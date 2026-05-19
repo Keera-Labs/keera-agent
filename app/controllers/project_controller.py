@@ -14,6 +14,7 @@ async def index(request: Request):
             "name": p.name,
             "path": p.path,
             "language": p.language,
+            "workspace_id": p.workspace_id,
         }
         for p in projects
     ])
@@ -33,6 +34,7 @@ async def store(request: Request):
     name = (body.get("name") or "").strip()
     path = (body.get("path") or "").strip()
     language = (body.get("language") or "Unknown").strip()
+    workspace_id = body.get("workspace_id") or None
 
     if not name or not path:
         return JSONResponse({"error": "name and path are required"}, status_code=422)
@@ -41,9 +43,20 @@ async def store(request: Request):
     if existing:
         return JSONResponse({"error": "A project with that name already exists"}, status_code=409)
 
-    project = await Project.create({"name": name, "path": path, "language": language})
+    project = await Project.create({
+        "name": name,
+        "path": path,
+        "language": language,
+        "workspace_id": workspace_id,
+    })
 
     return JSONResponse(
-        {"id": project.id, "name": project.name, "path": project.path, "language": project.language},
+        {
+            "id": project.id,
+            "name": project.name,
+            "path": project.path,
+            "language": project.language,
+            "workspace_id": project.workspace_id,
+        },
         status_code=201,
     )
