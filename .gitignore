@@ -1,0 +1,31 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+
+# Node
+node_modules/
+public/build/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Database / storage
+storage/*.db
+storage/*.db-shm
+storage/*.db-wal
+storage/logs/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
