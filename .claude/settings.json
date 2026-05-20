@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://localhost:8000/api/claude-stopped"
+          }
+        ]
+      }
+    ]
+  }
+}

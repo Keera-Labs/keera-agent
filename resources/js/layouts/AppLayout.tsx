@@ -17,6 +17,7 @@ interface Project {
     path: string
     language: string
     workspace_id: number | null
+    claude_status: 'running' | 'idle' | null
 }
 
 interface Session {
@@ -276,7 +277,39 @@ function SectionHeader({ label, onAdd }: { label: string; onAdd?: () => void }) 
     )
 }
 
-function ProjectItem({ project, active }: { project: Project; active: boolean }) {
+const dotsStyle = `
+@keyframes bounce1 { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-4px)} }
+@keyframes bounce2 { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-4px)} }
+@keyframes bounce3 { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-4px)} }
+@keyframes traveler {
+  0%   { left: 0px;   opacity: 0;   }
+  10%  { opacity: 1;               }
+  90%  { opacity: 1;               }
+  100% { left: 18px;  opacity: 0;  }
+}
+`
+
+function DotsIndicator() {
+    return (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', flexShrink: 0, position: 'relative' }}>
+            <style>{dotsStyle}</style>
+            {/* Track: 3 dim dots */}
+            <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: '#4a3800', animation: 'bounce1 1.0s ease-in-out infinite 0.0s' }} />
+            <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: '#4a3800', animation: 'bounce2 1.0s ease-in-out infinite 0.15s' }} />
+            <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: '#4a3800', animation: 'bounce3 1.0s ease-in-out infinite 0.3s' }} />
+            {/* Traveling bright dot */}
+            <span style={{
+                position: 'absolute', top: '50%', marginTop: '-2px',
+                width: '4px', height: '4px', borderRadius: '50%',
+                background: '#f0b429',
+                boxShadow: '0 0 5px 2px rgba(240,180,41,0.7)',
+                animation: 'traveler 1.0s linear infinite',
+            }} />
+        </span>
+    )
+}
+
+function ProjectItem({ project, active, status }: { project: Project; active: boolean; status?: 'running' | 'done' }) {
     return (
         <button
             onClick={() => router.visit(`/${project.name}`)}
@@ -287,11 +320,18 @@ function ProjectItem({ project, active }: { project: Project; active: boolean })
                 cursor: 'pointer', textAlign: 'left',
             }}
         >
-            <span style={{
-                color: active ? '#e6edf3' : '#c9d1d9', fontSize: '12px',
-                fontWeight: active ? 600 : 400, fontFamily: '"JetBrains Mono", monospace',
-            }}>
-                {project.name}
+            <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <span style={{
+                    color: active ? '#e6edf3' : '#c9d1d9', fontSize: '12px',
+                    fontWeight: active ? 600 : 400, fontFamily: '"JetBrains Mono", monospace',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                    {project.name}
+                </span>
+                {status === 'running' && <DotsIndicator />}
+                {status === 'done' && (
+                    <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#3fb950', flexShrink: 0 }} />
+                )}
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                 <span style={{
@@ -308,10 +348,12 @@ function WorkspaceSection({
     workspace,
     activeId,
     onAddProject,
+    claudeStatus,
 }: {
     workspace: Workspace
     activeId: number | null
     onAddProject: (workspaceId: number) => void
+    claudeStatus: Record<number, 'running' | 'done'>
 }) {
     const [collapsed, setCollapsed] = useState(false)
 
@@ -371,7 +413,7 @@ function WorkspaceSection({
                     )}
                     {workspace.projects.map(project => (
                         <li key={project.id}>
-                            <ProjectItem project={project} active={project.id === activeId} />
+                            <ProjectItem project={project} active={project.id === activeId} status={claudeStatus[project.id]} />
                         </li>
                     ))}
                 </ul>
@@ -390,6 +432,7 @@ function Sidebar({
     onAddTask,
     onCycleStatus,
     onDeleteTask,
+    claudeStatus,
 }: {
     workspaces: Workspace[]
     unassignedProjects: Project[]
@@ -400,6 +443,7 @@ function Sidebar({
     onAddTask: (desc: string) => void
     onCycleStatus: (task: Task) => void
     onDeleteTask: (task: Task) => void
+    claudeStatus: Record<number, 'running' | 'done'>
 }) {
     const [newTask, setNewTask] = useState('')
     const [addingTask, setAddingTask] = useState(false)
@@ -447,6 +491,7 @@ function Sidebar({
                         workspace={workspace}
                         activeId={activeId}
                         onAddProject={onAddProject}
+                        claudeStatus={claudeStatus}
                     />
                 ))}
 
@@ -476,7 +521,7 @@ function Sidebar({
                         <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
                             {unassignedProjects.map(project => (
                                 <li key={project.id}>
-                                    <ProjectItem project={project} active={project.id === activeId} />
+                                    <ProjectItem project={project} active={project.id === activeId} status={claudeStatus[project.id]} />
                                 </li>
                             ))}
                         </ul>
@@ -589,6 +634,26 @@ function makeTerminal() {
     })
 }
 
+// ─── Claude status badge ──────────────────────────────────────────────────────
+
+function ClaudeStatusBadge({ status }: { status?: 'running' | 'done' }) {
+    if (!status) return null
+    if (status === 'running') {
+        return (
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '8px' }}>
+                <DotsIndicator />
+                <span style={{ color: '#d29922', fontSize: '11px', fontFamily: '"JetBrains Mono", monospace' }}>running</span>
+            </span>
+        )
+    }
+    return (
+        <span style={{ display: 'flex', alignItems: 'center', gap: '5px', marginLeft: '6px' }}>
+            <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#3fb950' }} />
+            <span style={{ color: '#3fb950', fontSize: '11px', fontFamily: '"JetBrains Mono", monospace' }}>done</span>
+        </span>
+    )
+}
+
 // ─── Persistent layout ────────────────────────────────────────────────────────
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -600,6 +665,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const [showWorkspaceModal, setShowWorkspaceModal] = useState(false)
     const [addProjectWorkspaceId, setAddProjectWorkspaceId] = useState<number | null | undefined>(undefined)
     const [tasks, setTasks] = useState<Task[]>([])
+    // 'running' = Claude is working, 'done' = Claude finished (Stop hook received)
+    const [claudeStatus, setClaudeStatus] = useState<Record<number, 'running' | 'done'>>({})
 
     const sessions = useRef<Map<number, Session>>(new Map())
     const containerRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
@@ -614,9 +681,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         Promise.all([
             fetch('/api/workspaces').then(r => r.json()),
             fetch('/api/projects').then(r => r.json()),
-        ]).then(([ws, ps]) => {
+        ]).then(([ws, ps]: [Workspace[], Project[]]) => {
             setWorkspaces(ws)
             setAllProjects(ps)
+            // Restore status from DB — map 'idle' → 'done' for the frontend
+            const initial: Record<number, 'running' | 'done'> = {}
+            for (const p of ps) {
+                if (p.claude_status === 'running') initial[p.id] = 'running'
+                else if (p.claude_status === 'idle') initial[p.id] = 'done'
+            }
+            setClaudeStatus(initial)
         }).catch(() => {})
     }, [])
 
@@ -707,8 +781,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
         const ws = new WebSocket(`${protocol}//${location.host}/${activeProject.name}/ws?path=${encodeURIComponent(activeProject.path)}`)
         ws.binaryType = 'arraybuffer'
-        ws.onopen = () => ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
-        ws.onmessage = e => term.write(new Uint8Array(e.data as ArrayBuffer))
+        ws.onopen = () => {
+            ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
+            setClaudeStatus(prev => ({ ...prev, [activeProject.id]: 'running' }))
+        }
+        ws.onmessage = e => {
+            if (typeof e.data === 'string') {
+                try {
+                    const msg = JSON.parse(e.data)
+                    if (msg.type === 'claude_stopped') {
+                        setClaudeStatus(prev => ({ ...prev, [activeProject.id]: 'done' }))
+                    }
+                } catch { /* ignore */ }
+            } else {
+                term.write(new Uint8Array(e.data as ArrayBuffer))
+            }
+        }
         ws.onclose = () => term.write('\r\n\x1b[31m[disconnected]\x1b[0m\r\n')
 
         term.onData(data => { if (ws.readyState === WebSocket.OPEN) ws.send(new TextEncoder().encode(data)) })
@@ -758,6 +846,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 onAddTask={handleAddTask}
                 onCycleStatus={handleCycleStatus}
                 onDeleteTask={handleDeleteTask}
+                claudeStatus={claudeStatus}
             />
 
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
@@ -774,6 +863,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                             <span style={{ color: '#c9d1d9', fontSize: '12px', fontFamily: '"JetBrains Mono", monospace' }}>{activeProject.name}</span>
                             <span style={{ color: '#484f58', fontSize: '12px', fontFamily: '"JetBrains Mono", monospace' }}>—</span>
                             <span style={{ color: '#7d8590', fontSize: '12px', fontFamily: '"JetBrains Mono", monospace' }}>{activeProject.path}</span>
+                            <ClaudeStatusBadge status={claudeStatus[activeProject.id]} />
                         </>
                     ) : (
                         <span style={{ color: '#484f58', fontSize: '12px', fontFamily: '"JetBrains Mono", monospace' }}>No project selected</span>

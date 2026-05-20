@@ -15,6 +15,7 @@ async def index(request: Request):
             "path": p.path,
             "language": p.language,
             "workspace_id": p.workspace_id,
+            "claude_status": p.claude_status,
         }
         for p in projects
     ])

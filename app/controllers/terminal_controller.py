@@ -11,10 +11,14 @@ import termios
 
 from fastapi import Query, WebSocket, WebSocketDisconnect
 
+from app.models.Project import Project
 from app.models.TerminalOutput import TerminalOutput
 from app.models.TerminalSession import TerminalSession
 
 _ANSI_ESCAPE = re.compile(rb'\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[^[]')
+
+# Registry: project_path -> active WebSocket (frontend connection)
+connections: dict[str, WebSocket] = {}
 
 
 def _set_size(master_fd: int, rows: int, cols: int) -> None:
@@ -38,6 +42,15 @@ async def terminal_ws(websocket: WebSocket, project: str, path: str = Query(defa
         'project_name': project_name,
         'project_path': path or cwd,
     })
+
+    # Link session to project, mark as running, and register connection
+    project_record = await Project.where('path', path or cwd).first()
+    if project_record:
+        await Project.where('id', project_record.id).update({
+            'last_session_id': session.id,
+            'claude_status': 'running',
+        })
+    connections[path or cwd] = websocket
 
     shell = os.environ.get('SHELL', '/bin/bash')
     master_fd, slave_fd = pty.openpty()
@@ -143,6 +156,7 @@ async def terminal_ws(websocket: WebSocket, project: str, path: str = Query(defa
     finally:
         for t in tasks:
             t.cancel()
+        connections.pop(path or cwd, None)
         try:
             proc.kill()
         except Exception:
