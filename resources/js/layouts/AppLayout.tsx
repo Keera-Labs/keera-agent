@@ -253,6 +253,98 @@ function AddProjectModal({
     )
 }
 
+// ─── Move Project Modal ───────────────────────────────────────────────────────
+
+function MoveProjectModal({
+    project,
+    workspaces,
+    onClose,
+    onMove,
+}: {
+    project: Project
+    workspaces: Workspace[]
+    onClose: () => void
+    onMove: (project: Project, workspaceId: number | null) => Promise<void>
+}) {
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState('')
+
+    async function handleSelect(workspaceId: number | null) {
+        if (workspaceId === project.workspace_id) { onClose(); return }
+        setLoading(true)
+        setError('')
+        try {
+            await onMove(project, workspaceId)
+            onClose()
+        } catch {
+            setError('Failed to move project')
+            setLoading(false)
+        }
+    }
+
+    return (
+        <div style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+        }}>
+            <div style={{
+                background: '#161b22', border: '1px solid #30363d', borderRadius: '8px',
+                padding: '20px', width: '300px', display: 'flex', flexDirection: 'column', gap: '12px',
+            }}>
+                <h2 style={{ margin: 0, color: '#e6edf3', fontSize: '14px', fontWeight: 600 }}>
+                    Move{' '}
+                    <span style={{ fontFamily: '"JetBrains Mono", monospace', color: '#58a6ff' }}>
+                        {project.name}
+                    </span>
+                </h2>
+                {error && <span style={{ color: '#ff7b72', fontSize: '12px' }}>{error}</span>}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <button
+                        onClick={() => handleSelect(null)}
+                        disabled={loading}
+                        style={{
+                            textAlign: 'left', padding: '8px 12px', borderRadius: '6px',
+                            background: 'transparent',
+                            border: `1px solid ${project.workspace_id === null ? '#58a6ff' : '#30363d'}`,
+                            color: project.workspace_id === null ? '#58a6ff' : '#c9d1d9',
+                            fontSize: '13px', cursor: loading ? 'default' : 'pointer',
+                            display: 'flex', alignItems: 'center', gap: '8px',
+                        }}
+                    >
+                        <span style={{ color: '#484f58' }}>—</span> Unassigned
+                        {project.workspace_id === null && (
+                            <span style={{ marginLeft: 'auto', color: '#484f58', fontSize: '11px' }}>current</span>
+                        )}
+                    </button>
+                    {workspaces.map(w => (
+                        <button
+                            key={w.id}
+                            onClick={() => handleSelect(w.id)}
+                            disabled={loading}
+                            style={{
+                                textAlign: 'left', padding: '8px 12px', borderRadius: '6px',
+                                background: 'transparent',
+                                border: `1px solid ${w.id === project.workspace_id ? '#58a6ff' : '#30363d'}`,
+                                color: w.id === project.workspace_id ? '#58a6ff' : '#c9d1d9',
+                                fontSize: '13px', cursor: loading ? 'default' : 'pointer',
+                                display: 'flex', alignItems: 'center',
+                            }}
+                        >
+                            {w.name}
+                            {w.id === project.workspace_id && (
+                                <span style={{ marginLeft: 'auto', color: '#484f58', fontSize: '11px' }}>current</span>
+                            )}
+                        </button>
+                    ))}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button onClick={onClose} disabled={loading} style={cancelBtnStyle}>Cancel</button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 function SectionHeader({ label, onAdd }: { label: string; onAdd?: () => void }) {
@@ -309,38 +401,64 @@ function DotsIndicator() {
     )
 }
 
-function ProjectItem({ project, active, status }: { project: Project; active: boolean; status?: 'running' | 'done' }) {
+function ProjectItem({ project, active, status, onMove }: { project: Project; active: boolean; status?: 'running' | 'done'; onMove: (p: Project) => void }) {
+    const [hovered, setHovered] = useState(false)
+
     return (
-        <button
-            onClick={() => router.visit(`/${project.name}`)}
-            style={{
-                width: '100%', display: 'flex', flexDirection: 'column', gap: '2px',
-                padding: '5px 16px 5px 24px', background: active ? '#161b22' : 'transparent',
-                border: 'none', borderLeft: `2px solid ${active ? '#58a6ff' : 'transparent'}`,
-                cursor: 'pointer', textAlign: 'left',
-            }}
+        <div
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+            style={{ position: 'relative', display: 'flex' }}
         >
-            <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <span style={{
-                    color: active ? '#e6edf3' : '#c9d1d9', fontSize: '12px',
-                    fontWeight: active ? 600 : 400, fontFamily: '"JetBrains Mono", monospace',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>
-                    {project.name}
+            <div
+                role="button"
+                tabIndex={0}
+                onClick={() => router.visit(`/${project.name}`)}
+                onKeyDown={e => e.key === 'Enter' && router.visit(`/${project.name}`)}
+                style={{
+                    flex: 1, display: 'flex', flexDirection: 'column', gap: '2px',
+                    padding: '5px 28px 5px 24px', background: active ? '#161b22' : 'transparent',
+                    borderLeft: `2px solid ${active ? '#58a6ff' : 'transparent'}`,
+                    cursor: 'pointer', textAlign: 'left',
+                }}
+            >
+                <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <span style={{
+                        color: active ? '#e6edf3' : '#c9d1d9', fontSize: '12px',
+                        fontWeight: active ? 600 : 400, fontFamily: '"JetBrains Mono", monospace',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                        {project.name}
+                    </span>
+                    {status === 'running' && <DotsIndicator />}
+                    {status === 'done' && (
+                        <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#3fb950', flexShrink: 0 }} />
+                    )}
                 </span>
-                {status === 'running' && <DotsIndicator />}
-                {status === 'done' && (
-                    <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#3fb950', flexShrink: 0 }} />
-                )}
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <span style={{
-                    width: '6px', height: '6px', borderRadius: '50%',
-                    background: LANG_COLORS[project.language] ?? '#7d8590', flexShrink: 0,
-                }} />
-                <span style={{ color: '#7d8590', fontSize: '11px' }}>{project.language}</span>
-            </span>
-        </button>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <span style={{
+                        width: '6px', height: '6px', borderRadius: '50%',
+                        background: LANG_COLORS[project.language] ?? '#7d8590', flexShrink: 0,
+                    }} />
+                    <span style={{ color: '#7d8590', fontSize: '11px' }}>{project.language}</span>
+                </span>
+            </div>
+            <button
+                onClick={e => { e.stopPropagation(); onMove(project) }}
+                title="Move to workspace"
+                style={{
+                    position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)',
+                    background: 'transparent', border: 'none', cursor: 'pointer',
+                    color: hovered ? '#7d8590' : 'transparent',
+                    padding: '2px 3px', lineHeight: 1, display: 'flex', alignItems: 'center',
+                    transition: 'color 0.1s',
+                }}
+            >
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M7.47 1.97a.75.75 0 011.06 0l4.5 4.5a.75.75 0 010 1.06l-4.5 4.5a.75.75 0 11-1.06-1.06L11.44 7H3a.75.75 0 010-1.5h8.44L7.47 3.03a.75.75 0 010-1.06z"/>
+                </svg>
+            </button>
+        </div>
     )
 }
 
@@ -348,11 +466,13 @@ function WorkspaceSection({
     workspace,
     activeId,
     onAddProject,
+    onMoveProject,
     claudeStatus,
 }: {
     workspace: Workspace
     activeId: number | null
     onAddProject: (workspaceId: number) => void
+    onMoveProject: (project: Project) => void
     claudeStatus: Record<number, 'running' | 'done'>
 }) {
     const [collapsed, setCollapsed] = useState(false)
@@ -413,11 +533,61 @@ function WorkspaceSection({
                     )}
                     {workspace.projects.map(project => (
                         <li key={project.id}>
-                            <ProjectItem project={project} active={project.id === activeId} status={claudeStatus[project.id]} />
+                            <ProjectItem project={project} active={project.id === activeId} status={claudeStatus[project.id]} onMove={onMoveProject} />
                         </li>
                     ))}
                 </ul>
             )}
+        </div>
+    )
+}
+
+function WorkspaceFilter({
+    workspaces,
+    selected,
+    onChange,
+}: {
+    workspaces: Workspace[]
+    selected: number | null
+    onChange: (id: number | null) => void
+}) {
+    if (workspaces.length === 0) return null
+    return (
+        <div style={{
+            padding: '6px 12px 6px', display: 'flex', flexWrap: 'wrap', gap: '4px',
+            borderBottom: '1px solid #21262d',
+        }}>
+            <button
+                onClick={() => onChange(null)}
+                style={{
+                    padding: '2px 8px', borderRadius: '10px', fontSize: '10px', cursor: 'pointer',
+                    fontWeight: 600, letterSpacing: '0.03em',
+                    background: selected === null ? '#1f6feb' : 'transparent',
+                    border: `1px solid ${selected === null ? '#1f6feb' : '#30363d'}`,
+                    color: selected === null ? '#fff' : '#7d8590',
+                    transition: 'all 0.1s',
+                }}
+            >
+                All
+            </button>
+            {workspaces.map(w => (
+                <button
+                    key={w.id}
+                    onClick={() => onChange(w.id === selected ? null : w.id)}
+                    style={{
+                        padding: '2px 8px', borderRadius: '10px', fontSize: '10px', cursor: 'pointer',
+                        fontWeight: 600, letterSpacing: '0.03em',
+                        background: selected === w.id ? '#1f6feb' : 'transparent',
+                        border: `1px solid ${selected === w.id ? '#1f6feb' : '#30363d'}`,
+                        color: selected === w.id ? '#fff' : '#7d8590',
+                        transition: 'all 0.1s',
+                        maxWidth: '90px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}
+                    title={w.name}
+                >
+                    {w.name}
+                </button>
+            ))}
         </div>
     )
 }
@@ -428,6 +598,7 @@ function Sidebar({
     activeId,
     onAddWorkspace,
     onAddProject,
+    onMoveProject,
     tasks,
     onAddTask,
     onCycleStatus,
@@ -439,6 +610,7 @@ function Sidebar({
     activeId: number | null
     onAddWorkspace: () => void
     onAddProject: (workspaceId: number | null) => void
+    onMoveProject: (project: Project) => void
     tasks: Task[]
     onAddTask: (desc: string) => void
     onCycleStatus: (task: Task) => void
@@ -447,6 +619,7 @@ function Sidebar({
 }) {
     const [newTask, setNewTask] = useState('')
     const [addingTask, setAddingTask] = useState(false)
+    const [filterWorkspaceId, setFilterWorkspaceId] = useState<number | null>(null)
 
     function submitTask(e: React.FormEvent) {
         e.preventDefault()
@@ -475,73 +648,112 @@ function Sidebar({
                 </span>
             </div>
 
+            {/* Workspace filter pills */}
+            <WorkspaceFilter
+                workspaces={workspaces}
+                selected={filterWorkspaceId}
+                onChange={setFilterWorkspaceId}
+            />
+
             {/* Workspaces + Projects section */}
             <div style={{ overflowY: 'auto', maxHeight: '55%', display: 'flex', flexDirection: 'column' }}>
-                <SectionHeader label="Workspaces" onAdd={onAddWorkspace} />
-
-                {workspaces.length === 0 && (
-                    <p style={{ margin: '0 16px 8px', color: '#484f58', fontSize: '11px', fontStyle: 'italic' }}>
-                        No workspaces yet
-                    </p>
-                )}
-
-                {workspaces.map(workspace => (
-                    <WorkspaceSection
-                        key={workspace.id}
-                        workspace={workspace}
-                        activeId={activeId}
-                        onAddProject={onAddProject}
-                        claudeStatus={claudeStatus}
-                    />
-                ))}
-
-                {/* Unassigned projects */}
-                {unassignedProjects.length > 0 && (
+                {filterWorkspaceId !== null ? (
+                    // ── Filtered view: just the selected workspace's projects ──
+                    (() => {
+                        const ws = workspaces.find(w => w.id === filterWorkspaceId)
+                        if (!ws) return null
+                        return (
+                            <>
+                                <SectionHeader
+                                    label={ws.name}
+                                    onAdd={() => onAddProject(ws.id)}
+                                />
+                                <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                                    {ws.projects.length === 0 && (
+                                        <li style={{ padding: '4px 16px 4px 24px', color: '#484f58', fontSize: '11px', fontStyle: 'italic' }}>
+                                            No projects
+                                        </li>
+                                    )}
+                                    {ws.projects.map(project => (
+                                        <li key={project.id}>
+                                            <ProjectItem project={project} active={project.id === activeId} status={claudeStatus[project.id]} onMove={onMoveProject} />
+                                        </li>
+                                    ))}
+                                </ul>
+                            </>
+                        )
+                    })()
+                ) : (
+                    // ── Unfiltered view: all workspaces + unassigned ──
                     <>
-                        <div style={{ height: '1px', background: '#21262d', margin: '4px 0' }} />
-                        <div style={{ padding: '5px 16px 4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ color: '#484f58', fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', flex: 1 }}>
-                                Unassigned
-                            </span>
+                        <SectionHeader label="Workspaces" onAdd={onAddWorkspace} />
+
+                        {workspaces.length === 0 && (
+                            <p style={{ margin: '0 16px 8px', color: '#484f58', fontSize: '11px', fontStyle: 'italic' }}>
+                                No workspaces yet
+                            </p>
+                        )}
+
+                        {workspaces.map(workspace => (
+                            <WorkspaceSection
+                                key={workspace.id}
+                                workspace={workspace}
+                                activeId={activeId}
+                                onAddProject={onAddProject}
+                                onMoveProject={onMoveProject}
+                                claudeStatus={claudeStatus}
+                            />
+                        ))}
+
+                        {/* Unassigned projects */}
+                        {unassignedProjects.length > 0 && (
+                            <>
+                                <div style={{ height: '1px', background: '#21262d', margin: '4px 0' }} />
+                                <div style={{ padding: '5px 16px 4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ color: '#484f58', fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', flex: 1 }}>
+                                        Unassigned
+                                    </span>
+                                    <button
+                                        onClick={() => onAddProject(null)}
+                                        title="Add project"
+                                        style={{
+                                            background: 'transparent', border: 'none', cursor: 'pointer',
+                                            color: '#484f58', padding: '0 2px', lineHeight: 1, display: 'flex', alignItems: 'center',
+                                        }}
+                                        onMouseEnter={e => (e.currentTarget.style.color = '#7d8590')}
+                                        onMouseLeave={e => (e.currentTarget.style.color = '#484f58')}
+                                    >
+                                        <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+                                            <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                                <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                                    {unassignedProjects.map(project => (
+                                        <li key={project.id}>
+                                            <ProjectItem project={project} active={project.id === activeId} status={claudeStatus[project.id]} onMove={onMoveProject} />
+                                        </li>
+                                    ))}
+                                </ul>
+                            </>
+                        )}
+
+                        {/* Add project shortcut when no workspaces */}
+                        {workspaces.length === 0 && unassignedProjects.length === 0 && (
                             <button
                                 onClick={() => onAddProject(null)}
-                                title="Add project"
                                 style={{
-                                    background: 'transparent', border: 'none', cursor: 'pointer',
-                                    color: '#484f58', padding: '0 2px', lineHeight: 1, display: 'flex', alignItems: 'center',
+                                    margin: '0 16px 8px', background: 'transparent', border: '1px dashed #30363d',
+                                    borderRadius: '6px', color: '#484f58', fontSize: '11px', padding: '6px',
+                                    cursor: 'pointer', textAlign: 'center',
                                 }}
-                                onMouseEnter={e => (e.currentTarget.style.color = '#7d8590')}
-                                onMouseLeave={e => (e.currentTarget.style.color = '#484f58')}
+                                onMouseEnter={e => { e.currentTarget.style.color = '#7d8590'; e.currentTarget.style.borderColor = '#7d8590' }}
+                                onMouseLeave={e => { e.currentTarget.style.color = '#484f58'; e.currentTarget.style.borderColor = '#30363d' }}
                             >
-                                <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
-                                    <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
-                                </svg>
+                                + Add project
                             </button>
-                        </div>
-                        <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                            {unassignedProjects.map(project => (
-                                <li key={project.id}>
-                                    <ProjectItem project={project} active={project.id === activeId} status={claudeStatus[project.id]} />
-                                </li>
-                            ))}
-                        </ul>
+                        )}
                     </>
-                )}
-
-                {/* Add project shortcut when no workspaces */}
-                {workspaces.length === 0 && unassignedProjects.length === 0 && (
-                    <button
-                        onClick={() => onAddProject(null)}
-                        style={{
-                            margin: '0 16px 8px', background: 'transparent', border: '1px dashed #30363d',
-                            borderRadius: '6px', color: '#484f58', fontSize: '11px', padding: '6px',
-                            cursor: 'pointer', textAlign: 'center',
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.color = '#7d8590'; e.currentTarget.style.borderColor = '#7d8590' }}
-                        onMouseLeave={e => { e.currentTarget.style.color = '#484f58'; e.currentTarget.style.borderColor = '#30363d' }}
-                    >
-                        + Add project
-                    </button>
                 )}
             </div>
 
@@ -664,12 +876,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const [allProjects, setAllProjects] = useState<Project[]>([])
     const [showWorkspaceModal, setShowWorkspaceModal] = useState(false)
     const [addProjectWorkspaceId, setAddProjectWorkspaceId] = useState<number | null | undefined>(undefined)
+    const [movingProject, setMovingProject] = useState<Project | null>(null)
     const [tasks, setTasks] = useState<Task[]>([])
     // 'running' = Claude is working, 'done' = Claude finished (Stop hook received)
     const [claudeStatus, setClaudeStatus] = useState<Record<number, 'running' | 'done'>>({})
 
+    const [isDraggingOver, setIsDraggingOver] = useState(false)
+
     const sessions = useRef<Map<number, Session>>(new Map())
     const containerRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
+    const fileInputRef = useRef<HTMLInputElement>(null)
 
     const activeProject = allProjects.find(p => p.name === projectName) ?? allProjects[0] ?? null
 
@@ -799,6 +1015,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         }
         ws.onclose = () => term.write('\r\n\x1b[31m[disconnected]\x1b[0m\r\n')
 
+        term.attachCustomKeyEventHandler(e => {
+            if (e.key === 'Enter' && e.ctrlKey && e.type === 'keydown') {
+                if (ws.readyState === WebSocket.OPEN) ws.send(new TextEncoder().encode('\n'))
+                return false
+            }
+            return true
+        })
         term.onData(data => { if (ws.readyState === WebSocket.OPEN) ws.send(new TextEncoder().encode(data)) })
         term.onResize(({ cols, rows }) => {
             if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'resize', cols, rows }))
@@ -834,6 +1057,46 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         setAddProjectWorkspaceId(workspaceId)
     }
 
+    async function handleMoveProject(project: Project, newWorkspaceId: number | null) {
+        const res = await fetch(`/api/projects/${project.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ workspace_id: newWorkspaceId }),
+        })
+        if (!res.ok) throw new Error('Failed to move project')
+        const updated: Project = await res.json()
+
+        setAllProjects(prev => prev.map(p => p.id === project.id ? updated : p))
+        setWorkspaces(prev => prev.map(w => {
+            // Remove from old workspace
+            if (w.id === project.workspace_id) {
+                return { ...w, projects: w.projects.filter(p => p.id !== project.id) }
+            }
+            // Add to new workspace
+            if (w.id === newWorkspaceId) {
+                return { ...w, projects: [...w.projects, updated] }
+            }
+            return w
+        }))
+    }
+
+    async function uploadImage(file: File) {
+        if (!activeProject) return
+        if (!file.type.startsWith('image/')) return
+        const formData = new FormData()
+        formData.append('file', file)
+        const res = await fetch(`/api/projects/${activeProject.id}/upload-image`, {
+            method: 'POST',
+            body: formData,
+        })
+        if (!res.ok) return
+        const { path } = await res.json()
+        const session = sessions.current.get(activeProject.id)
+        if (session && session.ws.readyState === WebSocket.OPEN) {
+            session.ws.send(new TextEncoder().encode(path))
+        }
+    }
+
     return (
         <div style={{ display: 'flex', width: '100%', height: '100vh', background: '#0d1117', overflow: 'hidden' }}>
             <Sidebar
@@ -842,6 +1105,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 activeId={activeProject?.id ?? null}
                 onAddWorkspace={() => setShowWorkspaceModal(true)}
                 onAddProject={openAddProject}
+                onMoveProject={setMovingProject}
                 tasks={tasks}
                 onAddTask={handleAddTask}
                 onCycleStatus={handleCycleStatus}
@@ -864,6 +1128,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                             <span style={{ color: '#484f58', fontSize: '12px', fontFamily: '"JetBrains Mono", monospace' }}>—</span>
                             <span style={{ color: '#7d8590', fontSize: '12px', fontFamily: '"JetBrains Mono", monospace' }}>{activeProject.path}</span>
                             <ClaudeStatusBadge status={claudeStatus[activeProject.id]} />
+                            {/* Attach image button */}
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                title="Attach image"
+                                style={{
+                                    marginLeft: 'auto', marginRight: '8px',
+                                    background: 'transparent', border: 'none',
+                                    color: '#484f58', padding: '4px', cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', borderRadius: '4px',
+                                    transition: 'color 0.15s',
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.color = '#58a6ff' }}
+                                onMouseLeave={e => { e.currentTarget.style.color = '#484f58' }}
+                            >
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M4.5 3a2.5 2.5 0 015 0v9a1.5 1.5 0 01-3 0V5a.5.5 0 011 0v7a.5.5 0 001 0V3a1.5 1.5 0 10-3 0v9a2.5 2.5 0 005 0V5a.5.5 0 011 0v7a3.5 3.5 0 11-7 0V3z"/>
+                                </svg>
+                            </button>
                         </>
                     ) : (
                         <span style={{ color: '#484f58', fontSize: '12px', fontFamily: '"JetBrains Mono", monospace' }}>No project selected</span>
@@ -871,7 +1153,51 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </div>
 
                 {/* Terminal containers — one per project, hidden when inactive */}
-                <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+                <div
+                    style={{ flex: 1, position: 'relative', overflow: 'hidden' }}
+                    onDragOver={e => { e.preventDefault(); setIsDraggingOver(true) }}
+                    onDragEnter={e => { e.preventDefault(); setIsDraggingOver(true) }}
+                    onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDraggingOver(false) }}
+                    onDrop={e => {
+                        e.preventDefault()
+                        setIsDraggingOver(false)
+                        const file = e.dataTransfer.files[0]
+                        if (file) uploadImage(file)
+                    }}
+                >
+                    {/* Drag-over overlay */}
+                    {isDraggingOver && activeProject && (
+                        <div style={{
+                            position: 'absolute', inset: 0, zIndex: 10,
+                            background: 'rgba(88, 166, 255, 0.07)',
+                            border: '2px dashed #58a6ff', borderRadius: '4px',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            pointerEvents: 'none',
+                        }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                                <svg width="36" height="36" viewBox="0 0 16 16" fill="#58a6ff" opacity="0.8">
+                                    <path d="M1.75 2.5a.25.25 0 00-.25.25v10.5c0 .138.112.25.25.25h.94l.03-.013 4.013-4.013a1.75 1.75 0 012.474 0L13.62 13.5h.63a.25.25 0 00.25-.25V2.75a.25.25 0 00-.25-.25H1.75zM0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25V2.75zm9.5 3.5a1 1 0 11-2 0 1 1 0 012 0z"/>
+                                </svg>
+                                <span style={{ color: '#58a6ff', fontSize: '13px', fontFamily: '"JetBrains Mono", monospace' }}>
+                                    Drop image to attach
+                                </span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Hidden file input */}
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        onChange={e => {
+                            const file = e.target.files?.[0]
+                            if (file) uploadImage(file)
+                            e.target.value = ''
+                        }}
+                    />
+
                     {allProjects.map(project => (
                         <div
                             key={project.id}
@@ -898,6 +1224,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     defaultWorkspaceId={addProjectWorkspaceId}
                     onClose={() => setAddProjectWorkspaceId(undefined)}
                     onCreated={handleProjectCreated}
+                />
+            )}
+
+            {movingProject && (
+                <MoveProjectModal
+                    project={movingProject}
+                    workspaces={workspaces}
+                    onClose={() => setMovingProject(null)}
+                    onMove={handleMoveProject}
                 />
             )}
 

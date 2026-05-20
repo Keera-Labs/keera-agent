@@ -6,12 +6,25 @@ Called at app startup so users don't have to configure it manually.
 import json
 import os
 
-HOOK_URL = "http://localhost:8000/api/claude-stopped"
 SETTINGS_PATH = os.path.expanduser("~/.claude/settings.json")
 
 
-def ensure_stop_hook() -> None:
-    """Merge the Stop hook into the global Claude Code settings file."""
+def _is_hook_registered(hook_list: list, url: str) -> bool:
+    for group in hook_list:
+        for h in group.get("hooks", []):
+            if h.get("type") == "http" and h.get("url") == url:
+                return True
+    return False
+
+
+def ensure_hooks() -> None:
+    """Merge the Stop and UserPromptSubmit hooks into the global Claude Code settings file."""
+    from fastapi_startkit.environment import env
+
+    base_url = env('APP_URL', 'http://localhost:8000')
+    stop_url = f"{base_url}/api/claude-stopped"
+    start_url = f"{base_url}/api/claude-started"
+
     os.makedirs(os.path.dirname(SETTINGS_PATH), exist_ok=True)
 
     settings: dict = {}
@@ -23,19 +36,21 @@ def ensure_stop_hook() -> None:
             settings = {}
 
     hooks: dict = settings.setdefault("hooks", {})
+
+    changed = False
+
     stop_hooks: list = hooks.setdefault("Stop", [])
+    if not _is_hook_registered(stop_hooks, stop_url):
+        stop_hooks.append({"hooks": [{"type": "http", "url": stop_url}]})
+        changed = True
+        print(f"[keera] Registered Claude Code Stop hook → {stop_url}")
 
-    # Check if our hook is already registered
-    our_hook = {"type": "http", "url": HOOK_URL}
-    for group in stop_hooks:
-        for h in group.get("hooks", []):
-            if h.get("type") == "http" and h.get("url") == HOOK_URL:
-                return  # Already registered
+    start_hooks: list = hooks.setdefault("UserPromptSubmit", [])
+    if not _is_hook_registered(start_hooks, start_url):
+        start_hooks.append({"hooks": [{"type": "http", "url": start_url}]})
+        changed = True
+        print(f"[keera] Registered Claude Code UserPromptSubmit hook → {start_url}")
 
-    # Append our hook group
-    stop_hooks.append({"hooks": [our_hook]})
-
-    with open(SETTINGS_PATH, "w") as f:
-        json.dump(settings, f, indent=2)
-
-    print(f"[keera] Registered Claude Code Stop hook in {SETTINGS_PATH}")
+    if changed:
+        with open(SETTINGS_PATH, "w") as f:
+            json.dump(settings, f, indent=2)

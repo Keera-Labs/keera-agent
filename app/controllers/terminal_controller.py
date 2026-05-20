@@ -20,6 +20,9 @@ _ANSI_ESCAPE = re.compile(rb'\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[^[]')
 # Registry: project_path -> active WebSocket (frontend connection)
 connections: dict[str, WebSocket] = {}
 
+# Registry: project_path -> callable that writes bytes to the PTY
+pty_writers: dict[str, callable] = {}
+
 
 def _set_size(master_fd: int, rows: int, cols: int) -> None:
     size = struct.pack('HHHH', rows, cols, 0, 0)
@@ -55,6 +58,8 @@ async def terminal_ws(websocket: WebSocket, project: str, path: str = Query(defa
     shell = os.environ.get('SHELL', '/bin/bash')
     master_fd, slave_fd = pty.openpty()
     _set_size(master_fd, 24, 80)
+
+    pty_writers[path or cwd] = lambda data: os.write(master_fd, data if isinstance(data, bytes) else data.encode())
 
     proc = subprocess.Popen(
         [shell],
@@ -157,6 +162,7 @@ async def terminal_ws(websocket: WebSocket, project: str, path: str = Query(defa
         for t in tasks:
             t.cancel()
         connections.pop(path or cwd, None)
+        pty_writers.pop(path or cwd, None)
         try:
             proc.kill()
         except Exception:

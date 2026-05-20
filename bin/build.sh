@@ -56,6 +56,26 @@ patch_env "APP_URL"    "http://127.0.0.1:4545" "$DIST/.env"
 patch_env "APP_PORT"   "4545"                   "$DIST/.env"
 patch_env "APP_RELOAD" "false"                  "$DIST/.env"
 
+# Patch the Stop hook URL in .claude/settings.json to match APP_URL
+DIST_APP_URL=$(grep '^APP_URL=' "$DIST/.env" | head -1 | cut -d= -f2)
+DIST_SETTINGS="$DIST/.claude/settings.json"
+if [ -n "$DIST_APP_URL" ] && [ -f "$DIST_SETTINGS" ]; then
+    python3 - "$DIST_SETTINGS" "$DIST_APP_URL" <<'PYEOF'
+import json, sys
+path, app_url = sys.argv[1], sys.argv[2]
+with open(path) as f:
+    s = json.load(f)
+for grp in s.get("hooks", {}).get("Stop", []):
+    for h in grp.get("hooks", []):
+        if h.get("type") == "http" and "/api/claude-stopped" in h.get("url", ""):
+            h["url"] = f"{app_url}/api/claude-stopped"
+with open(path, "w") as f:
+    json.dump(s, f, indent=2)
+    f.write("\n")
+PYEOF
+    echo "    patched .claude/settings.json Stop hook → ${DIST_APP_URL}/api/claude-stopped"
+fi
+
 # Remove the vite hot file so built assets are used instead of the dev server
 rm -f "$DIST/public/hot"
 

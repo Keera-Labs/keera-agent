@@ -1,6 +1,6 @@
 import os
 
-from fastapi import Request
+from fastapi import Request, UploadFile, File
 from fastapi.responses import JSONResponse
 
 from app.models.Project import Project
@@ -27,6 +27,55 @@ async def validate_path(request: Request):
         return JSONResponse({"exists": False, "expanded": ""})
     expanded = os.path.expanduser(path)
     return JSONResponse({"exists": os.path.isdir(expanded), "expanded": expanded})
+
+
+async def update(request: Request, project_id: int):
+    body = await request.json()
+
+    project = await Project.find(project_id)
+    if not project:
+        return JSONResponse({"error": "Project not found"}, status_code=404)
+
+    if "workspace_id" in body:
+        project.workspace_id = body["workspace_id"]  # None = unassign
+
+    await project.save()
+
+    return JSONResponse({
+        "id": project.id,
+        "name": project.name,
+        "path": project.path,
+        "language": project.language,
+        "workspace_id": project.workspace_id,
+        "claude_status": project.claude_status,
+    })
+
+
+async def upload_image(request: Request, project_id: int, file: UploadFile = File(...)):
+    project = await Project.find(project_id)
+    if not project:
+        return JSONResponse({"error": "Project not found"}, status_code=404)
+
+    if not file.content_type or not file.content_type.startswith("image/"):
+        return JSONResponse({"error": "Only image files are supported"}, status_code=422)
+
+    project_path = os.path.expanduser(project.path)
+    uploads_dir = os.path.join(project_path, ".keera", "uploads")
+    os.makedirs(uploads_dir, exist_ok=True)
+
+    filename = file.filename or "image"
+    dest = os.path.join(uploads_dir, filename)
+    base, ext = os.path.splitext(filename)
+    counter = 1
+    while os.path.exists(dest):
+        dest = os.path.join(uploads_dir, f"{base}_{counter}{ext}")
+        counter += 1
+
+    content = await file.read()
+    with open(dest, "wb") as f:
+        f.write(content)
+
+    return JSONResponse({"path": dest})
 
 
 async def store(request: Request):

@@ -18,11 +18,14 @@ router.delete("/api/workspaces/{workspace_id}", workspace_controller.destroy)
 router.get("/api/projects", project_controller.index)
 router.get("/api/validate-path", project_controller.validate_path)
 router.post("/api/projects", project_controller.store)
+router.patch("/api/projects/{project_id}", project_controller.update)
+router.post("/api/projects/{project_id}/upload-image", project_controller.upload_image)
 router.get("/api/projects/{project_id}/tasks", task_controller.index)
 router.post("/api/projects/{project_id}/tasks", task_controller.store)
 router.patch("/api/tasks/{task_id}", task_controller.update)
 router.delete("/api/tasks/{task_id}", task_controller.destroy)
 
+router.post("/api/claude-started", claude_hook_controller.claude_started)
 router.post("/api/claude-stopped", claude_hook_controller.claude_stopped)
 
 # Wildcard page routes — must come last
