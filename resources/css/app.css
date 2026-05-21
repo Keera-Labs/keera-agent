@@ -1,1 +1,62 @@
 @import "tailwindcss";
+
+/**
+ * Design tokens — edit values here to retheme the entire app.
+ *
+ * Tailwind v4 @theme registers each --color-* variable as both:
+ *   • a CSS custom property  (use anywhere: var(--color-accent))
+ *   • a Tailwind utility     (e.g. bg-accent, text-text-primary)
+ *
+ * The JS side (resources/js/tokens.ts) maps human-readable names to
+ * var(--color-*) strings for use in React inline styles.
+ */
+@theme {
+    /* ── Backgrounds ─────────────────────────────────────── */
+    --color-bg-canvas:  #010409;   /* deepest: sidebar, topbar        */
+    --color-bg-base:    #0d1117;   /* page background, input fills    */
+    --color-bg-surface: #161b22;   /* cards, modals, active rows      */
+
+    /* ── Borders ─────────────────────────────────────────── */
+    --color-border:       #21262d; /* dividers                        */
+    --color-border-muted: #30363d; /* input / card borders            */
+
+    /* ── Text ────────────────────────────────────────────── */
+    --color-text-primary:   #e6edf3;
+    --color-text-secondary: #c9d1d9;
+    --color-text-tertiary:  #8b949e;
+    --color-text-muted:     #7d8590;
+    --color-text-ghost:     #6e7681;
+    --color-text-faint:     #484f58; /* disabled, placeholders         */
+
+    /* ── Accent (blue) ───────────────────────────────────── */
+    --color-accent:          #58a6ff;
+    --color-accent-muted:    #79c0ff;
+    --color-accent-emphasis: #1f6feb; /* selected state, dropdowns     */
+    --color-accent-subtle:   #0d419d; /* tag backgrounds               */
+
+    /* ── Success (green) ─────────────────────────────────── */
+    --color-success:          #3fb950;
+    --color-success-emphasis: #238636; /* create / submit buttons       */
+    --color-success-border:   #2ea043;
+
+    /* ── Warning (yellow) ────────────────────────────────── */
+    --color-warning:        #d29922;
+    --color-warning-bright: #f0b429; /* animated running indicator     */
+    --color-warning-subtle: #4a3800; /* low-contrast badge background  */
+
+    /* ── Danger (red) ────────────────────────────────────── */
+    --color-danger:        #ff7b72;
+    --color-danger-light:  #ffa198;
+    --color-danger-subtle: #67060c; /* high-priority border           */
+    --color-danger-canvas: #1c1012; /* high-priority background       */
+
+    /* ── Priority ────────────────────────────────────────── */
+    --color-priority-medium-bg: #1c2128;
+
+    /* ── Language dot colours ────────────────────────────── */
+    --color-lang-python:     #3572a5;
+    --color-lang-typescript: #3178c6;
+    --color-lang-go:         #00add8;
+    --color-lang-rust:       #dea584;
+    --color-lang-javascript: #f1e05a;
+}

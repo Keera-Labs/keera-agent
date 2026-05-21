@@ -2,9 +2,11 @@ import os
 
 from fastapi import Request, UploadFile, File
 from fastapi.responses import JSONResponse
+from fastapi_startkit.environment import env
 from fastapi_startkit.storage.storage import Storage
 
 from app.models.Project import Project
+from app.utils.hook_setup import ensure_claude_settings
 
 
 async def index(request: Request):
@@ -96,6 +98,10 @@ async def store(request: Request):
         "language": language,
         "workspace_id": workspace_id,
     })
+
+    expanded_path = os.path.expanduser(path)
+    base_url = env("APP_URL", "http://localhost:8000")
+    ensure_claude_settings(expanded_path, base_url)
 
     return JSONResponse(
         {

@@ -5,10 +5,26 @@
         "hooks": [
           {
             "type": "http",
-            "url": "http://localhost:8000/api/claude-stopped"
+            "url": "http://127.0.0.1:8000/api/claude-stopped"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:8000/api/claude-started"
           }
         ]
       }
     ]
+  },
+  "mcpServers": {
+    "keera-agent": {
+      "type": "http",
+      "url": "http://127.0.0.1:8000/mcp"
+    }
   }
 }

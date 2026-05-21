@@ -1,56 +1,82 @@
 """
-Ensures the Claude Code Stop hook is registered in ~/.claude/settings.json.
-Called at app startup so users don't have to configure it manually.
+Ensures Claude Code hooks and the MCP server are registered in a local
+.claude/settings.json.  Writes only to the given directory — never to the
+global ~/.claude/settings.json.
+
+Called at app startup (for the keera-agent directory itself) and whenever a
+new project is created (for the project's own directory).
 """
 
 import json
 import os
+import shutil
 
-SETTINGS_PATH = os.path.expanduser("~/.claude/settings.json")
+# URL path fragments that identify keera-managed hooks
+_STOP_PATH  = "/api/claude-stopped"
+_START_PATH = "/api/claude-started"
 
 
-def _is_hook_registered(hook_list: list, url: str) -> bool:
+def _upsert_hook(hook_list: list, path_fragment: str, new_url: str) -> bool:
+    """
+    If any existing hook entry contains path_fragment, update its URL in-place.
+    Otherwise append a new entry.  Returns True if anything changed.
+    """
     for group in hook_list:
         for h in group.get("hooks", []):
-            if h.get("type") == "http" and h.get("url") == url:
+            if h.get("type") == "http" and path_fragment in h.get("url", ""):
+                if h["url"] == new_url:
+                    return False  # already correct
+                h["url"] = new_url
                 return True
-    return False
+    # No existing entry — add one
+    hook_list.append({"hooks": [{"type": "http", "url": new_url}]})
+    return True
 
 
-def ensure_hooks() -> None:
-    """Merge the Stop and UserPromptSubmit hooks into the global Claude Code settings file."""
-    from fastapi_startkit.environment import env
-
-    base_url = env('APP_URL', 'http://localhost:8000')
-    stop_url = f"{base_url}/api/claude-stopped"
-    start_url = f"{base_url}/api/claude-started"
-
-    os.makedirs(os.path.dirname(SETTINGS_PATH), exist_ok=True)
+def ensure_claude_settings(directory: str, base_url: str) -> None:
+    """
+    Merge Stop hook, UserPromptSubmit hook, and MCP server entry into
+    <directory>/.claude/settings.json.  Existing unrelated settings are
+    preserved.  Keera-managed hook URLs are updated in-place if they changed.
+    """
+    settings_path = os.path.join(directory, ".claude", "settings.json")
+    os.makedirs(os.path.dirname(settings_path), exist_ok=True)
 
     settings: dict = {}
-    if os.path.exists(SETTINGS_PATH):
+    if os.path.exists(settings_path):
+        shutil.copy2(settings_path, settings_path + ".bak")
         try:
-            with open(SETTINGS_PATH) as f:
+            with open(settings_path) as f:
                 settings = json.load(f)
         except (json.JSONDecodeError, OSError):
             settings = {}
 
-    hooks: dict = settings.setdefault("hooks", {})
+    stop_url  = f"{base_url}{_STOP_PATH}"
+    start_url = f"{base_url}{_START_PATH}"
+    mcp_url   = f"{base_url}/mcp"
 
+    hooks: dict = settings.setdefault("hooks", {})
     changed = False
 
-    stop_hooks: list = hooks.setdefault("Stop", [])
-    if not _is_hook_registered(stop_hooks, stop_url):
-        stop_hooks.append({"hooks": [{"type": "http", "url": stop_url}]})
-        changed = True
-        print(f"[keera] Registered Claude Code Stop hook → {stop_url}")
+    changed |= _upsert_hook(hooks.setdefault("Stop", []),              _STOP_PATH,  stop_url)
+    changed |= _upsert_hook(hooks.setdefault("UserPromptSubmit", []), _START_PATH, start_url)
 
-    start_hooks: list = hooks.setdefault("UserPromptSubmit", [])
-    if not _is_hook_registered(start_hooks, start_url):
-        start_hooks.append({"hooks": [{"type": "http", "url": start_url}]})
+    mcp_servers: dict = settings.setdefault("mcpServers", {})
+    if mcp_servers.get("keera-agent", {}).get("url") != mcp_url:
+        mcp_servers["keera-agent"] = {"type": "http", "url": mcp_url}
         changed = True
-        print(f"[keera] Registered Claude Code UserPromptSubmit hook → {start_url}")
 
     if changed:
-        with open(SETTINGS_PATH, "w") as f:
+        with open(settings_path, "w") as f:
             json.dump(settings, f, indent=2)
+            f.write("\n")
+        print(f"[keera] Claude settings updated in {directory}/.claude/settings.json")
+
+
+def ensure_hooks() -> None:
+    """Register hooks + MCP in the keera-agent app directory at startup."""
+    from fastapi_startkit.environment import env
+
+    base_url = env("APP_URL", "http://localhost:8000")
+    app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    ensure_claude_settings(app_dir, base_url)
