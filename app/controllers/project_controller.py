@@ -1,9 +1,12 @@
 import os
 
-from fastapi import Request
+from fastapi import Request, UploadFile, File
 from fastapi.responses import JSONResponse
+from fastapi_startkit.environment import env
+from fastapi_startkit.storage.storage import Storage
 
 from app.models.Project import Project
+from app.utils.hook_setup import ensure_claude_settings
 
 
 async def index(request: Request):
@@ -15,6 +18,7 @@ async def index(request: Request):
             "path": p.path,
             "language": p.language,
             "workspace_id": p.workspace_id,
+            "claude_status": p.claude_status,
         }
         for p in projects
     ])
@@ -26,6 +30,51 @@ async def validate_path(request: Request):
         return JSONResponse({"exists": False, "expanded": ""})
     expanded = os.path.expanduser(path)
     return JSONResponse({"exists": os.path.isdir(expanded), "expanded": expanded})
+
+
+async def update(request: Request, project_id: int):
+    body = await request.json()
+
+    project = await Project.find(project_id)
+    if not project:
+        return JSONResponse({"error": "Project not found"}, status_code=404)
+
+    if "workspace_id" in body:
+        project.workspace_id = body["workspace_id"]  # None = unassign
+
+    await project.save()
+
+    return JSONResponse({
+        "id": project.id,
+        "name": project.name,
+        "path": project.path,
+        "language": project.language,
+        "workspace_id": project.workspace_id,
+        "claude_status": project.claude_status,
+    })
+
+
+async def upload_image(request: Request, project_id: int, file: UploadFile = File(...)):
+    project = await Project.find(project_id)
+    if not project:
+        return JSONResponse({"error": "Project not found"}, status_code=404)
+
+    if not file.content_type or not file.content_type.startswith("image/"):
+        return JSONResponse({"error": "Only image files are supported"}, status_code=422)
+
+    filename = file.filename or "image"
+    base, ext = os.path.splitext(filename)
+    rel_path = f"uploads/{project_id}/{filename}"
+    driver = Storage.disk("local")
+    counter = 1
+    while driver.exists(rel_path):
+        rel_path = f"uploads/{project_id}/{base}_{counter}{ext}"
+        counter += 1
+
+    content = await file.read()
+    driver.put(rel_path, content)
+
+    return JSONResponse({"path": driver.get_path(rel_path)})
 
 
 async def store(request: Request):
@@ -49,6 +98,10 @@ async def store(request: Request):
         "language": language,
         "workspace_id": workspace_id,
     })
+
+    expanded_path = os.path.expanduser(path)
+    base_url = env("APP_URL", "http://localhost:8000")
+    ensure_claude_settings(expanded_path, base_url)
 
     return JSONResponse(
         {

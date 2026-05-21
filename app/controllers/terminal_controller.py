@@ -11,10 +11,17 @@ import termios
 
 from fastapi import Query, WebSocket, WebSocketDisconnect
 
+from app.models.Project import Project
 from app.models.TerminalOutput import TerminalOutput
 from app.models.TerminalSession import TerminalSession
 
 _ANSI_ESCAPE = re.compile(rb'\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[^[]')
+
+# Registry: project_path -> active WebSocket (frontend connection)
+connections: dict[str, WebSocket] = {}
+
+# Registry: project_path -> callable that writes bytes to the PTY
+pty_writers: dict[str, callable] = {}
 
 
 def _set_size(master_fd: int, rows: int, cols: int) -> None:
@@ -39,9 +46,20 @@ async def terminal_ws(websocket: WebSocket, project: str, path: str = Query(defa
         'project_path': path or cwd,
     })
 
+    # Link session to project, mark as running, and register connection
+    project_record = await Project.where('path', path or cwd).first()
+    if project_record:
+        await Project.where('id', project_record.id).update({
+            'last_session_id': session.id,
+            'claude_status': 'running',
+        })
+    connections[path or cwd] = websocket
+
     shell = os.environ.get('SHELL', '/bin/bash')
     master_fd, slave_fd = pty.openpty()
     _set_size(master_fd, 24, 80)
+
+    pty_writers[path or cwd] = lambda data: os.write(master_fd, data if isinstance(data, bytes) else data.encode())
 
     proc = subprocess.Popen(
         [shell],
@@ -58,12 +76,19 @@ async def terminal_ws(websocket: WebSocket, project: str, path: str = Query(defa
     stopped = asyncio.Event()
 
     async def auto_continue():
-        """Wait for the shell to be ready, cd into the project dir, then launch claude --continue."""
+        """Wait for the shell to be ready, cd into the project dir, then launch claude.
+        Use --continue only if prior sessions exist for this path."""
         await asyncio.sleep(0.5)
-        if not stopped.is_set():
-            os.write(master_fd, f'cd {shlex.quote(cwd)}\n'.encode())
-            await asyncio.sleep(0.1)
+        if stopped.is_set():
+            return
+        os.write(master_fd, f'cd {shlex.quote(cwd)}\n'.encode())
+        await asyncio.sleep(0.1)
+        prior = await TerminalSession.where('project_path', path or cwd).get()
+        # prior includes the session we just created, so >1 means genuinely previous sessions
+        if len(prior) > 1:
             os.write(master_fd, b'claude --continue\n')
+        else:
+            os.write(master_fd, b'claude\n')
 
     async def pty_to_ws():
         """Read PTY output and forward to WebSocket.
@@ -71,6 +96,8 @@ async def terminal_ws(websocket: WebSocket, project: str, path: str = Query(defa
         (e.g. when a child process forks/execs) are ignored."""
         queue: asyncio.Queue = asyncio.Queue()
         new_session_started = False
+        # Rolling buffer to catch messages that span multiple reads
+        output_buf = ''
 
         def on_readable():
             try:
@@ -90,9 +117,12 @@ async def terminal_ws(websocket: WebSocket, project: str, path: str = Query(defa
                     item = await asyncio.wait_for(queue.get(), timeout=0.1)
                     await websocket.send_bytes(item)
                     text = _strip_ansi(item).strip()
-                    if not new_session_started and 'No conversation found to continue' in text:
-                        new_session_started = True
-                        os.write(master_fd, b'claude\n')
+                    if not new_session_started:
+                        output_buf = (output_buf + ' ' + text)[-2000:]
+                        if 'No conversation' in output_buf and 'continue' in output_buf:
+                            new_session_started = True
+                            await asyncio.sleep(0.2)
+                            os.write(master_fd, b'claude\n')
                     if text and '(thinking)' not in text:
                         await TerminalOutput.create({
                             'session_id': session.id,
@@ -143,6 +173,8 @@ async def terminal_ws(websocket: WebSocket, project: str, path: str = Query(defa
     finally:
         for t in tasks:
             t.cancel()
+        connections.pop(path or cwd, None)
+        pty_writers.pop(path or cwd, None)
         try:
             proc.kill()
         except Exception:

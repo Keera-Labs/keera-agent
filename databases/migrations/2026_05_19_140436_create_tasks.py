@@ -9,7 +9,7 @@ class CreateTasks(Migration):
             table.increments("id")
             table.integer("project_id").unsigned()
             table.string("description")
-            table.enum("status", ["pending", "in_progress", "completed", "cancelled"]).default("pending")
+            table.string("status").default("pending")
             table.timestamps()
 
     async def down(self):
