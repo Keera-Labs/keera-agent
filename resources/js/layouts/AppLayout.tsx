@@ -5,6 +5,17 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { color } from '../tokens'
 
+// ─── Slug utility ─────────────────────────────────────────────────────────────
+
+function slugify(name: string): string {
+    return name
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9-]/g, '')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+}
+
 // ─── Audio notifications ───────────────────────────────────────────────────────
 
 let _audioCtx: AudioContext | null = null
@@ -703,7 +714,11 @@ function ConfirmDeleteProjectModal({
         setError('')
         try {
             const res = await fetch(`/api/projects/${project.id}`, { method: 'DELETE' })
-            if (!res.ok) { setError('Failed to delete project'); return }
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}))
+                setError(data.error ?? 'Failed to delete project')
+                return
+            }
             onDeleted(project.id)
             onClose()
         } catch {
@@ -921,8 +936,8 @@ function ProjectItem({ project, active, status, onMove, onEdit, onSystemPrompt, 
             <div
                 role="button"
                 tabIndex={0}
-                onClick={() => router.visit(`/${project.name}`)}
-                onKeyDown={e => e.key === 'Enter' && router.visit(`/${project.name}`)}
+                onClick={() => router.visit(`/${slugify(project.name)}`)}
+                onKeyDown={e => e.key === 'Enter' && router.visit(`/${slugify(project.name)}`)}
                 style={{
                     flex: 1, display: 'flex', flexDirection: 'column', gap: '2px',
                     padding: '5px 68px 5px 24px', background: active ? color.bgSurface : 'transparent',
@@ -2825,7 +2840,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const containerRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
     const fileInputRef = useRef<HTMLInputElement>(null)
 
-    const activeProject = allProjects.find(p => p.name === projectName) ?? allProjects[0] ?? null
+    const activeProject = allProjects.find(p => slugify(p.name) === projectName) ?? allProjects[0] ?? null
 
     // Flatten all projects from workspaces for terminal management
     const workspaceProjects = workspaces.flatMap(w => w.projects)
@@ -2935,7 +2950,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         }
 
         const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-        const ws = new WebSocket(`${protocol}//${location.host}/${activeProject.name}/ws?path=${encodeURIComponent(activeProject.path)}`)
+        const ws = new WebSocket(`${protocol}//${location.host}/${slugify(activeProject.name)}/ws?path=${encodeURIComponent(activeProject.path)}`)
         ws.binaryType = 'arraybuffer'
         ws.onopen = () => {
             ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
@@ -3018,7 +3033,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     : w
             ))
         }
-        router.visit(`/${project.name}`)
+        router.visit(`/${slugify(project.name)}`)
     }
 
     function openAddProject(workspaceId: number | null) {
@@ -3064,7 +3079,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             projects: w.projects.filter(p => p.id !== projectId),
         })))
         // Navigate away if the deleted project was active
-        if (project && projectName === project.name) {
+        if (project && projectName === slugify(project.name)) {
             router.visit('/')
         }
     }
@@ -3152,7 +3167,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     {activeProject && (
                         <ProjectSidebar view={activeView} projectName={activeProject.name} onChange={(view) => {
                             setProjectView(view)
-                            if (isTasksPage) router.visit(`/${activeProject.name}`)
+                            if (isTasksPage) router.visit(`/${slugify(activeProject.name)}`)
                         }} />
                     )}
 

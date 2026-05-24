@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from fastapi_startkit.environment import env
 from fastapi_startkit.storage.storage import Storage
 
+from app.models.AgentMessage import AgentMessage
 from app.models.Project import Project
 from app.utils.hook_setup import ensure_claude_settings
 
@@ -74,7 +75,17 @@ async def destroy(request: Request, project_id: int):
     project = await Project.find(project_id)
     if not project:
         return JSONResponse({"error": "Project not found"}, status_code=404)
-    await Project.where("id", project_id).delete()
+    try:
+        # Cascade-delete related records before removing the project
+        from app.models.Task import Task
+        from app.models.Command import Command
+        await Task.where("project_id", project_id).delete()
+        await Command.where("project_id", project_id).delete()
+        await AgentMessage.where("receiver_project_id", project_id).delete()
+        await AgentMessage.where("sender_project_id", project_id).delete()
+        await Project.where("id", project_id).delete()
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
     return JSONResponse({"ok": True})
 
 
