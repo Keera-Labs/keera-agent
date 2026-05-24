@@ -5,6 +5,56 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { color } from '../tokens'
 
+// ─── Audio notifications ───────────────────────────────────────────────────────
+
+let _audioCtx: AudioContext | null = null
+function getAudioCtx(): AudioContext {
+    if (!_audioCtx) _audioCtx = new AudioContext()
+    return _audioCtx
+}
+
+function playSound(type: 'done' | 'input') {
+    try {
+        const ctx = getAudioCtx()
+        const gain = ctx.createGain()
+        gain.connect(ctx.destination)
+
+        if (type === 'done') {
+            // Two-tone ascending ding: task completed
+            const freqs = [880, 1100]
+            freqs.forEach((freq, i) => {
+                const osc = ctx.createOscillator()
+                osc.type = 'sine'
+                osc.frequency.value = freq
+                const g = ctx.createGain()
+                g.gain.setValueAtTime(0, ctx.currentTime + i * 0.12)
+                g.gain.linearRampToValueAtTime(0.18, ctx.currentTime + i * 0.12 + 0.02)
+                g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.12 + 0.28)
+                osc.connect(g)
+                g.connect(ctx.destination)
+                osc.start(ctx.currentTime + i * 0.12)
+                osc.stop(ctx.currentTime + i * 0.12 + 0.28)
+            })
+        } else {
+            // Soft double-pulse: needs user input
+            const freqs = [660, 660]
+            freqs.forEach((freq, i) => {
+                const osc = ctx.createOscillator()
+                osc.type = 'sine'
+                osc.frequency.value = freq
+                const g = ctx.createGain()
+                g.gain.setValueAtTime(0, ctx.currentTime + i * 0.18)
+                g.gain.linearRampToValueAtTime(0.14, ctx.currentTime + i * 0.18 + 0.02)
+                g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.18 + 0.18)
+                osc.connect(g)
+                g.connect(ctx.destination)
+                osc.start(ctx.currentTime + i * 0.18)
+                osc.stop(ctx.currentTime + i * 0.18 + 0.18)
+            })
+        }
+    } catch { /* AudioContext not available */ }
+}
+
 interface Workspace {
     id: number
     name: string
@@ -19,6 +69,7 @@ interface Project {
     language: string
     workspace_id: number | null
     claude_status: 'running' | 'idle' | null
+    system_prompt: string | null
 }
 
 interface Session {
@@ -267,6 +318,436 @@ function AddProjectModal({
     )
 }
 
+// ─── Edit Project Path Modal ──────────────────────────────────────────────────
+
+function EditProjectPathModal({
+    project,
+    onClose,
+    onUpdated,
+}: {
+    project: Project
+    onClose: () => void
+    onUpdated: (p: Project) => void
+}) {
+    const [path, setPath] = useState(project.path)
+    const [error, setError] = useState('')
+    const [loading, setLoading] = useState(false)
+
+    async function handleSubmit(e: React.FormEvent) {
+        e.preventDefault()
+        setError('')
+        setLoading(true)
+        try {
+            const res = await fetch(`/api/projects/${project.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: path.trim() }),
+            })
+            const data = await res.json()
+            if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
+            onUpdated(data as Project)
+            onClose()
+        } catch {
+            setError('Network error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    return (
+        <div style={{
+            position: 'fixed', inset: 0, background: color.overlay,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+        }}>
+            <div style={{
+                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
+                padding: '24px', width: '340px', display: 'flex', flexDirection: 'column', gap: '14px',
+            }}>
+                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>
+                        Change Directory —{' '}
+                        <span style={{ fontFamily: '"JetBrains Mono", monospace', color: color.accent }}>{project.name}</span>
+                    </h2>
+                    {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={labelStyle}>Path</span>
+                        <input value={path} onChange={e => setPath(e.target.value)} placeholder="~/code/my-project" required style={inputStyle} />
+                    </label>
+                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                        <button type="button" onClick={onClose} style={cancelBtnStyle}>Cancel</button>
+                        <button type="submit" disabled={loading} style={submitBtnStyle}>
+                            {loading ? 'Saving…' : 'Save'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    )
+}
+
+// ─── System Prompt Modal ──────────────────────────────────────────────────────
+
+function SystemPromptModal({
+    project,
+    onClose,
+    onUpdated,
+}: {
+    project: Project
+    onClose: () => void
+    onUpdated: (p: Project) => void
+}) {
+    const [prompt, setPrompt] = useState(project.system_prompt ?? '')
+    const [error, setError] = useState('')
+    const [loading, setLoading] = useState(false)
+
+    async function handleSubmit(e: React.FormEvent) {
+        e.preventDefault()
+        setError('')
+        setLoading(true)
+        try {
+            const res = await fetch(`/api/projects/${project.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ system_prompt: prompt.trim() || null }),
+            })
+            const data = await res.json()
+            if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
+            onUpdated(data as Project)
+            onClose()
+        } catch {
+            setError('Network error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    return (
+        <div style={{
+            position: 'fixed', inset: 0, background: color.overlay,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+        }}>
+            <div style={{
+                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
+                padding: '24px', width: '480px', display: 'flex', flexDirection: 'column', gap: '14px',
+            }}>
+                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div>
+                        <h2 style={{ margin: '0 0 4px', color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>
+                            System Instructions —{' '}
+                            <span style={{ fontFamily: '"JetBrains Mono", monospace', color: color.accent }}>{project.name}</span>
+                        </h2>
+                        <p style={{ margin: 0, color: color.textMuted, fontSize: '11px' }}>
+                            Instructions passed to Claude when a new agent session starts. Leave blank to use no system prompt.
+                        </p>
+                    </div>
+                    {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={labelStyle}>System prompt</span>
+                        <textarea
+                            value={prompt}
+                            onChange={e => setPrompt(e.target.value)}
+                            placeholder="You are a helpful assistant specialized in..."
+                            rows={8}
+                            style={{
+                                ...inputStyle,
+                                resize: 'vertical',
+                                fontFamily: '"JetBrains Mono", monospace',
+                                fontSize: '12px',
+                                lineHeight: '1.5',
+                            }}
+                        />
+                    </label>
+                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                        <button type="button" onClick={onClose} style={cancelBtnStyle}>Cancel</button>
+                        <button type="submit" disabled={loading} style={submitBtnStyle}>
+                            {loading ? 'Saving…' : 'Save'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    )
+}
+
+// ─── Shared Permissions Editor ────────────────────────────────────────────────
+
+function PermissionsEditor({
+    title,
+    subtitle,
+    allow,
+    deny,
+    onChange,
+    loading,
+    error,
+    onSubmit,
+    onClose,
+}: {
+    title: React.ReactNode
+    subtitle: string
+    allow: string
+    deny: string
+    onChange: (field: 'allow' | 'deny', value: string) => void
+    loading: boolean
+    error: string
+    onSubmit: (e: React.FormEvent) => void
+    onClose: () => void
+}) {
+    const areaStyle: React.CSSProperties = {
+        ...inputStyle,
+        resize: 'vertical',
+        fontFamily: '"JetBrains Mono", monospace',
+        fontSize: '11px',
+        lineHeight: '1.6',
+        minHeight: '80px',
+    }
+    return (
+        <div style={{
+            position: 'fixed', inset: 0, background: color.overlay,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+        }}>
+            <div style={{
+                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
+                padding: '24px', width: '460px', display: 'flex', flexDirection: 'column', gap: '14px',
+            }}>
+                <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div>
+                        <h2 style={{ margin: '0 0 4px', color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>
+                            {title}
+                        </h2>
+                        <p style={{ margin: 0, color: color.textMuted, fontSize: '11px' }}>{subtitle}</p>
+                    </div>
+                    {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={labelStyle}>Allow — one rule per line</span>
+                        <textarea
+                            value={allow}
+                            onChange={e => onChange('allow', e.target.value)}
+                            placeholder={'Bash(*)\nRead\nWrite\nEdit\nWebSearch'}
+                            style={areaStyle}
+                        />
+                    </label>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={labelStyle}>Deny — one rule per line</span>
+                        <textarea
+                            value={deny}
+                            onChange={e => onChange('deny', e.target.value)}
+                            placeholder={'Bash(rm -rf *)'}
+                            style={areaStyle}
+                        />
+                    </label>
+                    <p style={{ margin: 0, color: color.textFaint, fontSize: '10px', lineHeight: '1.5' }}>
+                        Rules follow Claude Code syntax, e.g. <code style={{ fontFamily: 'monospace' }}>Bash(*)</code>, <code style={{ fontFamily: 'monospace' }}>Bash(npm run *)</code>, <code style={{ fontFamily: 'monospace' }}>Read</code>. Leave both blank to rely on interactive prompts.
+                    </p>
+                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                        <button type="button" onClick={onClose} style={cancelBtnStyle}>Cancel</button>
+                        <button type="submit" disabled={loading} style={submitBtnStyle}>
+                            {loading ? 'Saving…' : 'Save'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    )
+}
+
+// ─── Project Permissions Modal ────────────────────────────────────────────────
+
+function ProjectPermissionsModal({
+    project,
+    onClose,
+}: {
+    project: Project
+    onClose: () => void
+}) {
+    const [allow, setAllow] = useState('')
+    const [deny,  setDeny]  = useState('')
+    const [error,   setError]   = useState('')
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        fetch(`/api/projects/${project.id}/permissions`)
+            .then(r => r.json())
+            .then(d => {
+                setAllow((d.allow ?? []).join('\n'))
+                setDeny((d.deny ?? []).join('\n'))
+            })
+            .catch(() => setError('Failed to load permissions'))
+            .finally(() => setLoading(false))
+    }, [project.id])
+
+    function handleChange(field: 'allow' | 'deny', value: string) {
+        if (field === 'allow') setAllow(value)
+        else setDeny(value)
+    }
+
+    async function handleSubmit(e: React.FormEvent) {
+        e.preventDefault()
+        setError('')
+        setLoading(true)
+        try {
+            const res = await fetch(`/api/projects/${project.id}/permissions`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    allow: allow.split('\n').map(s => s.trim()).filter(Boolean),
+                    deny:  deny.split('\n').map(s => s.trim()).filter(Boolean),
+                }),
+            })
+            const data = await res.json()
+            if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
+            setAllow((data.allow ?? []).join('\n'))
+            setDeny((data.deny ?? []).join('\n'))
+            onClose()
+        } catch {
+            setError('Network error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    return (
+        <PermissionsEditor
+            title={<>Permissions — <span style={{ fontFamily: '"JetBrains Mono", monospace', color: color.accent }}>{project.name}</span></>}
+            subtitle="Saved to the project's .claude/settings.json. Takes effect on next agent start."
+            allow={allow}
+            deny={deny}
+            onChange={handleChange}
+            loading={loading}
+            error={error}
+            onSubmit={handleSubmit}
+            onClose={onClose}
+        />
+    )
+}
+
+// ─── Default Permissions Modal ────────────────────────────────────────────────
+
+function DefaultPermissionsModal({ onClose }: { onClose: () => void }) {
+    const [allow, setAllow] = useState('')
+    const [deny,  setDeny]  = useState('')
+    const [error,   setError]   = useState('')
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        fetch('/api/default-permissions')
+            .then(r => r.json())
+            .then(d => {
+                setAllow((d.allow ?? []).join('\n'))
+                setDeny((d.deny ?? []).join('\n'))
+            })
+            .catch(() => setError('Failed to load defaults'))
+            .finally(() => setLoading(false))
+    }, [])
+
+    function handleChange(field: 'allow' | 'deny', value: string) {
+        if (field === 'allow') setAllow(value)
+        else setDeny(value)
+    }
+
+    async function handleSubmit(e: React.FormEvent) {
+        e.preventDefault()
+        setError('')
+        setLoading(true)
+        try {
+            const res = await fetch('/api/default-permissions', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    allow: allow.split('\n').map(s => s.trim()).filter(Boolean),
+                    deny:  deny.split('\n').map(s => s.trim()).filter(Boolean),
+                }),
+            })
+            const data = await res.json()
+            if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
+            setAllow((data.allow ?? []).join('\n'))
+            setDeny((data.deny ?? []).join('\n'))
+            onClose()
+        } catch {
+            setError('Network error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    return (
+        <PermissionsEditor
+            title="Default Permissions"
+            subtitle="Applied to new projects automatically. Existing projects are not affected."
+            allow={allow}
+            deny={deny}
+            onChange={handleChange}
+            loading={loading}
+            error={error}
+            onSubmit={handleSubmit}
+            onClose={onClose}
+        />
+    )
+}
+
+// ─── Confirm Delete Project Modal ─────────────────────────────────────────────
+
+function ConfirmDeleteProjectModal({
+    project,
+    onClose,
+    onDeleted,
+}: {
+    project: Project
+    onClose: () => void
+    onDeleted: (projectId: number) => void
+}) {
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState('')
+
+    async function handleDelete() {
+        setLoading(true)
+        setError('')
+        try {
+            const res = await fetch(`/api/projects/${project.id}`, { method: 'DELETE' })
+            if (!res.ok) { setError('Failed to delete project'); return }
+            onDeleted(project.id)
+            onClose()
+        } catch {
+            setError('Network error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    return (
+        <div style={{
+            position: 'fixed', inset: 0, background: color.overlay,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+        }}>
+            <div style={{
+                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
+                padding: '24px', width: '320px', display: 'flex', flexDirection: 'column', gap: '14px',
+            }}>
+                <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>Delete Project</h2>
+                <p style={{ margin: 0, color: color.textMuted, fontSize: '13px', lineHeight: 1.5 }}>
+                    Remove{' '}
+                    <span style={{ color: color.textSecondary, fontFamily: '"JetBrains Mono", monospace', fontSize: '12px' }}>{project.name}</span>
+                    {' '}from Keera? This only removes it from the app — files on disk are not deleted.
+                </p>
+                {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                    <button type="button" onClick={onClose} disabled={loading} style={cancelBtnStyle}>Cancel</button>
+                    <button
+                        type="button"
+                        disabled={loading}
+                        onClick={handleDelete}
+                        style={{
+                            background: '#da3633', border: `1px solid ${color.danger}`,
+                            borderRadius: '6px', color: '#fff', fontSize: '12px', padding: '6px 14px', cursor: 'pointer',
+                        }}
+                    >
+                        {loading ? 'Deleting…' : 'Delete'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 // ─── Move Project Modal ───────────────────────────────────────────────────────
 
 function MoveProjectModal({
@@ -415,8 +896,21 @@ function DotsIndicator() {
     )
 }
 
-function ProjectItem({ project, active, status, onMove }: { project: Project; active: boolean; status?: 'running' | 'done'; onMove: (p: Project) => void }) {
+function ProjectItem({ project, active, status, onMove, onEdit, onSystemPrompt, onPermissions, onDelete }: {
+    project: Project; active: boolean; status?: 'running' | 'done';
+    onMove: (p: Project) => void;
+    onEdit: (p: Project) => void;
+    onSystemPrompt: (p: Project) => void;
+    onPermissions: (p: Project) => void;
+    onDelete: (p: Project) => void;
+}) {
     const [hovered, setHovered] = useState(false)
+
+    const iconBtnStyle = (danger = false): React.CSSProperties => ({
+        background: 'transparent', border: 'none', cursor: 'pointer',
+        color: danger ? color.danger : color.textMuted,
+        padding: '2px 3px', lineHeight: 1, display: 'flex', alignItems: 'center',
+    })
 
     return (
         <div
@@ -431,7 +925,7 @@ function ProjectItem({ project, active, status, onMove }: { project: Project; ac
                 onKeyDown={e => e.key === 'Enter' && router.visit(`/${project.name}`)}
                 style={{
                     flex: 1, display: 'flex', flexDirection: 'column', gap: '2px',
-                    padding: '5px 28px 5px 24px', background: active ? color.bgSurface : 'transparent',
+                    padding: '5px 68px 5px 24px', background: active ? color.bgSurface : 'transparent',
                     borderLeft: `2px solid ${active ? color.accent : 'transparent'}`,
                     cursor: 'pointer', textAlign: 'left',
                 }}
@@ -457,21 +951,51 @@ function ProjectItem({ project, active, status, onMove }: { project: Project; ac
                     <span style={{ color: color.textMuted, fontSize: '11px' }}>{project.language}</span>
                 </span>
             </div>
-            <button
-                onClick={e => { e.stopPropagation(); onMove(project) }}
-                title="Move to workspace"
-                style={{
-                    position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)',
-                    background: 'transparent', border: 'none', cursor: 'pointer',
-                    color: hovered ? color.textMuted : 'transparent',
-                    padding: '2px 3px', lineHeight: 1, display: 'flex', alignItems: 'center',
-                    transition: 'color 0.1s',
-                }}
-            >
-                <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M7.47 1.97a.75.75 0 011.06 0l4.5 4.5a.75.75 0 010 1.06l-4.5 4.5a.75.75 0 11-1.06-1.06L11.44 7H3a.75.75 0 010-1.5h8.44L7.47 3.03a.75.75 0 010-1.06z"/>
-                </svg>
-            </button>
+            {hovered && (
+                <div style={{
+                    position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)',
+                    display: 'flex', alignItems: 'center', gap: '1px',
+                }}>
+                    {/* Change directory */}
+                    <button onClick={e => { e.stopPropagation(); onEdit(project) }} title="Change directory" style={iconBtnStyle()}>
+                        <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M11.013 1.427a1.75 1.75 0 012.474 0l1.086 1.086a1.75 1.75 0 010 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 01-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61zm1.414 1.06a.25.25 0 00-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 000-.354l-1.086-1.086zM11.189 6.25L9.75 4.81l-6.286 6.287a.25.25 0 00-.064.108l-.558 1.953 1.953-.558a.249.249 0 00.108-.064l6.286-6.286z"/>
+                        </svg>
+                    </button>
+                    {/* System instructions */}
+                    <button
+                        onClick={e => { e.stopPropagation(); onSystemPrompt(project) }}
+                        title="System instructions"
+                        style={{ ...iconBtnStyle(), color: project.system_prompt ? color.accent : color.textMuted }}
+                    >
+                        <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M0 1.75A.75.75 0 01.75 1h9.5a.75.75 0 010 1.5H.75A.75.75 0 010 1.75zM0 8a.75.75 0 01.75-.75h9.5a.75.75 0 010 1.5H.75A.75.75 0 010 8zm0 6.25a.75.75 0 01.75-.75h5.5a.75.75 0 010 1.5H.75a.75.75 0 01-.75-.75z"/>
+                        </svg>
+                    </button>
+                    {/* Permissions */}
+                    <button
+                        onClick={e => { e.stopPropagation(); onPermissions(project) }}
+                        title="Permissions"
+                        style={iconBtnStyle()}
+                    >
+                        <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M8.533.133a1.75 1.75 0 00-1.066 0l-5.25 1.68A1.75 1.75 0 001 3.48V8c0 3.183 1.958 5.837 4.798 7.319a.75.75 0 00.404.119.75.75 0 00.404-.119C9.042 13.837 11 11.183 11 8V3.48a1.75 1.75 0 00-1.217-1.667L8.533.133zm-.61 1.429a.25.25 0 01.153 0l5.25 1.68a.25.25 0 01.174.238V8c0 2.67-1.625 4.91-4 6.282C7.875 12.91 6.25 10.67 6.25 8V3.48a.25.25 0 01.173-.238l1.5-.48z"/>
+                        </svg>
+                    </button>
+                    {/* Move to workspace */}
+                    <button onClick={e => { e.stopPropagation(); onMove(project) }} title="Move to workspace" style={iconBtnStyle()}>
+                        <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M7.47 1.97a.75.75 0 011.06 0l4.5 4.5a.75.75 0 010 1.06l-4.5 4.5a.75.75 0 11-1.06-1.06L11.44 7H3a.75.75 0 010-1.5h8.44L7.47 3.03a.75.75 0 010-1.06z"/>
+                        </svg>
+                    </button>
+                    {/* Delete project */}
+                    <button onClick={e => { e.stopPropagation(); onDelete(project) }} title="Delete project" style={iconBtnStyle(true)}>
+                        <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M6.5 1.75a.25.25 0 01.25-.25h2.5a.25.25 0 01.25.25V3h-3V1.75zm4.5 0V3h2.25a.75.75 0 010 1.5H2.75a.75.75 0 010-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75zM4.496 6.675l.66 6.6a.25.25 0 00.249.225h5.19a.25.25 0 00.249-.225l.66-6.6a.75.75 0 011.492.149l-.66 6.6A1.748 1.748 0 0111.095 15H4.905a1.748 1.748 0 01-1.741-1.576l-.66-6.6a.75.75 0 111.492-.149z"/>
+                        </svg>
+                    </button>
+                </div>
+            )}
         </div>
     )
 }
@@ -481,12 +1005,20 @@ function WorkspaceSection({
     activeId,
     onAddProject,
     onMoveProject,
+    onEditProject,
+    onSystemPromptProject,
+    onPermissionsProject,
+    onDeleteProject,
     claudeStatus,
 }: {
     workspace: Workspace
     activeId: number | null
     onAddProject: (workspaceId: number) => void
     onMoveProject: (project: Project) => void
+    onEditProject: (project: Project) => void
+    onSystemPromptProject: (project: Project) => void
+    onPermissionsProject: (project: Project) => void
+    onDeleteProject: (project: Project) => void
     claudeStatus: Record<number, 'running' | 'done'>
 }) {
     const [collapsed, setCollapsed] = useState(false)
@@ -547,7 +1079,7 @@ function WorkspaceSection({
                     )}
                     {workspace.projects.map(project => (
                         <li key={project.id}>
-                            <ProjectItem project={project} active={project.id === activeId} status={claudeStatus[project.id]} onMove={onMoveProject} />
+                            <ProjectItem project={project} active={project.id === activeId} status={claudeStatus[project.id]} onMove={onMoveProject} onEdit={onEditProject} onSystemPrompt={onSystemPromptProject} onPermissions={onPermissionsProject} onDelete={onDeleteProject} />
                         </li>
                     ))}
                 </ul>
@@ -603,6 +1135,11 @@ function Sidebar({
     onAddWorkspace,
     onAddProject,
     onMoveProject,
+    onEditProject,
+    onSystemPromptProject,
+    onPermissionsProject,
+    onOpenDefaultPermissions,
+    onDeleteProject,
     tasks,
     onOpenCreateTask,
     onUpdateStatus,
@@ -615,6 +1152,11 @@ function Sidebar({
     onAddWorkspace: () => void
     onAddProject: (workspaceId: number | null) => void
     onMoveProject: (project: Project) => void
+    onEditProject: (project: Project) => void
+    onSystemPromptProject: (project: Project) => void
+    onPermissionsProject: (project: Project) => void
+    onOpenDefaultPermissions: () => void
+    onDeleteProject: (project: Project) => void
     tasks: Task[]
     onOpenCreateTask: () => void
     onUpdateStatus: (task: Task, status: Task['status']) => void
@@ -646,6 +1188,21 @@ function Sidebar({
                     selected={filterWorkspaceId}
                     onChange={setFilterWorkspaceId}
                 />
+                <button
+                    onClick={onOpenDefaultPermissions}
+                    title="Default permissions"
+                    style={{
+                        background: 'transparent', border: 'none', cursor: 'pointer',
+                        color: color.textFaint, padding: '2px', lineHeight: 1,
+                        display: 'flex', alignItems: 'center', flexShrink: 0,
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.color = color.textMuted)}
+                    onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
+                >
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M8.533.133a1.75 1.75 0 00-1.066 0l-5.25 1.68A1.75 1.75 0 001 3.48V8c0 3.183 1.958 5.837 4.798 7.319a.75.75 0 00.404.119.75.75 0 00.404-.119C9.042 13.837 11 11.183 11 8V3.48a1.75 1.75 0 00-1.217-1.667L8.533.133zm-.61 1.429a.25.25 0 01.153 0l5.25 1.68a.25.25 0 01.174.238V8c0 2.67-1.625 4.91-4 6.282C7.875 12.91 6.25 10.67 6.25 8V3.48a.25.25 0 01.173-.238l1.5-.48z"/>
+                    </svg>
+                </button>
             </div>
 
             {/* Workspaces + Projects section */}
@@ -669,7 +1226,7 @@ function Sidebar({
                                     )}
                                     {ws.projects.map(project => (
                                         <li key={project.id}>
-                                            <ProjectItem project={project} active={project.id === activeId} status={claudeStatus[project.id]} onMove={onMoveProject} />
+                                            <ProjectItem project={project} active={project.id === activeId} status={claudeStatus[project.id]} onMove={onMoveProject} onEdit={onEditProject} onSystemPrompt={onSystemPromptProject} onPermissions={onPermissionsProject} onDelete={onDeleteProject} />
                                         </li>
                                     ))}
                                 </ul>
@@ -694,6 +1251,10 @@ function Sidebar({
                                 activeId={activeId}
                                 onAddProject={onAddProject}
                                 onMoveProject={onMoveProject}
+                                onEditProject={onEditProject}
+                                onSystemPromptProject={onSystemPromptProject}
+                                onPermissionsProject={onPermissionsProject}
+                                onDeleteProject={onDeleteProject}
                                 claudeStatus={claudeStatus}
                             />
                         ))}
@@ -724,7 +1285,7 @@ function Sidebar({
                                 <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
                                     {unassignedProjects.map(project => (
                                         <li key={project.id}>
-                                            <ProjectItem project={project} active={project.id === activeId} status={claudeStatus[project.id]} onMove={onMoveProject} />
+                                            <ProjectItem project={project} active={project.id === activeId} status={claudeStatus[project.id]} onMove={onMoveProject} onEdit={onEditProject} onSystemPrompt={onSystemPromptProject} onPermissions={onPermissionsProject} onDelete={onDeleteProject} />
                                         </li>
                                     ))}
                                 </ul>
@@ -999,9 +1560,152 @@ function CreateTaskModal({
     )
 }
 
+// ─── Task Detail Modal ────────────────────────────────────────────────────────
+
+function TaskDetailModal({ task, onClose }: { task: Task; onClose: () => void }) {
+    useEffect(() => {
+        function onKeyDown(e: KeyboardEvent) {
+            if (e.key === 'Escape') onClose()
+        }
+        document.addEventListener('keydown', onKeyDown)
+        return () => document.removeEventListener('keydown', onKeyDown)
+    }, [onClose])
+
+    const statusColor = STATUS_COLORS[task.status]
+
+    return (
+        <div
+            style={{
+                position: 'fixed', inset: 0, background: color.overlay,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+            }}
+            onClick={onClose}
+        >
+            <div
+                style={{
+                    background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
+                    width: '540px', maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+                    overflow: 'hidden',
+                }}
+                onClick={e => e.stopPropagation()}
+            >
+                {/* Header */}
+                <div style={{
+                    padding: '16px 20px', borderBottom: `1px solid ${color.border}`,
+                    display: 'flex', alignItems: 'flex-start', gap: '10px', flexShrink: 0,
+                }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '15px', fontWeight: 600, color: color.textPrimary, lineHeight: 1.4, wordBreak: 'break-word' }}>
+                            {task.title}
+                        </div>
+                        <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span style={{
+                                fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '10px',
+                                background: `${statusColor}20`, border: `1px solid ${statusColor}40`,
+                                color: statusColor, textTransform: 'uppercase', letterSpacing: '0.05em',
+                            }}>
+                                {STATUS_LABELS[task.status]}
+                            </span>
+                            <PriorityBadge priority={task.priority} />
+                        </div>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        style={{
+                            flexShrink: 0, background: 'transparent', border: 'none',
+                            color: color.textFaint, cursor: 'pointer', padding: '2px',
+                            fontSize: '20px', lineHeight: 1,
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.color = color.textPrimary }}
+                        onMouseLeave={e => { e.currentTarget.style.color = color.textFaint }}
+                    >
+                        ×
+                    </button>
+                </div>
+
+                {/* Scrollable body */}
+                <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {/* Description */}
+                    {task.description ? (
+                        <div>
+                            <div style={{ ...labelStyle, marginBottom: '6px' }}>Description</div>
+                            <div style={{ fontSize: '13px', color: color.textMuted, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                                {task.description}
+                            </div>
+                        </div>
+                    ) : (
+                        <div style={{ fontSize: '12px', color: color.textFaint, fontStyle: 'italic' }}>No description</div>
+                    )}
+
+                    {/* Assignees */}
+                    {task.assignees.length > 0 && (
+                        <div>
+                            <div style={{ ...labelStyle, marginBottom: '6px' }}>Assignees</div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                {task.assignees.map(a => (
+                                    <span key={a} style={{
+                                        background: color.accentSubtle, border: `1px solid ${color.accentEmphasis}`,
+                                        borderRadius: '10px', padding: '2px 8px',
+                                        color: color.accentMuted, fontSize: '11px',
+                                    }}>{a}</span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Acceptance criteria */}
+                    {task.acceptance_criteria.length > 0 && (
+                        <div>
+                            <div style={{ ...labelStyle, marginBottom: '6px', color: color.success }}>Acceptance Criteria</div>
+                            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                {task.acceptance_criteria.map((c, i) => (
+                                    <li key={i} style={{ display: 'flex', gap: '8px', fontSize: '12px', color: color.textMuted, lineHeight: 1.5 }}>
+                                        <span style={{ color: color.success, flexShrink: 0 }}>✓</span>
+                                        <span>{c}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
+                    {/* Testing methods */}
+                    {task.testing_methods.length > 0 && (
+                        <div>
+                            <div style={{ ...labelStyle, marginBottom: '6px', color: color.accent }}>Testing Methods</div>
+                            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                {task.testing_methods.map((m, i) => (
+                                    <li key={i} style={{ display: 'flex', gap: '8px', fontSize: '12px', color: color.textMuted, lineHeight: 1.5 }}>
+                                        <span style={{ color: color.accent, flexShrink: 0 }}>⬡</span>
+                                        <span>{m}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
+                    {/* Validation steps */}
+                    {task.validation_steps.length > 0 && (
+                        <div>
+                            <div style={{ ...labelStyle, marginBottom: '6px', color: color.warning }}>Validation Steps</div>
+                            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                {task.validation_steps.map((s, i) => (
+                                    <li key={i} style={{ display: 'flex', gap: '8px', fontSize: '12px', color: color.textMuted, lineHeight: 1.5 }}>
+                                        <span style={{ color: color.warning, flexShrink: 0 }}>◎</span>
+                                        <span>{s}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    )
+}
+
 // ─── Project sidebar ─────────────────────────────────────────────────────────
 
-type ProjectView = 'agents' | 'commands' | 'tasks'
+type ProjectView = 'agents' | 'commands' | 'tasks' | 'messages'
 
 const PROJECT_NAV: { id: ProjectView; label: string; icon: React.ReactNode }[] = [
     {
@@ -1031,9 +1735,18 @@ const PROJECT_NAV: { id: ProjectView; label: string; icon: React.ReactNode }[] =
             </svg>
         ),
     },
+    {
+        id: 'messages',
+        label: 'Messages',
+        icon: (
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0114.25 14H1.75A1.75 1.75 0 010 12.25v-8.5C0 2.784.784 2 1.75 2zM1.5 12.251c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V5.06l-5.563 3.516a1.75 1.75 0 01-1.874 0L1.5 5.06v7.19zm13-8.181L8.312 7.512a.25.25 0 01-.264 0L1.5 4.07v-.32a.25.25 0 01.25-.25h12.5a.25.25 0 01.25.25v.32z"/>
+            </svg>
+        ),
+    },
 ]
 
-function ProjectSidebar({ view, onChange }: { view: ProjectView; onChange: (v: ProjectView) => void }) {
+function ProjectSidebar({ view, projectName, onChange }: { view: ProjectView; projectName: string | null; onChange: (v: ProjectView) => void }) {
     return (
         <div style={{
             width: '140px', flexShrink: 0, background: color.bgCanvas,
@@ -1045,7 +1758,13 @@ function ProjectSidebar({ view, onChange }: { view: ProjectView; onChange: (v: P
                 return (
                     <button
                         key={item.id}
-                        onClick={() => onChange(item.id)}
+                        onClick={() => {
+                            if (item.id === 'tasks' && projectName) {
+                                router.visit(`/${projectName}/tasks`)
+                            } else {
+                                onChange(item.id)
+                            }
+                        }}
                         style={{
                             display: 'flex', alignItems: 'center', gap: '8px',
                             padding: '8px 14px',
@@ -1675,11 +2394,13 @@ function TasksView({
     onOpenCreateTask,
     onUpdateStatus,
     onDeleteTask,
+    onOpenTask,
 }: {
     tasks: Task[]
     onOpenCreateTask: () => void
     onUpdateStatus: (task: Task, status: Task['status']) => void
     onDeleteTask: (task: Task) => void
+    onOpenTask: (task: Task) => void
 }) {
     const [dragTaskId, setDragTaskId] = useState<number | null>(null)
     const [dragOverStatus, setDragOverStatus] = useState<Task['status'] | null>(null)
@@ -1778,11 +2499,12 @@ function TasksView({
                                         draggable
                                         onDragStart={() => setDragTaskId(task.id)}
                                         onDragEnd={() => { setDragTaskId(null); setDragOverStatus(null) }}
+                                        onClick={() => { if (dragTaskId === null) onOpenTask(task) }}
                                         style={{
                                             background: color.bgBase,
                                             border: `1px solid ${color.borderMuted}`,
                                             borderRadius: '6px', padding: '10px 10px 8px',
-                                            cursor: 'grab', opacity: dragTaskId === task.id ? 0.35 : 1,
+                                            cursor: 'pointer', opacity: dragTaskId === task.id ? 0.35 : 1,
                                             transition: 'opacity 0.1s', display: 'flex',
                                             flexDirection: 'column', gap: '6px',
                                             position: 'relative',
@@ -1801,7 +2523,7 @@ function TasksView({
                                                 {task.title}
                                             </span>
                                             <button
-                                                onClick={() => onDeleteTask(task)}
+                                                onClick={e => { e.stopPropagation(); onDeleteTask(task) }}
                                                 style={{
                                                     flexShrink: 0, background: 'transparent', border: 'none',
                                                     color: color.textFaint, cursor: 'pointer', padding: 0,
@@ -1886,6 +2608,151 @@ function TasksView({
     )
 }
 
+// ─── Messages view ────────────────────────────────────────────────────────────
+
+interface AgentMessage {
+    id: number
+    sender_project_id: number
+    receiver_project_id: number
+    sender_name: string
+    receiver_name: string
+    content: string
+    status: 'pending' | 'delivered' | 'read'
+    created_at: string
+}
+
+function MessagesView({ projectId, projectName, newMessageIds }: { projectId: number; projectName: string; newMessageIds: number[] }) {
+    const [messages, setMessages] = useState<AgentMessage[]>([])
+
+    useEffect(() => {
+        fetch(`/api/projects/${projectId}/messages`)
+            .then(r => r.json())
+            .then(setMessages)
+            .catch(() => {})
+    }, [projectId])
+
+    // Reload when new messages arrive via WS
+    useEffect(() => {
+        if (newMessageIds.length === 0) return
+        fetch(`/api/projects/${projectId}/messages`)
+            .then(r => r.json())
+            .then(setMessages)
+            .catch(() => {})
+    }, [newMessageIds.length, projectId])
+
+    async function markRead(msg: AgentMessage) {
+        if (msg.status === 'read') return
+        await fetch(`/api/messages/${msg.id}/read`, { method: 'PATCH' })
+        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'read' } : m))
+    }
+
+    const unreadCount = messages.filter(m => m.receiver_project_id === projectId && m.status !== 'read').length
+
+    return (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {/* Header */}
+            <div style={{
+                padding: '10px 20px', borderBottom: `1px solid ${color.border}`,
+                display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0,
+                background: color.bgCanvas,
+            }}>
+                <svg width="13" height="13" viewBox="0 0 16 16" fill={color.textMuted}>
+                    <path d="M1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0114.25 14H1.75A1.75 1.75 0 010 12.25v-8.5C0 2.784.784 2 1.75 2zM1.5 12.251c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V5.06l-5.563 3.516a1.75 1.75 0 01-1.874 0L1.5 5.06v7.19zm13-8.181L8.312 7.512a.25.25 0 01-.264 0L1.5 4.07v-.32a.25.25 0 01.25-.25h12.5a.25.25 0 01.25.25v.32z"/>
+                </svg>
+                <span style={{ color: color.textPrimary, fontSize: '13px', fontWeight: 600, flex: 1 }}>Agent Messages</span>
+                {unreadCount > 0 && (
+                    <span style={{
+                        fontSize: '10px', padding: '1px 7px', borderRadius: '10px',
+                        background: `${color.accent}20`, border: `1px solid ${color.accent}40`,
+                        color: color.accent,
+                    }}>
+                        {unreadCount} unread
+                    </span>
+                )}
+            </div>
+
+            {/* Message thread */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {messages.length === 0 ? (
+                    <div style={{
+                        flex: 1, display: 'flex', flexDirection: 'column',
+                        alignItems: 'center', justifyContent: 'center', gap: '10px',
+                        padding: '60px 24px', textAlign: 'center',
+                    }}>
+                        <svg width="32" height="32" viewBox="0 0 16 16" fill={color.textFaint}>
+                            <path d="M1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0114.25 14H1.75A1.75 1.75 0 010 12.25v-8.5C0 2.784.784 2 1.75 2zM1.5 12.251c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V5.06l-5.563 3.516a1.75 1.75 0 01-1.874 0L1.5 5.06v7.19zm13-8.181L8.312 7.512a.25.25 0 01-.264 0L1.5 4.07v-.32a.25.25 0 01.25-.25h12.5a.25.25 0 01.25.25v.32z"/>
+                        </svg>
+                        <div>
+                            <p style={{ margin: '0 0 4px', color: color.textSecondary, fontSize: '13px', fontWeight: 500 }}>
+                                No messages yet
+                            </p>
+                            <p style={{ margin: 0, color: color.textFaint, fontSize: '11px', lineHeight: 1.5 }}>
+                                Agents can communicate using the<br />
+                                <code style={{ fontFamily: '"JetBrains Mono", monospace', color: color.accent }}>send_message_to_agent</code> MCP tool
+                            </p>
+                        </div>
+                    </div>
+                ) : (
+                    messages.map(msg => {
+                        const isInbound = msg.receiver_project_id === projectId
+                        const isUnread = isInbound && msg.status !== 'read'
+                        return (
+                            <div
+                                key={msg.id}
+                                onClick={() => isInbound && markRead(msg)}
+                                style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: isInbound ? 'flex-start' : 'flex-end',
+                                    gap: '4px',
+                                    cursor: isUnread ? 'pointer' : 'default',
+                                }}
+                            >
+                                <div style={{
+                                    fontSize: '10px', color: color.textFaint,
+                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                }}>
+                                    {isInbound ? (
+                                        <><span style={{ color: color.accent }}>{msg.sender_name}</span> → {projectName}</>
+                                    ) : (
+                                        <>{projectName} → <span style={{ color: color.accent }}>{msg.receiver_name}</span></>
+                                    )}
+                                    <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                </div>
+                                <div style={{
+                                    maxWidth: '75%',
+                                    background: isInbound ? color.bgSurface : color.accentSubtle,
+                                    border: `1px solid ${isUnread ? color.accent : isInbound ? color.borderMuted : color.accentEmphasis}`,
+                                    borderRadius: '8px',
+                                    padding: '8px 12px',
+                                    fontSize: '12px',
+                                    color: color.textPrimary,
+                                    lineHeight: 1.5,
+                                    wordBreak: 'break-word',
+                                    whiteSpace: 'pre-wrap',
+                                    boxShadow: isUnread ? `0 0 0 2px ${color.accent}30` : 'none',
+                                }}>
+                                    {msg.content}
+                                    {isUnread && (
+                                        <span style={{
+                                            display: 'inline-block', marginLeft: '6px',
+                                            width: '6px', height: '6px', borderRadius: '50%',
+                                            background: color.accent, verticalAlign: 'middle',
+                                        }} />
+                                    )}
+                                </div>
+                                <div style={{ fontSize: '10px', color: color.textFaint }}>
+                                    {msg.status}
+                                </div>
+                            </div>
+                        )
+                    })
+                )}
+            </div>
+        </div>
+    )
+}
+
 // ─── Terminal factory ─────────────────────────────────────────────────────────
 // xterm.js requires raw hex values — CSS variables are not supported.
 // These intentionally mirror the design tokens but must stay as hex strings.
@@ -1929,7 +2796,7 @@ function ClaudeStatusBadge({ status }: { status?: 'running' | 'done' }) {
 // ─── Persistent layout ────────────────────────────────────────────────────────
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-    const { props } = usePage<{ project?: string }>()
+    const { props, component } = usePage<{ project?: string; tasks?: Task[] }>()
     const projectName = props.project
 
     const [workspaces, setWorkspaces] = useState<Workspace[]>([])
@@ -1937,13 +2804,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const [showWorkspaceModal, setShowWorkspaceModal] = useState(false)
     const [addProjectWorkspaceId, setAddProjectWorkspaceId] = useState<number | null | undefined>(undefined)
     const [movingProject, setMovingProject] = useState<Project | null>(null)
-    const [tasks, setTasks] = useState<Task[]>([])
+    const [editingProject, setEditingProject] = useState<Project | null>(null)
+    const [systemPromptProject, setSystemPromptProject] = useState<Project | null>(null)
+    const [permissionsProject, setPermissionsProject] = useState<Project | null>(null)
+    const [showDefaultPermissions, setShowDefaultPermissions] = useState(false)
+    const [deletingProject, setDeletingProject] = useState<Project | null>(null)
+    const [tasks, setTasks] = useState<Task[]>(props.tasks ?? [])
     // 'running' = Claude is working, 'done' = Claude finished (Stop hook received)
     const [claudeStatus, setClaudeStatus] = useState<Record<number, 'running' | 'done'>>({})
 
+    const isTasksPage = component === 'Tasks'
     const [projectView, setProjectView] = useState<ProjectView>('agents')
+    const activeView: ProjectView = isTasksPage ? 'tasks' : projectView
     const [showCreateTask, setShowCreateTask] = useState(false)
     const [isDraggingOver, setIsDraggingOver] = useState(false)
+    const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+    const [newMessageIds, setNewMessageIds] = useState<number[]>([])
 
     const sessions = useRef<Map<number, Session>>(new Map())
     const containerRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
@@ -1979,6 +2855,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             .then(setTasks)
             .catch(() => {})
     }, [activeProject?.id])
+
+    function handleOpenTask(task: Task) { setSelectedTask(task) }
+    function handleCloseTask() { setSelectedTask(null) }
 
     async function handleAddTask(title: string, body: string, assignees: string[]) {
         if (!activeProject) return
@@ -2062,16 +2941,44 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
             setClaudeStatus(prev => ({ ...prev, [activeProject.id]: 'running' }))
         }
+        // Rolling text buffer for input-prompt detection (shared across messages)
+        let termTextBuf = ''
+        let lastInputSoundAt = 0
+
         ws.onmessage = e => {
             if (typeof e.data === 'string') {
                 try {
                     const msg = JSON.parse(e.data)
                     if (msg.type === 'claude_stopped') {
                         setClaudeStatus(prev => ({ ...prev, [activeProject.id]: 'done' }))
+                        playSound('done')
+                    } else if (msg.type === 'agent_message') {
+                        setNewMessageIds(prev => [...prev, msg.message_id])
+                        playSound('input')
                     }
                 } catch { /* ignore */ }
             } else {
-                term.write(new Uint8Array(e.data as ArrayBuffer))
+                const bytes = new Uint8Array(e.data as ArrayBuffer)
+                term.write(bytes)
+
+                // Detect Claude waiting for user input by scanning plain text
+                const text = new TextDecoder().decode(bytes).replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+                termTextBuf = (termTextBuf + text).slice(-800)
+
+                const now = Date.now()
+                const inputPatterns = [
+                    /\?\s*$/m,                       // ends with "?"
+                    /\[Y\/n\]/i,                      // yes/no prompt
+                    /\[y\/N\]/i,
+                    /Do you want to/i,
+                    /Would you like/i,
+                    /Press Enter to/i,
+                    /Type your (message|response|reply)/i,
+                ]
+                if (now - lastInputSoundAt > 3000 && inputPatterns.some(p => p.test(termTextBuf))) {
+                    lastInputSoundAt = now
+                    playSound('input')
+                }
             }
         }
         ws.onclose = () => term.write('\r\n\x1b[31m[disconnected]\x1b[0m\r\n')
@@ -2141,6 +3048,27 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         }))
     }
 
+    function handleProjectUpdated(updated: Project) {
+        setAllProjects(prev => prev.map(p => p.id === updated.id ? updated : p))
+        setWorkspaces(prev => prev.map(w => ({
+            ...w,
+            projects: w.projects.map(p => p.id === updated.id ? updated : p),
+        })))
+    }
+
+    function handleProjectDeleted(projectId: number) {
+        const project = allProjects.find(p => p.id === projectId)
+        setAllProjects(prev => prev.filter(p => p.id !== projectId))
+        setWorkspaces(prev => prev.map(w => ({
+            ...w,
+            projects: w.projects.filter(p => p.id !== projectId),
+        })))
+        // Navigate away if the deleted project was active
+        if (project && projectName === project.name) {
+            router.visit('/')
+        }
+    }
+
     async function uploadImage(file: File) {
         if (!activeProject) return
         if (!file.type.startsWith('image/')) return
@@ -2167,6 +3095,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 onAddWorkspace={() => setShowWorkspaceModal(true)}
                 onAddProject={openAddProject}
                 onMoveProject={setMovingProject}
+                onEditProject={setEditingProject}
+                onSystemPromptProject={setSystemPromptProject}
+                onPermissionsProject={setPermissionsProject}
+                onOpenDefaultPermissions={() => setShowDefaultPermissions(true)}
+                onDeleteProject={setDeletingProject}
                 tasks={tasks}
                 onOpenCreateTask={() => setShowCreateTask(true)}
                 onUpdateStatus={handleUpdateStatus}
@@ -2217,14 +3150,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 {/* Body: project sidebar + content */}
                 <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
                     {activeProject && (
-                        <ProjectSidebar view={projectView} onChange={setProjectView} />
+                        <ProjectSidebar view={activeView} projectName={activeProject.name} onChange={(view) => {
+                            setProjectView(view)
+                            if (isTasksPage) router.visit(`/${activeProject.name}`)
+                        }} />
                     )}
 
                     {/* Agents (terminal) — always rendered to keep sessions alive, hidden when inactive */}
                     <div
                         style={{
                             flex: 1, position: 'relative', overflow: 'hidden',
-                            display: projectView === 'agents' ? 'flex' : 'none', flexDirection: 'column',
+                            display: activeView === 'agents' ? 'flex' : 'none', flexDirection: 'column',
                         }}
                         onDragOver={e => { e.preventDefault(); setIsDraggingOver(true) }}
                         onDragEnter={e => { e.preventDefault(); setIsDraggingOver(true) }}
@@ -2280,17 +3216,27 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     </div>
 
                     {/* Commands view */}
-                    {projectView === 'commands' && activeProject && (
+                    {activeView === 'commands' && activeProject && (
                         <CommandsView projectId={activeProject.id} />
                     )}
 
                     {/* Tasks view */}
-                    {projectView === 'tasks' && activeProject && (
+                    {activeView === 'tasks' && activeProject && (
                         <TasksView
                             tasks={tasks}
                             onOpenCreateTask={() => setShowCreateTask(true)}
                             onUpdateStatus={handleUpdateStatus}
                             onDeleteTask={handleDeleteTask}
+                            onOpenTask={handleOpenTask}
+                        />
+                    )}
+
+                    {/* Messages view */}
+                    {activeView === 'messages' && activeProject && (
+                        <MessagesView
+                            projectId={activeProject.id}
+                            projectName={activeProject.name}
+                            newMessageIds={newMessageIds}
                         />
                     )}
 
@@ -2304,6 +3250,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     )}
                 </div>
             </div>
+
+            {selectedTask && (
+                <TaskDetailModal task={selectedTask} onClose={handleCloseTask} />
+            )}
 
             {showCreateTask && (
                 <CreateTaskModal
@@ -2334,6 +3284,43 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     workspaces={workspaces}
                     onClose={() => setMovingProject(null)}
                     onMove={handleMoveProject}
+                />
+            )}
+
+            {editingProject && (
+                <EditProjectPathModal
+                    project={editingProject}
+                    onClose={() => setEditingProject(null)}
+                    onUpdated={p => { handleProjectUpdated(p); setEditingProject(null) }}
+                />
+            )}
+
+            {systemPromptProject && (
+                <SystemPromptModal
+                    project={systemPromptProject}
+                    onClose={() => setSystemPromptProject(null)}
+                    onUpdated={p => { handleProjectUpdated(p); setSystemPromptProject(null) }}
+                />
+            )}
+
+            {permissionsProject && (
+                <ProjectPermissionsModal
+                    project={permissionsProject}
+                    onClose={() => setPermissionsProject(null)}
+                />
+            )}
+
+            {showDefaultPermissions && (
+                <DefaultPermissionsModal
+                    onClose={() => setShowDefaultPermissions(false)}
+                />
+            )}
+
+            {deletingProject && (
+                <ConfirmDeleteProjectModal
+                    project={deletingProject}
+                    onClose={() => setDeletingProject(null)}
+                    onDeleted={id => { handleProjectDeleted(id); setDeletingProject(null) }}
                 />
             )}
 

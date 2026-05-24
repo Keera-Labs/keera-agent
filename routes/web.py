@@ -1,12 +1,15 @@
 from fastapi_startkit.fastapi import Router
 
 from app.controllers import home_controller
+from app.controllers import tasks_page_controller
 from app.controllers import terminal_controller
 from app.controllers import project_controller
 from app.controllers import task_controller
 from app.controllers import workspace_controller
 from app.controllers import claude_hook_controller
 from app.controllers import command_controller
+from app.controllers import agent_message_controller
+from app.controllers import permission_controller
 from app.mcp import controller as mcp_controller
 
 router = Router()
@@ -21,6 +24,7 @@ router.get("/api/projects", project_controller.index)
 router.get("/api/validate-path", project_controller.validate_path)
 router.post("/api/projects", project_controller.store)
 router.patch("/api/projects/{project_id}", project_controller.update)
+router.delete("/api/projects/{project_id}", project_controller.destroy)
 router.post("/api/projects/{project_id}/upload-image", project_controller.upload_image)
 router.get("/api/projects/{project_id}/tasks", task_controller.index)
 router.post("/api/projects/{project_id}/tasks", task_controller.store)
@@ -37,11 +41,20 @@ router.delete("/api/commands/{command_id}", command_controller.destroy)
 router.post("/api/claude-started", claude_hook_controller.claude_started)
 router.post("/api/claude-stopped", claude_hook_controller.claude_stopped)
 
+router.get("/api/projects/{project_id}/messages", agent_message_controller.index)
+router.patch("/api/messages/{message_id}/read", agent_message_controller.mark_read)
+
+router.get("/api/projects/{project_id}/permissions", permission_controller.get_project_permissions)
+router.patch("/api/projects/{project_id}/permissions", permission_controller.update_project_permissions)
+router.get("/api/default-permissions", permission_controller.get_default_permissions)
+router.patch("/api/default-permissions", permission_controller.update_default_permissions)
+
 # MCP — JSON-RPC 2.0 endpoint (same server, no extra process)
 router.post("/mcp", mcp_controller.handle)
 
 # Wildcard page routes — must come last
 router.get("/", home_controller.home)
+router.get("/{project}/tasks", tasks_page_controller.tasks_page)
 router.get("/{project}", home_controller.home)
 
 router.router.add_api_websocket_route("/{project}/ws", terminal_controller.terminal_ws)

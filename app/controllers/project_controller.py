@@ -19,6 +19,7 @@ async def index(request: Request):
             "language": p.language,
             "workspace_id": p.workspace_id,
             "claude_status": p.claude_status,
+            "system_prompt": p.system_prompt,
         }
         for p in projects
     ])
@@ -42,6 +43,20 @@ async def update(request: Request, project_id: int):
     if "workspace_id" in body:
         project.workspace_id = body["workspace_id"]  # None = unassign
 
+    if "path" in body:
+        new_path = (body.get("path") or "").strip()
+        if not new_path:
+            return JSONResponse({"error": "Path is required"}, status_code=422)
+        expanded = os.path.expanduser(new_path)
+        if not os.path.isdir(expanded):
+            return JSONResponse({"error": "Directory does not exist"}, status_code=422)
+        project.path = new_path
+        base_url = env("APP_URL", "http://localhost:8000")
+        ensure_claude_settings(expanded, base_url)
+
+    if "system_prompt" in body:
+        project.system_prompt = body["system_prompt"] or None
+
     await project.save()
 
     return JSONResponse({
@@ -51,7 +66,16 @@ async def update(request: Request, project_id: int):
         "language": project.language,
         "workspace_id": project.workspace_id,
         "claude_status": project.claude_status,
+        "system_prompt": project.system_prompt,
     })
+
+
+async def destroy(request: Request, project_id: int):
+    project = await Project.find(project_id)
+    if not project:
+        return JSONResponse({"error": "Project not found"}, status_code=404)
+    await Project.where("id", project_id).delete()
+    return JSONResponse({"ok": True})
 
 
 async def upload_image(request: Request, project_id: int, file: UploadFile = File(...)):
@@ -101,7 +125,7 @@ async def store(request: Request):
 
     expanded_path = os.path.expanduser(path)
     base_url = env("APP_URL", "http://localhost:8000")
-    ensure_claude_settings(expanded_path, base_url)
+    ensure_claude_settings(expanded_path, base_url, apply_default_permissions=True)
 
     return JSONResponse(
         {
@@ -110,6 +134,7 @@ async def store(request: Request):
             "path": project.path,
             "language": project.language,
             "workspace_id": project.workspace_id,
+            "system_prompt": project.system_prompt,
         },
         status_code=201,
     )

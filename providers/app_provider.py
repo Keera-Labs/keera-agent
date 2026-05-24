@@ -12,5 +12,7 @@ class AppProvider(Provider):
     def boot(self) -> None:
         from routes.web import router
         from app.utils.hook_setup import ensure_hooks
+        from app.console.queue_work_command import QueueWorkCommand
         self.app.fastapi.include_router(router.router)
         ensure_hooks()
+        self.commands([QueueWorkCommand])

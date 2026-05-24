@@ -33,11 +33,15 @@ def _upsert_hook(hook_list: list, path_fragment: str, new_url: str) -> bool:
     return True
 
 
-def ensure_claude_settings(directory: str, base_url: str) -> None:
+def ensure_claude_settings(directory: str, base_url: str, apply_default_permissions: bool = False) -> None:
     """
     Merge Stop hook, UserPromptSubmit hook, and MCP server entry into
     <directory>/.claude/settings.json.  Existing unrelated settings are
     preserved.  Keera-managed hook URLs are updated in-place if they changed.
+
+    When apply_default_permissions=True (new project creation), default
+    permissions from storage/default_permissions.json are merged in if the
+    project has no permissions set yet.
     """
     settings_path = os.path.join(directory, ".claude", "settings.json")
     os.makedirs(os.path.dirname(settings_path), exist_ok=True)
@@ -53,7 +57,6 @@ def ensure_claude_settings(directory: str, base_url: str) -> None:
 
     stop_url  = f"{base_url}{_STOP_PATH}"
     start_url = f"{base_url}{_START_PATH}"
-    mcp_url   = f"{base_url}/mcp"
 
     hooks: dict = settings.setdefault("hooks", {})
     changed = False
@@ -61,16 +64,32 @@ def ensure_claude_settings(directory: str, base_url: str) -> None:
     changed |= _upsert_hook(hooks.setdefault("Stop", []),              _STOP_PATH,  stop_url)
     changed |= _upsert_hook(hooks.setdefault("UserPromptSubmit", []), _START_PATH, start_url)
 
-    mcp_servers: dict = settings.setdefault("mcpServers", {})
-    if mcp_servers.get("keera-agent", {}).get("url") != mcp_url:
-        mcp_servers["keera-agent"] = {"type": "http", "url": mcp_url}
-        changed = True
+    if apply_default_permissions and "permissions" not in settings:
+        default_perms = _read_default_permissions()
+        if default_perms.get("allow") or default_perms.get("deny"):
+            settings["permissions"] = default_perms
+            changed = True
 
     if changed:
         with open(settings_path, "w") as f:
             json.dump(settings, f, indent=2)
             f.write("\n")
         print(f"[keera] Claude settings updated in {directory}/.claude/settings.json")
+
+
+def _read_default_permissions() -> dict:
+    import os as _os
+    perms_path = _os.path.join(
+        _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))),
+        "storage", "default_permissions.json",
+    )
+    if _os.path.exists(perms_path):
+        try:
+            with open(perms_path) as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {"allow": [], "deny": []}
 
 
 def ensure_hooks() -> None:

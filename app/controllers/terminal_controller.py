@@ -11,6 +11,7 @@ import termios
 
 from fastapi import Query, WebSocket, WebSocketDisconnect
 
+from app.models.AgentMessage import AgentMessage
 from app.models.Project import Project
 from app.models.TerminalOutput import TerminalOutput
 from app.models.TerminalSession import TerminalSession
@@ -22,6 +23,41 @@ connections: dict[str, WebSocket] = {}
 
 # Registry: project_path -> callable that writes bytes to the PTY
 pty_writers: dict[str, callable] = {}
+
+
+async def _deliver_pending_messages(project, cwd: str) -> None:
+    """Inject any undelivered messages into the PTY and notify the frontend."""
+    import json as _json
+
+    pending = await AgentMessage.where("receiver_project_id", project.id)\
+        .where("status", "pending").order_by("id", "asc").get()
+    if not pending:
+        return
+
+    senders = await Project.all()
+    sender_map = {p.id: p for p in senders}
+
+    await asyncio.sleep(1.5)  # Let Claude finish starting up
+
+    write = pty_writers.get(cwd)
+    ws = connections.get(cwd)
+
+    for msg in pending:
+        sender_name = sender_map[msg.sender_project_id].name \
+            if msg.sender_project_id in sender_map else str(msg.sender_project_id)
+        if write:
+            write(f"\n[Message from {sender_name}]: {msg.content}\n")
+        await AgentMessage.where("id", msg.id).update({"status": "delivered"})
+        if ws:
+            try:
+                await ws.send_text(_json.dumps({
+                    "type": "agent_message",
+                    "message_id": msg.id,
+                    "sender_name": sender_name,
+                    "content": msg.content,
+                }))
+            except Exception:
+                pass
 
 
 def _set_size(master_fd: int, rows: int, cols: int) -> None:
@@ -83,12 +119,21 @@ async def terminal_ws(websocket: WebSocket, project: str, path: str = Query(defa
             return
         os.write(master_fd, f'cd {shlex.quote(cwd)}\n'.encode())
         await asyncio.sleep(0.1)
+
+        # Build the claude command, appending --system-prompt if the project has one set
+        system_prompt = getattr(project_record, 'system_prompt', None) if project_record else None
+        sp_flag = f' --system-prompt {shlex.quote(system_prompt)}' if system_prompt else ''
+
         prior = await TerminalSession.where('project_path', path or cwd).get()
         # prior includes the session we just created, so >1 means genuinely previous sessions
         if len(prior) > 1:
-            os.write(master_fd, b'claude --continue\n')
+            os.write(master_fd, f'claude --continue{sp_flag}\n'.encode())
         else:
-            os.write(master_fd, b'claude\n')
+            os.write(master_fd, f'claude{sp_flag}\n'.encode())
+
+        # Deliver any pending messages that arrived while this agent was offline
+        if project_record:
+            await _deliver_pending_messages(project_record, cwd)
 
     async def pty_to_ws():
         """Read PTY output and forward to WebSocket.
@@ -122,7 +167,9 @@ async def terminal_ws(websocket: WebSocket, project: str, path: str = Query(defa
                         if 'No conversation' in output_buf and 'continue' in output_buf:
                             new_session_started = True
                             await asyncio.sleep(0.2)
-                            os.write(master_fd, b'claude\n')
+                            system_prompt = getattr(project_record, 'system_prompt', None) if project_record else None
+                            sp_flag = f' --system-prompt {shlex.quote(system_prompt)}' if system_prompt else ''
+                            os.write(master_fd, f'claude{sp_flag}\n'.encode())
                     if text and '(thinking)' not in text:
                         await TerminalOutput.create({
                             'session_id': session.id,

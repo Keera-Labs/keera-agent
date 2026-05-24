@@ -305,6 +305,135 @@ async def handle_update_task_status(args: dict) -> str:
     return f"Task #{task.id} '{task.title or task.description}' → {task.status}"
 
 
+# ── tool: send_message_to_agent ───────────────────────────────────────────────
+
+SEND_MESSAGE_SCHEMA = {
+    "name": "send_message_to_agent",
+    "description": (
+        "Send a message from this agent to another agent running in a different project. "
+        "If the target agent is active, the message is delivered immediately to its terminal. "
+        "Otherwise it is queued and delivered when it next connects."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "sender_project_path": {
+                "type": "string",
+                "description": "Absolute path of the sending project (use current working directory).",
+            },
+            "receiver_project_path": {
+                "type": "string",
+                "description": "Absolute path of the project whose agent should receive the message.",
+            },
+            "message": {
+                "type": "string",
+                "description": "The message content to send.",
+            },
+        },
+        "required": ["sender_project_path", "receiver_project_path", "message"],
+    },
+}
+
+
+async def handle_send_message(args: dict) -> str:
+    from app.models.AgentMessage import AgentMessage
+    from app.controllers.terminal_controller import pty_writers, connections
+    import asyncio
+    import json as _json
+
+    sender = await _project_by_path(args["sender_project_path"])
+    if not sender:
+        return f"Error: no Keera project found at path '{args['sender_project_path']}'"
+
+    receiver = await _project_by_path(args["receiver_project_path"])
+    if not receiver:
+        return f"Error: no Keera project found at path '{args['receiver_project_path']}'"
+
+    content = args["message"].strip()
+    if not content:
+        return "Error: message cannot be empty"
+
+    msg = await AgentMessage.create({
+        "sender_project_id": sender.id,
+        "receiver_project_id": receiver.id,
+        "content": content,
+        "status": "pending",
+    })
+
+    # Deliver immediately if receiver has an active PTY
+    receiver_path = os.path.expanduser(receiver.path).rstrip("/")
+    write = pty_writers.get(receiver_path) or pty_writers.get(receiver.path)
+    ws = connections.get(receiver_path) or connections.get(receiver.path)
+
+    if write:
+        await asyncio.sleep(0.2)
+        write(f"\n[Message from {sender.name}]: {content}\n")
+        await AgentMessage.where("id", msg.id).update({"status": "delivered"})
+
+        # Notify receiver's frontend
+        if ws:
+            try:
+                await ws.send_text(_json.dumps({
+                    "type": "agent_message",
+                    "message_id": msg.id,
+                    "sender_name": sender.name,
+                    "content": content,
+                }))
+            except Exception:
+                pass
+
+        return f"Message delivered to {receiver.name} (#{msg.id})"
+
+    return f"Message queued for {receiver.name} (#{msg.id}) — will be delivered when agent connects"
+
+
+# ── tool: get_agent_messages ──────────────────────────────────────────────────
+
+GET_MESSAGES_SCHEMA = {
+    "name": "get_agent_messages",
+    "description": "Get messages in the inbox for this agent (sent from other agents).",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "project_path": {
+                "type": "string",
+                "description": "Absolute path of the project (use current working directory).",
+            },
+            "unread_only": {
+                "type": "boolean",
+                "description": "If true, return only unread/pending messages. Default: false.",
+            },
+        },
+        "required": ["project_path"],
+    },
+}
+
+
+async def handle_get_messages(args: dict) -> str:
+    from app.models.AgentMessage import AgentMessage
+
+    project = await _project_by_path(args["project_path"])
+    if not project:
+        return f"Error: no Keera project found at path '{args['project_path']}'"
+
+    q = AgentMessage.where("receiver_project_id", project.id)
+    if args.get("unread_only"):
+        q = q.where("status", "pending")
+    messages = await q.order_by("id", "asc").get()
+
+    if not messages:
+        return "No messages."
+
+    projects = await Project.all()
+    proj_map = {p.id: p for p in projects}
+
+    lines = []
+    for m in messages:
+        sender_name = proj_map[m.sender_project_id].name if m.sender_project_id in proj_map else str(m.sender_project_id)
+        lines.append(f"[#{m.id}] [{m.status}] From {sender_name}: {m.content}")
+    return "\n".join(lines)
+
+
 # ── registry ──────────────────────────────────────────────────────────────────
 
 TOOLS: list[dict] = [
@@ -313,6 +442,8 @@ TOOLS: list[dict] = [
     GET_TASK_SCHEMA,
     UPDATE_TASK_SCHEMA,
     UPDATE_STATUS_SCHEMA,
+    SEND_MESSAGE_SCHEMA,
+    GET_MESSAGES_SCHEMA,
 ]
 
 HANDLERS: dict = {
@@ -321,4 +452,6 @@ HANDLERS: dict = {
     "get_task": handle_get_task,
     "update_task": handle_update_task,
     "update_task_status": handle_update_task_status,
+    "send_message_to_agent": handle_send_message,
+    "get_agent_messages": handle_get_messages,
 }
