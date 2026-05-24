@@ -16,6 +16,15 @@ function slugify(name: string): string {
         .replace(/^-|-$/g, '')
 }
 
+// ─── Agent color ──────────────────────────────────────────────────────────────
+
+function agentColor(name: string): string {
+    const palette = ['#7c6af7', '#e8943f', '#3fb950', '#58a6ff', '#ff6b6b', '#ffa657', '#9b59b6', '#1abc9c']
+    let h = 0
+    for (let i = 0; i < name.length; i++) h = ((h << 5) - h + name.charCodeAt(i)) | 0
+    return palette[Math.abs(h) % palette.length]
+}
+
 // ─── Audio notifications ───────────────────────────────────────────────────────
 
 let _audioCtx: AudioContext | null = null
@@ -1761,47 +1770,77 @@ const PROJECT_NAV: { id: ProjectView; label: string; icon: React.ReactNode }[] =
     },
 ]
 
-function ProjectSidebar({ view, projectName, onChange }: { view: ProjectView; projectName: string | null; onChange: (v: ProjectView) => void }) {
+function ProjectSidebar({ view, projectName, onChange, taskCount, newMessageCount }: {
+    view: ProjectView
+    projectName: string | null
+    onChange: (v: ProjectView) => void
+    taskCount: number
+    newMessageCount: number
+}) {
     return (
         <div style={{
-            width: '140px', flexShrink: 0, background: color.bgCanvas,
+            width: '200px', flexShrink: 0, background: color.bgCanvas,
             borderRight: '1px solid #21262d', display: 'flex', flexDirection: 'column',
-            paddingTop: '6px',
         }}>
-            {PROJECT_NAV.map(item => {
-                const active = item.id === view
-                return (
-                    <button
-                        key={item.id}
-                        onClick={() => {
-                            if (item.id === 'tasks' && projectName) {
-                                router.visit(`/${projectName}/tasks`)
-                            } else {
-                                onChange(item.id)
-                            }
-                        }}
-                        style={{
-                            display: 'flex', alignItems: 'center', gap: '8px',
-                            padding: '8px 14px',
-                            background: active ? color.bgSurface : 'transparent',
-                            borderLeft: `2px solid ${active ? color.accent : 'transparent'}`,
-                            border: 'none',
-                            borderLeftWidth: '2px',
-                            borderLeftStyle: 'solid',
-                            borderLeftColor: active ? color.accent : 'transparent',
-                            color: active ? color.textPrimary : color.textMuted,
-                            fontSize: '12px', fontWeight: active ? 600 : 400,
-                            cursor: 'pointer', textAlign: 'left',
-                            transition: 'color 0.1s, background 0.1s',
-                        }}
-                        onMouseEnter={e => { if (!active) e.currentTarget.style.color = color.textSecondary }}
-                        onMouseLeave={e => { if (!active) e.currentTarget.style.color = color.textMuted }}
-                    >
-                        {item.icon}
-                        {item.label}
-                    </button>
-                )
-            })}
+            {/* Project name header */}
+            {projectName && (
+                <div style={{
+                    padding: '10px 14px 9px',
+                    borderBottom: '1px solid #21262d',
+                }}>
+                    <span style={{ color: color.textPrimary, fontSize: '13px', fontWeight: 700, letterSpacing: '0.01em' }}>
+                        {projectName}
+                    </span>
+                </div>
+            )}
+
+            {/* Nav items */}
+            <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '2px', paddingTop: projectName ? '8px' : '6px' }}>
+                {PROJECT_NAV.map(item => {
+                    const active = item.id === view
+                    const count = item.id === 'tasks' ? taskCount : item.id === 'messages' ? newMessageCount : 0
+                    return (
+                        <button
+                            key={item.id}
+                            onClick={() => {
+                                if (item.id === 'tasks' && projectName) {
+                                    router.visit(`/${projectName}/tasks`)
+                                } else {
+                                    onChange(item.id)
+                                }
+                            }}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: '8px',
+                                padding: '7px 10px',
+                                background: active ? color.accentSubtle : 'transparent',
+                                border: `1px solid ${active ? color.accentEmphasis : 'transparent'}`,
+                                borderRadius: '6px',
+                                color: active ? color.accentMuted : color.textMuted,
+                                fontSize: '12px', fontWeight: active ? 600 : 400,
+                                cursor: 'pointer', textAlign: 'left', width: '100%',
+                                transition: 'all 0.1s',
+                            }}
+                            onMouseEnter={e => { if (!active) { e.currentTarget.style.background = color.bgSurface; e.currentTarget.style.color = color.textSecondary } }}
+                            onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = color.textMuted } }}
+                        >
+                            {item.icon}
+                            <span style={{ flex: 1 }}>{item.label}</span>
+                            {count > 0 && (
+                                <span style={{
+                                    fontSize: '10px', fontWeight: 600,
+                                    padding: '1px 6px', borderRadius: '10px',
+                                    background: color.bgBase,
+                                    color: color.textFaint,
+                                    border: `1px solid ${color.border}`,
+                                    lineHeight: '16px',
+                                }}>
+                                    {count}
+                                </span>
+                            )}
+                        </button>
+                    )
+                })}
+            </div>
         </div>
     )
 }
@@ -2005,9 +2044,9 @@ function CommandsView({ projectId }: { projectId: number }) {
             {/* ── Body ── */}
             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
-                {/* Command list / cards */}
+                {/* Command list */}
                 <div style={{
-                    width: hasOutput ? '300px' : '100%',
+                    width: hasOutput ? '260px' : '100%',
                     flexShrink: 0,
                     overflowY: 'auto',
                     borderRight: hasOutput ? `1px solid ${color.border}` : 'none',
@@ -2020,7 +2059,7 @@ function CommandsView({ projectId }: { projectId: number }) {
                             padding: '40px 24px', textAlign: 'center',
                         }}>
                             <div style={{
-                                width: '48px', height: '48px', borderRadius: '12px',
+                                width: '48px', height: '48px', borderRadius: '50%',
                                 background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                             }}>
@@ -2033,7 +2072,7 @@ function CommandsView({ projectId }: { projectId: number }) {
                                     No commands yet
                                 </p>
                                 <p style={{ margin: 0, color: color.textFaint, fontSize: '12px', lineHeight: 1.5 }}>
-                                    Add server commands, build scripts,<br/>or any long-running process.
+                                    Add build scripts, dev servers,<br/>or any long-running process.
                                 </p>
                             </div>
                             <button
@@ -2050,172 +2089,122 @@ function CommandsView({ projectId }: { projectId: number }) {
                             </button>
                         </div>
                     ) : (
-                        <div style={{ padding: hasOutput ? '8px 0' : '12px', display: 'flex', flexDirection: 'column', gap: hasOutput ? '0' : '6px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
                             {commands.map(c => {
                                 const isSelected = outputCmd?.id === c.id
                                 const isRunning = c.status === 'running'
-
-                                // Compact list mode when output panel is open
-                                if (hasOutput) {
-                                    return (
-                                        <div
-                                            key={c.id}
-                                            onClick={() => { setOutputCmd(c); setOutputLines([]) }}
-                                            style={{
-                                                display: 'flex', alignItems: 'center', gap: '8px',
-                                                padding: '7px 12px', cursor: 'pointer',
-                                                background: isSelected ? color.bgSurface : 'transparent',
-                                                borderLeft: `2px solid ${isSelected ? color.accent : 'transparent'}`,
-                                            }}
-                                            onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = color.bgCanvas }}
-                                            onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
-                                        >
-                                            <span style={{
-                                                width: '7px', height: '7px', borderRadius: '50%', flexShrink: 0,
-                                                background: isRunning ? color.success : color.textFaint,
-                                                animation: isRunning ? 'cmd-pulse 2s infinite' : 'none',
-                                            }} />
-                                            <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={{ fontSize: '12px', fontWeight: 600, color: color.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                    {c.label}
-                                                </div>
-                                                <div style={{ fontSize: '10px', color: color.textFaint, fontFamily: '"JetBrains Mono", monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                    {c.command}
-                                                </div>
-                                            </div>
-                                            {isRunning ? (
-                                                <button
-                                                    onClick={e => { e.stopPropagation(); handleStop(c) }}
-                                                    style={{
-                                                        flexShrink: 0, background: color.dangerCanvas,
-                                                        border: `1px solid ${color.dangerSubtle}`, borderRadius: '4px',
-                                                        color: color.danger, fontSize: '10px', padding: '2px 6px', cursor: 'pointer',
-                                                    }}
-                                                >■</button>
-                                            ) : (
-                                                <button
-                                                    onClick={e => { e.stopPropagation(); handleRun(c) }}
-                                                    style={{
-                                                        flexShrink: 0, background: color.successEmphasis,
-                                                        border: `1px solid ${color.successBorder}`, borderRadius: '4px',
-                                                        color: '#fff', fontSize: '10px', padding: '2px 6px', cursor: 'pointer',
-                                                    }}
-                                                >▶</button>
-                                            )}
-                                        </div>
-                                    )
-                                }
-
-                                // Card mode (no output panel open)
                                 return (
                                     <div
                                         key={c.id}
                                         onClick={() => { setOutputCmd(c); setOutputLines([]) }}
                                         style={{
-                                            background: color.bgSurface,
-                                            border: `1px solid ${isRunning ? 'rgba(63,185,80,0.25)' : color.borderMuted}`,
-                                            borderRadius: '8px', padding: '12px 14px',
-                                            cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '8px',
-                                            transition: 'border-color 0.15s',
+                                            display: 'flex', alignItems: 'center', gap: '10px',
+                                            padding: '10px 14px', cursor: 'pointer',
+                                            background: isSelected ? color.bgSurface : 'transparent',
+                                            borderLeft: `2px solid ${isSelected ? color.accent : 'transparent'}`,
+                                            borderBottom: `1px solid ${color.border}`,
+                                            transition: 'background 0.1s',
                                         }}
-                                        onMouseEnter={e => {
-                                            e.currentTarget.style.borderColor = isRunning ? 'rgba(63,185,80,0.5)' : color.accent
-                                        }}
-                                        onMouseLeave={e => {
-                                            e.currentTarget.style.borderColor = isRunning ? 'rgba(63,185,80,0.25)' : color.borderMuted
-                                        }}
+                                        onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = color.bgSurface }}
+                                        onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
                                     >
-                                        {/* Card top: label + status + actions */}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            {/* Pulse dot */}
-                                            <span style={{
-                                                width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0,
-                                                background: isRunning ? color.success : color.textFaint,
-                                                animation: isRunning ? 'cmd-pulse 2s infinite' : 'none',
-                                            }} />
-                                            <span style={{ flex: 1, fontSize: '13px', fontWeight: 600, color: color.textPrimary }}>
-                                                {c.label}
-                                            </span>
-                                            {/* PID badge when running */}
-                                            {isRunning && c.pid && (
-                                                <span style={{
-                                                    fontSize: '10px', color: color.success, fontFamily: '"JetBrains Mono", monospace',
-                                                    background: 'rgba(63,185,80,0.08)', border: '1px solid rgba(63,185,80,0.2)',
-                                                    borderRadius: '4px', padding: '1px 6px',
-                                                }}>
-                                                    pid {c.pid}
-                                                </span>
-                                            )}
-                                            {/* Run / Stop */}
+                                        {/* Play/Stop circle */}
+                                        <button
+                                            onClick={e => { e.stopPropagation(); isRunning ? handleStop(c) : handleRun(c) }}
+                                            title={isRunning ? 'Stop' : 'Run'}
+                                            style={{
+                                                width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0,
+                                                background: isRunning ? 'rgba(63,185,80,0.1)' : color.bgBase,
+                                                border: `1px solid ${isRunning ? 'rgba(63,185,80,0.4)' : color.borderMuted}`,
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                cursor: 'pointer', color: isRunning ? color.success : color.textMuted,
+                                                transition: 'all 0.15s',
+                                            }}
+                                            onMouseEnter={e => {
+                                                e.currentTarget.style.borderColor = isRunning ? color.danger : color.success
+                                                e.currentTarget.style.color = isRunning ? color.danger : color.success
+                                                e.currentTarget.style.background = isRunning ? color.dangerCanvas : 'rgba(63,185,80,0.1)'
+                                            }}
+                                            onMouseLeave={e => {
+                                                e.currentTarget.style.borderColor = isRunning ? 'rgba(63,185,80,0.4)' : color.borderMuted
+                                                e.currentTarget.style.color = isRunning ? color.success : color.textMuted
+                                                e.currentTarget.style.background = isRunning ? 'rgba(63,185,80,0.1)' : color.bgBase
+                                            }}
+                                        >
                                             {isRunning ? (
-                                                <button
-                                                    onClick={e => { e.stopPropagation(); handleStop(c) }}
-                                                    style={{
-                                                        background: color.dangerCanvas, border: `1px solid ${color.dangerSubtle}`,
-                                                        borderRadius: '5px', color: color.danger,
-                                                        fontSize: '11px', padding: '3px 10px', cursor: 'pointer',
-                                                        display: 'flex', alignItems: 'center', gap: '4px',
-                                                    }}
-                                                >
-                                                    <svg width="8" height="8" viewBox="0 0 10 10" fill="currentColor">
-                                                        <rect x="1" y="1" width="8" height="8" rx="1"/>
-                                                    </svg>
-                                                    Stop
-                                                </button>
+                                                <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor">
+                                                    <rect x="1.5" y="1.5" width="7" height="7" rx="1"/>
+                                                </svg>
                                             ) : (
-                                                <button
-                                                    onClick={e => { e.stopPropagation(); handleRun(c) }}
-                                                    style={{
-                                                        background: color.successEmphasis, border: `1px solid ${color.successBorder}`,
-                                                        borderRadius: '5px', color: '#fff',
-                                                        fontSize: '11px', padding: '3px 10px', cursor: 'pointer',
-                                                        display: 'flex', alignItems: 'center', gap: '4px',
-                                                    }}
-                                                >
-                                                    <svg width="8" height="8" viewBox="0 0 10 10" fill="currentColor">
-                                                        <path d="M2 1.5l7 3.5-7 3.5V1.5z"/>
-                                                    </svg>
-                                                    Run
-                                                </button>
+                                                <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor">
+                                                    <path d="M2 1.5l7 3.5-7 3.5V1.5z"/>
+                                                </svg>
                                             )}
-                                            {/* Delete */}
-                                            <button
-                                                onClick={e => { e.stopPropagation(); handleDelete(c) }}
-                                                style={{
-                                                    background: 'transparent', border: 'none',
-                                                    color: color.textFaint, cursor: 'pointer',
-                                                    padding: '3px 4px', fontSize: '14px', lineHeight: 1,
-                                                    borderRadius: '4px',
-                                                }}
-                                                onMouseEnter={e => { e.currentTarget.style.color = color.danger; e.currentTarget.style.background = color.dangerCanvas }}
-                                                onMouseLeave={e => { e.currentTarget.style.color = color.textFaint; e.currentTarget.style.background = 'transparent' }}
-                                            >×</button>
-                                        </div>
+                                        </button>
 
-                                        {/* Command string */}
-                                        <div style={{
-                                            display: 'flex', alignItems: 'center', gap: '6px',
-                                            background: color.bgBase, borderRadius: '5px',
-                                            padding: '5px 8px',
-                                            border: `1px solid ${color.border}`,
-                                        }}>
-                                            <span style={{ color: color.textFaint, fontSize: '11px', fontFamily: '"JetBrains Mono", monospace', flexShrink: 0 }}>$</span>
-                                            <span style={{
-                                                fontSize: '11px', color: color.textSecondary,
+                                        {/* Label and command */}
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{
+                                                fontSize: '12px', fontWeight: 600, color: color.textPrimary,
                                                 fontFamily: '"JetBrains Mono", monospace',
                                                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                            }}>{c.command}</span>
+                                            }}>
+                                                /{c.label}
+                                            </div>
+                                            <div style={{
+                                                fontSize: '10px', color: color.textFaint,
+                                                fontFamily: '"JetBrains Mono", monospace',
+                                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                                marginTop: '2px',
+                                            }}>
+                                                {c.command}
+                                            </div>
                                         </div>
 
-                                        {/* View output hint */}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                            <span style={{ fontSize: '10px', color: color.textFaint }}>
-                                                {isRunning ? 'Click to view output' : 'Click to view log'}
+                                        {/* Running pill */}
+                                        {isRunning && (
+                                            <span style={{
+                                                fontSize: '10px', padding: '1px 6px', borderRadius: '8px',
+                                                background: 'rgba(63,185,80,0.08)', border: '1px solid rgba(63,185,80,0.25)',
+                                                color: color.success, fontFamily: '"JetBrains Mono", monospace', flexShrink: 0,
+                                                animation: 'cmd-pulse 2s infinite',
+                                            }}>
+                                                {c.pid ? `pid ${c.pid}` : 'running'}
                                             </span>
-                                        </div>
+                                        )}
+
+                                        {/* Delete */}
+                                        <button
+                                            onClick={e => { e.stopPropagation(); handleDelete(c) }}
+                                            style={{
+                                                flexShrink: 0, background: 'transparent', border: 'none',
+                                                color: 'transparent', cursor: 'pointer',
+                                                padding: '3px 4px', fontSize: '14px', lineHeight: 1, borderRadius: '4px',
+                                            }}
+                                            onMouseEnter={e => { e.currentTarget.style.color = color.danger; e.currentTarget.style.background = color.dangerCanvas }}
+                                            onMouseLeave={e => { e.currentTarget.style.color = 'transparent'; e.currentTarget.style.background = 'transparent' }}
+                                        >×</button>
                                     </div>
                                 )
                             })}
+                            {/* Add command footer row */}
+                            <button
+                                onClick={() => setShowForm(true)}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                    padding: '9px 14px',
+                                    background: 'transparent', border: 'none',
+                                    color: color.textFaint, fontSize: '11px', cursor: 'pointer',
+                                    width: '100%', textAlign: 'left',
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.color = color.textMuted; e.currentTarget.style.background = color.bgSurface }}
+                                onMouseLeave={e => { e.currentTarget.style.color = color.textFaint; e.currentTarget.style.background = 'transparent' }}
+                            >
+                                <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
+                                </svg>
+                                Add command
+                            </button>
                         </div>
                     )}
                 </div>
@@ -2223,33 +2212,75 @@ function CommandsView({ projectId }: { projectId: number }) {
                 {/* ── Output panel ── */}
                 {hasOutput && (
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                        {/* Terminal chrome header */}
+                        {/* Command detail header */}
                         <div style={{
-                            padding: '7px 12px', borderBottom: `1px solid ${color.border}`,
+                            padding: '16px 20px 14px',
+                            borderBottom: `1px solid ${color.border}`,
+                            flexShrink: 0,
+                            background: color.bgCanvas,
+                        }}>
+                            {/* Title row */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                                <h2 style={{
+                                    margin: 0, color: color.textPrimary, fontSize: '18px', fontWeight: 700,
+                                    fontFamily: '"JetBrains Mono", monospace', letterSpacing: '-0.01em',
+                                }}>
+                                    /{outputCmd.label}
+                                </h2>
+                                {outputCmd.status === 'running' && <DotsIndicator />}
+                                {outputCmd.status === 'stopped' && (
+                                    <span style={{ fontSize: '10px', color: color.textFaint, fontFamily: '"JetBrains Mono", monospace' }}>
+                                        exited
+                                    </span>
+                                )}
+                                <div style={{ flex: 1 }} />
+                                <button
+                                    onClick={() => { setOutputCmd(null); setOutputLines([]) }}
+                                    style={{
+                                        background: 'transparent', border: 'none',
+                                        color: color.textFaint, fontSize: '18px', cursor: 'pointer',
+                                        padding: '0 2px', lineHeight: 1, borderRadius: '4px',
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget.style.color = color.textSecondary)}
+                                    onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
+                                >×</button>
+                            </div>
+                            {/* SHELL section */}
+                            <div>
+                                <div style={{
+                                    color: color.textFaint, fontSize: '10px', fontWeight: 700,
+                                    textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px',
+                                }}>Shell</div>
+                                <div style={{
+                                    background: '#010409', borderRadius: '6px', padding: '8px 12px',
+                                    border: `1px solid ${color.border}`,
+                                    fontFamily: '"JetBrains Mono", monospace', fontSize: '12px',
+                                    color: color.textSecondary,
+                                    display: 'flex', alignItems: 'center', gap: '8px',
+                                    overflow: 'hidden',
+                                }}>
+                                    <span style={{ color: color.success, flexShrink: 0 }}>$</span>
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {outputCmd.command}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Output sub-header */}
+                        <div style={{
+                            padding: '6px 14px',
+                            borderBottom: `1px solid ${color.border}`,
                             display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0,
                             background: color.bgCanvas,
                         }}>
-                            {/* Traffic lights */}
-                            <div style={{ display: 'flex', gap: '5px', flexShrink: 0 }}>
-                                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#ff5f57' }} />
-                                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#febc2e' }} />
-                                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#28c840' }} />
-                            </div>
-                            <span style={{ color: color.borderMuted, fontSize: '11px' }}>|</span>
                             <span style={{
-                                fontSize: '11px', color: color.textMuted,
-                                fontFamily: '"JetBrains Mono", monospace',
-                                flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                            }}>
-                                {outputCmd.label}
-                                {outputCmd.pid && outputCmd.status === 'running' && (
-                                    <span style={{ color: color.textFaint }}> · pid {outputCmd.pid}</span>
-                                )}
-                            </span>
-                            {outputCmd.status === 'running' && <DotsIndicator />}
-                            {outputCmd.status === 'stopped' && (
-                                <span style={{ fontSize: '10px', color: color.textFaint, fontFamily: '"JetBrains Mono", monospace' }}>
-                                    exited
+                                color: color.textFaint, fontSize: '10px', fontWeight: 700,
+                                textTransform: 'uppercase', letterSpacing: '0.08em', flex: 1,
+                            }}>Output</span>
+                            {outputCmd.pid && outputCmd.status === 'running' && (
+                                <span style={{ fontSize: '10px', color: color.success, fontFamily: '"JetBrains Mono", monospace' }}>
+                                    pid {outputCmd.pid}
                                 </span>
                             )}
                             <button
@@ -2275,16 +2306,6 @@ function CommandsView({ projectId }: { projectId: number }) {
                             >
                                 Clear
                             </button>
-                            <button
-                                onClick={() => { setOutputCmd(null); setOutputLines([]) }}
-                                style={{
-                                    background: 'transparent', border: 'none',
-                                    color: color.textFaint, fontSize: '16px', cursor: 'pointer',
-                                    padding: '0 2px', lineHeight: 1,
-                                }}
-                                onMouseEnter={e => (e.currentTarget.style.color = color.textSecondary)}
-                                onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
-                            >×</button>
                         </div>
 
                         {/* Terminal body */}
@@ -2790,6 +2811,88 @@ function makeTerminal() {
 
 // ─── Claude status badge ──────────────────────────────────────────────────────
 
+// ─── Agent card ──────────────────────────────────────────────────────────────
+
+function AgentCard({
+    project, active, status, activity, sessionStart, outputChars, onClick,
+}: {
+    project: Project; active: boolean; status?: 'running' | 'done'
+    activity?: string; sessionStart?: Date; outputChars?: number
+    onClick: () => void
+}) {
+    const [elapsed, setElapsed] = useState('')
+
+    useEffect(() => {
+        if (!sessionStart) { setElapsed(''); return }
+        const update = () => {
+            const secs = Math.floor((Date.now() - sessionStart.getTime()) / 1000)
+            if (secs < 60) setElapsed(`${secs}s`)
+            else if (secs < 3600) setElapsed(`${Math.floor(secs / 60)}m`)
+            else setElapsed(`${Math.floor(secs / 3600)}h`)
+        }
+        update()
+        const id = setInterval(update, 15000)
+        return () => clearInterval(id)
+    }, [sessionStart])
+
+    const initial = project.name.charAt(0).toUpperCase()
+    const avatarBg = agentColor(project.name)
+    const isRunning = status === 'running'
+    const tokLabel = outputChars && outputChars > 400
+        ? (outputChars / 4000 >= 1 ? `${(outputChars / 4000).toFixed(1)}k tok` : `${Math.round(outputChars / 4)} tok`)
+        : null
+
+    return (
+        <div
+            onClick={onClick}
+            style={{
+                display: 'flex', alignItems: 'flex-start', gap: '10px',
+                padding: '12px 14px', cursor: 'pointer', transition: 'background 0.1s',
+                background: active ? '#161b22' : 'transparent',
+                borderLeft: `2px solid ${active ? '#58a6ff' : 'transparent'}`,
+            }}
+            onMouseEnter={e => { if (!active) e.currentTarget.style.background = '#0d1117' }}
+            onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}
+        >
+            <div style={{
+                width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0,
+                background: avatarBg, display: 'flex', alignItems: 'center',
+                justifyContent: 'center', fontSize: '12px', fontWeight: 700, color: '#fff', marginTop: '1px',
+            }}>
+                {initial}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                    <span style={{ color: color.textPrimary, fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {project.name}
+                    </span>
+                    <span style={{
+                        width: '6px', height: '6px', borderRadius: '50%', flexShrink: 0,
+                        background: isRunning ? '#3fb950' : color.textFaint,
+                        boxShadow: isRunning ? '0 0 5px #3fb950' : 'none',
+                    }} />
+                </div>
+                <div style={{ color: color.textMuted, fontSize: '11px', marginTop: '1px' }}>{project.language}</div>
+                {activity && (
+                    <div style={{
+                        color: color.textSecondary, fontSize: '11px', marginTop: '6px', lineHeight: 1.4,
+                        overflow: 'hidden', display: '-webkit-box',
+                        WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
+                    }}>
+                        {activity}
+                    </div>
+                )}
+                {(elapsed || tokLabel) && (
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '5px', color: color.textFaint, fontSize: '10px', fontFamily: '"JetBrains Mono", monospace' }}>
+                        {elapsed && <span>{elapsed} uptime</span>}
+                        {tokLabel && <span>{tokLabel}</span>}
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
+
 function ClaudeStatusBadge({ status }: { status?: 'running' | 'done' }) {
     if (!status) return null
     if (status === 'running') {
@@ -2827,6 +2930,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const [tasks, setTasks] = useState<Task[]>(props.tasks ?? [])
     // 'running' = Claude is working, 'done' = Claude finished (Stop hook received)
     const [claudeStatus, setClaudeStatus] = useState<Record<number, 'running' | 'done'>>({})
+    const [lastActivity, setLastActivity] = useState<Record<number, string>>({})
+    const [sessionStart, setSessionStart] = useState<Record<number, Date>>({})
+    const [outputChars, setOutputChars] = useState<Record<number, number>>({})
 
     const isTasksPage = component === 'Tasks'
     const [projectView, setProjectView] = useState<ProjectView>('agents')
@@ -2955,6 +3061,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         ws.onopen = () => {
             ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
             setClaudeStatus(prev => ({ ...prev, [activeProject.id]: 'running' }))
+            setSessionStart(prev => ({ ...prev, [activeProject.id]: new Date() }))
         }
         // Rolling text buffer for input-prompt detection (shared across messages)
         let termTextBuf = ''
@@ -2979,6 +3086,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 // Detect Claude waiting for user input by scanning plain text
                 const text = new TextDecoder().decode(bytes).replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
                 termTextBuf = (termTextBuf + text).slice(-800)
+
+                // Track last meaningful activity line for agent cards
+                const stripped = text.replace(/[^\x20-\x7E\n\r]/g, '')
+                const actLines = stripped.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 6 && !/^[$%>#\u276F]/.test(l))
+                if (actLines.length) setLastActivity(prev => ({ ...prev, [activeProject.id]: actLines[actLines.length - 1] }))
+                setOutputChars(prev => ({ ...prev, [activeProject.id]: (prev[activeProject.id] ?? 0) + bytes.length }))
 
                 const now = Date.now()
                 const inputPatterns = [
@@ -3101,6 +3214,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         }
     }
 
+    function restartClaude() {
+        if (!activeProject) return
+        const session = sessions.current.get(activeProject.id)
+        if (!session || session.ws.readyState !== WebSocket.OPEN) return
+        session.ws.send(new TextEncoder().encode('\x03'))
+        setTimeout(() => {
+            if (session.ws.readyState === WebSocket.OPEN) {
+                session.ws.send(new TextEncoder().encode('claude --continue\n'))
+            }
+        }, 800)
+    }
+
     return (
         <div style={{ display: 'flex', width: '100%', height: '100vh', background: color.bgBase, overflow: 'hidden' }}>
             <Sidebar
@@ -3165,69 +3290,144 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 {/* Body: project sidebar + content */}
                 <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
                     {activeProject && (
-                        <ProjectSidebar view={activeView} projectName={activeProject.name} onChange={(view) => {
-                            setProjectView(view)
-                            if (isTasksPage) router.visit(`/${slugify(activeProject.name)}`)
-                        }} />
+                        <ProjectSidebar
+                            view={activeView}
+                            projectName={activeProject.name}
+                            onChange={(view) => {
+                                setProjectView(view)
+                                if (isTasksPage) router.visit(`/${slugify(activeProject.name)}`)
+                            }}
+                            taskCount={tasks.length}
+                            newMessageCount={newMessageIds.length}
+                        />
                     )}
 
-                    {/* Agents (terminal) — always rendered to keep sessions alive, hidden when inactive */}
-                    <div
-                        style={{
-                            flex: 1, position: 'relative', overflow: 'hidden',
-                            display: activeView === 'agents' ? 'flex' : 'none', flexDirection: 'column',
-                        }}
-                        onDragOver={e => { e.preventDefault(); setIsDraggingOver(true) }}
-                        onDragEnter={e => { e.preventDefault(); setIsDraggingOver(true) }}
-                        onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDraggingOver(false) }}
-                        onDrop={e => {
-                            e.preventDefault()
-                            setIsDraggingOver(false)
-                            const file = e.dataTransfer.files[0]
-                            if (file) uploadImage(file)
-                        }}
-                    >
-                        {isDraggingOver && activeProject && (
-                            <div style={{
-                                position: 'absolute', inset: 0, zIndex: 10,
-                                background: color.accentGlow,
-                                border: `2px dashed ${color.accent}`, borderRadius: '4px',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                pointerEvents: 'none',
-                            }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-                                    <svg width="36" height="36" viewBox="0 0 16 16" fill={color.accent} opacity="0.8">
-                                        <path d="M1.75 2.5a.25.25 0 00-.25.25v10.5c0 .138.112.25.25.25h.94l.03-.013 4.013-4.013a1.75 1.75 0 012.474 0L13.62 13.5h.63a.25.25 0 00.25-.25V2.75a.25.25 0 00-.25-.25H1.75zM0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25V2.75zm9.5 3.5a1 1 0 11-2 0 1 1 0 012 0z"/>
-                                    </svg>
-                                    <span style={{ color: color.accent, fontSize: '13px', fontFamily: '"JetBrains Mono", monospace' }}>
-                                        Drop image to attach
-                                    </span>
-                                </div>
+                    {/* Agents view: agent card list (left) + terminal (right) — always rendered to keep sessions alive */}
+                    <div style={{ flex: 1, overflow: 'hidden', display: activeView === 'agents' ? 'flex' : 'none' }}>
+
+                        {/* Agent cards list */}
+                        <div style={{
+                            width: '230px', flexShrink: 0, overflowY: 'auto', background: color.bgBase,
+                            borderRight: `1px solid ${color.borderMuted}`,
+                        }}>
+                            <div style={{ padding: '8px 14px 4px', color: color.textFaint, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                                Agents
                             </div>
-                        )}
+                            {allProjects.length === 0 ? (
+                                <div style={{ padding: '12px 14px', color: color.textFaint, fontSize: '12px' }}>No projects yet</div>
+                            ) : allProjects.map(project => (
+                                <AgentCard
+                                    key={project.id}
+                                    project={project}
+                                    active={project.id === activeProject?.id}
+                                    status={claudeStatus[project.id]}
+                                    activity={lastActivity[project.id]}
+                                    sessionStart={sessionStart[project.id]}
+                                    outputChars={outputChars[project.id]}
+                                    onClick={() => router.visit(`/${slugify(project.name)}`)}
+                                />
+                            ))}
+                        </div>
 
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept="image/*"
-                            style={{ display: 'none' }}
-                            onChange={e => {
-                                const file = e.target.files?.[0]
+                        {/* Terminal area */}
+                        <div
+                            style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}
+                            onDragOver={e => { e.preventDefault(); setIsDraggingOver(true) }}
+                            onDragEnter={e => { e.preventDefault(); setIsDraggingOver(true) }}
+                            onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDraggingOver(false) }}
+                            onDrop={e => {
+                                e.preventDefault()
+                                setIsDraggingOver(false)
+                                const file = e.dataTransfer.files[0]
                                 if (file) uploadImage(file)
-                                e.target.value = ''
                             }}
-                        />
+                        >
+                            {/* Terminal header: avatar + name + role + Restart */}
+                            {activeProject && (
+                                <div style={{
+                                    height: '40px', flexShrink: 0, display: 'flex', alignItems: 'center',
+                                    paddingLeft: '14px', paddingRight: '12px', gap: '10px',
+                                    borderBottom: `1px solid ${color.borderMuted}`, background: color.bgCanvas,
+                                }}>
+                                    <div style={{
+                                        width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0,
+                                        background: agentColor(activeProject.name), display: 'flex',
+                                        alignItems: 'center', justifyContent: 'center',
+                                        fontSize: '11px', fontWeight: 700, color: '#fff',
+                                    }}>
+                                        {activeProject.name.charAt(0).toUpperCase()}
+                                    </div>
+                                    <span style={{ color: color.textPrimary, fontSize: '13px', fontWeight: 600 }}>
+                                        {activeProject.name}
+                                    </span>
+                                    <span style={{ color: color.textFaint, fontSize: '12px' }}>
+                                        / {activeProject.language}
+                                    </span>
+                                    <div style={{ flex: 1 }} />
+                                    <button
+                                        onClick={restartClaude}
+                                        style={{
+                                            background: 'transparent', border: `1px solid ${color.borderMuted}`,
+                                            borderRadius: '5px', color: color.textMuted, fontSize: '11px',
+                                            padding: '4px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
+                                        }}
+                                        onMouseEnter={e => { e.currentTarget.style.borderColor = color.textMuted; e.currentTarget.style.color = color.textSecondary }}
+                                        onMouseLeave={e => { e.currentTarget.style.borderColor = color.borderMuted; e.currentTarget.style.color = color.textMuted }}
+                                    >
+                                        <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+                                            <path d="M8 2.5a5.487 5.487 0 00-4.131 1.869l1.204 1.204A.25.25 0 014.896 6H1.25A.25.25 0 011 5.75V2.104a.25.25 0 01.427-.177l1.38 1.38A7.001 7.001 0 0114.95 7.16a.75.75 0 11-1.49.178A5.501 5.501 0 008 2.5zM1.705 8.005a.75.75 0 01.834.656 5.501 5.501 0 009.592 2.97l-1.204-1.204a.25.25 0 01.177-.427h3.646a.25.25 0 01.25.25v3.646a.25.25 0 01-.427.177l-1.38-1.38A7.001 7.001 0 011.05 8.84a.75.75 0 01.656-.834z"/>
+                                        </svg>
+                                        Restart
+                                    </button>
+                                </div>
+                            )}
 
-                        {allProjects.map(project => (
-                            <div
-                                key={project.id}
-                                ref={el => containerRefs.current.set(project.id, el)}
-                                style={{
-                                    position: 'absolute', inset: 0, padding: '8px', boxSizing: 'border-box',
-                                    display: project.id === activeProject?.id ? 'block' : 'none',
+                            {/* Drag overlay */}
+                            {isDraggingOver && activeProject && (
+                                <div style={{
+                                    position: 'absolute', inset: 0, zIndex: 10,
+                                    background: color.accentGlow,
+                                    border: `2px dashed ${color.accent}`, borderRadius: '4px',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    pointerEvents: 'none',
+                                }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                                        <svg width="36" height="36" viewBox="0 0 16 16" fill={color.accent} opacity="0.8">
+                                            <path d="M1.75 2.5a.25.25 0 00-.25.25v10.5c0 .138.112.25.25.25h.94l.03-.013 4.013-4.013a1.75 1.75 0 012.474 0L13.62 13.5h.63a.25.25 0 00.25-.25V2.75a.25.25 0 00-.25-.25H1.75zM0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25V2.75zm9.5 3.5a1 1 0 11-2 0 1 1 0 012 0z"/>
+                                        </svg>
+                                        <span style={{ color: color.accent, fontSize: '13px', fontFamily: '"JetBrains Mono", monospace' }}>
+                                            Drop image to attach
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                style={{ display: 'none' }}
+                                onChange={e => {
+                                    const file = e.target.files?.[0]
+                                    if (file) uploadImage(file)
+                                    e.target.value = ''
                                 }}
                             />
-                        ))}
+
+                            {/* Terminal containers */}
+                            <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+                                {allProjects.map(project => (
+                                    <div
+                                        key={project.id}
+                                        ref={el => { containerRefs.current.set(project.id, el) }}
+                                        style={{
+                                            position: 'absolute', inset: 0, padding: '8px', boxSizing: 'border-box',
+                                            display: project.id === activeProject?.id ? 'block' : 'none',
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                        </div>
                     </div>
 
                     {/* Commands view */}

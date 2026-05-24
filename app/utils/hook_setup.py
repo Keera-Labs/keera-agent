@@ -57,12 +57,25 @@ def ensure_claude_settings(directory: str, base_url: str, apply_default_permissi
 
     stop_url  = f"{base_url}{_STOP_PATH}"
     start_url = f"{base_url}{_START_PATH}"
+    mcp_url   = f"{base_url}/mcp"
 
     hooks: dict = settings.setdefault("hooks", {})
     changed = False
 
     changed |= _upsert_hook(hooks.setdefault("Stop", []),              _STOP_PATH,  stop_url)
     changed |= _upsert_hook(hooks.setdefault("UserPromptSubmit", []), _START_PATH, start_url)
+
+    # Register MCP server with X-Project-Path header so the server knows
+    # which project's tasks to surface via resources/read.
+    mcp_servers: dict = settings.setdefault("mcpServers", {})
+    desired_mcp = {
+        "type": "http",
+        "url": mcp_url,
+        "headers": {"X-Project-Path": directory},
+    }
+    if mcp_servers.get("keera-agent") != desired_mcp:
+        mcp_servers["keera-agent"] = desired_mcp
+        changed = True
 
     if apply_default_permissions and "permissions" not in settings:
         default_perms = _read_default_permissions()

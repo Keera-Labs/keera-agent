@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -7,6 +8,15 @@ from fastapi.responses import JSONResponse
 from app.controllers.terminal_controller import connections, pty_writers
 from app.models.Project import Project
 from app.models.Task import Task
+
+
+async def _find_project_by_cwd(cwd: str):
+    """Find a project whose path matches cwd, handling ~ vs absolute path differences."""
+    project = await Project.where('path', cwd).first()
+    if project:
+        return project
+    all_projects = await Project.all()
+    return next((p for p in all_projects if os.path.expanduser(p.path) == cwd), None)
 
 
 async def claude_started(request: Request):
@@ -23,7 +33,7 @@ async def claude_started(request: Request):
     if not cwd:
         return JSONResponse({}, status_code=200)
 
-    project = await Project.where('path', cwd).first()
+    project = await _find_project_by_cwd(cwd)
     if project:
         pending = await Task.where('project_id', project.id).where('status', 'pending').first()
         if pending:
@@ -50,7 +60,7 @@ async def claude_stopped(request: Request):
         return JSONResponse({}, status_code=200)
 
     # Find the project by path and mark as idle
-    project = await Project.where('path', cwd).first()
+    project = await _find_project_by_cwd(cwd)
     if project:
         await Project.where('id', project.id).update({'claude_status': 'idle'})
 

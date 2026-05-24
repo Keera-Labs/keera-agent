@@ -1,8 +1,18 @@
+import re
+
 from fastapi import Request
 from fastapi_startkit.inertia.inertia import Inertia
 
 from app.models.Project import Project
 from app.models.Task import Task
+
+
+def _slugify(name: str) -> str:
+    s = name.lower()
+    s = re.sub(r'\s+', '-', s)
+    s = re.sub(r'[^a-z0-9-]', '', s)
+    s = re.sub(r'-+', '-', s)
+    return s.strip('-')
 
 
 def _load_json(value) -> list:
@@ -34,7 +44,7 @@ def _serialize(t: Task) -> dict:
 
 async def tasks_page(request: Request, project: str):
     projects = await Project.all()
-    proj = next((p for p in projects if p.name == project), None)
+    proj = next((p for p in projects if _slugify(p.name) == project), None)
     tasks = []
     if proj:
         raw = await Task.where("project_id", proj.id).get()

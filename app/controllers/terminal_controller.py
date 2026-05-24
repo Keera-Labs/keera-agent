@@ -89,13 +89,13 @@ async def terminal_ws(websocket: WebSocket, project: str, path: str = Query(defa
             'last_session_id': session.id,
             'claude_status': 'running',
         })
-    connections[path or cwd] = websocket
+    connections[cwd] = websocket
 
     shell = os.environ.get('SHELL', '/bin/bash')
     master_fd, slave_fd = pty.openpty()
     _set_size(master_fd, 24, 80)
 
-    pty_writers[path or cwd] = lambda data: os.write(master_fd, data if isinstance(data, bytes) else data.encode())
+    pty_writers[cwd] = lambda data: os.write(master_fd, data if isinstance(data, bytes) else data.encode())
 
     proc = subprocess.Popen(
         [shell],
@@ -220,8 +220,8 @@ async def terminal_ws(websocket: WebSocket, project: str, path: str = Query(defa
     finally:
         for t in tasks:
             t.cancel()
-        connections.pop(path or cwd, None)
-        pty_writers.pop(path or cwd, None)
+        connections.pop(cwd, None)
+        pty_writers.pop(cwd, None)
         try:
             proc.kill()
         except Exception:
