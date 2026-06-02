@@ -6,6 +6,8 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from app.controllers.terminal_controller import connections, pty_writers
+from app.models.Agent import Agent
+from app.models.AgentRelayMessage import AgentRelayMessage
 from app.models.Project import Project
 from app.models.Task import Task
 
@@ -90,6 +92,10 @@ async def claude_stopped(request: Request):
                         pass
                 return JSONResponse({}, status_code=200)
 
+    # Deliver pending agent relay messages to any agents with active PTYs
+    if project:
+        await _deliver_agent_relay_messages(project, cwd)
+
     # Notify the connected frontend WebSocket for this project
     ws = connections.get(cwd)
     if ws:
@@ -99,3 +105,47 @@ async def claude_stopped(request: Request):
             pass
 
     return JSONResponse({}, status_code=200)
+
+
+async def _deliver_agent_relay_messages(project, cwd: str) -> None:
+    """
+    After any Claude instance stops, check for pending relay messages
+    for all agents in the project and inject them into active PTYs.
+    This creates the continuous back-and-forth flow between agents.
+    """
+    agents = await Agent.where('project_id', project.id).get()
+    if not agents:
+        return
+
+    for agent in agents:
+        pending = await AgentRelayMessage.where('to_agent_id', agent.id)\
+            .where('status', 'pending').order_by('id', 'asc').get()
+        if not pending:
+            continue
+
+        conn_key = f"{cwd}:agent:{agent.id}"
+        write_fn = pty_writers.get(conn_key)
+        if not write_fn:
+            continue
+
+        # Small delay so Claude has time to return to the prompt
+        await asyncio.sleep(1.0)
+
+        for msg in pending:
+            from_agent = await Agent.find(msg.from_agent_id)
+            sender_name = from_agent.name if from_agent else f"Agent #{msg.from_agent_id}"
+            text = f"[Message from Agent '{sender_name}']: {msg.content}\n"
+            write_fn(text.encode())
+            await AgentRelayMessage.where('id', msg.id).update({'status': 'delivered'})
+
+        # Notify frontend about the delivered messages
+        ws = connections.get(cwd)
+        if ws:
+            try:
+                await ws.send_text(json.dumps({
+                    'type': 'agent_relay_delivered',
+                    'agent_id': agent.id,
+                    'count': len(pending),
+                }))
+            except Exception:
+                pass

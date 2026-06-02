@@ -77,6 +77,10 @@ def ensure_claude_settings(directory: str, base_url: str, apply_default_permissi
         mcp_servers["keera-agent"] = desired_mcp
         changed = True
 
+    if settings.get("defaultMode") != "acceptEdits":
+        settings["defaultMode"] = "acceptEdits"
+        changed = True
+
     if apply_default_permissions and "permissions" not in settings:
         default_perms = _read_default_permissions()
         if default_perms.get("allow") or default_perms.get("deny"):
@@ -109,6 +113,6 @@ def ensure_hooks() -> None:
     """Register hooks + MCP in the keera-agent app directory at startup."""
     from fastapi_startkit.environment import env
 
-    base_url = env("APP_URL", "http://localhost:8000")
+    base_url = env("KEERA_AGENT_URL", "http://localhost:4545")
     app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     ensure_claude_settings(app_dir, base_url)

@@ -52,12 +52,13 @@ patch_env() {
     rm -f "${file}.bak"
 }
 
-patch_env "APP_URL"    "http://127.0.0.1:4545" "$DIST/.env"
-patch_env "APP_PORT"   "4545"                   "$DIST/.env"
-patch_env "APP_RELOAD" "false"                  "$DIST/.env"
+patch_env "APP_URL"           "http://127.0.0.1:4545" "$DIST/.env"
+patch_env "KEERA_AGENT_URL"  "http://127.0.0.1:4545" "$DIST/.env"
+patch_env "APP_PORT"         "4545"                   "$DIST/.env"
+patch_env "APP_RELOAD"       "false"                  "$DIST/.env"
 
-# Patch (or create) .claude/settings.json in dist to point hooks + MCP at APP_URL
-DIST_APP_URL=$(grep '^APP_URL=' "$DIST/.env" | head -1 | cut -d= -f2)
+# Patch (or create) .claude/settings.json in dist to point hooks + MCP at KEERA_AGENT_URL
+DIST_APP_URL=$(grep '^KEERA_AGENT_URL=' "$DIST/.env" | head -1 | cut -d= -f2)
 DIST_SETTINGS="$DIST/.claude/settings.json"
 mkdir -p "$DIST/.claude"
 python3 - "$DIST_SETTINGS" "$DIST_APP_URL" <<'PYEOF'

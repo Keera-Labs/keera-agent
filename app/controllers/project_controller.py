@@ -1,4 +1,6 @@
 import os
+import subprocess
+import sys
 
 from fastapi import Request, UploadFile, File
 from fastapi.responses import JSONResponse
@@ -52,7 +54,7 @@ async def update(request: Request, project_id: int):
         if not os.path.isdir(expanded):
             return JSONResponse({"error": "Directory does not exist"}, status_code=422)
         project.path = new_path
-        base_url = env("APP_URL", "http://localhost:8000")
+        base_url = env("KEERA_AGENT_URL", "http://localhost:4545")
         ensure_claude_settings(expanded, base_url)
 
     if "system_prompt" in body:
@@ -69,6 +71,23 @@ async def update(request: Request, project_id: int):
         "claude_status": project.claude_status,
         "system_prompt": project.system_prompt,
     })
+
+
+async def open_directory(request: Request, project_id: int):
+    project = await Project.find(project_id)
+    if not project:
+        return JSONResponse({"error": "Project not found"}, status_code=404)
+    path = os.path.expanduser(project.path)
+    if not os.path.isdir(path):
+        return JSONResponse({"error": "Directory does not exist"}, status_code=422)
+    try:
+        if sys.platform == "darwin":
+            subprocess.Popen(["open", path])
+        else:
+            subprocess.Popen(["xdg-open", path])
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    return JSONResponse({"ok": True})
 
 
 async def destroy(request: Request, project_id: int):
@@ -135,8 +154,25 @@ async def store(request: Request):
     })
 
     expanded_path = os.path.expanduser(path)
-    base_url = env("APP_URL", "http://localhost:8000")
+    base_url = env("KEERA_AGENT_URL", "http://localhost:4545")
     ensure_claude_settings(expanded_path, base_url, apply_default_permissions=True)
+
+    # Create a default PM agent for every new project
+    from app.models.Agent import Agent
+    await Agent.create({
+        "project_id": project.id,
+        "name": "PM",
+        "agent_type": "pm",
+        "description": "Project manager agent that coordinates work across the team.",
+        "model": "claude-sonnet-4-6",
+        "system_prompt": (
+            "You are a project manager AI agent. Your role is to understand the project goals, "
+            "break down work into clear tasks, coordinate with other agents, and ensure delivery. "
+            "Spawn specialist agents (software_engineer, qa) when needed and relay tasks to them."
+        ),
+        "status": "idle",
+        "has_session": False,
+    })
 
     return JSONResponse(
         {
