@@ -5,6 +5,76 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { color } from '../tokens'
 
+// ─── Slug utility ─────────────────────────────────────────────────────────────
+
+function slugify(name: string): string {
+    return name
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9-]/g, '')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+}
+
+// ─── Agent color ──────────────────────────────────────────────────────────────
+
+function agentColor(name: string): string {
+    const palette = ['#7c6af7', '#e8943f', '#3fb950', '#58a6ff', '#ff6b6b', '#ffa657', '#9b59b6', '#1abc9c']
+    let h = 0
+    for (let i = 0; i < name.length; i++) h = ((h << 5) - h + name.charCodeAt(i)) | 0
+    return palette[Math.abs(h) % palette.length]
+}
+
+// ─── Audio notifications ───────────────────────────────────────────────────────
+
+let _audioCtx: AudioContext | null = null
+function getAudioCtx(): AudioContext {
+    if (!_audioCtx) _audioCtx = new AudioContext()
+    return _audioCtx
+}
+
+function playSound(type: 'done' | 'input') {
+    try {
+        const ctx = getAudioCtx()
+        const gain = ctx.createGain()
+        gain.connect(ctx.destination)
+
+        if (type === 'done') {
+            // Two-tone ascending ding: task completed
+            const freqs = [880, 1100]
+            freqs.forEach((freq, i) => {
+                const osc = ctx.createOscillator()
+                osc.type = 'sine'
+                osc.frequency.value = freq
+                const g = ctx.createGain()
+                g.gain.setValueAtTime(0, ctx.currentTime + i * 0.12)
+                g.gain.linearRampToValueAtTime(0.18, ctx.currentTime + i * 0.12 + 0.02)
+                g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.12 + 0.28)
+                osc.connect(g)
+                g.connect(ctx.destination)
+                osc.start(ctx.currentTime + i * 0.12)
+                osc.stop(ctx.currentTime + i * 0.12 + 0.28)
+            })
+        } else {
+            // Soft double-pulse: needs user input
+            const freqs = [660, 660]
+            freqs.forEach((freq, i) => {
+                const osc = ctx.createOscillator()
+                osc.type = 'sine'
+                osc.frequency.value = freq
+                const g = ctx.createGain()
+                g.gain.setValueAtTime(0, ctx.currentTime + i * 0.18)
+                g.gain.linearRampToValueAtTime(0.14, ctx.currentTime + i * 0.18 + 0.02)
+                g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.18 + 0.18)
+                osc.connect(g)
+                g.connect(ctx.destination)
+                osc.start(ctx.currentTime + i * 0.18)
+                osc.stop(ctx.currentTime + i * 0.18 + 0.18)
+            })
+        }
+    } catch { /* AudioContext not available */ }
+}
+
 interface Workspace {
     id: number
     name: string
@@ -19,6 +89,7 @@ interface Project {
     language: string
     workspace_id: number | null
     claude_status: 'running' | 'idle' | null
+    system_prompt: string | null
 }
 
 interface Session {
@@ -267,6 +338,642 @@ function AddProjectModal({
     )
 }
 
+// ─── Edit Project Path Modal ──────────────────────────────────────────────────
+
+function EditProjectPathModal({
+    project,
+    onClose,
+    onUpdated,
+}: {
+    project: Project
+    onClose: () => void
+    onUpdated: (p: Project) => void
+}) {
+    const [path, setPath] = useState(project.path)
+    const [error, setError] = useState('')
+    const [loading, setLoading] = useState(false)
+
+    async function handleSubmit(e: React.FormEvent) {
+        e.preventDefault()
+        setError('')
+        setLoading(true)
+        try {
+            const res = await fetch(`/api/projects/${project.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: path.trim() }),
+            })
+            const data = await res.json()
+            if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
+            onUpdated(data as Project)
+            onClose()
+        } catch {
+            setError('Network error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    return (
+        <div style={{
+            position: 'fixed', inset: 0, background: color.overlay,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+        }}>
+            <div style={{
+                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
+                padding: '24px', width: '340px', display: 'flex', flexDirection: 'column', gap: '14px',
+            }}>
+                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>
+                        Change Directory —{' '}
+                        <span style={{ fontFamily: '"JetBrains Mono", monospace', color: color.accent }}>{project.name}</span>
+                    </h2>
+                    {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={labelStyle}>Path</span>
+                        <input value={path} onChange={e => setPath(e.target.value)} placeholder="~/code/my-project" required style={inputStyle} />
+                    </label>
+                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                        <button type="button" onClick={onClose} style={cancelBtnStyle}>Cancel</button>
+                        <button type="submit" disabled={loading} style={submitBtnStyle}>
+                            {loading ? 'Saving…' : 'Save'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    )
+}
+
+// ─── System Prompt Modal ──────────────────────────────────────────────────────
+
+function SystemPromptModal({
+    project,
+    onClose,
+    onUpdated,
+}: {
+    project: Project
+    onClose: () => void
+    onUpdated: (p: Project) => void
+}) {
+    const [prompt, setPrompt] = useState(project.system_prompt ?? '')
+    const [error, setError] = useState('')
+    const [loading, setLoading] = useState(false)
+
+    async function handleSubmit(e: React.FormEvent) {
+        e.preventDefault()
+        setError('')
+        setLoading(true)
+        try {
+            const res = await fetch(`/api/projects/${project.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ system_prompt: prompt.trim() || null }),
+            })
+            const data = await res.json()
+            if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
+            onUpdated(data as Project)
+            onClose()
+        } catch {
+            setError('Network error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    return (
+        <div style={{
+            position: 'fixed', inset: 0, background: color.overlay,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+        }}>
+            <div style={{
+                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
+                padding: '24px', width: '480px', display: 'flex', flexDirection: 'column', gap: '14px',
+            }}>
+                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div>
+                        <h2 style={{ margin: '0 0 4px', color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>
+                            System Instructions —{' '}
+                            <span style={{ fontFamily: '"JetBrains Mono", monospace', color: color.accent }}>{project.name}</span>
+                        </h2>
+                        <p style={{ margin: 0, color: color.textMuted, fontSize: '11px' }}>
+                            Instructions passed to Claude when a new agent session starts. Leave blank to use no system prompt.
+                        </p>
+                    </div>
+                    {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={labelStyle}>System prompt</span>
+                        <textarea
+                            value={prompt}
+                            onChange={e => setPrompt(e.target.value)}
+                            placeholder="You are a helpful assistant specialized in..."
+                            rows={8}
+                            style={{
+                                ...inputStyle,
+                                resize: 'vertical',
+                                fontFamily: '"JetBrains Mono", monospace',
+                                fontSize: '12px',
+                                lineHeight: '1.5',
+                            }}
+                        />
+                    </label>
+                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                        <button type="button" onClick={onClose} style={cancelBtnStyle}>Cancel</button>
+                        <button type="submit" disabled={loading} style={submitBtnStyle}>
+                            {loading ? 'Saving…' : 'Save'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    )
+}
+
+// ─── Tag Input ────────────────────────────────────────────────────────────────
+
+function TagInput({
+    tags,
+    onChange,
+    placeholder,
+    disabled,
+    tagColor,
+}: {
+    tags: string[]
+    onChange: (tags: string[]) => void
+    placeholder?: string
+    disabled?: boolean
+    tagColor: string
+}) {
+    const [input, setInput] = useState('')
+    const inputRef = useRef<HTMLInputElement>(null)
+
+    function addTag(raw: string) {
+        const value = raw.trim()
+        if (value && !tags.includes(value)) {
+            onChange([...tags, value])
+        }
+        setInput('')
+    }
+
+    function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+        if (e.key === 'Enter') {
+            e.preventDefault()
+            addTag(input)
+        } else if ((e.key === 'Backspace' || e.key === 'Delete') && input === '' && tags.length > 0) {
+            onChange(tags.slice(0, -1))
+        }
+    }
+
+    function removeTag(idx: number) {
+        onChange(tags.filter((_, i) => i !== idx))
+    }
+
+    return (
+        <div
+            onClick={() => inputRef.current?.focus()}
+            style={{
+                display: 'flex', flexWrap: 'wrap', gap: '5px', alignItems: 'center',
+                background: color.bgBase, border: `1px solid ${color.borderMuted}`, borderRadius: '6px',
+                padding: '6px 8px', minHeight: '38px', cursor: 'text',
+                opacity: disabled ? 0.5 : 1,
+            }}
+        >
+            {tags.map((tag, i) => (
+                <span key={i} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '4px',
+                    background: tagColor + '22', border: `1px solid ${tagColor}55`,
+                    borderRadius: '4px', padding: '2px 6px',
+                    fontFamily: '"JetBrains Mono", monospace', fontSize: '11px',
+                    color: tagColor, lineHeight: '1.4',
+                }}>
+                    {tag}
+                    {!disabled && (
+                        <button
+                            type="button"
+                            onClick={e => { e.stopPropagation(); removeTag(i) }}
+                            style={{
+                                background: 'none', border: 'none', cursor: 'pointer',
+                                color: tagColor, padding: '0', lineHeight: 1, fontSize: '12px',
+                                display: 'flex', alignItems: 'center', opacity: 0.7,
+                            }}
+                        >×</button>
+                    )}
+                </span>
+            ))}
+            {!disabled && (
+                <input
+                    ref={inputRef}
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    onBlur={() => { if (input.trim()) addTag(input) }}
+                    placeholder={tags.length === 0 ? placeholder : ''}
+                    style={{
+                        background: 'none', border: 'none', outline: 'none', padding: '2px 0',
+                        fontFamily: '"JetBrains Mono", monospace', fontSize: '11px',
+                        color: color.textPrimary, minWidth: '120px', flex: 1,
+                    }}
+                />
+            )}
+            {disabled && tags.length === 0 && (
+                <span style={{ color: color.textFaint, fontSize: '11px', fontFamily: '"JetBrains Mono", monospace' }}>
+                    Loading…
+                </span>
+            )}
+        </div>
+    )
+}
+
+// ─── Shared Permissions Editor ────────────────────────────────────────────────
+
+function PermissionsEditor({
+    title,
+    subtitle,
+    allow,
+    deny,
+    onChange,
+    loading,
+    fetching,
+    error,
+    onSubmit,
+    onClose,
+}: {
+    title: React.ReactNode
+    subtitle: string
+    allow: string[]
+    deny: string[]
+    onChange: (field: 'allow' | 'deny', tags: string[]) => void
+    loading: boolean
+    fetching?: boolean
+    error: string
+    onSubmit: (e: React.FormEvent) => void
+    onClose: () => void
+}) {
+    return (
+        <div style={{
+            position: 'fixed', inset: 0, background: color.overlay,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+        }}>
+            <div style={{
+                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
+                padding: '24px', width: '480px', display: 'flex', flexDirection: 'column', gap: '14px',
+            }}>
+                <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div>
+                        <h2 style={{ margin: '0 0 4px', color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>
+                            {title}
+                        </h2>
+                        <p style={{ margin: 0, color: color.textMuted, fontSize: '11px' }}>{subtitle}</p>
+                    </div>
+                    {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={labelStyle}>Allow</span>
+                        <TagInput
+                            tags={allow}
+                            onChange={tags => onChange('allow', tags)}
+                            placeholder={fetching ? '' : 'Type a rule and press Enter…'}
+                            disabled={fetching}
+                            tagColor={color.success}
+                        />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={labelStyle}>Deny</span>
+                        <TagInput
+                            tags={deny}
+                            onChange={tags => onChange('deny', tags)}
+                            placeholder={fetching ? '' : 'Type a rule and press Enter…'}
+                            disabled={fetching}
+                            tagColor={color.danger}
+                        />
+                    </div>
+                    <p style={{ margin: 0, color: color.textFaint, fontSize: '10px', lineHeight: '1.5' }}>
+                        Rules follow Claude Code syntax, e.g. <code style={{ fontFamily: 'monospace' }}>Bash(*)</code>, <code style={{ fontFamily: 'monospace' }}>Bash(npm run *)</code>, <code style={{ fontFamily: 'monospace' }}>Read</code>. Press Enter to add. Leave both empty to rely on interactive prompts.
+                    </p>
+                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                        <button type="button" onClick={onClose} style={cancelBtnStyle}>Cancel</button>
+                        <button type="submit" disabled={fetching || loading} style={submitBtnStyle}>
+                            {loading ? 'Saving…' : 'Save'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    )
+}
+
+// ─── Project Permissions Modal ────────────────────────────────────────────────
+
+function ProjectPermissionsModal({
+    project,
+    onClose,
+}: {
+    project: Project
+    onClose: () => void
+}) {
+    const [allow, setAllow] = useState<string[]>([])
+    const [deny,  setDeny]  = useState<string[]>([])
+    const [error,   setError]   = useState('')
+    const [fetching, setFetching] = useState(true)
+    const [saving,   setSaving]   = useState(false)
+
+    useEffect(() => {
+        fetch(`/api/projects/${project.id}/permissions`)
+            .then(r => r.json())
+            .then(d => {
+                setAllow(d.allow ?? [])
+                setDeny(d.deny ?? [])
+            })
+            .catch(() => setError('Failed to load permissions'))
+            .finally(() => setFetching(false))
+    }, [project.id])
+
+    function handleChange(field: 'allow' | 'deny', tags: string[]) {
+        if (field === 'allow') setAllow(tags)
+        else setDeny(tags)
+    }
+
+    async function handleSubmit(e: React.FormEvent) {
+        e.preventDefault()
+        setError('')
+        setSaving(true)
+        try {
+            const res = await fetch(`/api/projects/${project.id}/permissions`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ allow, deny }),
+            })
+            const data = await res.json()
+            if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
+            setAllow(data.allow ?? [])
+            setDeny(data.deny ?? [])
+            onClose()
+        } catch {
+            setError('Network error')
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    return (
+        <PermissionsEditor
+            title={<>Permissions — <span style={{ fontFamily: '"JetBrains Mono", monospace', color: color.accent }}>{project.name}</span></>}
+            subtitle="Saved to the project's .claude/settings.json and database. Takes effect on next agent start."
+            allow={allow}
+            deny={deny}
+            onChange={handleChange}
+            loading={saving}
+            fetching={fetching}
+            error={error}
+            onSubmit={handleSubmit}
+            onClose={onClose}
+        />
+    )
+}
+
+// ─── Default Permissions Modal ────────────────────────────────────────────────
+
+function DefaultPermissionsModal({ onClose }: { onClose: () => void }) {
+    const [allow, setAllow] = useState<string[]>([])
+    const [deny,  setDeny]  = useState<string[]>([])
+    const [error,   setError]   = useState('')
+    const [fetching, setFetching] = useState(true)
+    const [saving,   setSaving]   = useState(false)
+
+    useEffect(() => {
+        fetch('/api/default-permissions')
+            .then(r => r.json())
+            .then(d => {
+                setAllow(d.allow ?? [])
+                setDeny(d.deny ?? [])
+            })
+            .catch(() => setError('Failed to load defaults'))
+            .finally(() => setFetching(false))
+    }, [])
+
+    function handleChange(field: 'allow' | 'deny', tags: string[]) {
+        if (field === 'allow') setAllow(tags)
+        else setDeny(tags)
+    }
+
+    async function handleSubmit(e: React.FormEvent) {
+        e.preventDefault()
+        setError('')
+        setSaving(true)
+        try {
+            const res = await fetch('/api/default-permissions', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ allow, deny }),
+            })
+            const data = await res.json()
+            if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
+            setAllow(data.allow ?? [])
+            setDeny(data.deny ?? [])
+            onClose()
+        } catch {
+            setError('Network error')
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    return (
+        <PermissionsEditor
+            title="Default Permissions"
+            subtitle="Saved to default_permissions.json and synced to all existing projects."
+            allow={allow}
+            deny={deny}
+            onChange={handleChange}
+            loading={saving}
+            fetching={fetching}
+            error={error}
+            onSubmit={handleSubmit}
+            onClose={onClose}
+        />
+    )
+}
+
+// ─── Project Search Modal (⌘P) ────────────────────────────────────────────────
+
+function ProjectSearchModal({ projects, onClose, onSelect }: {
+    projects: Project[]
+    onClose: () => void
+    onSelect: (project: Project) => void
+}) {
+    const [query, setQuery] = useState('')
+    const [cursor, setCursor] = useState(0)
+    const inputRef = useRef<HTMLInputElement>(null)
+    const listRef = useRef<HTMLDivElement>(null)
+
+    const filtered = query.trim()
+        ? projects.filter(p =>
+            p.name.toLowerCase().includes(query.toLowerCase()) ||
+            p.path.toLowerCase().includes(query.toLowerCase())
+        )
+        : projects
+
+    useEffect(() => { setCursor(0) }, [query])
+    useEffect(() => { inputRef.current?.focus() }, [])
+
+    // Scroll active item into view
+    useEffect(() => {
+        const el = listRef.current?.querySelector<HTMLDivElement>(`[data-idx="${cursor}"]`)
+        el?.scrollIntoView({ block: 'nearest' })
+    }, [cursor])
+
+    function handleKey(e: React.KeyboardEvent) {
+        if (e.key === 'ArrowDown') { e.preventDefault(); setCursor(c => Math.min(c + 1, filtered.length - 1)) }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); setCursor(c => Math.max(c - 1, 0)) }
+        else if (e.key === 'Enter') { e.preventDefault(); if (filtered[cursor]) { onSelect(filtered[cursor]); onClose() } }
+        else if (e.key === 'Escape') { e.preventDefault(); onClose() }
+    }
+
+    return (
+        <div
+            style={{ position: 'fixed', inset: 0, background: color.overlay, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 500, paddingTop: '15vh' }}
+            onClick={onClose}
+        >
+            <div
+                style={{ background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '10px', width: '480px', maxWidth: '92vw', boxShadow: '0 16px 48px rgba(0,0,0,0.6)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+                onClick={e => e.stopPropagation()}
+            >
+                {/* Search input */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px', borderBottom: `1px solid ${color.border}` }}>
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill={color.textMuted} style={{ flexShrink: 0 }}>
+                        <path d="M10.68 11.74a6 6 0 01-7.922-8.982 6 6 0 018.982 7.922l3.04 3.04a.749.749 0 11-1.06 1.06l-3.04-3.04zm-5.68.26a4.5 4.5 0 100-9 4.5 4.5 0 000 9z"/>
+                    </svg>
+                    <input
+                        ref={inputRef}
+                        value={query}
+                        onChange={e => setQuery(e.target.value)}
+                        onKeyDown={handleKey}
+                        placeholder="Search projects..."
+                        style={{ ...inputStyle, flex: 1, border: 'none', background: 'transparent', outline: 'none', padding: 0, fontSize: '14px' }}
+                    />
+                    {query && (
+                        <button onClick={() => setQuery('')} style={{ background: 'transparent', border: 'none', color: color.textMuted, cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}>
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z"/></svg>
+                        </button>
+                    )}
+                </div>
+
+                {/* Results */}
+                <div ref={listRef} style={{ maxHeight: '320px', overflowY: 'auto', padding: '4px 0' }}>
+                    {filtered.length === 0 ? (
+                        <div style={{ padding: '20px', textAlign: 'center', color: color.textFaint, fontSize: '13px' }}>No projects found</div>
+                    ) : filtered.map((project, idx) => (
+                        <div
+                            key={project.id}
+                            data-idx={idx}
+                            onClick={() => { onSelect(project); onClose() }}
+                            onMouseEnter={() => setCursor(idx)}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: '10px',
+                                padding: '8px 14px', cursor: 'pointer',
+                                background: idx === cursor ? color.bgBase : 'transparent',
+                                transition: 'background 0.1s',
+                            }}
+                        >
+                            <svg width="13" height="13" viewBox="0 0 16 16" fill={color.textMuted} style={{ flexShrink: 0 }}>
+                                <path d="M1.75 1A1.75 1.75 0 000 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0016 13.25v-8.5A1.75 1.75 0 0014.25 3H7.5L6.066 1.566A.25.25 0 005.89 1.5H1.75zm0 1.5h3.89l1.433 1.434a.25.25 0 00.177.066H14.25a.25.25 0 01.25.25v8.5a.25.25 0 01-.25.25H1.75a.25.25 0 01-.25-.25V2.75a.25.25 0 01.25-.25z"/>
+                            </svg>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: '13px', fontWeight: 500, color: color.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {project.name}
+                                </div>
+                                <div style={{ fontSize: '11px', color: color.textFaint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: '"JetBrains Mono", monospace' }}>
+                                    {project.path}
+                                </div>
+                            </div>
+                            {idx === cursor && (
+                                <span style={{ fontSize: '10px', color: color.textFaint, flexShrink: 0 }}>↵</span>
+                            )}
+                        </div>
+                    ))}
+                </div>
+
+                {/* Footer hint */}
+                <div style={{ borderTop: `1px solid ${color.border}`, padding: '6px 14px', display: 'flex', gap: '12px' }}>
+                    {[['↑↓', 'navigate'], ['↵', 'open'], ['Esc', 'close']].map(([key, label]) => (
+                        <span key={key} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: color.textFaint }}>
+                            <kbd style={{ background: color.bgBase, border: `1px solid ${color.border}`, borderRadius: '3px', padding: '1px 4px', fontSize: '10px', fontFamily: 'inherit' }}>{key}</kbd>
+                            {label}
+                        </span>
+                    ))}
+                </div>
+            </div>
+        </div>
+    )
+}
+
+// ─── Confirm Delete Project Modal ─────────────────────────────────────────────
+
+function ConfirmDeleteProjectModal({
+    project,
+    onClose,
+    onDeleted,
+}: {
+    project: Project
+    onClose: () => void
+    onDeleted: (projectId: number) => void
+}) {
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState('')
+
+    async function handleDelete() {
+        setLoading(true)
+        setError('')
+        try {
+            const res = await fetch(`/api/projects/${project.id}`, { method: 'DELETE' })
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}))
+                setError(data.error ?? 'Failed to delete project')
+                return
+            }
+            onDeleted(project.id)
+            onClose()
+        } catch {
+            setError('Network error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    return (
+        <div style={{
+            position: 'fixed', inset: 0, background: color.overlay,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+        }}>
+            <div style={{
+                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
+                padding: '24px', width: '320px', display: 'flex', flexDirection: 'column', gap: '14px',
+            }}>
+                <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>Delete Project</h2>
+                <p style={{ margin: 0, color: color.textMuted, fontSize: '13px', lineHeight: 1.5 }}>
+                    Remove{' '}
+                    <span style={{ color: color.textSecondary, fontFamily: '"JetBrains Mono", monospace', fontSize: '12px' }}>{project.name}</span>
+                    {' '}from Keera? This only removes it from the app — files on disk are not deleted.
+                </p>
+                {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                    <button type="button" onClick={onClose} disabled={loading} style={cancelBtnStyle}>Cancel</button>
+                    <button
+                        type="button"
+                        disabled={loading}
+                        onClick={handleDelete}
+                        style={{
+                            background: '#da3633', border: `1px solid ${color.danger}`,
+                            borderRadius: '6px', color: '#fff', fontSize: '12px', padding: '6px 14px', cursor: 'pointer',
+                        }}
+                    >
+                        {loading ? 'Deleting…' : 'Delete'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 // ─── Move Project Modal ───────────────────────────────────────────────────────
 
 function MoveProjectModal({
@@ -415,63 +1122,174 @@ function DotsIndicator() {
     )
 }
 
-function ProjectItem({ project, active, status, onMove }: { project: Project; active: boolean; status?: 'running' | 'done'; onMove: (p: Project) => void }) {
+function ProjectItem({ project, active, status, onMove, onEdit, onSystemPrompt, onPermissions, onDelete }: {
+    project: Project; active: boolean; status?: 'running' | 'done';
+    onMove: (p: Project) => void;
+    onEdit: (p: Project) => void;
+    onSystemPrompt: (p: Project) => void;
+    onPermissions: (p: Project) => void;
+    onDelete: (p: Project) => void;
+}) {
     const [hovered, setHovered] = useState(false)
+    const [menuOpen, setMenuOpen] = useState(false)
+    const menuRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        if (!menuOpen) return
+        function handleClickOutside(e: MouseEvent) {
+            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+                setMenuOpen(false)
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside)
+        return () => document.removeEventListener('mousedown', handleClickOutside)
+    }, [menuOpen])
+
+    const menuItemStyle = (danger = false): React.CSSProperties => ({
+        display: 'flex', alignItems: 'center', gap: '8px',
+        padding: '6px 12px', cursor: 'pointer', fontSize: '12px',
+        color: danger ? color.danger : color.textSecondary,
+        background: 'transparent', border: 'none', width: '100%', textAlign: 'left',
+        whiteSpace: 'nowrap',
+    })
 
     return (
         <div
             onMouseEnter={() => setHovered(true)}
-            onMouseLeave={() => setHovered(false)}
+            onMouseLeave={() => { setHovered(false) }}
             style={{ position: 'relative', display: 'flex' }}
         >
             <div
                 role="button"
                 tabIndex={0}
-                onClick={() => router.visit(`/${project.name}`)}
-                onKeyDown={e => e.key === 'Enter' && router.visit(`/${project.name}`)}
+                onClick={() => router.visit(`/${slugify(project.name)}`)}
+                onKeyDown={e => e.key === 'Enter' && router.visit(`/${slugify(project.name)}`)}
                 style={{
-                    flex: 1, display: 'flex', flexDirection: 'column', gap: '2px',
-                    padding: '5px 28px 5px 24px', background: active ? color.bgSurface : 'transparent',
+                    flex: 1, display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '6px',
+                    padding: '7px 32px 7px 12px', background: active ? color.bgSurface : 'transparent',
                     borderLeft: `2px solid ${active ? color.accent : 'transparent'}`,
                     cursor: 'pointer', textAlign: 'left',
                 }}
             >
-                <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
                     <span style={{
-                        color: active ? color.textPrimary : color.textSecondary, fontSize: '12px',
+                        color: active ? color.textPrimary : color.textSecondary, fontSize: '13px',
                         fontWeight: active ? 600 : 400, fontFamily: '"JetBrains Mono", monospace',
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
                         {project.name}
                     </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span style={{ color: color.textMuted, fontSize: '11px' }}>•</span>
+                        <span style={{ color: color.textMuted, fontSize: '11px', fontStyle: 'italic' }}>{project.language}</span>
+                    </span>
+                </div>
+                <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
                     {status === 'running' && <DotsIndicator />}
                     {status === 'done' && (
-                        <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: color.success, flexShrink: 0 }} />
+                        <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: color.success }} />
                     )}
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <span style={{
-                        width: '6px', height: '6px', borderRadius: '50%',
-                        background: LANG_COLORS[project.language] ?? color.textMuted, flexShrink: 0,
-                    }} />
-                    <span style={{ color: color.textMuted, fontSize: '11px' }}>{project.language}</span>
-                </span>
+                </div>
             </div>
-            <button
-                onClick={e => { e.stopPropagation(); onMove(project) }}
-                title="Move to workspace"
-                style={{
-                    position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)',
-                    background: 'transparent', border: 'none', cursor: 'pointer',
-                    color: hovered ? color.textMuted : 'transparent',
-                    padding: '2px 3px', lineHeight: 1, display: 'flex', alignItems: 'center',
-                    transition: 'color 0.1s',
-                }}
-            >
-                <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M7.47 1.97a.75.75 0 011.06 0l4.5 4.5a.75.75 0 010 1.06l-4.5 4.5a.75.75 0 11-1.06-1.06L11.44 7H3a.75.75 0 010-1.5h8.44L7.47 3.03a.75.75 0 010-1.06z"/>
-                </svg>
-            </button>
+
+            {/* 3-dot kebab button */}
+            {(hovered || menuOpen) && (
+                <button
+                    onClick={e => { e.stopPropagation(); setMenuOpen(o => !o) }}
+                    style={{
+                        position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)',
+                        background: menuOpen ? color.bgSurface : 'transparent',
+                        border: menuOpen ? `1px solid ${color.borderMuted}` : '1px solid transparent',
+                        borderRadius: '4px', cursor: 'pointer',
+                        color: color.textMuted, padding: '2px 4px',
+                        display: 'flex', alignItems: 'center', lineHeight: 1,
+                    }}
+                    onMouseEnter={e => { if (!menuOpen) e.currentTarget.style.background = color.bgSurface }}
+                    onMouseLeave={e => { if (!menuOpen) e.currentTarget.style.background = 'transparent' }}
+                >
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm0-5.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm0 11a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
+                    </svg>
+                </button>
+            )}
+
+            {/* Dropdown menu */}
+            {menuOpen && (
+                <div ref={menuRef} style={{
+                    position: 'absolute', right: '0', top: '100%', zIndex: 200,
+                    background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
+                    borderRadius: '6px', boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                    minWidth: '170px', padding: '4px 0', overflow: 'hidden',
+                }}>
+                    <button
+                        style={menuItemStyle()}
+                        onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        onClick={e => { e.stopPropagation(); setMenuOpen(false); onEdit(project) }}
+                    >
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0 }}>
+                            <path d="M11.013 1.427a1.75 1.75 0 012.474 0l1.086 1.086a1.75 1.75 0 010 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 01-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61zm1.414 1.06a.25.25 0 00-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 000-.354l-1.086-1.086zM11.189 6.25L9.75 4.81l-6.286 6.287a.25.25 0 00-.064.108l-.558 1.953 1.953-.558a.249.249 0 00.108-.064l6.286-6.286z"/>
+                        </svg>
+                        Change directory
+                    </button>
+                    <button
+                        style={{ ...menuItemStyle(), color: project.system_prompt ? color.accent : color.textSecondary }}
+                        onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        onClick={e => { e.stopPropagation(); setMenuOpen(false); onSystemPrompt(project) }}
+                    >
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0 }}>
+                            <path d="M0 1.75A.75.75 0 01.75 1h9.5a.75.75 0 010 1.5H.75A.75.75 0 010 1.75zM0 8a.75.75 0 01.75-.75h9.5a.75.75 0 010 1.5H.75A.75.75 0 010 8zm0 6.25a.75.75 0 01.75-.75h5.5a.75.75 0 010 1.5H.75a.75.75 0 01-.75-.75z"/>
+                        </svg>
+                        System instructions
+                    </button>
+                    <button
+                        style={menuItemStyle()}
+                        onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        onClick={e => { e.stopPropagation(); setMenuOpen(false); onPermissions(project) }}
+                    >
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0 }}>
+                            <path d="M8.533.133a1.75 1.75 0 00-1.066 0l-5.25 1.68A1.75 1.75 0 001 3.48V8c0 3.183 1.958 5.837 4.798 7.319a.75.75 0 00.404.119.75.75 0 00.404-.119C9.042 13.837 11 11.183 11 8V3.48a1.75 1.75 0 00-1.217-1.667L8.533.133zm-.61 1.429a.25.25 0 01.153 0l5.25 1.68a.25.25 0 01.174.238V8c0 2.67-1.625 4.91-4 6.282C7.875 12.91 6.25 10.67 6.25 8V3.48a.25.25 0 01.173-.238l1.5-.48z"/>
+                        </svg>
+                        Permissions
+                    </button>
+                    <button
+                        style={menuItemStyle()}
+                        onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        onClick={e => { e.stopPropagation(); setMenuOpen(false); onMove(project) }}
+                    >
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0 }}>
+                            <path d="M7.47 1.97a.75.75 0 011.06 0l4.5 4.5a.75.75 0 010 1.06l-4.5 4.5a.75.75 0 11-1.06-1.06L11.44 7H3a.75.75 0 010-1.5h8.44L7.47 3.03a.75.75 0 010-1.06z"/>
+                        </svg>
+                        Move to workspace
+                    </button>
+                    <button
+                        style={menuItemStyle()}
+                        onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        onClick={e => { e.stopPropagation(); setMenuOpen(false); fetch(`/api/projects/${project.id}/open-directory`, { method: 'POST' }) }}
+                    >
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0 }}>
+                            <path d="M1.75 1A1.75 1.75 0 000 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0016 13.25v-8.5A1.75 1.75 0 0014.25 3H7.5L6.066 1.566A.25.25 0 005.89 1.5H1.75zm0 1.5h3.89l1.433 1.434a.25.25 0 00.177.066H14.25a.25.25 0 01.25.25v8.5a.25.25 0 01-.25.25H1.75a.25.25 0 01-.25-.25V2.75a.25.25 0 01.25-.25z"/>
+                        </svg>
+                        Open in directory
+                    </button>
+                    <div style={{ height: '1px', background: color.border, margin: '4px 0' }} />
+                    <button
+                        style={menuItemStyle(true)}
+                        onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        onClick={e => { e.stopPropagation(); setMenuOpen(false); onDelete(project) }}
+                    >
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0 }}>
+                            <path d="M6.5 1.75a.25.25 0 01.25-.25h2.5a.25.25 0 01.25.25V3h-3V1.75zm4.5 0V3h2.25a.75.75 0 010 1.5H2.75a.75.75 0 010-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75zM4.496 6.675l.66 6.6a.25.25 0 00.249.225h5.19a.25.25 0 00.249-.225l.66-6.6a.75.75 0 011.492.149l-.66 6.6A1.748 1.748 0 0111.095 15H4.905a1.748 1.748 0 01-1.741-1.576l-.66-6.6a.75.75 0 111.492-.149z"/>
+                        </svg>
+                        Delete project
+                    </button>
+                </div>
+            )}
         </div>
     )
 }
@@ -481,40 +1299,48 @@ function WorkspaceSection({
     activeId,
     onAddProject,
     onMoveProject,
+    onEditProject,
+    onSystemPromptProject,
+    onPermissionsProject,
+    onDeleteProject,
     claudeStatus,
 }: {
     workspace: Workspace
     activeId: number | null
     onAddProject: (workspaceId: number) => void
     onMoveProject: (project: Project) => void
+    onEditProject: (project: Project) => void
+    onSystemPromptProject: (project: Project) => void
+    onPermissionsProject: (project: Project) => void
+    onDeleteProject: (project: Project) => void
     claudeStatus: Record<number, 'running' | 'done'>
 }) {
     const [collapsed, setCollapsed] = useState(false)
 
     return (
-        <div>
+        <div style={{ marginBottom: '2px' }}>
             {/* Workspace header */}
             <div style={{
-                display: 'flex', alignItems: 'center', padding: '5px 10px 5px 16px',
-                gap: '4px', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', padding: '6px 10px 6px 14px',
+                gap: '4px',
             }}>
                 <button
                     onClick={() => setCollapsed(c => !c)}
                     style={{
-                        flex: 1, display: 'flex', alignItems: 'center', gap: '5px',
+                        flex: 1, display: 'flex', alignItems: 'center', gap: '6px',
                         background: 'transparent', border: 'none', cursor: 'pointer',
                         textAlign: 'left', padding: 0,
                     }}
                 >
                     <svg
-                        width="10" height="10" viewBox="0 0 16 16" fill={color.textMuted}
+                        width="9" height="9" viewBox="0 0 16 16" fill={color.textTertiary}
                         style={{ transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', flexShrink: 0 }}
                     >
                         <path d="M4.427 7.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 7H4.604a.25.25 0 00-.177.427z"/>
                     </svg>
                     <span style={{
-                        color: color.textTertiary, fontSize: '11px', fontWeight: 600,
-                        textTransform: 'uppercase', letterSpacing: '0.05em',
+                        color: color.textSecondary, fontSize: '11px', fontWeight: 700,
+                        textTransform: 'uppercase', letterSpacing: '0.07em',
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
                         {workspace.name}
@@ -537,62 +1363,169 @@ function WorkspaceSection({
                 </button>
             </div>
 
-            {/* Projects list */}
+            {/* Projects list with left border */}
             {!collapsed && (
-                <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                    {workspace.projects.length === 0 && (
-                        <li style={{ padding: '4px 16px 4px 28px', color: color.textFaint, fontSize: '11px', fontStyle: 'italic' }}>
-                            No projects
-                        </li>
-                    )}
-                    {workspace.projects.map(project => (
-                        <li key={project.id}>
-                            <ProjectItem project={project} active={project.id === activeId} status={claudeStatus[project.id]} onMove={onMoveProject} />
-                        </li>
-                    ))}
-                </ul>
+                <div style={{ marginLeft: '20px', borderLeft: `1px solid ${color.border}` }}>
+                    <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                        {workspace.projects.length === 0 && (
+                            <li style={{ padding: '4px 16px 4px 12px', color: color.textFaint, fontSize: '11px', fontStyle: 'italic' }}>
+                                No projects
+                            </li>
+                        )}
+                        {workspace.projects.map(project => (
+                            <li key={project.id}>
+                                <ProjectItem project={project} active={project.id === activeId} status={claudeStatus[project.id]} onMove={onMoveProject} onEdit={onEditProject} onSystemPrompt={onSystemPromptProject} onPermissions={onPermissionsProject} onDelete={onDeleteProject} />
+                            </li>
+                        ))}
+                    </ul>
+                </div>
             )}
         </div>
     )
 }
 
-function WorkspaceDropdown({
+function WorkspaceSwitcher({
     workspaces,
     selected,
     onChange,
+    onAdd,
 }: {
     workspaces: Workspace[]
     selected: number | null
     onChange: (id: number | null) => void
+    onAdd: () => void
 }) {
-    if (workspaces.length === 0) return null
+    const [open, setOpen] = useState(false)
+    const [search, setSearch] = useState('')
+    const ref = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        if (!open) return
+        function handleClick(e: MouseEvent) {
+            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+        }
+        document.addEventListener('mousedown', handleClick)
+        return () => document.removeEventListener('mousedown', handleClick)
+    }, [open])
+
+    const selectedWs = workspaces.find(w => w.id === selected)
+    const filtered = workspaces.filter(w => w.name.toLowerCase().includes(search.toLowerCase()))
+
     return (
-        <select
-            value={selected ?? ''}
-            onChange={e => onChange(e.target.value === '' ? null : Number(e.target.value))}
-            style={{
-                marginLeft: 'auto',
-                background: color.bgBase,
-                border: `1px solid ${color.borderMuted}`,
-                borderRadius: '5px',
-                color: selected !== null ? color.textSecondary : color.textFaint,
-                fontSize: '11px',
-                padding: '2px 20px 2px 6px',
-                cursor: 'pointer',
-                outline: 'none',
-                maxWidth: '90px',
-                appearance: 'none',
-                WebkitAppearance: 'none',
-                backgroundImage: `url("data:image/svg+xml,%3Csvg width='8' height='5' viewBox='0 0 8 5' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L4 4L7 1' stroke='%237d8590' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
-                backgroundRepeat: 'no-repeat',
-                backgroundPosition: 'right 5px center',
-            }}
-        >
-            <option value="">All</option>
-            {workspaces.map(w => (
-                <option key={w.id} value={w.id}>{w.name}</option>
-            ))}
-        </select>
+        <div ref={ref} style={{ position: 'relative' }}>
+            <button
+                onClick={() => setOpen(o => !o)}
+                style={{
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
+                    borderRadius: '6px', cursor: 'pointer', padding: '5px 8px',
+                    color: color.textSecondary, fontSize: '12px', fontWeight: 500,
+                    width: '100%',
+                }}
+            >
+                <svg width="11" height="11" viewBox="0 0 16 16" fill={color.textMuted} style={{ flexShrink: 0 }}>
+                    <path d="M4 2.5a.5.5 0 01.5-.5h7a.5.5 0 01.5.5v1a.5.5 0 01-.5.5h-7a.5.5 0 01-.5-.5v-1zm-2 3A.5.5 0 012.5 5h11a.5.5 0 01.5.5v1a.5.5 0 01-.5.5h-11a.5.5 0 01-.5-.5v-1zm0 3a.5.5 0 01.5-.5h11a.5.5 0 01.5.5v1a.5.5 0 01-.5.5h-11a.5.5 0 01-.5-.5v-1zm0 3a.5.5 0 01.5-.5h11a.5.5 0 01.5.5v1a.5.5 0 01-.5.5h-11a.5.5 0 01-.5-.5v-1z"/>
+                </svg>
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>
+                    {selectedWs ? selectedWs.name : 'All Workspaces'}
+                </span>
+                <svg width="10" height="10" viewBox="0 0 16 16" fill={color.textMuted} style={{ flexShrink: 0 }}>
+                    <path d="M4.427 7.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 7H4.604a.25.25 0 00-.177.427z"/>
+                </svg>
+            </button>
+
+            {open && (
+                <div style={{
+                    position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 300,
+                    background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
+                    borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                    overflow: 'hidden',
+                }}>
+                    {/* Search + Create */}
+                    <div style={{ display: 'flex', gap: '6px', padding: '8px 8px 6px' }}>
+                        <input
+                            autoFocus
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            placeholder="Search workspaces..."
+                            style={{
+                                flex: 1, background: color.bgBase,
+                                border: `1px solid ${color.accent}`,
+                                borderRadius: '5px', color: color.textSecondary,
+                                fontSize: '11px', padding: '5px 8px', outline: 'none',
+                            }}
+                        />
+                        <button
+                            onClick={() => { setOpen(false); onAdd() }}
+                            style={{
+                                background: color.bgBase, border: `1px solid ${color.borderMuted}`,
+                                borderRadius: '5px', color: color.textSecondary,
+                                fontSize: '11px', padding: '5px 10px', cursor: 'pointer', whiteSpace: 'nowrap',
+                            }}
+                        >
+                            Create
+                        </button>
+                    </div>
+
+                    {/* Workspace list */}
+                    <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                        {filtered.length === 0 && (
+                            <div style={{ padding: '8px 12px', color: color.textFaint, fontSize: '11px', fontStyle: 'italic' }}>
+                                No workspaces found
+                            </div>
+                        )}
+                        {filtered.map(w => (
+                            <button
+                                key={w.id}
+                                onClick={() => { onChange(w.id); setOpen(false); setSearch('') }}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: '8px',
+                                    width: '100%', padding: '7px 12px', background: 'transparent',
+                                    border: 'none', cursor: 'pointer', textAlign: 'left',
+                                    color: w.id === selected ? color.textPrimary : color.textSecondary,
+                                    fontSize: '12px',
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
+                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                            >
+                                <svg width="11" height="11" viewBox="0 0 16 16" fill={w.id === selected ? color.accent : color.textMuted} style={{ flexShrink: 0 }}>
+                                    <path d="M4 2.5a.5.5 0 01.5-.5h7a.5.5 0 01.5.5v1a.5.5 0 01-.5.5h-7a.5.5 0 01-.5-.5v-1zm-2 3A.5.5 0 012.5 5h11a.5.5 0 01.5.5v1a.5.5 0 01-.5.5h-11a.5.5 0 01-.5-.5v-1zm0 3a.5.5 0 01.5-.5h11a.5.5 0 01.5.5v1a.5.5 0 01-.5.5h-11a.5.5 0 01-.5-.5v-1zm0 3a.5.5 0 01.5-.5h11a.5.5 0 01.5.5v1a.5.5 0 01-.5.5h-11a.5.5 0 01-.5-.5v-1z"/>
+                                </svg>
+                                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {w.name}
+                                </span>
+                                {w.id === selected && (
+                                    <svg width="10" height="10" viewBox="0 0 16 16" fill={color.accent}>
+                                        <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/>
+                                    </svg>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* View all */}
+                    <div style={{ borderTop: `1px solid ${color.border}` }}>
+                        <button
+                            onClick={() => { onChange(null); setOpen(false); setSearch('') }}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: '8px',
+                                width: '100%', padding: '8px 12px', background: 'transparent',
+                                border: 'none', cursor: 'pointer', textAlign: 'left',
+                                color: selected === null ? color.textPrimary : color.textSecondary,
+                                fontSize: '12px',
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        >
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill={color.textMuted}>
+                                <path d="M1 2.75A.75.75 0 011.75 2h3.5a.75.75 0 010 1.5h-3.5A.75.75 0 011 2.75zm0 5A.75.75 0 011.75 7h3.5a.75.75 0 010 1.5h-3.5A.75.75 0 011 7.75zm0 5a.75.75 0 01.75-.75h3.5a.75.75 0 010 1.5h-3.5a.75.75 0 01-.75-.75zm7.75-9.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-4.5zm0 5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-4.5zm0 5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-4.5z"/>
+                            </svg>
+                            View all workspaces
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
     )
 }
 
@@ -603,6 +1536,11 @@ function Sidebar({
     onAddWorkspace,
     onAddProject,
     onMoveProject,
+    onEditProject,
+    onSystemPromptProject,
+    onPermissionsProject,
+    onOpenDefaultPermissions,
+    onDeleteProject,
     tasks,
     onOpenCreateTask,
     onUpdateStatus,
@@ -615,6 +1553,11 @@ function Sidebar({
     onAddWorkspace: () => void
     onAddProject: (workspaceId: number | null) => void
     onMoveProject: (project: Project) => void
+    onEditProject: (project: Project) => void
+    onSystemPromptProject: (project: Project) => void
+    onPermissionsProject: (project: Project) => void
+    onOpenDefaultPermissions: () => void
+    onDeleteProject: (project: Project) => void
     tasks: Task[]
     onOpenCreateTask: () => void
     onUpdateStatus: (task: Task, status: Task['status']) => void
@@ -632,24 +1575,56 @@ function Sidebar({
         }}>
             {/* App header */}
             <div style={{
-                padding: '10px 12px 10px 16px', borderBottom: '1px solid #21262d',
-                display: 'flex', alignItems: 'center', gap: '8px',
+                padding: '16px 14px 14px 16px', borderBottom: `1px solid ${color.border}`,
+                display: 'flex', alignItems: 'center', gap: '12px',
             }}>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill={color.accent} style={{ flexShrink: 0 }}>
-                    <path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25V2.75zm1.75-.25a.25.25 0 00-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V2.75a.25.25 0 00-.25-.25H1.75zM8 4a.75.75 0 01.75.75v3.5h3.5a.75.75 0 010 1.5h-4.25a.75.75 0 01-.75-.75v-4.25A.75.75 0 018 4zM5 4a.75.75 0 01.75.75v6.5a.75.75 0 01-1.5 0v-6.5A.75.75 0 015 4z"/>
-                </svg>
-                <span style={{ color: color.textPrimary, fontSize: '13px', fontWeight: 700, letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>
-                    Keera Agent
-                </span>
-                <WorkspaceDropdown
+                {/* Purple terminal icon */}
+                <div style={{
+                    width: '40px', height: '40px', borderRadius: '10px',
+                    background: 'rgba(124,106,247,0.2)', border: '1px solid rgba(124,106,247,0.35)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                    <svg width="20" height="20" viewBox="0 0 16 16" fill="#7c6af7">
+                        <path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25V2.75zm1.75-.25a.25.25 0 00-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V2.75a.25.25 0 00-.25-.25H1.75zM3.72 6.78a.75.75 0 011.06-1.06l2 2a.75.75 0 010 1.06l-2 2a.75.75 0 01-1.06-1.06L5.19 8 3.72 6.78zM8.25 9.5a.75.75 0 000 1.5h3a.75.75 0 000-1.5h-3z"/>
+                    </svg>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', flex: 1, minWidth: 0 }}>
+                    <span style={{ color: color.textPrimary, fontSize: '15px', fontWeight: 700, letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>
+                        Keera Agent
+                    </span>
+                    <span style={{ color: color.textMuted, fontSize: '11px', fontFamily: '"JetBrains Mono", monospace', whiteSpace: 'nowrap' }}>
+                        AI Coding Manager
+                    </span>
+                </div>
+                <button
+                    onClick={onOpenDefaultPermissions}
+                    title="Default permissions"
+                    style={{
+                        background: 'transparent', border: 'none', cursor: 'pointer',
+                        color: color.textFaint, padding: '2px', lineHeight: 1,
+                        display: 'flex', alignItems: 'center', flexShrink: 0,
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.color = color.textMuted)}
+                    onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
+                >
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M8.533.133a1.75 1.75 0 00-1.066 0l-5.25 1.68A1.75 1.75 0 001 3.48V8c0 3.183 1.958 5.837 4.798 7.319a.75.75 0 00.404.119.75.75 0 00.404-.119C9.042 13.837 11 11.183 11 8V3.48a1.75 1.75 0 00-1.217-1.667L8.533.133zm-.61 1.429a.25.25 0 01.153 0l5.25 1.68a.25.25 0 01.174.238V8c0 2.67-1.625 4.91-4 6.282C7.875 12.91 6.25 10.67 6.25 8V3.48a.25.25 0 01.173-.238l1.5-.48z"/>
+                    </svg>
+                </button>
+            </div>
+
+            {/* Workspace switcher */}
+            <div style={{ padding: '8px 10px 4px' }}>
+                <WorkspaceSwitcher
                     workspaces={workspaces}
                     selected={filterWorkspaceId}
                     onChange={setFilterWorkspaceId}
+                    onAdd={onAddWorkspace}
                 />
             </div>
 
             {/* Workspaces + Projects section */}
-            <div style={{ overflowY: 'auto', maxHeight: '55%', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column' }}>
                 {filterWorkspaceId !== null ? (
                     // ── Filtered view: just the selected workspace's projects ──
                     (() => {
@@ -669,7 +1644,7 @@ function Sidebar({
                                     )}
                                     {ws.projects.map(project => (
                                         <li key={project.id}>
-                                            <ProjectItem project={project} active={project.id === activeId} status={claudeStatus[project.id]} onMove={onMoveProject} />
+                                            <ProjectItem project={project} active={project.id === activeId} status={claudeStatus[project.id]} onMove={onMoveProject} onEdit={onEditProject} onSystemPrompt={onSystemPromptProject} onPermissions={onPermissionsProject} onDelete={onDeleteProject} />
                                         </li>
                                     ))}
                                 </ul>
@@ -679,7 +1654,6 @@ function Sidebar({
                 ) : (
                     // ── Unfiltered view: all workspaces + unassigned ──
                     <>
-                        <SectionHeader label="Workspaces" onAdd={onAddWorkspace} />
 
                         {workspaces.length === 0 && (
                             <p style={{ margin: '0 16px 8px', color: color.textFaint, fontSize: '11px', fontStyle: 'italic' }}>
@@ -694,6 +1668,10 @@ function Sidebar({
                                 activeId={activeId}
                                 onAddProject={onAddProject}
                                 onMoveProject={onMoveProject}
+                                onEditProject={onEditProject}
+                                onSystemPromptProject={onSystemPromptProject}
+                                onPermissionsProject={onPermissionsProject}
+                                onDeleteProject={onDeleteProject}
                                 claudeStatus={claudeStatus}
                             />
                         ))}
@@ -724,7 +1702,7 @@ function Sidebar({
                                 <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
                                     {unassignedProjects.map(project => (
                                         <li key={project.id}>
-                                            <ProjectItem project={project} active={project.id === activeId} status={claudeStatus[project.id]} onMove={onMoveProject} />
+                                            <ProjectItem project={project} active={project.id === activeId} status={claudeStatus[project.id]} onMove={onMoveProject} onEdit={onEditProject} onSystemPrompt={onSystemPromptProject} onPermissions={onPermissionsProject} onDelete={onDeleteProject} />
                                         </li>
                                     ))}
                                 </ul>
@@ -999,9 +1977,368 @@ function CreateTaskModal({
     )
 }
 
+// ─── Task Detail Modal ────────────────────────────────────────────────────────
+
+function TaskDetailModal({ task, onClose }: { task: Task; onClose: () => void }) {
+    useEffect(() => {
+        function onKeyDown(e: KeyboardEvent) {
+            if (e.key === 'Escape') onClose()
+        }
+        document.addEventListener('keydown', onKeyDown)
+        return () => document.removeEventListener('keydown', onKeyDown)
+    }, [onClose])
+
+    const statusColor = STATUS_COLORS[task.status]
+
+    return (
+        <div
+            style={{
+                position: 'fixed', inset: 0, background: color.overlay,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+            }}
+            onClick={onClose}
+        >
+            <div
+                style={{
+                    background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
+                    width: '540px', maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+                    overflow: 'hidden',
+                }}
+                onClick={e => e.stopPropagation()}
+            >
+                {/* Header */}
+                <div style={{
+                    padding: '16px 20px', borderBottom: `1px solid ${color.border}`,
+                    display: 'flex', alignItems: 'flex-start', gap: '10px', flexShrink: 0,
+                }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '15px', fontWeight: 600, color: color.textPrimary, lineHeight: 1.4, wordBreak: 'break-word' }}>
+                            {task.title}
+                        </div>
+                        <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span style={{
+                                fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '10px',
+                                background: `${statusColor}20`, border: `1px solid ${statusColor}40`,
+                                color: statusColor, textTransform: 'uppercase', letterSpacing: '0.05em',
+                            }}>
+                                {STATUS_LABELS[task.status]}
+                            </span>
+                            <PriorityBadge priority={task.priority} />
+                        </div>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        style={{
+                            flexShrink: 0, background: 'transparent', border: 'none',
+                            color: color.textFaint, cursor: 'pointer', padding: '2px',
+                            fontSize: '20px', lineHeight: 1,
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.color = color.textPrimary }}
+                        onMouseLeave={e => { e.currentTarget.style.color = color.textFaint }}
+                    >
+                        ×
+                    </button>
+                </div>
+
+                {/* Scrollable body */}
+                <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {/* Description */}
+                    {task.description ? (
+                        <div>
+                            <div style={{ ...labelStyle, marginBottom: '6px' }}>Description</div>
+                            <div style={{ fontSize: '13px', color: color.textMuted, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                                {task.description}
+                            </div>
+                        </div>
+                    ) : (
+                        <div style={{ fontSize: '12px', color: color.textFaint, fontStyle: 'italic' }}>No description</div>
+                    )}
+
+                    {/* Assignees */}
+                    {task.assignees.length > 0 && (
+                        <div>
+                            <div style={{ ...labelStyle, marginBottom: '6px' }}>Assignees</div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                {task.assignees.map(a => (
+                                    <span key={a} style={{
+                                        background: color.accentSubtle, border: `1px solid ${color.accentEmphasis}`,
+                                        borderRadius: '10px', padding: '2px 8px',
+                                        color: color.accentMuted, fontSize: '11px',
+                                    }}>{a}</span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Acceptance criteria */}
+                    {task.acceptance_criteria.length > 0 && (
+                        <div>
+                            <div style={{ ...labelStyle, marginBottom: '6px', color: color.success }}>Acceptance Criteria</div>
+                            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                {task.acceptance_criteria.map((c, i) => (
+                                    <li key={i} style={{ display: 'flex', gap: '8px', fontSize: '12px', color: color.textMuted, lineHeight: 1.5 }}>
+                                        <span style={{ color: color.success, flexShrink: 0 }}>✓</span>
+                                        <span>{c}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
+                    {/* Testing methods */}
+                    {task.testing_methods.length > 0 && (
+                        <div>
+                            <div style={{ ...labelStyle, marginBottom: '6px', color: color.accent }}>Testing Methods</div>
+                            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                {task.testing_methods.map((m, i) => (
+                                    <li key={i} style={{ display: 'flex', gap: '8px', fontSize: '12px', color: color.textMuted, lineHeight: 1.5 }}>
+                                        <span style={{ color: color.accent, flexShrink: 0 }}>⬡</span>
+                                        <span>{m}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
+                    {/* Validation steps */}
+                    {task.validation_steps.length > 0 && (
+                        <div>
+                            <div style={{ ...labelStyle, marginBottom: '6px', color: color.warning }}>Validation Steps</div>
+                            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                {task.validation_steps.map((s, i) => (
+                                    <li key={i} style={{ display: 'flex', gap: '8px', fontSize: '12px', color: color.textMuted, lineHeight: 1.5 }}>
+                                        <span style={{ color: color.warning, flexShrink: 0 }}>◎</span>
+                                        <span>{s}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    )
+}
+
+// ─── Agent types ─────────────────────────────────────────────────────────────
+
+interface RelayMessage {
+    id: number
+    from_agent_id: number
+    from_agent_name?: string
+    to_agent_id: number
+    to_agent_name?: string
+    content: string
+    status: 'pending' | 'delivered'
+    created_at: string | null
+}
+
+interface ProjectAgent {
+    id: number
+    project_id: number
+    name: string
+    description: string | null
+    model: string
+    system_prompt: string | null
+    agent_type: string
+    status: 'idle' | 'running'
+    created_at: string | null
+}
+
+const AGENT_TYPE_LABELS: Record<string, string> = {
+    pm: 'PM',
+    software_engineer: 'Software Engineer',
+    qa: 'QA',
+    custom: 'Custom',
+}
+
+const AGENT_TYPE_COLORS: Record<string, string> = {
+    pm: '#58a6ff',
+    software_engineer: '#3fb950',
+    qa: '#ffa657',
+    custom: '#bc8cff',
+}
+
+const AGENT_TYPE_DEFAULTS: Record<string, { description: string; system_prompt: string }> = {
+    pm: {
+        description: 'Manages requirements, prioritization, and stakeholder coordination',
+        system_prompt: `You are a Product Manager agent. Your responsibilities are:
+- Define and clarify requirements and user stories
+- Prioritize the backlog based on business value and technical feasibility
+- Coordinate between engineering, design, and stakeholders
+- Write clear acceptance criteria for features
+- Track progress and communicate status updates
+Focus on delivering value incrementally and keeping the team aligned on goals.`,
+    },
+    software_engineer: {
+        description: 'Designs, implements, and reviews code',
+        system_prompt: `You are a Software Engineer agent. Your responsibilities are:
+- Design and implement features following best practices
+- Write clean, maintainable, and well-tested code
+- Review code for correctness, performance, and security
+- Identify and fix bugs with clear explanations
+- Suggest refactors and improvements when appropriate
+Focus on code quality, consistency with the existing codebase, and long-term maintainability.`,
+    },
+    qa: {
+        description: 'Tests, verifies quality, and reports bugs',
+        system_prompt: `You are a QA Engineer agent. Your responsibilities are:
+- Design comprehensive test plans for features and bug fixes
+- Write and execute automated tests (unit, integration, e2e)
+- Identify edge cases and regression risks
+- Report bugs clearly with steps to reproduce, expected vs actual behavior
+- Verify fixes and ensure no regressions are introduced
+Focus on thoroughness, coverage, and clear communication of quality issues.`,
+    },
+    custom: {
+        description: '',
+        system_prompt: '',
+    },
+}
+
+// ─── Add Agent Modal ──────────────────────────────────────────────────────────
+
+function AddAgentModal({ projectId, onClose, onCreated }: {
+    projectId: number
+    onClose: () => void
+    onCreated: (a: ProjectAgent) => void
+}) {
+    const [name, setName] = useState('')
+    const [agentType, setAgentType] = useState<string>('software_engineer')
+    const [description, setDescription] = useState(AGENT_TYPE_DEFAULTS.software_engineer.description)
+    const [systemPrompt, setSystemPrompt] = useState(AGENT_TYPE_DEFAULTS.software_engineer.system_prompt)
+    const [model, setModel] = useState('claude-sonnet-4-6')
+    const [error, setError] = useState('')
+    const [loading, setLoading] = useState(false)
+
+    function handleTypeChange(type: string) {
+        setAgentType(type)
+        const defaults = AGENT_TYPE_DEFAULTS[type]
+        if (defaults) {
+            setDescription(defaults.description)
+            setSystemPrompt(defaults.system_prompt)
+        }
+    }
+
+    async function handleSubmit(e: React.FormEvent) {
+        e.preventDefault()
+        setError('')
+        setLoading(true)
+        try {
+            const res = await fetch(`/api/projects/${projectId}/agents`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, agent_type: agentType, description, system_prompt: systemPrompt, model }),
+            })
+            const data = await res.json()
+            if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
+            onCreated(data as ProjectAgent)
+            onClose()
+        } catch {
+            setError('Network error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    return (
+        <div style={{
+            position: 'fixed', inset: 0, background: color.overlay,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+        }}>
+            <div style={{
+                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
+                padding: '24px', width: '480px', display: 'flex', flexDirection: 'column', gap: '14px',
+                maxHeight: '90vh', overflowY: 'auto',
+            }}>
+                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>Add Agent</h2>
+                    {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
+
+                    {/* Type selector */}
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <span style={labelStyle}>Type</span>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            {Object.entries(AGENT_TYPE_LABELS).map(([type, label]) => {
+                                const active = agentType === type
+                                return (
+                                    <button
+                                        key={type}
+                                        type="button"
+                                        onClick={() => handleTypeChange(type)}
+                                        style={{
+                                            padding: '5px 12px',
+                                            borderRadius: '6px',
+                                            border: `1px solid ${active ? AGENT_TYPE_COLORS[type] : color.borderMuted}`,
+                                            background: active ? `${AGENT_TYPE_COLORS[type]}18` : 'transparent',
+                                            color: active ? AGENT_TYPE_COLORS[type] : color.textMuted,
+                                            fontSize: '12px', fontWeight: active ? 600 : 400,
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        {label}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </label>
+
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={labelStyle}>Name</span>
+                        <input
+                            value={name}
+                            onChange={e => setName(e.target.value)}
+                            placeholder={agentType === 'pm' ? 'e.g. Alice' : agentType === 'qa' ? 'e.g. QA Bot' : 'e.g. Dev Agent'}
+                            required
+                            style={inputStyle}
+                        />
+                    </label>
+
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={labelStyle}>Description</span>
+                        <input
+                            value={description}
+                            onChange={e => setDescription(e.target.value)}
+                            placeholder="Short description"
+                            style={inputStyle}
+                        />
+                    </label>
+
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={labelStyle}>Model</span>
+                        <select value={model} onChange={e => setModel(e.target.value)} style={inputStyle}>
+                            <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
+                            <option value="claude-opus-4-6">Claude Opus 4.6</option>
+                            <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+                        </select>
+                    </label>
+
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={labelStyle}>System Prompt</span>
+                        <textarea
+                            value={systemPrompt}
+                            onChange={e => setSystemPrompt(e.target.value)}
+                            placeholder="Instructions for this agent…"
+                            rows={6}
+                            style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }}
+                        />
+                    </label>
+
+                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                        <button type="button" onClick={onClose} style={cancelBtnStyle}>Cancel</button>
+                        <button type="submit" disabled={loading} style={submitBtnStyle}>
+                            {loading ? 'Adding…' : 'Add Agent'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    )
+}
+
 // ─── Project sidebar ─────────────────────────────────────────────────────────
 
-type ProjectView = 'agents' | 'commands' | 'tasks'
+type ProjectView = 'agents' | 'commands' | 'tasks' | 'messages'
 
 const PROJECT_NAV: { id: ProjectView; label: string; icon: React.ReactNode }[] = [
     {
@@ -1031,67 +2368,186 @@ const PROJECT_NAV: { id: ProjectView; label: string; icon: React.ReactNode }[] =
             </svg>
         ),
     },
+    {
+        id: 'messages',
+        label: 'Messages',
+        icon: (
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0114.25 14H1.75A1.75 1.75 0 010 12.25v-8.5C0 2.784.784 2 1.75 2zM1.5 12.251c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V5.06l-5.563 3.516a1.75 1.75 0 01-1.874 0L1.5 5.06v7.19zm13-8.181L8.312 7.512a.25.25 0 01-.264 0L1.5 4.07v-.32a.25.25 0 01.25-.25h12.5a.25.25 0 01.25.25v.32z"/>
+            </svg>
+        ),
+    },
 ]
 
-function ProjectSidebar({ view, onChange }: { view: ProjectView; onChange: (v: ProjectView) => void }) {
+function ProjectSidebar({ view, projectName, onChange, taskCount, newMessageCount }: {
+    view: ProjectView
+    projectName: string | null
+    onChange: (v: ProjectView) => void
+    taskCount: number
+    newMessageCount: number
+}) {
     return (
         <div style={{
-            width: '140px', flexShrink: 0, background: color.bgCanvas,
+            width: '200px', flexShrink: 0, background: color.bgCanvas,
             borderRight: '1px solid #21262d', display: 'flex', flexDirection: 'column',
-            paddingTop: '6px',
         }}>
-            {PROJECT_NAV.map(item => {
-                const active = item.id === view
-                return (
-                    <button
-                        key={item.id}
-                        onClick={() => onChange(item.id)}
-                        style={{
-                            display: 'flex', alignItems: 'center', gap: '8px',
-                            padding: '8px 14px',
-                            background: active ? color.bgSurface : 'transparent',
-                            borderLeft: `2px solid ${active ? color.accent : 'transparent'}`,
-                            border: 'none',
-                            borderLeftWidth: '2px',
-                            borderLeftStyle: 'solid',
-                            borderLeftColor: active ? color.accent : 'transparent',
-                            color: active ? color.textPrimary : color.textMuted,
-                            fontSize: '12px', fontWeight: active ? 600 : 400,
-                            cursor: 'pointer', textAlign: 'left',
-                            transition: 'color 0.1s, background 0.1s',
-                        }}
-                        onMouseEnter={e => { if (!active) e.currentTarget.style.color = color.textSecondary }}
-                        onMouseLeave={e => { if (!active) e.currentTarget.style.color = color.textMuted }}
-                    >
-                        {item.icon}
-                        {item.label}
-                    </button>
-                )
-            })}
+            {/* Project name header */}
+            {projectName && (
+                <div style={{
+                    padding: '10px 14px 9px',
+                    borderBottom: '1px solid #21262d',
+                }}>
+                    <span style={{ color: color.textPrimary, fontSize: '13px', fontWeight: 700, letterSpacing: '0.01em' }}>
+                        {projectName}
+                    </span>
+                </div>
+            )}
+
+            {/* Nav items */}
+            <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '2px', paddingTop: projectName ? '8px' : '6px' }}>
+                {PROJECT_NAV.map(item => {
+                    const active = item.id === view
+                    const count = item.id === 'tasks' ? taskCount : item.id === 'messages' ? newMessageCount : 0
+                    return (
+                        <button
+                            key={item.id}
+                            onClick={() => {
+                                if (item.id === 'tasks' && projectName) {
+                                    router.visit(`/${projectName}/tasks`)
+                                } else {
+                                    onChange(item.id)
+                                }
+                            }}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: '8px',
+                                padding: '7px 10px',
+                                background: active ? color.accentSubtle : 'transparent',
+                                border: `1px solid ${active ? color.accentEmphasis : 'transparent'}`,
+                                borderRadius: '6px',
+                                color: active ? color.accentMuted : color.textMuted,
+                                fontSize: '12px', fontWeight: active ? 600 : 400,
+                                cursor: 'pointer', textAlign: 'left', width: '100%',
+                                transition: 'all 0.1s',
+                            }}
+                            onMouseEnter={e => { if (!active) { e.currentTarget.style.background = color.bgSurface; e.currentTarget.style.color = color.textSecondary } }}
+                            onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = color.textMuted } }}
+                        >
+                            {item.icon}
+                            <span style={{ flex: 1 }}>{item.label}</span>
+                            {count > 0 && (
+                                <span style={{
+                                    fontSize: '10px', fontWeight: 600,
+                                    padding: '1px 6px', borderRadius: '10px',
+                                    background: color.bgBase,
+                                    color: color.textFaint,
+                                    border: `1px solid ${color.border}`,
+                                    lineHeight: '16px',
+                                }}>
+                                    {count}
+                                </span>
+                            )}
+                        </button>
+                    )
+                })}
+            </div>
         </div>
     )
 }
 
 // ─── Commands view ────────────────────────────────────────────────────────────
 
-const cmdPulseStyle = `
-@keyframes cmd-pulse {
-  0%   { box-shadow: 0 0 0 0 rgba(63,185,80,0.6); }
-  70%  { box-shadow: 0 0 0 5px rgba(63,185,80,0); }
-  100% { box-shadow: 0 0 0 0 rgba(63,185,80,0);   }
-}
-`
-
 interface Command {
     id: number
     project_id: number
     label: string
     command: string
+    description: string
+    category: string
+    shortcut: string
     status: 'running' | 'stopped'
     pid: number | null
 }
 
-function CommandsView({ projectId }: { projectId: number }) {
+interface RunRecord {
+    exit_code: number
+    duration_ms: number
+    created_at: string
+}
+
+function fmtDuration(ms: number): string {
+    if (ms < 1000) return `${ms}ms`
+    return `${(ms / 1000).toFixed(1)}s`
+}
+
+function timeAgo(isoStr: string): string {
+    const diff = Date.now() - new Date(isoStr).getTime()
+    const secs = Math.floor(diff / 1000)
+    if (secs < 60) return `${secs}s ago`
+    const mins = Math.floor(secs / 60)
+    if (mins < 60) return `${mins}m ago`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24) return `${hrs}h ago`
+    if (hrs < 48) return 'yesterday'
+    return `${Math.floor(hrs / 24)}d ago`
+}
+
+function getCmdIcon(label: string): React.ReactNode {
+    const l = label.toLowerCase()
+    if (l.includes('build') || l.includes('compile')) return (
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M9.504.43a1.516 1.516 0 012.437 1.713L10.415 5.5h2.123c1.57 0 2.454 1.833 1.447 3.04L6.04 15.96a1.516 1.516 0 01-2.437-1.713l1.526-3.356H3.006c-1.57 0-2.454-1.833-1.447-3.04L9.504.43z"/>
+        </svg>
+    )
+    if (l.includes('test') || l.includes('spec') || l.includes('check')) return (
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.751.751 0 011.042-1.08l.018.018 2.72 2.72 6.72-6.72a.75.75 0 011.06 0z"/>
+        </svg>
+    )
+    if (l.includes('deploy') || l.includes('ship') || l.includes('release') || l.includes('publish')) return (
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M7.47 1.97a.75.75 0 011.06 0l3.75 3.75a.75.75 0 01-1.06 1.06L8.75 4.31v7.94a.75.75 0 01-1.5 0V4.31L4.78 6.78a.75.75 0 01-1.06-1.06l3.75-3.75zM3.75 13a.75.75 0 000 1.5h8.5a.75.75 0 000-1.5h-8.5z"/>
+        </svg>
+    )
+    if (l.includes('lint')) return (
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M0 1.75A.75.75 0 01.75 1h4.253c1.227 0 2.317.59 3 1.501A3.744 3.744 0 0111.006 1h3.245a.75.75 0 010 1.5H11.006a2.25 2.25 0 00-2.25 2.25v8.5a.75.75 0 01-1.5 0v-8.5a2.25 2.25 0 00-2.25-2.25H.75A.75.75 0 010 1.75z"/>
+        </svg>
+    )
+    if (l.includes('format') || l.includes('fmt') || l.includes('prettier')) return (
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M1.5 2.75a.75.75 0 01.75-.75h11.5a.75.75 0 010 1.5H2.25a.75.75 0 01-.75-.75zM1.5 8a.75.75 0 01.75-.75h7.5a.75.75 0 010 1.5h-7.5A.75.75 0 011.5 8zm0 5.25a.75.75 0 01.75-.75h5.5a.75.75 0 010 1.5h-5.5a.75.75 0 01-.75-.75z"/>
+        </svg>
+    )
+    if (l.includes('review') || l.includes('pr') || l.includes('diff')) return (
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M1.5 2.75a.25.25 0 01.25-.25h8.5a.25.25 0 01.25.25v5.5a.25.25 0 01-.25.25h-3.5a.75.75 0 00-.53.22L3.5 11.44V9.25a.75.75 0 00-.75-.75h-1a.25.25 0 01-.25-.25v-5.5zM1.75 1A1.75 1.75 0 000 2.75v5.5C0 9.216.784 10 1.75 10H2v1.543a1.457 1.457 0 002.487 1.03L7.061 10h3.189A1.75 1.75 0 0012 8.25v-5.5A1.75 1.75 0 0010.25 1h-8.5z"/>
+        </svg>
+    )
+    if (l.includes('db') || l.includes('database') || l.includes('migrate') || l.includes('sql')) return (
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M1 3.5C1 2.119 3.582 1 7 1s6 1.119 6 2.5v2c0 1.381-2.582 2.5-6 2.5S1 6.881 1 5.5v-2zm6 9C3.582 12.5 1 11.381 1 10V8.5c0-.304.082-.598.27-.867.502.677 1.508 1.247 2.812 1.598C4.74 9.485 5.838 9.6 7 9.6s2.26-.115 3.918-.369c1.304-.351 2.31-.921 2.812-1.598.188.269.27.563.27.867v1.5c0 1.381-2.582 2.5-6 2.5zm0 3c-3.418 0-6-1.119-6-2.5V11.5c0-.304.082-.598.27-.867.502.677 1.508 1.247 2.812 1.598C4.74 12.485 5.838 12.6 7 12.6s2.26-.115 3.918-.369c1.304-.351 2.31-.921 2.812-1.598.188.269.27.563.27.867V13c0 1.381-2.582 2.5-6 2.5z"/>
+        </svg>
+    )
+    if (l.includes('log') || l.includes('tail') || l.includes('monitor') || l.includes('watch')) return (
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M1.75 2.5a.25.25 0 000 .5h12.5a.25.25 0 000-.5H1.75zM1.5 6a.75.75 0 01.75-.75h12.5a.75.75 0 010 1.5H2.25A.75.75 0 011.5 6zm.75 3.25a.25.25 0 000 .5h12.5a.25.25 0 000-.5H2.25z"/>
+        </svg>
+    )
+    if (l.includes('dev') || l.includes('start') || l.includes('serve')) return (
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 0a8 8 0 100 16A8 8 0 008 0zM1.5 8a6.5 6.5 0 1113 0 6.5 6.5 0 01-13 0zm4.879-2.773l4.264 2.559a.25.25 0 010 .428l-4.264 2.559A.25.25 0 016 10.559V5.442a.25.25 0 01.379-.215z"/>
+        </svg>
+    )
+    return (
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25V2.75zm1.75-.25a.25.25 0 00-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V2.75a.25.25 0 00-.25-.25H1.75zM3.5 6.25a.75.75 0 000 1.5h.268l-.01.034L2.76 10.5a.75.75 0 001.44.42l.04-.138H6.76l.04.138a.75.75 0 001.44-.42L7.242 7.784l-.01-.034H7.5a.75.75 0 000-1.5h-4z"/>
+        </svg>
+    )
+}
+
+const cmdPulseStyle = `@keyframes cmd-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`
+
+function CommandsView({ project, projectId }: { project: Project; projectId: number }) {
     const [commands, setCommands] = useState<Command[]>([])
     const [showForm, setShowForm] = useState(false)
     const [label, setLabel] = useState('')
@@ -1099,10 +2555,12 @@ function CommandsView({ projectId }: { projectId: number }) {
     const [formError, setFormError] = useState('')
     const [formLoading, setFormLoading] = useState(false)
     const [outputCmd, setOutputCmd] = useState<Command | null>(null)
-    const [outputLines, setOutputLines] = useState<string[]>([])
-    const [autoScroll, setAutoScroll] = useState(true)
-    const outputRef = useRef<HTMLDivElement>(null)
-    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+    const [editingCmd, setEditingCmd] = useState<Command | null>(null)
+    const [editLabel, setEditLabel] = useState('')
+    const [editCmdStr, setEditCmdStr] = useState('')
+    const [editLoading, setEditLoading] = useState(false)
+    const cmdSessions = useRef<Map<number, Session>>(new Map())
+    const cmdContainerRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
 
     useEffect(() => {
         fetch(`/api/projects/${projectId}/commands`)
@@ -1112,24 +2570,14 @@ function CommandsView({ projectId }: { projectId: number }) {
     }, [projectId])
 
     useEffect(() => {
-        if (pollRef.current) clearInterval(pollRef.current)
-        if (!outputCmd) return
-        const poll = () => {
-            fetch(`/api/commands/${outputCmd.id}/output`)
-                .then(r => r.json())
-                .then(d => setOutputLines(d.lines ?? []))
-                .catch(() => {})
+        return () => {
+            cmdSessions.current.forEach(({ term, ws, observer }) => {
+                observer.disconnect()
+                term.dispose()
+                ws.close()
+            })
         }
-        poll()
-        pollRef.current = setInterval(poll, 1000)
-        return () => { if (pollRef.current) clearInterval(pollRef.current) }
-    }, [outputCmd?.id])
-
-    useEffect(() => {
-        if (autoScroll && outputRef.current) {
-            outputRef.current.scrollTop = outputRef.current.scrollHeight
-        }
-    }, [outputLines, autoScroll])
+    }, [])
 
     async function handleCreate(e: React.FormEvent) {
         e.preventDefault()
@@ -1149,30 +2597,113 @@ function CommandsView({ projectId }: { projectId: number }) {
         finally { setFormLoading(false) }
     }
 
-    async function handleRun(c: Command) {
-        const res = await fetch(`/api/commands/${c.id}/run`, { method: 'POST' })
-        if (res.ok) {
-            const updated = await res.json()
-            setCommands(prev => prev.map(x => x.id === c.id ? updated : x))
-            setOutputCmd(updated)
-            setOutputLines([])
-            setAutoScroll(true)
-        }
+    function handleRun(c: Command) {
+        setOutputCmd(c)
+
+        requestAnimationFrame(() => {
+            const container = cmdContainerRefs.current.get(c.id)
+            if (!container) return
+
+            // If session exists, re-attach to container if needed (panel may have been remounted)
+            if (cmdSessions.current.has(c.id)) {
+                const sess = cmdSessions.current.get(c.id)!
+                if (!container.querySelector('.xterm')) {
+                    sess.term.open(container)
+                    sess.fitAddon.fit()
+                    sess.observer.disconnect()
+                    sess.observer.observe(container)
+                } else {
+                    sess.fitAddon.fit()
+                }
+                sess.term.focus()
+                return
+            }
+
+            const term = makeTerminal()
+            const fitAddon = new FitAddon()
+            term.loadAddon(fitAddon)
+            term.open(container)
+            fitAddon.fit()
+
+            const textarea = container.querySelector('textarea')
+            if (textarea) {
+                textarea.setAttribute('autocomplete', 'off')
+                textarea.setAttribute('autocorrect', 'off')
+                textarea.setAttribute('autocapitalize', 'none')
+                textarea.setAttribute('spellcheck', 'false')
+            }
+
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
+            const ws = new WebSocket(
+                `${protocol}//${location.host}/${slugify(project.name)}/command-ws/${c.id}`
+            )
+            ws.binaryType = 'arraybuffer'
+            ws.onopen = () => {
+                ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
+                setCommands(prev => prev.map(x => x.id === c.id ? { ...x, status: 'running' } : x))
+            }
+            ws.onmessage = e => {
+                if (typeof e.data !== 'string') term.write(new Uint8Array(e.data as ArrayBuffer))
+            }
+            ws.onclose = () => {
+                term.write('\r\n\x1b[31m[exited]\x1b[0m\r\n')
+                setCommands(prev => prev.map(x => x.id === c.id ? { ...x, status: 'stopped', pid: null } : x))
+                setOutputCmd(prev => prev?.id === c.id ? { ...prev, status: 'stopped', pid: null } : prev)
+            }
+            term.onData(data => { if (ws.readyState === WebSocket.OPEN) ws.send(new TextEncoder().encode(data)) })
+            term.onResize(({ cols, rows }) => {
+                if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'resize', cols, rows }))
+            })
+            container.addEventListener('click', () => term.focus())
+            term.focus()
+
+            const observer = new ResizeObserver(() => fitAddon.fit())
+            observer.observe(container)
+
+            cmdSessions.current.set(c.id, { term, ws, fitAddon, observer })
+        })
     }
 
     async function handleStop(c: Command) {
-        const res = await fetch(`/api/commands/${c.id}/stop`, { method: 'POST' })
-        if (res.ok) {
-            const updated = await res.json()
-            setCommands(prev => prev.map(x => x.id === c.id ? updated : x))
-            if (outputCmd?.id === c.id) setOutputCmd(updated)
-        }
+        const sess = cmdSessions.current.get(c.id)
+        if (sess) sess.ws.close()
+        // REST stop also signals the DB in case WS was never opened
+        await fetch(`/api/commands/${c.id}/stop`, { method: 'POST' })
+        setCommands(prev => prev.map(x => x.id === c.id ? { ...x, status: 'stopped', pid: null } : x))
+        if (outputCmd?.id === c.id) setOutputCmd(prev => prev ? { ...prev, status: 'stopped', pid: null } : prev)
     }
 
     async function handleDelete(c: Command) {
+        const sess = cmdSessions.current.get(c.id)
+        if (sess) {
+            sess.observer.disconnect()
+            sess.ws.close()
+            sess.term.dispose()
+            cmdSessions.current.delete(c.id)
+        }
         await fetch(`/api/commands/${c.id}`, { method: 'DELETE' })
         setCommands(prev => prev.filter(x => x.id !== c.id))
-        if (outputCmd?.id === c.id) { setOutputCmd(null); setOutputLines([]) }
+        if (outputCmd?.id === c.id) setOutputCmd(null)
+    }
+
+    async function handleUpdate(e: React.FormEvent) {
+        e.preventDefault()
+        if (!editingCmd) return
+        setEditLoading(true)
+        try {
+            const res = await fetch(`/api/commands/${editingCmd.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ label: editLabel.trim(), command: editCmdStr.trim() }),
+            })
+            const data = await res.json()
+            if (!res.ok) return
+            setCommands(prev => prev.map(x => x.id === editingCmd.id ? { ...x, ...data } : x))
+            if (outputCmd?.id === editingCmd.id) setOutputCmd(prev => prev ? { ...prev, ...data } : prev)
+            setEditingCmd(null)
+        } finally {
+            setEditLoading(false)
+        }
     }
 
     const hasOutput = outputCmd !== null
@@ -1271,9 +2802,9 @@ function CommandsView({ projectId }: { projectId: number }) {
             {/* ── Body ── */}
             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
-                {/* Command list / cards */}
+                {/* Command list */}
                 <div style={{
-                    width: hasOutput ? '300px' : '100%',
+                    width: hasOutput ? '260px' : '100%',
                     flexShrink: 0,
                     overflowY: 'auto',
                     borderRight: hasOutput ? `1px solid ${color.border}` : 'none',
@@ -1286,7 +2817,7 @@ function CommandsView({ projectId }: { projectId: number }) {
                             padding: '40px 24px', textAlign: 'center',
                         }}>
                             <div style={{
-                                width: '48px', height: '48px', borderRadius: '12px',
+                                width: '48px', height: '48px', borderRadius: '50%',
                                 background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                             }}>
@@ -1299,7 +2830,7 @@ function CommandsView({ projectId }: { projectId: number }) {
                                     No commands yet
                                 </p>
                                 <p style={{ margin: 0, color: color.textFaint, fontSize: '12px', lineHeight: 1.5 }}>
-                                    Add server commands, build scripts,<br/>or any long-running process.
+                                    Add build scripts, dev servers,<br/>or any long-running process.
                                 </p>
                             </div>
                             <button
@@ -1316,172 +2847,193 @@ function CommandsView({ projectId }: { projectId: number }) {
                             </button>
                         </div>
                     ) : (
-                        <div style={{ padding: hasOutput ? '8px 0' : '12px', display: 'flex', flexDirection: 'column', gap: hasOutput ? '0' : '6px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
                             {commands.map(c => {
                                 const isSelected = outputCmd?.id === c.id
                                 const isRunning = c.status === 'running'
-
-                                // Compact list mode when output panel is open
-                                if (hasOutput) {
+                                const isEditing = editingCmd?.id === c.id
+                                if (isEditing) {
                                     return (
-                                        <div
+                                        <form
                                             key={c.id}
-                                            onClick={() => { setOutputCmd(c); setOutputLines([]) }}
+                                            onSubmit={handleUpdate}
                                             style={{
-                                                display: 'flex', alignItems: 'center', gap: '8px',
-                                                padding: '7px 12px', cursor: 'pointer',
-                                                background: isSelected ? color.bgSurface : 'transparent',
-                                                borderLeft: `2px solid ${isSelected ? color.accent : 'transparent'}`,
+                                                display: 'flex', flexDirection: 'column', gap: '8px',
+                                                padding: '10px 14px',
+                                                background: color.bgSurface,
+                                                borderLeft: `2px solid ${color.accent}`,
+                                                borderBottom: `1px solid ${color.border}`,
                                             }}
-                                            onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = color.bgCanvas }}
-                                            onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
                                         >
-                                            <span style={{
-                                                width: '7px', height: '7px', borderRadius: '50%', flexShrink: 0,
-                                                background: isRunning ? color.success : color.textFaint,
-                                                animation: isRunning ? 'cmd-pulse 2s infinite' : 'none',
-                                            }} />
-                                            <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={{ fontSize: '12px', fontWeight: 600, color: color.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                    {c.label}
-                                                </div>
-                                                <div style={{ fontSize: '10px', color: color.textFaint, fontFamily: '"JetBrains Mono", monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                    {c.command}
-                                                </div>
+                                            <input
+                                                autoFocus
+                                                value={editLabel}
+                                                onChange={e => setEditLabel(e.target.value)}
+                                                placeholder="Label"
+                                                required
+                                                style={{ ...inputStyle, boxSizing: 'border-box', width: '100%' }}
+                                            />
+                                            <input
+                                                value={editCmdStr}
+                                                onChange={e => setEditCmdStr(e.target.value)}
+                                                placeholder="Shell command"
+                                                required
+                                                style={{
+                                                    ...inputStyle, boxSizing: 'border-box', width: '100%',
+                                                    fontFamily: '"JetBrains Mono", monospace',
+                                                }}
+                                            />
+                                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setEditingCmd(null)}
+                                                    style={cancelBtnStyle}
+                                                >Cancel</button>
+                                                <button
+                                                    type="submit"
+                                                    disabled={editLoading}
+                                                    style={submitBtnStyle}
+                                                >{editLoading ? 'Saving…' : 'Save'}</button>
                                             </div>
-                                            {isRunning ? (
-                                                <button
-                                                    onClick={e => { e.stopPropagation(); handleStop(c) }}
-                                                    style={{
-                                                        flexShrink: 0, background: color.dangerCanvas,
-                                                        border: `1px solid ${color.dangerSubtle}`, borderRadius: '4px',
-                                                        color: color.danger, fontSize: '10px', padding: '2px 6px', cursor: 'pointer',
-                                                    }}
-                                                >■</button>
-                                            ) : (
-                                                <button
-                                                    onClick={e => { e.stopPropagation(); handleRun(c) }}
-                                                    style={{
-                                                        flexShrink: 0, background: color.successEmphasis,
-                                                        border: `1px solid ${color.successBorder}`, borderRadius: '4px',
-                                                        color: '#fff', fontSize: '10px', padding: '2px 6px', cursor: 'pointer',
-                                                    }}
-                                                >▶</button>
-                                            )}
-                                        </div>
+                                        </form>
                                     )
                                 }
-
-                                // Card mode (no output panel open)
                                 return (
                                     <div
                                         key={c.id}
-                                        onClick={() => { setOutputCmd(c); setOutputLines([]) }}
+                                        onClick={() => {
+                                            setOutputCmd(c)
+                                            if (cmdSessions.current.has(c.id)) {
+                                                const sess = cmdSessions.current.get(c.id)!
+                                                requestAnimationFrame(() => { sess.fitAddon.fit(); sess.term.focus() })
+                                            }
+                                        }}
                                         style={{
-                                            background: color.bgSurface,
-                                            border: `1px solid ${isRunning ? 'rgba(63,185,80,0.25)' : color.borderMuted}`,
-                                            borderRadius: '8px', padding: '12px 14px',
-                                            cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '8px',
-                                            transition: 'border-color 0.15s',
+                                            display: 'flex', alignItems: 'center', gap: '10px',
+                                            padding: '10px 14px', cursor: 'pointer',
+                                            background: isSelected ? color.bgSurface : 'transparent',
+                                            borderLeft: `2px solid ${isSelected ? color.accent : 'transparent'}`,
+                                            borderBottom: `1px solid ${color.border}`,
+                                            transition: 'background 0.1s',
                                         }}
-                                        onMouseEnter={e => {
-                                            e.currentTarget.style.borderColor = isRunning ? 'rgba(63,185,80,0.5)' : color.accent
-                                        }}
-                                        onMouseLeave={e => {
-                                            e.currentTarget.style.borderColor = isRunning ? 'rgba(63,185,80,0.25)' : color.borderMuted
-                                        }}
+                                        onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = color.bgSurface }}
+                                        onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
                                     >
-                                        {/* Card top: label + status + actions */}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            {/* Pulse dot */}
-                                            <span style={{
-                                                width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0,
-                                                background: isRunning ? color.success : color.textFaint,
-                                                animation: isRunning ? 'cmd-pulse 2s infinite' : 'none',
-                                            }} />
-                                            <span style={{ flex: 1, fontSize: '13px', fontWeight: 600, color: color.textPrimary }}>
-                                                {c.label}
-                                            </span>
-                                            {/* PID badge when running */}
-                                            {isRunning && c.pid && (
-                                                <span style={{
-                                                    fontSize: '10px', color: color.success, fontFamily: '"JetBrains Mono", monospace',
-                                                    background: 'rgba(63,185,80,0.08)', border: '1px solid rgba(63,185,80,0.2)',
-                                                    borderRadius: '4px', padding: '1px 6px',
-                                                }}>
-                                                    pid {c.pid}
-                                                </span>
-                                            )}
-                                            {/* Run / Stop */}
+                                        {/* Play/Stop circle */}
+                                        <button
+                                            onClick={e => { e.stopPropagation(); isRunning ? handleStop(c) : handleRun(c) }}
+                                            title={isRunning ? 'Stop' : 'Run'}
+                                            style={{
+                                                width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0,
+                                                background: isRunning ? 'rgba(63,185,80,0.1)' : color.bgBase,
+                                                border: `1px solid ${isRunning ? 'rgba(63,185,80,0.4)' : color.borderMuted}`,
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                cursor: 'pointer', color: isRunning ? color.success : color.textMuted,
+                                                transition: 'all 0.15s',
+                                            }}
+                                            onMouseEnter={e => {
+                                                e.currentTarget.style.borderColor = isRunning ? color.danger : color.success
+                                                e.currentTarget.style.color = isRunning ? color.danger : color.success
+                                                e.currentTarget.style.background = isRunning ? color.dangerCanvas : 'rgba(63,185,80,0.1)'
+                                            }}
+                                            onMouseLeave={e => {
+                                                e.currentTarget.style.borderColor = isRunning ? 'rgba(63,185,80,0.4)' : color.borderMuted
+                                                e.currentTarget.style.color = isRunning ? color.success : color.textMuted
+                                                e.currentTarget.style.background = isRunning ? 'rgba(63,185,80,0.1)' : color.bgBase
+                                            }}
+                                        >
                                             {isRunning ? (
-                                                <button
-                                                    onClick={e => { e.stopPropagation(); handleStop(c) }}
-                                                    style={{
-                                                        background: color.dangerCanvas, border: `1px solid ${color.dangerSubtle}`,
-                                                        borderRadius: '5px', color: color.danger,
-                                                        fontSize: '11px', padding: '3px 10px', cursor: 'pointer',
-                                                        display: 'flex', alignItems: 'center', gap: '4px',
-                                                    }}
-                                                >
-                                                    <svg width="8" height="8" viewBox="0 0 10 10" fill="currentColor">
-                                                        <rect x="1" y="1" width="8" height="8" rx="1"/>
-                                                    </svg>
-                                                    Stop
-                                                </button>
+                                                <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor">
+                                                    <rect x="1.5" y="1.5" width="7" height="7" rx="1"/>
+                                                </svg>
                                             ) : (
-                                                <button
-                                                    onClick={e => { e.stopPropagation(); handleRun(c) }}
-                                                    style={{
-                                                        background: color.successEmphasis, border: `1px solid ${color.successBorder}`,
-                                                        borderRadius: '5px', color: '#fff',
-                                                        fontSize: '11px', padding: '3px 10px', cursor: 'pointer',
-                                                        display: 'flex', alignItems: 'center', gap: '4px',
-                                                    }}
-                                                >
-                                                    <svg width="8" height="8" viewBox="0 0 10 10" fill="currentColor">
-                                                        <path d="M2 1.5l7 3.5-7 3.5V1.5z"/>
-                                                    </svg>
-                                                    Run
-                                                </button>
+                                                <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor">
+                                                    <path d="M2 1.5l7 3.5-7 3.5V1.5z"/>
+                                                </svg>
                                             )}
-                                            {/* Delete */}
-                                            <button
-                                                onClick={e => { e.stopPropagation(); handleDelete(c) }}
-                                                style={{
-                                                    background: 'transparent', border: 'none',
-                                                    color: color.textFaint, cursor: 'pointer',
-                                                    padding: '3px 4px', fontSize: '14px', lineHeight: 1,
-                                                    borderRadius: '4px',
-                                                }}
-                                                onMouseEnter={e => { e.currentTarget.style.color = color.danger; e.currentTarget.style.background = color.dangerCanvas }}
-                                                onMouseLeave={e => { e.currentTarget.style.color = color.textFaint; e.currentTarget.style.background = 'transparent' }}
-                                            >×</button>
-                                        </div>
+                                        </button>
 
-                                        {/* Command string */}
-                                        <div style={{
-                                            display: 'flex', alignItems: 'center', gap: '6px',
-                                            background: color.bgBase, borderRadius: '5px',
-                                            padding: '5px 8px',
-                                            border: `1px solid ${color.border}`,
-                                        }}>
-                                            <span style={{ color: color.textFaint, fontSize: '11px', fontFamily: '"JetBrains Mono", monospace', flexShrink: 0 }}>$</span>
-                                            <span style={{
-                                                fontSize: '11px', color: color.textSecondary,
+                                        {/* Label and command */}
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{
+                                                fontSize: '12px', fontWeight: 600, color: color.textPrimary,
                                                 fontFamily: '"JetBrains Mono", monospace',
                                                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                            }}>{c.command}</span>
+                                            }}>
+                                                /{c.label}
+                                            </div>
+                                            <div style={{
+                                                fontSize: '10px', color: color.textFaint,
+                                                fontFamily: '"JetBrains Mono", monospace',
+                                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                                marginTop: '2px',
+                                            }}>
+                                                {c.command}
+                                            </div>
                                         </div>
 
-                                        {/* View output hint */}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                            <span style={{ fontSize: '10px', color: color.textFaint }}>
-                                                {isRunning ? 'Click to view output' : 'Click to view log'}
+                                        {/* Running pill */}
+                                        {isRunning && (
+                                            <span style={{
+                                                fontSize: '10px', padding: '1px 6px', borderRadius: '8px',
+                                                background: 'rgba(63,185,80,0.08)', border: '1px solid rgba(63,185,80,0.25)',
+                                                color: color.success, fontFamily: '"JetBrains Mono", monospace', flexShrink: 0,
+                                                animation: 'cmd-pulse 2s infinite',
+                                            }}>
+                                                {c.pid ? `pid ${c.pid}` : 'running'}
                                             </span>
-                                        </div>
+                                        )}
+
+                                        {/* Edit */}
+                                        <button
+                                            onClick={e => { e.stopPropagation(); setEditingCmd(c); setEditLabel(c.label); setEditCmdStr(c.command) }}
+                                            title="Edit"
+                                            style={{
+                                                flexShrink: 0, background: 'transparent', border: 'none',
+                                                color: color.textFaint, cursor: 'pointer',
+                                                padding: '3px 4px', borderRadius: '4px', display: 'flex', alignItems: 'center',
+                                            }}
+                                            onMouseEnter={e => { e.currentTarget.style.color = color.accent; e.currentTarget.style.background = color.bgBase }}
+                                            onMouseLeave={e => { e.currentTarget.style.color = color.textFaint; e.currentTarget.style.background = 'transparent' }}
+                                        >
+                                            <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+                                                <path d="M11.013 1.427a1.75 1.75 0 012.474 0l1.086 1.086a1.75 1.75 0 010 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 01-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61zm1.414 1.06a.25.25 0 00-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 000-.354l-1.086-1.086zM11.189 6.25L9.75 4.81l-6.286 6.287a.25.25 0 00-.064.108l-.558 1.953 1.953-.558a.249.249 0 00.108-.064l6.286-6.286z"/>
+                                            </svg>
+                                        </button>
+
+                                        {/* Delete */}
+                                        <button
+                                            onClick={e => { e.stopPropagation(); handleDelete(c) }}
+                                            title="Delete"
+                                            style={{
+                                                flexShrink: 0, background: 'transparent', border: 'none',
+                                                color: color.textFaint, cursor: 'pointer',
+                                                padding: '3px 4px', fontSize: '14px', lineHeight: 1, borderRadius: '4px',
+                                            }}
+                                            onMouseEnter={e => { e.currentTarget.style.color = color.danger; e.currentTarget.style.background = color.dangerCanvas }}
+                                            onMouseLeave={e => { e.currentTarget.style.color = color.textFaint; e.currentTarget.style.background = 'transparent' }}
+                                        >×</button>
                                     </div>
                                 )
                             })}
+                            {/* Add command footer row */}
+                            <button
+                                onClick={() => setShowForm(true)}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                    padding: '9px 14px',
+                                    background: 'transparent', border: 'none',
+                                    color: color.textFaint, fontSize: '11px', cursor: 'pointer',
+                                    width: '100%', textAlign: 'left',
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.color = color.textMuted; e.currentTarget.style.background = color.bgSurface }}
+                                onMouseLeave={e => { e.currentTarget.style.color = color.textFaint; e.currentTarget.style.background = 'transparent' }}
+                            >
+                                <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
+                                </svg>
+                                Add command
+                            </button>
                         </div>
                     )}
                 </div>
@@ -1489,122 +3041,74 @@ function CommandsView({ projectId }: { projectId: number }) {
                 {/* ── Output panel ── */}
                 {hasOutput && (
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                        {/* Terminal chrome header */}
+                        {/* Command detail header */}
                         <div style={{
-                            padding: '7px 12px', borderBottom: `1px solid ${color.border}`,
-                            display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0,
+                            padding: '16px 20px 14px',
+                            borderBottom: `1px solid ${color.border}`,
+                            flexShrink: 0,
                             background: color.bgCanvas,
                         }}>
-                            {/* Traffic lights */}
-                            <div style={{ display: 'flex', gap: '5px', flexShrink: 0 }}>
-                                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#ff5f57' }} />
-                                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#febc2e' }} />
-                                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#28c840' }} />
-                            </div>
-                            <span style={{ color: color.borderMuted, fontSize: '11px' }}>|</span>
-                            <span style={{
-                                fontSize: '11px', color: color.textMuted,
-                                fontFamily: '"JetBrains Mono", monospace',
-                                flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                            }}>
-                                {outputCmd.label}
-                                {outputCmd.pid && outputCmd.status === 'running' && (
-                                    <span style={{ color: color.textFaint }}> · pid {outputCmd.pid}</span>
+                            {/* Title row */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                                <h2 style={{
+                                    margin: 0, color: color.textPrimary, fontSize: '18px', fontWeight: 700,
+                                    fontFamily: '"JetBrains Mono", monospace', letterSpacing: '-0.01em',
+                                }}>
+                                    /{outputCmd.label}
+                                </h2>
+                                {outputCmd.status === 'running' && <DotsIndicator />}
+                                {outputCmd.status === 'stopped' && (
+                                    <span style={{ fontSize: '10px', color: color.textFaint, fontFamily: '"JetBrains Mono", monospace' }}>
+                                        exited
+                                    </span>
                                 )}
-                            </span>
-                            {outputCmd.status === 'running' && <DotsIndicator />}
-                            {outputCmd.status === 'stopped' && (
-                                <span style={{ fontSize: '10px', color: color.textFaint, fontFamily: '"JetBrains Mono", monospace' }}>
-                                    exited
-                                </span>
-                            )}
-                            <button
-                                onClick={() => setAutoScroll(s => !s)}
-                                title={autoScroll ? 'Auto-scroll on' : 'Auto-scroll off'}
-                                style={{
-                                    background: autoScroll ? 'rgba(88,166,255,0.1)' : 'transparent',
-                                    border: `1px solid ${autoScroll ? color.accentEmphasis : color.borderMuted}`,
-                                    borderRadius: '4px', color: autoScroll ? color.accent : color.textFaint,
-                                    fontSize: '10px', padding: '1px 6px', cursor: 'pointer',
-                                }}
-                            >
-                                ↓ scroll
-                            </button>
-                            <button
-                                onClick={() => setOutputLines([])}
-                                style={{
-                                    background: 'transparent', border: 'none',
-                                    color: color.textFaint, fontSize: '11px', cursor: 'pointer', padding: '2px 4px',
-                                }}
-                                onMouseEnter={e => (e.currentTarget.style.color = color.textMuted)}
-                                onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
-                            >
-                                Clear
-                            </button>
-                            <button
-                                onClick={() => { setOutputCmd(null); setOutputLines([]) }}
-                                style={{
-                                    background: 'transparent', border: 'none',
-                                    color: color.textFaint, fontSize: '16px', cursor: 'pointer',
-                                    padding: '0 2px', lineHeight: 1,
-                                }}
-                                onMouseEnter={e => (e.currentTarget.style.color = color.textSecondary)}
-                                onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
-                            >×</button>
+                                <div style={{ flex: 1 }} />
+                                <button
+                                    onClick={() => setOutputCmd(null)}
+                                    style={{
+                                        background: 'transparent', border: 'none',
+                                        color: color.textFaint, fontSize: '18px', cursor: 'pointer',
+                                        padding: '0 2px', lineHeight: 1, borderRadius: '4px',
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget.style.color = color.textSecondary)}
+                                    onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
+                                >×</button>
+                            </div>
+                            {/* SHELL section */}
+                            <div>
+                                <div style={{
+                                    color: color.textFaint, fontSize: '10px', fontWeight: 700,
+                                    textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px',
+                                }}>Shell</div>
+                                <div style={{
+                                    background: '#010409', borderRadius: '6px', padding: '8px 12px',
+                                    border: `1px solid ${color.border}`,
+                                    fontFamily: '"JetBrains Mono", monospace', fontSize: '12px',
+                                    color: color.textSecondary,
+                                    display: 'flex', alignItems: 'center', gap: '8px',
+                                    overflow: 'hidden',
+                                }}>
+                                    <span style={{ color: color.success, flexShrink: 0 }}>$</span>
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {outputCmd.command}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
 
-                        {/* Terminal body */}
-                        <div
-                            ref={outputRef}
-                            onScroll={e => {
-                                const el = e.currentTarget
-                                const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 32
-                                if (!atBottom) setAutoScroll(false)
-                            }}
-                            style={{
-                                flex: 1, overflowY: 'auto', background: '#0d1117',
-                                fontFamily: '"JetBrains Mono", monospace', fontSize: '12px',
-                                lineHeight: 1.6, padding: '10px 0',
-                            }}
-                        >
-                            {outputLines.length === 0 ? (
-                                <div style={{ padding: '6px 16px', color: '#484f58', fontStyle: 'italic' }}>
-                                    {outputCmd.status === 'running' ? 'Waiting for output…' : 'No output captured.'}
-                                </div>
-                            ) : (
-                                outputLines.map((line, i) => (
-                                    <div
-                                        key={i}
-                                        style={{ display: 'flex', minHeight: '19px' }}
-                                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
-                                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                                    >
-                                        {/* Line number gutter */}
-                                        <span style={{
-                                            flexShrink: 0, width: '44px', textAlign: 'right',
-                                            paddingRight: '12px', color: '#3d444d',
-                                            userSelect: 'none', fontSize: '11px',
-                                        }}>
-                                            {i + 1}
-                                        </span>
-                                        {/* Line content */}
-                                        <span style={{
-                                            flex: 1, color: '#c9d1d9',
-                                            paddingRight: '16px', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
-                                        }}>
-                                            {line || '\u00a0'}
-                                        </span>
-                                    </div>
-                                ))
-                            )}
-                            {/* Blinking cursor when running */}
-                            {outputCmd.status === 'running' && (
-                                <div style={{ padding: '0 0 0 56px', color: color.success, fontSize: '12px' }}>
-                                    <span style={{ animation: 'blink 1s step-end infinite' }}>▌</span>
-                                </div>
-                            )}
+                        {/* xterm containers — one per command */}
+                        <div style={{ flex: 1, position: 'relative', background: '#0d1117', overflow: 'hidden' }}>
+                            {commands.map(c => (
+                                <div
+                                    key={c.id}
+                                    ref={el => { cmdContainerRefs.current.set(c.id, el) }}
+                                    style={{
+                                        position: 'absolute', inset: 0, padding: '8px', boxSizing: 'border-box',
+                                        display: c.id === outputCmd?.id ? 'block' : 'none',
+                                    }}
+                                />
+                            ))}
                         </div>
-                        <style>{`@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
                     </div>
                 )}
             </div>
@@ -1675,11 +3179,13 @@ function TasksView({
     onOpenCreateTask,
     onUpdateStatus,
     onDeleteTask,
+    onOpenTask,
 }: {
     tasks: Task[]
     onOpenCreateTask: () => void
     onUpdateStatus: (task: Task, status: Task['status']) => void
     onDeleteTask: (task: Task) => void
+    onOpenTask: (task: Task) => void
 }) {
     const [dragTaskId, setDragTaskId] = useState<number | null>(null)
     const [dragOverStatus, setDragOverStatus] = useState<Task['status'] | null>(null)
@@ -1778,11 +3284,12 @@ function TasksView({
                                         draggable
                                         onDragStart={() => setDragTaskId(task.id)}
                                         onDragEnd={() => { setDragTaskId(null); setDragOverStatus(null) }}
+                                        onClick={() => { if (dragTaskId === null) onOpenTask(task) }}
                                         style={{
                                             background: color.bgBase,
                                             border: `1px solid ${color.borderMuted}`,
                                             borderRadius: '6px', padding: '10px 10px 8px',
-                                            cursor: 'grab', opacity: dragTaskId === task.id ? 0.35 : 1,
+                                            cursor: 'pointer', opacity: dragTaskId === task.id ? 0.35 : 1,
                                             transition: 'opacity 0.1s', display: 'flex',
                                             flexDirection: 'column', gap: '6px',
                                             position: 'relative',
@@ -1801,7 +3308,7 @@ function TasksView({
                                                 {task.title}
                                             </span>
                                             <button
-                                                onClick={() => onDeleteTask(task)}
+                                                onClick={e => { e.stopPropagation(); onDeleteTask(task) }}
                                                 style={{
                                                     flexShrink: 0, background: 'transparent', border: 'none',
                                                     color: color.textFaint, cursor: 'pointer', padding: 0,
@@ -1886,6 +3393,151 @@ function TasksView({
     )
 }
 
+// ─── Messages view ────────────────────────────────────────────────────────────
+
+interface AgentMessage {
+    id: number
+    sender_project_id: number
+    receiver_project_id: number
+    sender_name: string
+    receiver_name: string
+    content: string
+    status: 'pending' | 'delivered' | 'read'
+    created_at: string
+}
+
+function MessagesView({ projectId, projectName, newMessageIds }: { projectId: number; projectName: string; newMessageIds: number[] }) {
+    const [messages, setMessages] = useState<AgentMessage[]>([])
+
+    useEffect(() => {
+        fetch(`/api/projects/${projectId}/messages`)
+            .then(r => r.json())
+            .then(setMessages)
+            .catch(() => {})
+    }, [projectId])
+
+    // Reload when new messages arrive via WS
+    useEffect(() => {
+        if (newMessageIds.length === 0) return
+        fetch(`/api/projects/${projectId}/messages`)
+            .then(r => r.json())
+            .then(setMessages)
+            .catch(() => {})
+    }, [newMessageIds.length, projectId])
+
+    async function markRead(msg: AgentMessage) {
+        if (msg.status === 'read') return
+        await fetch(`/api/messages/${msg.id}/read`, { method: 'PATCH' })
+        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'read' } : m))
+    }
+
+    const unreadCount = messages.filter(m => m.receiver_project_id === projectId && m.status !== 'read').length
+
+    return (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {/* Header */}
+            <div style={{
+                padding: '10px 20px', borderBottom: `1px solid ${color.border}`,
+                display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0,
+                background: color.bgCanvas,
+            }}>
+                <svg width="13" height="13" viewBox="0 0 16 16" fill={color.textMuted}>
+                    <path d="M1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0114.25 14H1.75A1.75 1.75 0 010 12.25v-8.5C0 2.784.784 2 1.75 2zM1.5 12.251c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V5.06l-5.563 3.516a1.75 1.75 0 01-1.874 0L1.5 5.06v7.19zm13-8.181L8.312 7.512a.25.25 0 01-.264 0L1.5 4.07v-.32a.25.25 0 01.25-.25h12.5a.25.25 0 01.25.25v.32z"/>
+                </svg>
+                <span style={{ color: color.textPrimary, fontSize: '13px', fontWeight: 600, flex: 1 }}>Agent Messages</span>
+                {unreadCount > 0 && (
+                    <span style={{
+                        fontSize: '10px', padding: '1px 7px', borderRadius: '10px',
+                        background: `${color.accent}20`, border: `1px solid ${color.accent}40`,
+                        color: color.accent,
+                    }}>
+                        {unreadCount} unread
+                    </span>
+                )}
+            </div>
+
+            {/* Message thread */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {messages.length === 0 ? (
+                    <div style={{
+                        flex: 1, display: 'flex', flexDirection: 'column',
+                        alignItems: 'center', justifyContent: 'center', gap: '10px',
+                        padding: '60px 24px', textAlign: 'center',
+                    }}>
+                        <svg width="32" height="32" viewBox="0 0 16 16" fill={color.textFaint}>
+                            <path d="M1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0114.25 14H1.75A1.75 1.75 0 010 12.25v-8.5C0 2.784.784 2 1.75 2zM1.5 12.251c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V5.06l-5.563 3.516a1.75 1.75 0 01-1.874 0L1.5 5.06v7.19zm13-8.181L8.312 7.512a.25.25 0 01-.264 0L1.5 4.07v-.32a.25.25 0 01.25-.25h12.5a.25.25 0 01.25.25v.32z"/>
+                        </svg>
+                        <div>
+                            <p style={{ margin: '0 0 4px', color: color.textSecondary, fontSize: '13px', fontWeight: 500 }}>
+                                No messages yet
+                            </p>
+                            <p style={{ margin: 0, color: color.textFaint, fontSize: '11px', lineHeight: 1.5 }}>
+                                Agents can communicate using the<br />
+                                <code style={{ fontFamily: '"JetBrains Mono", monospace', color: color.accent }}>send_message_to_agent</code> MCP tool
+                            </p>
+                        </div>
+                    </div>
+                ) : (
+                    messages.map(msg => {
+                        const isInbound = msg.receiver_project_id === projectId
+                        const isUnread = isInbound && msg.status !== 'read'
+                        return (
+                            <div
+                                key={msg.id}
+                                onClick={() => isInbound && markRead(msg)}
+                                style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: isInbound ? 'flex-start' : 'flex-end',
+                                    gap: '4px',
+                                    cursor: isUnread ? 'pointer' : 'default',
+                                }}
+                            >
+                                <div style={{
+                                    fontSize: '10px', color: color.textFaint,
+                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                }}>
+                                    {isInbound ? (
+                                        <><span style={{ color: color.accent }}>{msg.sender_name}</span> → {projectName}</>
+                                    ) : (
+                                        <>{projectName} → <span style={{ color: color.accent }}>{msg.receiver_name}</span></>
+                                    )}
+                                    <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                </div>
+                                <div style={{
+                                    maxWidth: '75%',
+                                    background: isInbound ? color.bgSurface : color.accentSubtle,
+                                    border: `1px solid ${isUnread ? color.accent : isInbound ? color.borderMuted : color.accentEmphasis}`,
+                                    borderRadius: '8px',
+                                    padding: '8px 12px',
+                                    fontSize: '12px',
+                                    color: color.textPrimary,
+                                    lineHeight: 1.5,
+                                    wordBreak: 'break-word',
+                                    whiteSpace: 'pre-wrap',
+                                    boxShadow: isUnread ? `0 0 0 2px ${color.accent}30` : 'none',
+                                }}>
+                                    {msg.content}
+                                    {isUnread && (
+                                        <span style={{
+                                            display: 'inline-block', marginLeft: '6px',
+                                            width: '6px', height: '6px', borderRadius: '50%',
+                                            background: color.accent, verticalAlign: 'middle',
+                                        }} />
+                                    )}
+                                </div>
+                                <div style={{ fontSize: '10px', color: color.textFaint }}>
+                                    {msg.status}
+                                </div>
+                            </div>
+                        )
+                    })
+                )}
+            </div>
+        </div>
+    )
+}
+
 // ─── Terminal factory ─────────────────────────────────────────────────────────
 // xterm.js requires raw hex values — CSS variables are not supported.
 // These intentionally mirror the design tokens but must stay as hex strings.
@@ -1908,6 +3560,88 @@ function makeTerminal() {
 
 // ─── Claude status badge ──────────────────────────────────────────────────────
 
+// ─── Agent card ──────────────────────────────────────────────────────────────
+
+function AgentCard({
+    project, active, status, activity, sessionStart, outputChars, onClick,
+}: {
+    project: Project; active: boolean; status?: 'running' | 'done'
+    activity?: string; sessionStart?: Date; outputChars?: number
+    onClick: () => void
+}) {
+    const [elapsed, setElapsed] = useState('')
+
+    useEffect(() => {
+        if (!sessionStart) { setElapsed(''); return }
+        const update = () => {
+            const secs = Math.floor((Date.now() - sessionStart.getTime()) / 1000)
+            if (secs < 60) setElapsed(`${secs}s`)
+            else if (secs < 3600) setElapsed(`${Math.floor(secs / 60)}m`)
+            else setElapsed(`${Math.floor(secs / 3600)}h`)
+        }
+        update()
+        const id = setInterval(update, 15000)
+        return () => clearInterval(id)
+    }, [sessionStart])
+
+    const initial = project.name.charAt(0).toUpperCase()
+    const avatarBg = agentColor(project.name)
+    const isRunning = status === 'running'
+    const tokLabel = outputChars && outputChars > 400
+        ? (outputChars / 4000 >= 1 ? `${(outputChars / 4000).toFixed(1)}k tok` : `${Math.round(outputChars / 4)} tok`)
+        : null
+
+    return (
+        <div
+            onClick={onClick}
+            style={{
+                display: 'flex', alignItems: 'flex-start', gap: '10px',
+                padding: '12px 14px', cursor: 'pointer', transition: 'background 0.1s',
+                background: active ? '#161b22' : 'transparent',
+                borderLeft: `2px solid ${active ? '#58a6ff' : 'transparent'}`,
+            }}
+            onMouseEnter={e => { if (!active) e.currentTarget.style.background = '#0d1117' }}
+            onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}
+        >
+            <div style={{
+                width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0,
+                background: avatarBg, display: 'flex', alignItems: 'center',
+                justifyContent: 'center', fontSize: '12px', fontWeight: 700, color: '#fff', marginTop: '1px',
+            }}>
+                {initial}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                    <span style={{ color: color.textPrimary, fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {project.name}
+                    </span>
+                    <span style={{
+                        width: '6px', height: '6px', borderRadius: '50%', flexShrink: 0,
+                        background: isRunning ? '#3fb950' : color.textFaint,
+                        boxShadow: isRunning ? '0 0 5px #3fb950' : 'none',
+                    }} />
+                </div>
+                <div style={{ color: color.textMuted, fontSize: '11px', marginTop: '1px' }}>{project.language}</div>
+                {activity && (
+                    <div style={{
+                        color: color.textSecondary, fontSize: '11px', marginTop: '6px', lineHeight: 1.4,
+                        overflow: 'hidden', display: '-webkit-box',
+                        WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
+                    }}>
+                        {activity}
+                    </div>
+                )}
+                {(elapsed || tokLabel) && (
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '5px', color: color.textFaint, fontSize: '10px', fontFamily: '"JetBrains Mono", monospace' }}>
+                        {elapsed && <span>{elapsed} uptime</span>}
+                        {tokLabel && <span>{tokLabel}</span>}
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
+
 function ClaudeStatusBadge({ status }: { status?: 'running' | 'done' }) {
     if (!status) return null
     if (status === 'running') {
@@ -1929,7 +3663,7 @@ function ClaudeStatusBadge({ status }: { status?: 'running' | 'done' }) {
 // ─── Persistent layout ────────────────────────────────────────────────────────
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-    const { props } = usePage<{ project?: string }>()
+    const { props, component } = usePage<{ project?: string; tasks?: Task[] }>()
     const projectName = props.project
 
     const [workspaces, setWorkspaces] = useState<Workspace[]>([])
@@ -1937,23 +3671,55 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const [showWorkspaceModal, setShowWorkspaceModal] = useState(false)
     const [addProjectWorkspaceId, setAddProjectWorkspaceId] = useState<number | null | undefined>(undefined)
     const [movingProject, setMovingProject] = useState<Project | null>(null)
-    const [tasks, setTasks] = useState<Task[]>([])
+    const [editingProject, setEditingProject] = useState<Project | null>(null)
+    const [systemPromptProject, setSystemPromptProject] = useState<Project | null>(null)
+    const [permissionsProject, setPermissionsProject] = useState<Project | null>(null)
+    const [showDefaultPermissions, setShowDefaultPermissions] = useState(false)
+    const [deletingProject, setDeletingProject] = useState<Project | null>(null)
+    const [tasks, setTasks] = useState<Task[]>(props.tasks ?? [])
     // 'running' = Claude is working, 'done' = Claude finished (Stop hook received)
     const [claudeStatus, setClaudeStatus] = useState<Record<number, 'running' | 'done'>>({})
+    const [lastActivity, setLastActivity] = useState<Record<number, string>>({})
+    const [sessionStart, setSessionStart] = useState<Record<number, Date>>({})
+    const [outputChars, setOutputChars] = useState<Record<number, number>>({})
 
+    const isTasksPage = component === 'Tasks'
     const [projectView, setProjectView] = useState<ProjectView>('agents')
+    const activeView: ProjectView = isTasksPage ? 'tasks' : projectView
     const [showCreateTask, setShowCreateTask] = useState(false)
     const [isDraggingOver, setIsDraggingOver] = useState(false)
+    const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+    const [newMessageIds, setNewMessageIds] = useState<number[]>([])
+    const [projectAgents, setProjectAgents] = useState<ProjectAgent[]>([])
+    const [showAddAgent, setShowAddAgent] = useState(false)
+    const [activeAgentId, setActiveAgentId] = useState<number | null>(null)
+    const [relayMessages, setRelayMessages] = useState<RelayMessage[]>([])
+    const [showProjectSearch, setShowProjectSearch] = useState(false)
+    const [triggerMessage, setTriggerMessage] = useState('')
+    const [triggerStatus, setTriggerStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
 
     const sessions = useRef<Map<number, Session>>(new Map())
     const containerRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
+    const agentSessions = useRef<Map<number, Session>>(new Map())
+    const agentContainerRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
     const fileInputRef = useRef<HTMLInputElement>(null)
 
-    const activeProject = allProjects.find(p => p.name === projectName) ?? allProjects[0] ?? null
+    const activeProject = allProjects.find(p => slugify(p.name) === projectName) ?? allProjects[0] ?? null
 
     // Flatten all projects from workspaces for terminal management
     const workspaceProjects = workspaces.flatMap(w => w.projects)
     const unassignedProjects = allProjects.filter(p => p.workspace_id === null || p.workspace_id === undefined)
+
+    useEffect(() => {
+        function onKeyDown(e: KeyboardEvent) {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
+                e.preventDefault()
+                setShowProjectSearch(o => !o)
+            }
+        }
+        window.addEventListener('keydown', onKeyDown)
+        return () => window.removeEventListener('keydown', onKeyDown)
+    }, [])
 
     useEffect(() => {
         Promise.all([
@@ -1979,6 +3745,136 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             .then(setTasks)
             .catch(() => {})
     }, [activeProject?.id])
+
+    useEffect(() => {
+        if (!activeProject) { setProjectAgents([]); return }
+        setActiveAgentId(null)
+        // Tear down any existing agent terminal sessions for this project switch
+        agentSessions.current.forEach(({ term, ws, observer }) => {
+            observer.disconnect(); term.dispose(); ws.close()
+        })
+        agentSessions.current.clear()
+        fetch(`/api/projects/${activeProject.id}/agents`)
+            .then(r => r.json())
+            .then(setProjectAgents)
+            .catch(() => {})
+    }, [activeProject?.id])
+
+    // Fetch relay messages when an agent is selected
+    useEffect(() => {
+        if (activeAgentId === null) { setRelayMessages([]); return }
+        fetch(`/api/agents/${activeAgentId}/relay-messages`)
+            .then(r => r.json())
+            .then((msgs: RelayMessage[]) => setRelayMessages(msgs))
+            .catch(() => {})
+    }, [activeAgentId])
+
+    // Launch a terminal session for a single agent (reusable helper)
+    function launchAgentSession(agentId: number, focus: boolean = true) {
+        if (!activeProject) return
+        const container = agentContainerRefs.current.get(agentId)
+        if (!container) return
+
+        if (agentSessions.current.has(agentId)) {
+            if (focus) {
+                const { fitAddon, term } = agentSessions.current.get(agentId)!
+                requestAnimationFrame(() => { fitAddon.fit(); term.focus() })
+            }
+            return
+        }
+
+        const term = makeTerminal()
+        const fitAddon = new FitAddon()
+        term.loadAddon(fitAddon)
+        term.open(container)
+        fitAddon.fit()
+
+        const textarea = container.querySelector('textarea')
+        if (textarea) {
+            textarea.setAttribute('autocomplete', 'off')
+            textarea.setAttribute('autocorrect', 'off')
+            textarea.setAttribute('autocapitalize', 'none')
+            textarea.setAttribute('spellcheck', 'false')
+        }
+
+        const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
+        const ws = new WebSocket(
+            `${protocol}//${location.host}/${slugify(activeProject.name)}/ws?path=${encodeURIComponent(activeProject.path)}&agent_id=${agentId}`
+        )
+        ws.binaryType = 'arraybuffer'
+        ws.onopen = () => ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
+        ws.onmessage = e => {
+            if (typeof e.data !== 'string') {
+                term.write(new Uint8Array(e.data as ArrayBuffer))
+            } else {
+                // Handle JSON events (relay messages) from the WebSocket
+                try {
+                    const event = JSON.parse(e.data)
+                    if (event.type === 'agent_relay_message' || event.type === 'agent_relay_delivered') {
+                        // Refresh relay messages for the active agent
+                        if (activeAgentId !== null) {
+                            fetch(`/api/agents/${activeAgentId}/relay-messages`)
+                                .then(r => r.json())
+                                .then((msgs: RelayMessage[]) => setRelayMessages(msgs))
+                                .catch(() => {})
+                        }
+                    }
+                } catch { /* not JSON, ignore */ }
+            }
+        }
+        ws.onclose = () => term.write('\r\n\x1b[31m[disconnected]\x1b[0m\r\n')
+        term.onData(data => { if (ws.readyState === WebSocket.OPEN) ws.send(new TextEncoder().encode(data)) })
+        term.onResize(({ cols, rows }) => {
+            if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'resize', cols, rows }))
+        })
+        container.addEventListener('click', () => term.focus())
+        if (focus) term.focus()
+
+        const observer = new ResizeObserver(() => fitAddon.fit())
+        observer.observe(container)
+
+        agentSessions.current.set(agentId, { term, ws, fitAddon, observer })
+    }
+
+    // When an agent is selected, start ALL agents (so they can communicate)
+    // but only focus the selected one
+    useEffect(() => {
+        if (activeAgentId === null || !activeProject) return
+
+        // Use requestAnimationFrame to ensure containers are rendered
+        requestAnimationFrame(() => {
+            // Launch all agents so they can all receive relay messages
+            for (const agent of projectAgents) {
+                launchAgentSession(agent.id, agent.id === activeAgentId)
+            }
+        })
+    }, [activeAgentId, projectAgents.length])
+
+    async function handleTriggerAgent() {
+        if (!activeAgentId || !triggerMessage.trim()) return
+        setTriggerStatus('sending')
+        try {
+            const res = await fetch(`/api/agents/${activeAgentId}/trigger`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: triggerMessage.trim() }),
+            })
+            if (res.ok) {
+                setTriggerStatus('sent')
+                setTriggerMessage('')
+                setTimeout(() => setTriggerStatus('idle'), 2000)
+            } else {
+                setTriggerStatus('error')
+                setTimeout(() => setTriggerStatus('idle'), 3000)
+            }
+        } catch {
+            setTriggerStatus('error')
+            setTimeout(() => setTriggerStatus('idle'), 3000)
+        }
+    }
+
+    function handleOpenTask(task: Task) { setSelectedTask(task) }
+    function handleCloseTask() { setSelectedTask(null) }
 
     async function handleAddTask(title: string, body: string, assignees: string[]) {
         if (!activeProject) return
@@ -2027,6 +3923,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 term.dispose()
                 ws.close()
             })
+            agentSessions.current.forEach(({ term, ws, observer }) => {
+                observer.disconnect()
+                term.dispose()
+                ws.close()
+            })
         }
     }, [])
 
@@ -2056,22 +3957,84 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         }
 
         const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-        const ws = new WebSocket(`${protocol}//${location.host}/${activeProject.name}/ws?path=${encodeURIComponent(activeProject.path)}`)
+        const ws = new WebSocket(`${protocol}//${location.host}/${slugify(activeProject.name)}/ws?path=${encodeURIComponent(activeProject.path)}`)
         ws.binaryType = 'arraybuffer'
         ws.onopen = () => {
             ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
             setClaudeStatus(prev => ({ ...prev, [activeProject.id]: 'running' }))
+            setSessionStart(prev => ({ ...prev, [activeProject.id]: new Date() }))
         }
+        // Rolling text buffer for input-prompt detection (shared across messages)
+        let termTextBuf = ''
+        let lastInputSoundAt = 0
+
         ws.onmessage = e => {
             if (typeof e.data === 'string') {
                 try {
                     const msg = JSON.parse(e.data)
                     if (msg.type === 'claude_stopped') {
                         setClaudeStatus(prev => ({ ...prev, [activeProject.id]: 'done' }))
+                        playSound('done')
+                    } else if (msg.type === 'agent_message') {
+                        setNewMessageIds(prev => [...prev, msg.message_id])
+                        playSound('input')
+                    } else if (msg.type === 'agent_relay_message') {
+                        const rm: RelayMessage = {
+                            id: msg.message_id,
+                            from_agent_id: msg.from_agent_id,
+                            from_agent_name: msg.from_agent_name,
+                            to_agent_id: msg.to_agent_id,
+                            to_agent_name: msg.to_agent_name,
+                            content: msg.content,
+                            status: msg.status,
+                            created_at: new Date().toISOString(),
+                        }
+                        setRelayMessages(prev => [...prev, rm])
+                        playSound('input')
+                    } else if (msg.type === 'agent_relay_delivered') {
+                        // Refresh relay messages when pending messages get delivered
+                        if (activeAgentId !== null) {
+                            fetch(`/api/agents/${activeAgentId}/relay-messages`)
+                                .then(r => r.json())
+                                .then((msgs: RelayMessage[]) => setRelayMessages(msgs))
+                                .catch(() => {})
+                        }
+                    } else if (msg.type === 'agent_created') {
+                        // An agent spawned a new agent — add it to the sidebar
+                        setProjectAgents(prev => {
+                            if (prev.some(a => a.id === msg.agent.id)) return prev
+                            return [...prev, msg.agent as ProjectAgent]
+                        })
                     }
                 } catch { /* ignore */ }
             } else {
-                term.write(new Uint8Array(e.data as ArrayBuffer))
+                const bytes = new Uint8Array(e.data as ArrayBuffer)
+                term.write(bytes)
+
+                // Detect Claude waiting for user input by scanning plain text
+                const text = new TextDecoder().decode(bytes).replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+                termTextBuf = (termTextBuf + text).slice(-800)
+
+                // Track last meaningful activity line for agent cards
+                const stripped = text.replace(/[^\x20-\x7E\n\r]/g, '')
+                const actLines = stripped.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 6 && !/^[$%>#\u276F]/.test(l))
+                if (actLines.length) setLastActivity(prev => ({ ...prev, [activeProject.id]: actLines[actLines.length - 1] }))
+                setOutputChars(prev => ({ ...prev, [activeProject.id]: (prev[activeProject.id] ?? 0) + bytes.length }))
+
+                const now = Date.now()
+                const inputPatterns = [
+                    /\?\s*$/m,                       // ends with "?"
+                    /\[Y\/n\]/i,                      // yes/no prompt
+                    /\[y\/N\]/i,
+                    /Do you want to/i,
+                    /Would you like/i,
+                    /Press Enter to/i,
+                    /Type your (message|response|reply)/i,
+                ]
+                if (now - lastInputSoundAt > 3000 && inputPatterns.some(p => p.test(termTextBuf))) {
+                    lastInputSoundAt = now
+                    playSound('input')
+                }
             }
         }
         ws.onclose = () => term.write('\r\n\x1b[31m[disconnected]\x1b[0m\r\n')
@@ -2111,7 +4074,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     : w
             ))
         }
-        router.visit(`/${project.name}`)
+        router.visit(`/${slugify(project.name)}`)
     }
 
     function openAddProject(workspaceId: number | null) {
@@ -2141,6 +4104,27 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         }))
     }
 
+    function handleProjectUpdated(updated: Project) {
+        setAllProjects(prev => prev.map(p => p.id === updated.id ? updated : p))
+        setWorkspaces(prev => prev.map(w => ({
+            ...w,
+            projects: w.projects.map(p => p.id === updated.id ? updated : p),
+        })))
+    }
+
+    function handleProjectDeleted(projectId: number) {
+        const project = allProjects.find(p => p.id === projectId)
+        setAllProjects(prev => prev.filter(p => p.id !== projectId))
+        setWorkspaces(prev => prev.map(w => ({
+            ...w,
+            projects: w.projects.filter(p => p.id !== projectId),
+        })))
+        // Navigate away if the deleted project was active
+        if (project && projectName === slugify(project.name)) {
+            router.visit('/')
+        }
+    }
+
     async function uploadImage(file: File) {
         if (!activeProject) return
         if (!file.type.startsWith('image/')) return
@@ -2158,6 +4142,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         }
     }
 
+    function restartClaude() {
+        if (!activeProject) return
+        const session = sessions.current.get(activeProject.id)
+        if (!session || session.ws.readyState !== WebSocket.OPEN) return
+        session.ws.send(new TextEncoder().encode('\x03'))
+        setTimeout(() => {
+            if (session.ws.readyState === WebSocket.OPEN) {
+                session.ws.send(new TextEncoder().encode('claude --continue\n'))
+            }
+        }, 800)
+    }
+
     return (
         <div style={{ display: 'flex', width: '100%', height: '100vh', background: color.bgBase, overflow: 'hidden' }}>
             <Sidebar
@@ -2167,6 +4163,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 onAddWorkspace={() => setShowWorkspaceModal(true)}
                 onAddProject={openAddProject}
                 onMoveProject={setMovingProject}
+                onEditProject={setEditingProject}
+                onSystemPromptProject={setSystemPromptProject}
+                onPermissionsProject={setPermissionsProject}
+                onOpenDefaultPermissions={() => setShowDefaultPermissions(true)}
+                onDeleteProject={setDeletingProject}
                 tasks={tasks}
                 onOpenCreateTask={() => setShowCreateTask(true)}
                 onUpdateStatus={handleUpdateStatus}
@@ -2217,80 +4218,476 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 {/* Body: project sidebar + content */}
                 <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
                     {activeProject && (
-                        <ProjectSidebar view={projectView} onChange={setProjectView} />
+                        <ProjectSidebar
+                            view={activeView}
+                            projectName={activeProject.name}
+                            onChange={(view) => {
+                                setProjectView(view)
+                                if (isTasksPage) router.visit(`/${slugify(activeProject.name)}`)
+                            }}
+                            taskCount={tasks.length}
+                            newMessageCount={newMessageIds.length}
+                        />
                     )}
 
-                    {/* Agents (terminal) — always rendered to keep sessions alive, hidden when inactive */}
-                    <div
-                        style={{
-                            flex: 1, position: 'relative', overflow: 'hidden',
-                            display: projectView === 'agents' ? 'flex' : 'none', flexDirection: 'column',
-                        }}
-                        onDragOver={e => { e.preventDefault(); setIsDraggingOver(true) }}
-                        onDragEnter={e => { e.preventDefault(); setIsDraggingOver(true) }}
-                        onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDraggingOver(false) }}
-                        onDrop={e => {
-                            e.preventDefault()
-                            setIsDraggingOver(false)
-                            const file = e.dataTransfer.files[0]
-                            if (file) uploadImage(file)
-                        }}
-                    >
-                        {isDraggingOver && activeProject && (
+                    {/* Agents view: agent card list (left) + terminal (right) — always rendered to keep sessions alive */}
+                    <div style={{ flex: 1, overflow: 'hidden', display: activeView === 'agents' ? 'flex' : 'none' }}>
+
+                        {/* Agent cards list */}
+                        <div style={{
+                            width: '230px', flexShrink: 0, overflowY: 'auto', background: color.bgBase,
+                            borderRight: `1px solid ${color.borderMuted}`,
+                            display: 'flex', flexDirection: 'column',
+                        }}>
+                            {/* Per-project agents */}
+                            {activeProject && (
+                                <>
+                                    <div style={{
+                                        padding: '10px 14px 4px',
+                                        display: 'flex', alignItems: 'center', gap: '6px',
+                                    }}>
+                                        <span style={{ color: color.textFaint, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.07em', flex: 1 }}>
+                                            Team Agents
+                                        </span>
+                                        {projectAgents.length >= 2 && (
+                                            <button
+                                                onClick={() => {
+                                                    if (activeAgentId === null) setActiveAgentId(projectAgents[0].id)
+                                                    else requestAnimationFrame(() => {
+                                                        for (const agent of projectAgents) launchAgentSession(agent.id, agent.id === activeAgentId)
+                                                    })
+                                                }}
+                                                title="Start all agents"
+                                                style={{
+                                                    background: 'transparent', border: `1px solid ${color.borderMuted}`,
+                                                    borderRadius: '4px', color: color.textMuted,
+                                                    fontSize: '10px', lineHeight: 1, padding: '2px 6px',
+                                                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px',
+                                                }}
+                                                onMouseEnter={e => { e.currentTarget.style.borderColor = color.success; e.currentTarget.style.color = color.success }}
+                                                onMouseLeave={e => { e.currentTarget.style.borderColor = color.borderMuted; e.currentTarget.style.color = color.textMuted }}
+                                            >
+                                                <svg width="8" height="8" viewBox="0 0 10 10" fill="currentColor">
+                                                    <path d="M2 1.5l7 3.5-7 3.5V1.5z"/>
+                                                </svg>
+                                                All
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => setShowAddAgent(true)}
+                                            title="Add agent"
+                                            style={{
+                                                background: 'transparent', border: `1px solid ${color.borderMuted}`,
+                                                borderRadius: '4px', color: color.textMuted,
+                                                fontSize: '14px', lineHeight: 1, padding: '1px 6px',
+                                                cursor: 'pointer',
+                                            }}
+                                            onMouseEnter={e => { e.currentTarget.style.borderColor = color.accent; e.currentTarget.style.color = color.accent }}
+                                            onMouseLeave={e => { e.currentTarget.style.borderColor = color.borderMuted; e.currentTarget.style.color = color.textMuted }}
+                                        >
+                                            +
+                                        </button>
+                                    </div>
+                                    {projectAgents.length === 0 ? (
+                                        <div style={{ padding: '8px 14px 10px', color: color.textFaint, fontSize: '11px' }}>
+                                            No agents yet
+                                        </div>
+                                    ) : projectAgents.map(agent => {
+                                        const isRunning = agentSessions.current.has(agent.id)
+                                        return (
+                                        <div
+                                            key={agent.id}
+                                            onClick={() => setActiveAgentId(agent.id)}
+                                            style={{
+                                                padding: '7px 12px', cursor: 'pointer',
+                                                display: 'flex', alignItems: 'center', gap: '8px',
+                                                borderRadius: '6px', margin: '1px 6px',
+                                                background: agent.id === activeAgentId ? color.bgCanvas : 'transparent',
+                                                borderLeft: `2px solid ${agent.id === activeAgentId ? color.accent : 'transparent'}`,
+                                            }}
+                                            onMouseEnter={e => { if (agent.id !== activeAgentId) e.currentTarget.style.background = color.bgSurface }}
+                                            onMouseLeave={e => { if (agent.id !== activeAgentId) e.currentTarget.style.background = 'transparent' }}
+                                        >
+                                            <div style={{ position: 'relative', flexShrink: 0 }}>
+                                                <div style={{
+                                                    width: '22px', height: '22px', borderRadius: '50%',
+                                                    background: AGENT_TYPE_COLORS[agent.agent_type] ?? color.accent,
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    fontSize: '10px', fontWeight: 700, color: '#fff',
+                                                }}>
+                                                    {agent.name.charAt(0).toUpperCase()}
+                                                </div>
+                                                {isRunning && (
+                                                    <div style={{
+                                                        position: 'absolute', bottom: '-1px', right: '-1px',
+                                                        width: '7px', height: '7px', borderRadius: '50%',
+                                                        background: color.success,
+                                                        border: `1.5px solid ${color.bgBase}`,
+                                                    }} />
+                                                )}
+                                            </div>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                    {agent.name}
+                                                </div>
+                                                <div style={{ fontSize: '10px', color: AGENT_TYPE_COLORS[agent.agent_type] ?? color.textFaint }}>
+                                                    {AGENT_TYPE_LABELS[agent.agent_type] ?? agent.agent_type}
+                                                </div>
+                                            </div>
+                                            {!isRunning && (
+                                                <button
+                                                    onClick={e => { e.stopPropagation(); setActiveAgentId(agent.id) }}
+                                                    title="Run"
+                                                    style={{
+                                                        background: 'transparent', border: 'none',
+                                                        color: color.textFaint, cursor: 'pointer',
+                                                        padding: '2px 4px', borderRadius: '3px',
+                                                        flexShrink: 0, display: 'flex', alignItems: 'center',
+                                                    }}
+                                                    onMouseEnter={e => { e.currentTarget.style.color = color.success }}
+                                                    onMouseLeave={e => { e.currentTarget.style.color = color.textFaint }}
+                                                >
+                                                    <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+                                                        <path d="M3 2l11 6-11 6V2z"/>
+                                                    </svg>
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={async (e) => {
+                                                    e.stopPropagation()
+                                                    await fetch(`/api/agents/${agent.id}`, { method: 'DELETE' })
+                                                    setProjectAgents(prev => prev.filter(a => a.id !== agent.id))
+                                                }}
+                                                title="Remove"
+                                                style={{
+                                                    background: 'transparent', border: 'none',
+                                                    color: color.textFaint, cursor: 'pointer',
+                                                    fontSize: '14px', padding: '2px 4px', borderRadius: '3px',
+                                                    flexShrink: 0,
+                                                }}
+                                                onMouseEnter={e => { e.currentTarget.style.color = color.danger }}
+                                                onMouseLeave={e => { e.currentTarget.style.color = color.textFaint }}
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
+                                    )})}
+                                </>
+                            )}
+                        </div>
+
+                        {/* Terminal area */}
+                        <div
+                            style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}
+                            onDragOver={e => { e.preventDefault(); setIsDraggingOver(true) }}
+                            onDragEnter={e => { e.preventDefault(); setIsDraggingOver(true) }}
+                            onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDraggingOver(false) }}
+                            onDrop={e => {
+                                e.preventDefault()
+                                setIsDraggingOver(false)
+                                const file = e.dataTransfer.files[0]
+                                if (file) uploadImage(file)
+                            }}
+                        >
+                            {/* Terminal header: avatar + name + role + Restart (or agent header) */}
+                            {activeProject && (() => {
+                                const activeAgent = activeAgentId !== null ? projectAgents.find(a => a.id === activeAgentId) ?? null : null
+                                return (
+                                    <div style={{
+                                        height: '40px', flexShrink: 0, display: 'flex', alignItems: 'center',
+                                        paddingLeft: '14px', paddingRight: '12px', gap: '10px',
+                                        borderBottom: `1px solid ${color.borderMuted}`, background: color.bgCanvas,
+                                    }}>
+                                        {activeAgent ? (
+                                            <>
+                                                <button
+                                                    onClick={() => setActiveAgentId(null)}
+                                                    title="Back to project terminal"
+                                                    style={{
+                                                        background: 'transparent', border: 'none',
+                                                        color: color.textFaint, cursor: 'pointer',
+                                                        padding: '2px 4px', display: 'flex', alignItems: 'center',
+                                                    }}
+                                                    onMouseEnter={e => { e.currentTarget.style.color = color.textSecondary }}
+                                                    onMouseLeave={e => { e.currentTarget.style.color = color.textFaint }}
+                                                >
+                                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                                        <path d="M7.78 12.53a.75.75 0 01-1.06 0L2.47 8.28a.75.75 0 010-1.06l4.25-4.25a.75.75 0 011.06 1.06L4.81 7h7.44a.75.75 0 010 1.5H4.81l2.97 2.97a.75.75 0 010 1.06z"/>
+                                                    </svg>
+                                                </button>
+                                                <div style={{
+                                                    width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0,
+                                                    background: AGENT_TYPE_COLORS[activeAgent.agent_type] ?? color.accent,
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    fontSize: '11px', fontWeight: 700, color: '#fff',
+                                                }}>
+                                                    {activeAgent.name.charAt(0).toUpperCase()}
+                                                </div>
+                                                <span style={{ color: color.textPrimary, fontSize: '13px', fontWeight: 600 }}>
+                                                    {activeAgent.name}
+                                                </span>
+                                                <span style={{ color: color.textFaint, fontSize: '12px' }}>
+                                                    {AGENT_TYPE_LABELS[activeAgent.agent_type] ?? activeAgent.agent_type}
+                                                </span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div style={{
+                                                    width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0,
+                                                    background: agentColor(activeProject.name), display: 'flex',
+                                                    alignItems: 'center', justifyContent: 'center',
+                                                    fontSize: '11px', fontWeight: 700, color: '#fff',
+                                                }}>
+                                                    {activeProject.name.charAt(0).toUpperCase()}
+                                                </div>
+                                                <span style={{ color: color.textPrimary, fontSize: '13px', fontWeight: 600 }}>
+                                                    {activeProject.name}
+                                                </span>
+                                                <span style={{ color: color.textFaint, fontSize: '12px' }}>
+                                                    / {activeProject.language}
+                                                </span>
+                                            </>
+                                        )}
+                                        <div style={{ flex: 1 }} />
+                                        {!activeAgent && (
+                                            <button
+                                                onClick={restartClaude}
+                                                style={{
+                                                    background: 'transparent', border: `1px solid ${color.borderMuted}`,
+                                                    borderRadius: '5px', color: color.textMuted, fontSize: '11px',
+                                                    padding: '4px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
+                                                }}
+                                                onMouseEnter={e => { e.currentTarget.style.borderColor = color.textMuted; e.currentTarget.style.color = color.textSecondary }}
+                                                onMouseLeave={e => { e.currentTarget.style.borderColor = color.borderMuted; e.currentTarget.style.color = color.textMuted }}
+                                            >
+                                                <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+                                                    <path d="M8 2.5a5.487 5.487 0 00-4.131 1.869l1.204 1.204A.25.25 0 014.896 6H1.25A.25.25 0 011 5.75V2.104a.25.25 0 01.427-.177l1.38 1.38A7.001 7.001 0 0114.95 7.16a.75.75 0 11-1.49.178A5.501 5.501 0 008 2.5zM1.705 8.005a.75.75 0 01.834.656 5.501 5.501 0 009.592 2.97l-1.204-1.204a.25.25 0 01.177-.427h3.646a.25.25 0 01.25.25v3.646a.25.25 0 01-.427.177l-1.38-1.38A7.001 7.001 0 011.05 8.84a.75.75 0 01.656-.834z"/>
+                                                </svg>
+                                                Restart
+                                            </button>
+                                        )}
+                                    </div>
+                                )
+                            })()}
+
+                            {/* Drag overlay */}
+                            {isDraggingOver && activeProject && (
+                                <div style={{
+                                    position: 'absolute', inset: 0, zIndex: 10,
+                                    background: color.accentGlow,
+                                    border: `2px dashed ${color.accent}`, borderRadius: '4px',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    pointerEvents: 'none',
+                                }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                                        <svg width="36" height="36" viewBox="0 0 16 16" fill={color.accent} opacity="0.8">
+                                            <path d="M1.75 2.5a.25.25 0 00-.25.25v10.5c0 .138.112.25.25.25h.94l.03-.013 4.013-4.013a1.75 1.75 0 012.474 0L13.62 13.5h.63a.25.25 0 00.25-.25V2.75a.25.25 0 00-.25-.25H1.75zM0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25V2.75zm9.5 3.5a1 1 0 11-2 0 1 1 0 012 0z"/>
+                                        </svg>
+                                        <span style={{ color: color.accent, fontSize: '13px', fontFamily: '"JetBrains Mono", monospace' }}>
+                                            Drop image to attach
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                style={{ display: 'none' }}
+                                onChange={e => {
+                                    const file = e.target.files?.[0]
+                                    if (file) uploadImage(file)
+                                    e.target.value = ''
+                                }}
+                            />
+
+                            {/* Terminal containers */}
+                            <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+                                {allProjects.map(project => (
+                                    <div
+                                        key={project.id}
+                                        ref={el => { containerRefs.current.set(project.id, el) }}
+                                        style={{
+                                            position: 'absolute', inset: 0, padding: '8px', boxSizing: 'border-box',
+                                            display: project.id === activeProject?.id && activeAgentId === null ? 'block' : 'none',
+                                        }}
+                                    />
+                                ))}
+                                {projectAgents.map(agent => {
+                                    const isActive = agent.id === activeAgentId
+                                    const hasSession = agentSessions.current.has(agent.id)
+                                    return (
+                                        <div
+                                            key={`agent-${agent.id}`}
+                                            ref={el => { agentContainerRefs.current.set(agent.id, el) }}
+                                            style={{
+                                                position: 'absolute', inset: 0, padding: '8px', boxSizing: 'border-box',
+                                                // Active agent is fully visible; background agents with sessions
+                                                // are rendered off-screen so xterm stays alive
+                                                ...(isActive
+                                                    ? { display: 'block' }
+                                                    : hasSession
+                                                        ? { display: 'block', visibility: 'hidden' as const, pointerEvents: 'none' as const }
+                                                        : { display: 'none' }),
+                                            }}
+                                        />
+                                    )
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Relay messages panel — shown when an agent is active */}
+                        {activeAgentId !== null && (
                             <div style={{
-                                position: 'absolute', inset: 0, zIndex: 10,
-                                background: color.accentGlow,
-                                border: `2px dashed ${color.accent}`, borderRadius: '4px',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                pointerEvents: 'none',
+                                width: '270px', flexShrink: 0,
+                                borderLeft: `1px solid ${color.borderMuted}`,
+                                background: color.bgBase,
+                                display: 'flex', flexDirection: 'column', overflow: 'hidden',
                             }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-                                    <svg width="36" height="36" viewBox="0 0 16 16" fill={color.accent} opacity="0.8">
-                                        <path d="M1.75 2.5a.25.25 0 00-.25.25v10.5c0 .138.112.25.25.25h.94l.03-.013 4.013-4.013a1.75 1.75 0 012.474 0L13.62 13.5h.63a.25.25 0 00.25-.25V2.75a.25.25 0 00-.25-.25H1.75zM0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25V2.75zm9.5 3.5a1 1 0 11-2 0 1 1 0 012 0z"/>
-                                    </svg>
-                                    <span style={{ color: color.accent, fontSize: '13px', fontFamily: '"JetBrains Mono", monospace' }}>
-                                        Drop image to attach
+                                <div style={{
+                                    height: '40px', flexShrink: 0,
+                                    display: 'flex', alignItems: 'center', paddingLeft: '14px', paddingRight: '12px',
+                                    borderBottom: `1px solid ${color.borderMuted}`, background: color.bgCanvas,
+                                }}>
+                                    <span style={{ color: color.textFaint, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                                        Relay Messages
+                                    </span>
+                                    {relayMessages.length > 0 && (
+                                        <span style={{
+                                            marginLeft: '8px', background: color.accent,
+                                            color: '#fff', fontSize: '10px', fontWeight: 600,
+                                            borderRadius: '8px', padding: '1px 6px',
+                                        }}>
+                                            {relayMessages.length}
+                                        </span>
+                                    )}
+                                </div>
+                                <div style={{ flex: 1, overflowY: 'auto', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                    {relayMessages.length === 0 ? (
+                                        <div style={{ color: color.textFaint, fontSize: '11px', padding: '6px 4px' }}>
+                                            No messages yet
+                                        </div>
+                                    ) : relayMessages.map(rm => {
+                                        const agentById = (id: number) => projectAgents.find(a => a.id === id)?.name ?? `Agent #${id}`
+                                        const isSent = rm.from_agent_id === activeAgentId
+                                        const otherName = isSent
+                                            ? (rm.to_agent_name ?? agentById(rm.to_agent_id))
+                                            : (rm.from_agent_name ?? agentById(rm.from_agent_id))
+                                        return (
+                                            <div key={rm.id} style={{
+                                                padding: '8px 10px',
+                                                borderRadius: '6px',
+                                                background: isSent ? color.bgCanvas : '#1a2636',
+                                                border: `1px solid ${isSent ? color.borderMuted : '#1f3a5a'}`,
+                                            }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                                                    <span style={{
+                                                        fontSize: '9px', fontWeight: 700, textTransform: 'uppercase',
+                                                        letterSpacing: '0.06em',
+                                                        color: isSent ? color.textFaint : color.accent,
+                                                    }}>
+                                                        {isSent ? `→ ${otherName}` : `← ${otherName}`}
+                                                    </span>
+                                                    <span style={{
+                                                        marginLeft: 'auto', fontSize: '9px',
+                                                        color: rm.status === 'delivered' ? color.success : color.warning,
+                                                        fontFamily: '"JetBrains Mono", monospace',
+                                                    }}>
+                                                        {rm.status}
+                                                    </span>
+                                                </div>
+                                                <div style={{
+                                                    color: color.textSecondary, fontSize: '11px', lineHeight: 1.5,
+                                                    wordBreak: 'break-word',
+                                                }}>
+                                                    {rm.content}
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+
+                                {/* Trigger agent section */}
+                                <div style={{
+                                    flexShrink: 0, borderTop: `1px solid ${color.borderMuted}`,
+                                    padding: '10px', display: 'flex', flexDirection: 'column', gap: '6px',
+                                    background: color.bgCanvas,
+                                }}>
+                                    <span style={{ color: color.textFaint, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                                        Trigger Agent
+                                    </span>
+                                    <textarea
+                                        value={triggerMessage}
+                                        onChange={e => setTriggerMessage(e.target.value)}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                                                e.preventDefault()
+                                                handleTriggerAgent()
+                                            }
+                                        }}
+                                        placeholder="Send a task or message to start this agent..."
+                                        rows={3}
+                                        style={{
+                                            width: '100%', boxSizing: 'border-box',
+                                            background: color.bgBase, border: `1px solid ${color.borderMuted}`,
+                                            borderRadius: '5px', color: color.textSecondary,
+                                            fontSize: '11px', fontFamily: 'inherit',
+                                            padding: '6px 8px', resize: 'none', outline: 'none',
+                                            lineHeight: 1.5,
+                                        }}
+                                        onFocus={e => { e.currentTarget.style.borderColor = color.accent }}
+                                        onBlur={e => { e.currentTarget.style.borderColor = color.borderMuted }}
+                                    />
+                                    <button
+                                        onClick={handleTriggerAgent}
+                                        disabled={triggerStatus === 'sending' || !triggerMessage.trim()}
+                                        style={{
+                                            background: triggerStatus === 'sent' ? color.success
+                                                : triggerStatus === 'error' ? color.danger
+                                                : color.accent,
+                                            border: 'none', borderRadius: '5px',
+                                            color: '#fff', fontSize: '11px', fontWeight: 600,
+                                            padding: '6px 10px', cursor: triggerStatus === 'sending' || !triggerMessage.trim() ? 'not-allowed' : 'pointer',
+                                            opacity: triggerStatus === 'sending' || !triggerMessage.trim() ? 0.6 : 1,
+                                            transition: 'background 0.2s',
+                                        }}
+                                    >
+                                        {triggerStatus === 'sending' ? 'Starting...'
+                                            : triggerStatus === 'sent' ? 'Triggered!'
+                                            : triggerStatus === 'error' ? 'Error — retry'
+                                            : '⚡ Trigger Agent'}
+                                    </button>
+                                    <span style={{ color: color.textFaint, fontSize: '9px' }}>
+                                        ⌘↵ to send · starts agent if not running
                                     </span>
                                 </div>
                             </div>
                         )}
-
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept="image/*"
-                            style={{ display: 'none' }}
-                            onChange={e => {
-                                const file = e.target.files?.[0]
-                                if (file) uploadImage(file)
-                                e.target.value = ''
-                            }}
-                        />
-
-                        {allProjects.map(project => (
-                            <div
-                                key={project.id}
-                                ref={el => containerRefs.current.set(project.id, el)}
-                                style={{
-                                    position: 'absolute', inset: 0, padding: '8px', boxSizing: 'border-box',
-                                    display: project.id === activeProject?.id ? 'block' : 'none',
-                                }}
-                            />
-                        ))}
                     </div>
 
                     {/* Commands view */}
-                    {projectView === 'commands' && activeProject && (
-                        <CommandsView projectId={activeProject.id} />
+                    {activeView === 'commands' && activeProject && (
+                        <CommandsView project={activeProject} projectId={activeProject.id} />
                     )}
 
                     {/* Tasks view */}
-                    {projectView === 'tasks' && activeProject && (
+                    {activeView === 'tasks' && activeProject && (
                         <TasksView
                             tasks={tasks}
                             onOpenCreateTask={() => setShowCreateTask(true)}
                             onUpdateStatus={handleUpdateStatus}
                             onDeleteTask={handleDeleteTask}
+                            onOpenTask={handleOpenTask}
+                        />
+                    )}
+
+                    {/* Messages view */}
+                    {activeView === 'messages' && activeProject && (
+                        <MessagesView
+                            projectId={activeProject.id}
+                            projectName={activeProject.name}
+                            newMessageIds={newMessageIds}
                         />
                     )}
 
@@ -2304,6 +4701,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     )}
                 </div>
             </div>
+
+            {selectedTask && (
+                <TaskDetailModal task={selectedTask} onClose={handleCloseTask} />
+            )}
 
             {showCreateTask && (
                 <CreateTaskModal
@@ -2334,6 +4735,59 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     workspaces={workspaces}
                     onClose={() => setMovingProject(null)}
                     onMove={handleMoveProject}
+                />
+            )}
+
+            {editingProject && (
+                <EditProjectPathModal
+                    project={editingProject}
+                    onClose={() => setEditingProject(null)}
+                    onUpdated={p => { handleProjectUpdated(p); setEditingProject(null) }}
+                />
+            )}
+
+            {systemPromptProject && (
+                <SystemPromptModal
+                    project={systemPromptProject}
+                    onClose={() => setSystemPromptProject(null)}
+                    onUpdated={p => { handleProjectUpdated(p); setSystemPromptProject(null) }}
+                />
+            )}
+
+            {permissionsProject && (
+                <ProjectPermissionsModal
+                    project={permissionsProject}
+                    onClose={() => setPermissionsProject(null)}
+                />
+            )}
+
+            {showDefaultPermissions && (
+                <DefaultPermissionsModal
+                    onClose={() => setShowDefaultPermissions(false)}
+                />
+            )}
+
+            {deletingProject && (
+                <ConfirmDeleteProjectModal
+                    project={deletingProject}
+                    onClose={() => setDeletingProject(null)}
+                    onDeleted={id => { handleProjectDeleted(id); setDeletingProject(null) }}
+                />
+            )}
+
+            {showAddAgent && activeProject && (
+                <AddAgentModal
+                    projectId={activeProject.id}
+                    onClose={() => setShowAddAgent(false)}
+                    onCreated={agent => { setProjectAgents(prev => [...prev, agent]); setShowAddAgent(false) }}
+                />
+            )}
+
+            {showProjectSearch && (
+                <ProjectSearchModal
+                    projects={allProjects}
+                    onClose={() => setShowProjectSearch(false)}
+                    onSelect={project => router.visit(`/${slugify(project.name)}`)}
                 />
             )}
 
