@@ -100,8 +100,12 @@ async def _spawn_headless_agent(agent, project, cwd: str, conn_key: str, initial
     loop = asyncio.get_event_loop()
     stopped = asyncio.Event()
 
+    # Shared state for the "no conversation" fallback
+    _fallback: dict = {'sp_flag': '', 'model_flag': '', 'perm_flag': '', 'done': False}
+
     async def read_output():
         queue: asyncio.Queue = asyncio.Queue()
+        output_buf = ''
 
         def on_readable():
             try:
@@ -124,6 +128,16 @@ async def _spawn_headless_agent(agent, project, cwd: str, conn_key: str, initial
                         except Exception:
                             pass
                     text = _ANSI_ESCAPE.sub(b'', item).decode('utf-8', errors='replace').strip()
+                    # Detect "--continue" finding no session and fall back to a fresh start
+                    if not _fallback['done'] and _fallback['sp_flag']:
+                        output_buf = (output_buf + ' ' + text)[-2000:]
+                        if 'No conversation' in output_buf and 'continue' in output_buf:
+                            _fallback['done'] = True
+                            await asyncio.sleep(0.2)
+                            sp = _fallback['sp_flag']
+                            mf = _fallback['model_flag']
+                            pf = _fallback['perm_flag']
+                            os.write(master_fd, f'claude{sp}{mf}{pf}\n'.encode())
                     if text and '(thinking)' not in text:
                         await TerminalOutput.create({'session_id': session.id, 'data': text})
                 except asyncio.TimeoutError:
@@ -147,6 +161,12 @@ async def _spawn_headless_agent(agent, project, cwd: str, conn_key: str, initial
         model = getattr(agent, 'model', None)
         task_id = getattr(agent, 'task_id', None)
         worktree_name = f'agent-{task_id}' if task_id else f'agent-{agent.id}'
+
+        from app.controllers.terminal_controller import _permission_flags
+        perm_flag = _permission_flags(
+            getattr(agent, 'permissions_allow', None),
+            getattr(agent, 'permissions_deny', None),
+        )
 
         siblings = await _Agent.where("project_id", agent.project_id)\
             .where("id", "!=", agent.id).get()

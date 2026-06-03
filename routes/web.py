@@ -55,6 +55,7 @@ router.post("/api/projects/{project_id}/agents", agent_controller.store)
 router.post("/api/projects/{project_id}/agents/spawn", agent_controller.spawn)
 router.patch("/api/agents/{agent_id}", agent_controller.update)
 router.delete("/api/agents/{agent_id}", agent_controller.destroy)
+router.get("/api/agents/{agent_id}/output", agent_controller.output)
 
 # Agent-to-agent relay
 router.post("/api/agent-relay", agent_relay_controller.relay)
@@ -65,6 +66,8 @@ router.post("/api/agents/{agent_id}/trigger", agent_trigger_controller.trigger)
 
 router.get("/api/projects/{project_id}/permissions", permission_controller.get_project_permissions)
 router.patch("/api/projects/{project_id}/permissions", permission_controller.update_project_permissions)
+router.get("/api/agents/{agent_id}/permissions", permission_controller.get_agent_permissions)
+router.patch("/api/agents/{agent_id}/permissions", permission_controller.update_agent_permissions)
 router.get("/api/default-permissions", permission_controller.get_default_permissions)
 router.patch("/api/default-permissions", permission_controller.update_default_permissions)
 

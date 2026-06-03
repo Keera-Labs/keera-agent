@@ -3750,6 +3750,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             return
         }
 
+        requestAnimationFrame(() => {
         const term = makeTerminal()
         const fitAddon = new FitAddon()
         term.loadAddon(fitAddon)
@@ -3798,6 +3799,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         observer.observe(container)
 
         agentSessions.current.set(agentId, { term, ws, fitAddon, observer })
+        }) // requestAnimationFrame
     }
 
     // When an agent is selected, start ALL agents (so they can communicate)
@@ -3886,6 +3888,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             return
         }
 
+        requestAnimationFrame(() => {
         const term = makeTerminal()
         const fitAddon = new FitAddon()
         term.loadAddon(fitAddon)

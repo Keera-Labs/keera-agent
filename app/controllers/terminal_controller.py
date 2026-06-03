@@ -18,6 +18,27 @@ from app.models.TerminalSession import TerminalSession
 
 _ANSI_ESCAPE = re.compile(rb'\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[^[]')
 
+
+def _permission_flags(allow_json: str | None, deny_json: str | None) -> str:
+    """Build --allowedTools / --disallowedTools flags from JSON column values."""
+    flags = []
+    if allow_json:
+        try:
+            allow = json.loads(allow_json)
+            if allow:
+                flags.append(f'--allowedTools {shlex.quote(",".join(allow))}')
+        except (json.JSONDecodeError, TypeError):
+            pass
+    if deny_json:
+        try:
+            deny = json.loads(deny_json)
+            if deny:
+                flags.append(f'--disallowedTools {shlex.quote(",".join(deny))}')
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return (' ' + ' '.join(flags)) if flags else ''
+
+
 # Registry: project_path -> active WebSocket (frontend connection)
 connections: dict[str, WebSocket] = {}
 
