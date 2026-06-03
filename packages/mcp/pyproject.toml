@@ -2,10 +2,10 @@
 name = "keera-mcp"
 version = "0.1.0"
 description = "Standalone MCP server for Keera — exposes task management and agent tools via the Model Context Protocol"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
     "mcp[cli]>=1.0.0",
-    "aiosqlite>=0.20.0",
+    "fastapi-startkit[fastapi,database,sqlite]>=0.26.0",
 ]
 
 [build-system]
