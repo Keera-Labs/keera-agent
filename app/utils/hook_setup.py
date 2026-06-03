@@ -33,7 +33,7 @@ def _upsert_hook(hook_list: list, path_fragment: str, new_url: str) -> bool:
     return True
 
 
-def ensure_claude_settings(directory: str, base_url: str, apply_default_permissions: bool = False) -> None:
+def ensure_claude_settings(directory: str, base_url: str, apply_default_permissions: bool = False, project_path: str | None = None) -> None:
     """
     Merge Stop hook, UserPromptSubmit hook, and MCP server entry into
     <directory>/.claude/settings.json.  Existing unrelated settings are
@@ -71,7 +71,8 @@ def ensure_claude_settings(directory: str, base_url: str, apply_default_permissi
     desired_mcp = {
         "type": "http",
         "url": mcp_url,
-        "headers": {"X-Project-Path": directory},
+        # project_path overrides directory so agent subdirs still scope to the project root
+        "headers": {"X-Project-Path": project_path or directory},
     }
     if mcp_servers.get("keera-agent") != desired_mcp:
         mcp_servers["keera-agent"] = desired_mcp
@@ -109,10 +110,10 @@ def _read_default_permissions() -> dict:
     return {"allow": [], "deny": []}
 
 
+BASE_URL = "http://localhost:4545"
+
+
 def ensure_hooks() -> None:
     """Register hooks + MCP in the keera-agent app directory at startup."""
-    from fastapi_startkit.environment import env
-
-    base_url = env("KEERA_AGENT_URL", "http://localhost:4545")
     app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    ensure_claude_settings(app_dir, base_url)
+    ensure_claude_settings(app_dir, BASE_URL)

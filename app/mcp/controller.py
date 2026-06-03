@@ -162,6 +162,19 @@ _METHODS = {
 }
 
 
+async def handle_get(request: Request):
+    """GET /mcp — SSE endpoint for MCP Streamable HTTP transport.
+
+    The MCP client may probe this with GET before sending POST requests.
+    Return 405 with Allow header so the client knows to use POST only.
+    """
+    return JSONResponse(
+        {"error": "Use POST for JSON-RPC requests"},
+        status_code=405,
+        headers={"Allow": "POST"},
+    )
+
+
 async def handle(request: Request):
     try:
         body = await request.json()

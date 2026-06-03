@@ -18,6 +18,7 @@ async def index(request: Request):
                 {
                     "id": p.id,
                     "name": p.name,
+                    "slug": p.slug,
                     "path": p.path,
                     "language": p.language,
                     "workspace_id": p.workspace_id,
