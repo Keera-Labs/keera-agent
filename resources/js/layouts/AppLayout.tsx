@@ -3,18 +3,7 @@ import { router, usePage } from '@inertiajs/react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import { color } from '../tokens'
-
-// ─── Slug utility ─────────────────────────────────────────────────────────────
-
-function slugify(name: string): string {
-    return name
-        .toLowerCase()
-        .replace(/\s+/g, '-')
-        .replace(/[^a-z0-9-]/g, '')
-        .replace(/-+/g, '-')
-        .replace(/^-|-$/g, '')
-}
+import { color } from "@/tokens"
 
 // ─── Agent color ──────────────────────────────────────────────────────────────
 
@@ -85,6 +74,7 @@ interface Workspace {
 interface Project {
     id: number
     name: string
+    slug: string
     path: string
     language: string
     workspace_id: number | null
@@ -1162,8 +1152,8 @@ function ProjectItem({ project, active, status, onMove, onEdit, onSystemPrompt, 
             <div
                 role="button"
                 tabIndex={0}
-                onClick={() => router.visit(`/${slugify(project.name)}`)}
-                onKeyDown={e => e.key === 'Enter' && router.visit(`/${slugify(project.name)}`)}
+                onClick={() => router.visit(`/${project.slug}`)}
+                onKeyDown={e => e.key === 'Enter' && router.visit(`/${project.slug}`)}
                 style={{
                     flex: 1, display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '6px',
                     padding: '7px 32px 7px 12px', background: active ? color.bgSurface : 'transparent',
@@ -2122,17 +2112,6 @@ function TaskDetailModal({ task, onClose }: { task: Task; onClose: () => void })
 
 // ─── Agent types ─────────────────────────────────────────────────────────────
 
-interface RelayMessage {
-    id: number
-    from_agent_id: number
-    from_agent_name?: string
-    to_agent_id: number
-    to_agent_name?: string
-    content: string
-    status: 'pending' | 'delivered'
-    created_at: string | null
-}
-
 interface ProjectAgent {
     id: number
     project_id: number
@@ -2635,7 +2614,7 @@ function CommandsView({ project, projectId }: { project: Project; projectId: num
 
             const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
             const ws = new WebSocket(
-                `${protocol}//${location.host}/${slugify(project.name)}/command-ws/${c.id}`
+                `${protocol}//${location.host}/${project.slug}/command-ws/${c.id}`
             )
             ws.binaryType = 'arraybuffer'
             ws.onopen = () => {
@@ -3693,10 +3672,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const [projectAgents, setProjectAgents] = useState<ProjectAgent[]>([])
     const [showAddAgent, setShowAddAgent] = useState(false)
     const [activeAgentId, setActiveAgentId] = useState<number | null>(null)
-    const [relayMessages, setRelayMessages] = useState<RelayMessage[]>([])
     const [showProjectSearch, setShowProjectSearch] = useState(false)
-    const [triggerMessage, setTriggerMessage] = useState('')
-    const [triggerStatus, setTriggerStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
 
     const sessions = useRef<Map<number, Session>>(new Map())
     const containerRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
@@ -3704,7 +3680,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const agentContainerRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
     const fileInputRef = useRef<HTMLInputElement>(null)
 
-    const activeProject = allProjects.find(p => slugify(p.name) === projectName) ?? allProjects[0] ?? null
+    const activeProject = allProjects.find(p => p.slug === projectName) ?? allProjects[0] ?? null
 
     // Flatten all projects from workspaces for terminal management
     const workspaceProjects = workspaces.flatMap(w => w.projects)
@@ -3760,15 +3736,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             .catch(() => {})
     }, [activeProject?.id])
 
-    // Fetch relay messages when an agent is selected
-    useEffect(() => {
-        if (activeAgentId === null) { setRelayMessages([]); return }
-        fetch(`/api/agents/${activeAgentId}/relay-messages`)
-            .then(r => r.json())
-            .then((msgs: RelayMessage[]) => setRelayMessages(msgs))
-            .catch(() => {})
-    }, [activeAgentId])
-
     // Launch a terminal session for a single agent (reusable helper)
     function launchAgentSession(agentId: number, focus: boolean = true) {
         if (!activeProject) return
@@ -3800,7 +3767,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
         const ws = new WebSocket(
-            `${protocol}//${location.host}/${slugify(activeProject.name)}/ws?path=${encodeURIComponent(activeProject.path)}&agent_id=${agentId}`
+            `${protocol}//${location.host}/${activeProject.slug}/ws?agent_id=${agentId}`
         )
         ws.binaryType = 'arraybuffer'
         ws.onopen = () => ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
@@ -3811,14 +3778,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 // Handle JSON events (relay messages) from the WebSocket
                 try {
                     const event = JSON.parse(e.data)
-                    if (event.type === 'agent_relay_message' || event.type === 'agent_relay_delivered') {
-                        // Refresh relay messages for the active agent
-                        if (activeAgentId !== null) {
-                            fetch(`/api/agents/${activeAgentId}/relay-messages`)
-                                .then(r => r.json())
-                                .then((msgs: RelayMessage[]) => setRelayMessages(msgs))
-                                .catch(() => {})
-                        }
+                    if (event.type === 'agent_created') {
+                        setProjectAgents(prev => {
+                            if (prev.some(a => a.id === event.agent.id)) return prev
+                            return [...prev, event.agent as ProjectAgent]
+                        })
                     }
                 } catch { /* not JSON, ignore */ }
             }
@@ -3852,28 +3816,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         })
     }, [activeAgentId, projectAgents.length])
 
-    async function handleTriggerAgent() {
-        if (!activeAgentId || !triggerMessage.trim()) return
-        setTriggerStatus('sending')
-        try {
-            const res = await fetch(`/api/agents/${activeAgentId}/trigger`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: triggerMessage.trim() }),
-            })
-            if (res.ok) {
-                setTriggerStatus('sent')
-                setTriggerMessage('')
-                setTimeout(() => setTriggerStatus('idle'), 2000)
-            } else {
-                setTriggerStatus('error')
-                setTimeout(() => setTriggerStatus('idle'), 3000)
-            }
-        } catch {
-            setTriggerStatus('error')
-            setTimeout(() => setTriggerStatus('idle'), 3000)
-        }
-    }
 
     function handleOpenTask(task: Task) { setSelectedTask(task) }
     function handleCloseTask() { setSelectedTask(null) }
@@ -3935,6 +3877,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
     useEffect(() => {
         if (!activeProject) return
+        const pmAgent = projectAgents.find(a => a.agent_type === 'pm')
+        if (!pmAgent) return
         const container = containerRefs.current.get(activeProject.id)
         if (!container) return
 
@@ -3960,7 +3904,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         }
 
         const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-        const ws = new WebSocket(`${protocol}//${location.host}/${slugify(activeProject.name)}/ws?path=${encodeURIComponent(activeProject.path)}`)
+        const ws = new WebSocket(`${protocol}//${location.host}/${activeProject.slug}/ws?agent_id=${pmAgent.id}`)
         ws.binaryType = 'arraybuffer'
         ws.onopen = () => {
             ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
@@ -3981,27 +3925,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     } else if (msg.type === 'agent_message') {
                         setNewMessageIds(prev => [...prev, msg.message_id])
                         playSound('input')
-                    } else if (msg.type === 'agent_relay_message') {
-                        const rm: RelayMessage = {
-                            id: msg.message_id,
-                            from_agent_id: msg.from_agent_id,
-                            from_agent_name: msg.from_agent_name,
-                            to_agent_id: msg.to_agent_id,
-                            to_agent_name: msg.to_agent_name,
-                            content: msg.content,
-                            status: msg.status,
-                            created_at: new Date().toISOString(),
-                        }
-                        setRelayMessages(prev => [...prev, rm])
-                        playSound('input')
-                    } else if (msg.type === 'agent_relay_delivered') {
-                        // Refresh relay messages when pending messages get delivered
-                        if (activeAgentId !== null) {
-                            fetch(`/api/agents/${activeAgentId}/relay-messages`)
-                                .then(r => r.json())
-                                .then((msgs: RelayMessage[]) => setRelayMessages(msgs))
-                                .catch(() => {})
-                        }
                     } else if (msg.type === 'agent_created') {
                         // An agent spawned a new agent — add it to the sidebar
                         setProjectAgents(prev => {
@@ -4061,8 +3984,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         observer.observe(container)
 
         sessions.current.set(activeProject.id, { term, ws, fitAddon, observer })
-        }) // requestAnimationFrame
-    }, [activeProject])
+    }, [activeProject, projectAgents])
 
     function handleWorkspaceCreated(workspace: Workspace) {
         setWorkspaces(prev => [...prev, workspace])
@@ -4078,7 +4000,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     : w
             ))
         }
-        router.visit(`/${slugify(project.name)}`)
+        router.visit(`/${project.slug}`)
     }
 
     function openAddProject(workspaceId: number | null) {
@@ -4124,7 +4046,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             projects: w.projects.filter(p => p.id !== projectId),
         })))
         // Navigate away if the deleted project was active
-        if (project && projectName === slugify(project.name)) {
+        if (project && projectName === project.slug) {
             router.visit('/')
         }
     }
@@ -4227,7 +4149,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                             projectName={activeProject.name}
                             onChange={(view) => {
                                 setProjectView(view)
-                                if (isTasksPage) router.visit(`/${slugify(activeProject.name)}`)
+                                if (isTasksPage) router.visit(`/${activeProject.slug}`)
                             }}
                             taskCount={tasks.length}
                             newMessageCount={newMessageIds.length}
@@ -4541,133 +4463,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                             </div>
                         </div>
 
-                        {/* Relay messages panel — shown when an agent is active */}
-                        {activeAgentId !== null && (
-                            <div style={{
-                                width: '270px', flexShrink: 0,
-                                borderLeft: `1px solid ${color.borderMuted}`,
-                                background: color.bgBase,
-                                display: 'flex', flexDirection: 'column', overflow: 'hidden',
-                            }}>
-                                <div style={{
-                                    height: '40px', flexShrink: 0,
-                                    display: 'flex', alignItems: 'center', paddingLeft: '14px', paddingRight: '12px',
-                                    borderBottom: `1px solid ${color.borderMuted}`, background: color.bgCanvas,
-                                }}>
-                                    <span style={{ color: color.textFaint, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-                                        Relay Messages
-                                    </span>
-                                    {relayMessages.length > 0 && (
-                                        <span style={{
-                                            marginLeft: '8px', background: color.accent,
-                                            color: '#fff', fontSize: '10px', fontWeight: 600,
-                                            borderRadius: '8px', padding: '1px 6px',
-                                        }}>
-                                            {relayMessages.length}
-                                        </span>
-                                    )}
-                                </div>
-                                <div style={{ flex: 1, overflowY: 'auto', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                    {relayMessages.length === 0 ? (
-                                        <div style={{ color: color.textFaint, fontSize: '11px', padding: '6px 4px' }}>
-                                            No messages yet
-                                        </div>
-                                    ) : relayMessages.map(rm => {
-                                        const agentById = (id: number) => projectAgents.find(a => a.id === id)?.name ?? `Agent #${id}`
-                                        const isSent = rm.from_agent_id === activeAgentId
-                                        const otherName = isSent
-                                            ? (rm.to_agent_name ?? agentById(rm.to_agent_id))
-                                            : (rm.from_agent_name ?? agentById(rm.from_agent_id))
-                                        return (
-                                            <div key={rm.id} style={{
-                                                padding: '8px 10px',
-                                                borderRadius: '6px',
-                                                background: isSent ? color.bgCanvas : '#1a2636',
-                                                border: `1px solid ${isSent ? color.borderMuted : '#1f3a5a'}`,
-                                            }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                                                    <span style={{
-                                                        fontSize: '9px', fontWeight: 700, textTransform: 'uppercase',
-                                                        letterSpacing: '0.06em',
-                                                        color: isSent ? color.textFaint : color.accent,
-                                                    }}>
-                                                        {isSent ? `→ ${otherName}` : `← ${otherName}`}
-                                                    </span>
-                                                    <span style={{
-                                                        marginLeft: 'auto', fontSize: '9px',
-                                                        color: rm.status === 'delivered' ? color.success : color.warning,
-                                                        fontFamily: '"JetBrains Mono", monospace',
-                                                    }}>
-                                                        {rm.status}
-                                                    </span>
-                                                </div>
-                                                <div style={{
-                                                    color: color.textSecondary, fontSize: '11px', lineHeight: 1.5,
-                                                    wordBreak: 'break-word',
-                                                }}>
-                                                    {rm.content}
-                                                </div>
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-
-                                {/* Trigger agent section */}
-                                <div style={{
-                                    flexShrink: 0, borderTop: `1px solid ${color.borderMuted}`,
-                                    padding: '10px', display: 'flex', flexDirection: 'column', gap: '6px',
-                                    background: color.bgCanvas,
-                                }}>
-                                    <span style={{ color: color.textFaint, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-                                        Trigger Agent
-                                    </span>
-                                    <textarea
-                                        value={triggerMessage}
-                                        onChange={e => setTriggerMessage(e.target.value)}
-                                        onKeyDown={e => {
-                                            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                                                e.preventDefault()
-                                                handleTriggerAgent()
-                                            }
-                                        }}
-                                        placeholder="Send a task or message to start this agent..."
-                                        rows={3}
-                                        style={{
-                                            width: '100%', boxSizing: 'border-box',
-                                            background: color.bgBase, border: `1px solid ${color.borderMuted}`,
-                                            borderRadius: '5px', color: color.textSecondary,
-                                            fontSize: '11px', fontFamily: 'inherit',
-                                            padding: '6px 8px', resize: 'none', outline: 'none',
-                                            lineHeight: 1.5,
-                                        }}
-                                        onFocus={e => { e.currentTarget.style.borderColor = color.accent }}
-                                        onBlur={e => { e.currentTarget.style.borderColor = color.borderMuted }}
-                                    />
-                                    <button
-                                        onClick={handleTriggerAgent}
-                                        disabled={triggerStatus === 'sending' || !triggerMessage.trim()}
-                                        style={{
-                                            background: triggerStatus === 'sent' ? color.success
-                                                : triggerStatus === 'error' ? color.danger
-                                                : color.accent,
-                                            border: 'none', borderRadius: '5px',
-                                            color: '#fff', fontSize: '11px', fontWeight: 600,
-                                            padding: '6px 10px', cursor: triggerStatus === 'sending' || !triggerMessage.trim() ? 'not-allowed' : 'pointer',
-                                            opacity: triggerStatus === 'sending' || !triggerMessage.trim() ? 0.6 : 1,
-                                            transition: 'background 0.2s',
-                                        }}
-                                    >
-                                        {triggerStatus === 'sending' ? 'Starting...'
-                                            : triggerStatus === 'sent' ? 'Triggered!'
-                                            : triggerStatus === 'error' ? 'Error — retry'
-                                            : '⚡ Trigger Agent'}
-                                    </button>
-                                    <span style={{ color: color.textFaint, fontSize: '9px' }}>
-                                        ⌘↵ to send · starts agent if not running
-                                    </span>
-                                </div>
-                            </div>
-                        )}
                     </div>
 
                     {/* Commands view */}
@@ -4791,7 +4586,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <ProjectSearchModal
                     projects={allProjects}
                     onClose={() => setShowProjectSearch(false)}
-                    onSelect={project => router.visit(`/${slugify(project.name)}`)}
+                    onSelect={project => router.visit(`/${project.slug}`)}
                 />
             )}
 

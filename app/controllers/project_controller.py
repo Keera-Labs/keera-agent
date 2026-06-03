@@ -1,15 +1,19 @@
 import os
+import re
 import subprocess
 import sys
 
 from fastapi import Request, UploadFile, File
 from fastapi.responses import JSONResponse
-from fastapi_startkit.environment import env
 from fastapi_startkit.storage.storage import Storage
 
 from app.models.AgentMessage import AgentMessage
 from app.models.Project import Project
-from app.utils.hook_setup import ensure_claude_settings
+from app.utils.hook_setup import ensure_claude_settings, BASE_URL
+
+
+def slugify(name: str) -> str:
+    return re.sub(r'[^a-z0-9-]', '', name.lower().replace(' ', '-'))
 
 
 async def index(request: Request):
@@ -18,6 +22,7 @@ async def index(request: Request):
         {
             "id": p.id,
             "name": p.name,
+            "slug": p.slug,
             "path": p.path,
             "language": p.language,
             "workspace_id": p.workspace_id,
@@ -54,8 +59,7 @@ async def update(request: Request, project_id: int):
         if not os.path.isdir(expanded):
             return JSONResponse({"error": "Directory does not exist"}, status_code=422)
         project.path = new_path
-        base_url = env("KEERA_AGENT_URL", "http://localhost:4545")
-        ensure_claude_settings(expanded, base_url)
+        ensure_claude_settings(expanded, BASE_URL)
 
     if "system_prompt" in body:
         project.system_prompt = body["system_prompt"] or None
@@ -65,6 +69,7 @@ async def update(request: Request, project_id: int):
     return JSONResponse({
         "id": project.id,
         "name": project.name,
+        "slug": project.slug,
         "path": project.path,
         "language": project.language,
         "workspace_id": project.workspace_id,
@@ -148,14 +153,14 @@ async def store(request: Request):
 
     project = await Project.create({
         "name": name,
+        "slug": slugify(name),
         "path": path,
         "language": language,
         "workspace_id": workspace_id,
     })
 
     expanded_path = os.path.expanduser(path)
-    base_url = env("KEERA_AGENT_URL", "http://localhost:4545")
-    ensure_claude_settings(expanded_path, base_url, apply_default_permissions=False)
+    ensure_claude_settings(expanded_path, BASE_URL, apply_default_permissions=True)
 
     # Create a default PM agent for every new project
     import json as _json
@@ -180,6 +185,7 @@ async def store(request: Request):
         {
             "id": project.id,
             "name": project.name,
+            "slug": project.slug,
             "path": project.path,
             "language": project.language,
             "workspace_id": project.workspace_id,

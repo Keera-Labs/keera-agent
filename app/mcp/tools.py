@@ -508,7 +508,7 @@ SPAWN_AGENT_SCHEMA = {
             },
             "task_id": {
                 "type": "integer",
-                "description": "ID of the task this agent is working on.",
+                "description": "ID of the task this agent is working on. Required for non-PM agents. Used to name the agent's worktree.",
             },
         },
         "required": ["project_path", "name", "agent_type"],
@@ -585,7 +585,7 @@ RELAY_TO_AGENT_SCHEMA = {
     "description": (
         "Send a message to another agent in the same project. "
         "If the agent is running the message is delivered immediately; "
-        "otherwise the agent is started headlessly and the message is its first task."
+        "otherwise it is queued and delivered when the agent next starts."
     ),
     "inputSchema": {
         "type": "object",
@@ -639,7 +639,6 @@ async def handle_relay_to_agent(args: dict) -> str:
         conn_key = f"{cwd}:agent:{to_agent.id}"
         write_fn = pty_writers.get(conn_key)
         if write_fn:
-            # Use \r — Claude's interactive mode (raw PTY) expects carriage return as Enter
             text = f"[Message from Agent '{from_agent.name}']: {content}\r"
             write_fn(text.encode())
             await AgentRelayMessage.where("id", msg.id).update({"status": "delivered"})

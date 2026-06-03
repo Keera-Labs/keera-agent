@@ -73,6 +73,7 @@ router.patch("/api/default-permissions", permission_controller.update_default_pe
 
 # MCP — JSON-RPC 2.0 endpoint (same server, no extra process)
 router.post("/mcp", mcp_controller.handle)
+router.get("/mcp", mcp_controller.handle_get)
 
 # Wildcard page routes — must come last
 router.get("/", home_controller.home)

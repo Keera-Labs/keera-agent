@@ -17,6 +17,47 @@ class AppProvider(Provider):
         ensure_hooks()
         self.commands([QueueWorkCommand])
 
+        async def on_startup():
+            """Sync Claude settings for all projects and ensure each has a default PM agent."""
+            import os
+            from app.models.Project import Project
+            from app.models.Agent import Agent
+            from app.utils.hook_setup import ensure_claude_settings, BASE_URL
+
+            projects = await Project.all()
+            for project in projects:
+                expanded = os.path.expanduser(project.path)
+                if os.path.isdir(expanded):
+                    # Re-sync MCP + hooks for every project directory
+                    ensure_claude_settings(expanded, BASE_URL)
+
+                    # Also re-sync any existing agent subdirectories
+                    agents_dir = os.path.join(expanded, '.keera-agents')
+                    if os.path.isdir(agents_dir):
+                        for entry in os.scandir(agents_dir):
+                            if entry.is_dir():
+                                ensure_claude_settings(entry.path, BASE_URL, project_path=expanded)
+
+                # Ensure default PM agent exists
+                existing = await Agent.where("project_id", project.id).first()
+                if not existing:
+                    await Agent.create({
+                        "project_id": project.id,
+                        "name": "PM",
+                        "agent_type": "pm",
+                        "description": "Project manager agent that coordinates work across the team.",
+                        "model": "claude-sonnet-4-6",
+                        "system_prompt": (
+                            "You are a project manager AI agent. Your role is to understand the project goals, "
+                            "break down work into clear tasks, coordinate with other agents, and ensure delivery. "
+                            "Spawn specialist agents (software_engineer, qa) when needed and relay tasks to them."
+                        ),
+                        "status": "idle",
+                        "has_session": False,
+                    })
+
+        self.app.fastapi.add_event_handler("startup", on_startup)
+
         async def on_shutdown():
             import os
             import signal

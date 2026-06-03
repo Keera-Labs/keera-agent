@@ -30,3 +30,11 @@ storage/uploads/
 
 # OS
 .DS_Store
+
+# Claude Code
+.claude/worktrees/
+.claude/settings.json.bak
+.claude/settings.json
+
+# Keera uploads
+.keera/uploads/

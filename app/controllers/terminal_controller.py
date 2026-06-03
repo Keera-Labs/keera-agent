@@ -11,7 +11,7 @@ import termios
 
 from fastapi import Query, WebSocket, WebSocketDisconnect
 
-from app.models.AgentMessage import AgentMessage
+from app.models.Agent import Agent
 from app.models.Project import Project
 from app.models.TerminalOutput import TerminalOutput
 from app.models.TerminalSession import TerminalSession
@@ -48,13 +48,19 @@ pty_writers: dict[str, callable] = {}
 # Registry: conn_key -> Popen — used by shutdown handler to kill all PTY processes
 _pty_procs: dict[str, subprocess.Popen] = {}
 
+# Registry: conn_key -> master_fd for PTY output reading
+_pty_fds: dict[str, int] = {}
+
+# Registry: conn_key -> Event set when Claude has finished starting up and is ready for input
+claude_ready: dict[str, asyncio.Event] = {}
+
 
 async def _deliver_pending_relay_messages(agent_id: int, cwd: str) -> None:
     """Inject any queued agent-to-agent relay messages into the running PTY."""
     from app.models.AgentRelayMessage import AgentRelayMessage
     from app.models.Agent import Agent
 
-    pending = await AgentRelayMessage.where("to_agent_id", agent_id)\
+    pending = await AgentRelayMessage.where("to_agent_id", agent_id) \
         .where("status", "pending").order_by("id", "asc").get()
     if not pending:
         return
@@ -73,41 +79,6 @@ async def _deliver_pending_relay_messages(agent_id: int, cwd: str) -> None:
         await AgentRelayMessage.where("id", msg.id).update({"status": "delivered"})
 
 
-async def _deliver_pending_messages(project, cwd: str) -> None:
-    """Inject any undelivered messages into the PTY and notify the frontend."""
-    import json as _json
-
-    pending = await AgentMessage.where("receiver_project_id", project.id)\
-        .where("status", "pending").order_by("id", "asc").get()
-    if not pending:
-        return
-
-    senders = await Project.all()
-    sender_map = {p.id: p for p in senders}
-
-    await asyncio.sleep(1.5)  # Let Claude finish starting up
-
-    write = pty_writers.get(cwd)
-    ws = connections.get(cwd)
-
-    for msg in pending:
-        sender_name = sender_map[msg.sender_project_id].name \
-            if msg.sender_project_id in sender_map else str(msg.sender_project_id)
-        if write:
-            write(f"[Message from {sender_name}]: {msg.content}\r")
-        await AgentMessage.where("id", msg.id).update({"status": "delivered"})
-        if ws:
-            try:
-                await ws.send_text(_json.dumps({
-                    "type": "agent_message",
-                    "message_id": msg.id,
-                    "sender_name": sender_name,
-                    "content": msg.content,
-                }))
-            except Exception:
-                pass
-
-
 def _set_size(master_fd: int, rows: int, cols: int) -> None:
     size = struct.pack('HHHH', rows, cols, 0, 0)
     fcntl.ioctl(master_fd, termios.TIOCSWINSZ, size)
@@ -117,35 +88,103 @@ def _strip_ansi(data: bytes) -> str:
     return _ANSI_ESCAPE.sub(b'', data).decode('utf-8', errors='replace')
 
 
-async def terminal_ws(websocket: WebSocket, project: str, path: str = Query(default=''), agent_id: int = Query(default=None)):
+async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query()):
     await websocket.accept()
 
-    cwd = os.path.expanduser(path) if path else os.getcwd()
+    project_record = await Project.where("slug", project).first()
+    if not project_record:
+        await websocket.close(code=1008, reason="Project not found")
+        return
+
+    cwd = os.path.expanduser(project_record.path)
     os.makedirs(cwd, exist_ok=True)
+
+    conn_key = f"{cwd}:agent:{agent_id}"
+
+    # If a PTY is already running for this agent, attach the WebSocket
+    # to the existing PTY instead of spawning a second claude instance.
+    existing_proc = _pty_procs.get(conn_key)
+    if existing_proc and existing_proc.poll() is None:
+        connections[conn_key] = websocket
+        write_fn = pty_writers.get(conn_key)
+        master_fd = _pty_fds.get(conn_key)
+
+        attach_stopped = asyncio.Event()
+
+        async def attach_pty_to_ws():
+            """Forward PTY output to the newly attached WebSocket."""
+            if master_fd is None:
+                return
+            queue: asyncio.Queue = asyncio.Queue()
+
+            def on_readable():
+                try:
+                    data = os.read(master_fd, 4096)
+                    if data:
+                        queue.put_nowait(data)
+                except OSError:
+                    pass
+
+            loop = asyncio.get_event_loop()
+            loop.add_reader(master_fd, on_readable)
+            try:
+                while not attach_stopped.is_set():
+                    try:
+                        item = await asyncio.wait_for(queue.get(), timeout=0.1)
+                        await websocket.send_bytes(item)
+                    except asyncio.TimeoutError:
+                        continue
+            except Exception:
+                pass
+            finally:
+                try:
+                    loop.remove_reader(master_fd)
+                except Exception:
+                    pass
+
+        async def attach_ws_to_pty():
+            """Forward WebSocket input to the existing PTY."""
+            while not attach_stopped.is_set():
+                try:
+                    msg = await websocket.receive()
+                    if msg.get('type') == 'websocket.disconnect':
+                        break
+                    if msg.get('bytes') and write_fn:
+                        write_fn(msg['bytes'])
+                    elif msg.get('text'):
+                        try:
+                            payload = json.loads(msg['text'])
+                            if payload.get('type') == 'resize' and master_fd is not None:
+                                _set_size(master_fd, int(payload['rows']), int(payload['cols']))
+                        except (json.JSONDecodeError, KeyError, ValueError):
+                            pass
+                except (WebSocketDisconnect, Exception):
+                    break
+            attach_stopped.set()
+
+        tasks = [
+            asyncio.create_task(attach_pty_to_ws()),
+            asyncio.create_task(attach_ws_to_pty()),
+        ]
+        try:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        finally:
+            for t in tasks:
+                t.cancel()
+            connections.pop(conn_key, None)
+        return
 
     project_name = os.path.basename(cwd)
 
     session = await TerminalSession.create({
         'project_name': project_name,
-        'project_path': path or cwd,
+        'project_path': cwd,
     })
 
-    # Look up the associated project and optional agent
-    project_record = await Project.where('path', path or cwd).first()
-    agent_record = None
-    if agent_id:
-        from app.models.Agent import Agent
-        agent_record = await Agent.find(agent_id)
-
-    # Agent terminals use a namespaced key so they don't displace the project terminal
-    conn_key = f"{cwd}:agent:{agent_id}" if agent_id else cwd
-
-    # Only track status on the project terminal (not per-agent terminals)
-    if not agent_id and project_record:
-        await Project.where('id', project_record.id).update({
-            'last_session_id': session.id,
-            'claude_status': 'running',
-        })
+    agent_record = await Agent.find(agent_id)
+    if not agent_record:
+        await websocket.close(code=1008, reason="Agent not found")
+        return
 
     connections[conn_key] = websocket
 
@@ -154,6 +193,7 @@ async def terminal_ws(websocket: WebSocket, project: str, path: str = Query(defa
     _set_size(master_fd, 24, 80)
 
     pty_writers[conn_key] = lambda data: os.write(master_fd, data if isinstance(data, bytes) else data.encode())
+    _pty_fds[conn_key] = master_fd
 
     proc = subprocess.Popen(
         [shell],
@@ -170,104 +210,41 @@ async def terminal_ws(websocket: WebSocket, project: str, path: str = Query(defa
     loop = asyncio.get_event_loop()
     stopped = asyncio.Event()
 
-    # Shared agent flags — computed in auto_continue, used as fallback in pty_to_ws
-    _agent_flags: dict = {'sp_flag': '', 'model_flag': '', 'perm_flag': '', 'ready': False}
-
     async def auto_continue():
         """Wait for the shell to be ready, cd into the project dir, then launch claude."""
-        from app.models.Agent import Agent as _Agent
-
         await asyncio.sleep(0.5)
         if stopped.is_set():
             return
         os.write(master_fd, f'cd {shlex.quote(cwd)}\n'.encode())
         await asyncio.sleep(0.1)
 
-        if agent_record:
-            # Each agent gets its own subdirectory so Claude stores conversations separately
-            agent_cwd = os.path.join(cwd, '.keera-agents', f'agent_{agent_record.id}')
-            os.makedirs(agent_cwd, exist_ok=True)
-            os.write(master_fd, f'cd {shlex.quote(agent_cwd)}\n'.encode())
-            await asyncio.sleep(0.1)
+        system_prompt = agent_record.system_prompt or ''
+        model = agent_record.model or ''
+        has_session = agent_record.has_session or False
+        task_id = agent_record.task_id or None
+        worktree_name = f'agent-{task_id}' if task_id else f'agent-{agent_record.id}'
 
-            system_prompt = getattr(agent_record, 'system_prompt', None) or ''
-            model = getattr(agent_record, 'model', None)
-            has_session = bool(getattr(agent_record, 'has_session', False))
-            perm_flag = _permission_flags(
-                getattr(agent_record, 'permissions_allow', None),
-                getattr(agent_record, 'permissions_deny', None),
-            )
+        full_prompt = (system_prompt).strip()
+        model_flag = f' --model {shlex.quote(model)}' if model else ''
 
-            from fastapi_startkit.environment import env as _env
-            base_url = _env("KEERA_AGENT_URL", "http://localhost:4545")
+        prompt_file = f'/tmp/keera-agent-{agent_record.id}.txt'
+        with open(prompt_file, 'w') as _pf:
+            _pf.write(full_prompt)
+        sp_ref = f" --system-prompt \"$(cat {shlex.quote(prompt_file)})\""
 
-            siblings = await _Agent.where("project_id", agent_record.project_id)\
-                .where("id", "!=", agent_record.id).get()
-            if siblings:
-                agent_roster = "\n".join(f"  - {a.name} (ID: {a.id})" for a in siblings)
-                roster_section = f"\nAgents you can message:\n{agent_roster}\n"
-            else:
-                roster_section = "\nNo other agents are currently registered in this project.\n"
-
-            relay_instructions = (
-                f"\n\n---\n"
-                f"AGENT COMMUNICATION PROTOCOL\n"
-                f"Your agent ID is: {agent_record.id}\n"
-                f"Project ID: {agent_record.project_id}\n"
-                f"Project directory: {cwd}\n"
-                f"{roster_section}"
-                f"To send a message to another agent, run:\n"
-                f"  curl -s -X POST {base_url}/api/agent-relay \\\n"
-                f"    -H 'Content-Type: application/json' \\\n"
-                f"    -d '{{\"from_agent_id\": {agent_record.id}, \"to_agent_id\": TARGET_ID, \"content\": \"your message\"}}'\n"
-                f"Replace TARGET_ID with the numeric ID from the list above.\n"
-                f"Messages you receive appear as: [Message from Agent '<name>']: <content>\n"
-                f"Always reply to messages you receive.\n"
-                f"\n"
-                f"To create and start a NEW agent (it will appear in the sidebar automatically), run:\n"
-                f"  curl -s -X POST {base_url}/api/projects/{agent_record.project_id}/agents/spawn \\\n"
-                f"    -H 'Content-Type: application/json' \\\n"
-                f"    -d '{{\"name\": \"Agent Name\", \"agent_type\": \"software_engineer\", \"message\": \"Initial task for the agent\"}}'\n"
-                f"Valid agent_type values: pm, software_engineer, qa, custom\n"
-                f"The 'message' field is optional — omit it to create an idle agent.\n"
-                f"The new agent's ID will be in the response JSON — use it to send relay messages."
-            )
-            full_prompt = (system_prompt + relay_instructions).strip()
-            sp_flag = f' --system-prompt {shlex.quote(full_prompt)}'
-            model_flag = f' --model {shlex.quote(model)}' if model else ''
-
-            # Store flags for pty_to_ws fallback (used if --continue finds no conversation)
-            _agent_flags['sp_flag'] = sp_flag
-            _agent_flags['model_flag'] = model_flag
-            _agent_flags['perm_flag'] = perm_flag
-            _agent_flags['ready'] = True
-
-            if has_session:
-                # Resume existing conversation, re-inject system prompt so role is never lost
-                os.write(master_fd, f'claude --continue{sp_flag}{model_flag}{perm_flag}\n'.encode())
-            else:
-                # First run: start fresh with full system prompt
-                os.write(master_fd, f'claude{sp_flag}{model_flag}{perm_flag}\n'.encode())
-                await _Agent.where("id", agent_record.id).update({"has_session": True})
-
-            asyncio.create_task(_deliver_pending_relay_messages(agent_record.id, cwd))
+        wt_flag = f' --worktree {shlex.quote(worktree_name)}'
+        if has_session:
+            os.write(master_fd, f'claude{wt_flag} --continue{model_flag}\n'.encode())
         else:
-            # Project terminal: resume previous session if one exists
-            system_prompt = getattr(project_record, 'system_prompt', None) if project_record else None
-            sp_flag = f' --system-prompt {shlex.quote(system_prompt)}' if system_prompt else ''
-            perm_flag = _permission_flags(
-                getattr(project_record, 'permissions_allow', None) if project_record else None,
-                getattr(project_record, 'permissions_deny', None) if project_record else None,
-            )
+            os.write(master_fd, f'claude{wt_flag}{sp_ref}{model_flag}\n'.encode())
+            await Agent.where("id", agent_record.id).update({"has_session": True})
 
-            prior = await TerminalSession.where('project_path', path or cwd).get()
-            if len(prior) > 1:
-                os.write(master_fd, f'claude --continue{sp_flag}{perm_flag}\n'.encode())
-            else:
-                os.write(master_fd, f'claude{sp_flag}{perm_flag}\n'.encode())
+        # Signal that Claude is ready for input
+        ready_event = claude_ready.setdefault(conn_key, asyncio.Event())
+        await asyncio.sleep(1.5)  # let Claude finish its startup banner
+        ready_event.set()
 
-            if project_record:
-                await _deliver_pending_messages(project_record, cwd)
+        asyncio.create_task(_deliver_pending_relay_messages(agent_record.id, cwd))
 
     async def pty_to_ws():
         """Read PTY output and forward to WebSocket.
@@ -293,26 +270,15 @@ async def terminal_ws(websocket: WebSocket, project: str, path: str = Query(defa
                     item = await asyncio.wait_for(queue.get(), timeout=0.1)
                     await websocket.send_bytes(item)
                     text = _strip_ansi(item).strip()
-                    if not new_session_started:
+                    if not new_session_started and not agent_record:
                         output_buf = (output_buf + ' ' + text)[-2000:]
+                        # Detect failed --continue on project terminal and fall back to fresh start
                         if 'No conversation' in output_buf and 'continue' in output_buf:
                             new_session_started = True
                             await asyncio.sleep(0.2)
-                            if agent_record and _agent_flags['ready']:
-                                # Agent --continue found no conversation: fresh start with system prompt
-                                sp = _agent_flags['sp_flag']
-                                mf = _agent_flags['model_flag']
-                                pf = _agent_flags.get('perm_flag', '')
-                                os.write(master_fd, f'claude{sp}{mf}{pf}\n'.encode())
-                            else:
-                                # Project terminal fallback
-                                system_prompt = getattr(project_record, 'system_prompt', None) if project_record else None
-                                sp_flag = f' --system-prompt {shlex.quote(system_prompt)}' if system_prompt else ''
-                                perm_flag = _permission_flags(
-                                    getattr(project_record, 'permissions_allow', None) if project_record else None,
-                                    getattr(project_record, 'permissions_deny', None) if project_record else None,
-                                )
-                                os.write(master_fd, f'claude{sp_flag}{perm_flag}\n'.encode())
+                            system_prompt = getattr(project_record, 'system_prompt', None) if project_record else None
+                            sp_flag = f' --system-prompt {shlex.quote(system_prompt)}' if system_prompt else ''
+                            os.write(master_fd, f'claude{sp_flag}\n'.encode())
                     if text and '(thinking)' not in text:
                         await TerminalOutput.create({
                             'session_id': session.id,
@@ -366,6 +332,8 @@ async def terminal_ws(websocket: WebSocket, project: str, path: str = Query(defa
         connections.pop(conn_key, None)
         pty_writers.pop(conn_key, None)
         _pty_procs.pop(conn_key, None)
+        _pty_fds.pop(conn_key, None)
+        claude_ready.pop(conn_key, None)
         try:
             proc.kill()
         except Exception:

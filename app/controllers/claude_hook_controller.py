@@ -12,13 +12,38 @@ from app.models.Project import Project
 from app.models.Task import Task
 
 
+def _find_project_ws(project_cwd: str):
+    """Return the active frontend WebSocket for a project, searching both the
+    bare project_cwd key and the agent-scoped 'project_cwd:agent:N' keys that
+    the terminal controller now uses exclusively."""
+    ws = connections.get(project_cwd)
+    if ws:
+        return ws
+    prefix = project_cwd + ':agent:'
+    for key, conn in connections.items():
+        if key.startswith(prefix):
+            return conn
+    return None
+
+
 async def _find_project_by_cwd(cwd: str):
-    """Find a project whose path matches cwd, handling ~ vs absolute path differences."""
+    """Find a project whose path matches cwd, handling ~ vs absolute path differences.
+    Also handles worktree paths (e.g. <project>/.claude/worktrees/agent-N)."""
     project = await Project.where('path', cwd).first()
     if project:
         return project
     all_projects = await Project.all()
-    return next((p for p in all_projects if os.path.expanduser(p.path) == cwd), None)
+    # Exact match after ~ expansion
+    match = next((p for p in all_projects if os.path.expanduser(p.path) == cwd), None)
+    if match:
+        return match
+    # Worktree path: cwd is <project_path>/.claude/worktrees/agent-N
+    worktrees_suffix = os.path.join('.claude', 'worktrees') + os.sep
+    for p in all_projects:
+        expanded = os.path.expanduser(p.path)
+        if cwd.startswith(os.path.join(expanded, worktrees_suffix)):
+            return p
+    return None
 
 
 async def claude_started(request: Request):
@@ -66,12 +91,20 @@ async def claude_stopped(request: Request):
     if project:
         await Project.where('id', project.id).update({'claude_status': 'idle'})
 
+    # Use the project's actual stored path for connection/pty_writer lookups so that
+    # worktree cwds (e.g. <project>/.claude/worktrees/agent-N) resolve correctly.
+    project_cwd = os.path.expanduser(project.path) if project else cwd
+
     # Check for pending tasks and process the next one
     if project:
         next_task = await Task.where('project_id', project.id).where('status', 'pending').first()
         if next_task:
             await Task.where('id', next_task.id).update({'status': 'in_progress'})
-            write = pty_writers.get(cwd)
+            # pty_writers keys are "project_cwd:agent:{id}" — find any active writer for this project
+            write = pty_writers.get(project_cwd) or next(
+                (fn for key, fn in pty_writers.items() if key.startswith(project_cwd + ':agent:')),
+                None
+            )
             if write:
                 # Give Claude a moment to return to the prompt before sending input
                 await asyncio.sleep(0.5)
@@ -79,12 +112,12 @@ async def claude_stopped(request: Request):
                 await Project.where('id', project.id).update({'claude_status': 'running'})
 
                 # Notify the frontend that a new task started
-                ws = connections.get(cwd)
+                ws = _find_project_ws(project_cwd)
                 if ws:
                     try:
                         await ws.send_text(json.dumps({
                             'type': 'task_started',
-                            'cwd': cwd,
+                            'cwd': project_cwd,
                             'task_id': next_task.id,
                             'description': next_task.description,
                         }))
@@ -94,13 +127,13 @@ async def claude_stopped(request: Request):
 
     # Deliver pending agent relay messages to any agents with active PTYs
     if project:
-        await _deliver_agent_relay_messages(project, cwd)
+        await _deliver_agent_relay_messages(project, project_cwd)
 
     # Notify the connected frontend WebSocket for this project
-    ws = connections.get(cwd)
+    ws = _find_project_ws(project_cwd)
     if ws:
         try:
-            await ws.send_text(json.dumps({'type': 'claude_stopped', 'cwd': cwd}))
+            await ws.send_text(json.dumps({'type': 'claude_stopped', 'cwd': project_cwd}))
         except Exception:
             pass
 
@@ -139,7 +172,7 @@ async def _deliver_agent_relay_messages(project, cwd: str) -> None:
             await AgentRelayMessage.where('id', msg.id).update({'status': 'delivered'})
 
         # Notify frontend about the delivered messages
-        ws = connections.get(cwd)
+        ws = _find_project_ws(cwd)
         if ws:
             try:
                 await ws.send_text(json.dumps({
