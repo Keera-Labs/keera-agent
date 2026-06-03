@@ -41,10 +41,10 @@ async def trigger(request: Request, agent_id: int):
     cwd = os.path.expanduser(project.path)
     conn_key = f"{cwd}:agent:{agent_id}"
 
-    # If already running, inject directly
+    # If already running, inject directly (use \r — Claude's interactive mode expects carriage return)
     write_fn = pty_writers.get(conn_key)
     if write_fn:
-        write_fn(f"{message}\n".encode())
+        write_fn(f"{message}\r".encode())
         return JSONResponse({"status": "injected", "message": "Message delivered to running agent"})
 
     # Spawn headless PTY and start the agent
@@ -174,11 +174,12 @@ async def _spawn_headless_agent(agent, project, cwd: str, conn_key: str, initial
             await _Agent.where("id", agent.id).update({"has_session": True})
 
         # Wait for Claude to finish starting up, then send the initial message
+        # Use \r — Claude's interactive mode (raw PTY) expects carriage return as Enter
         await asyncio.sleep(4.0)
         if not stopped.is_set():
             write_fn = pty_writers.get(conn_key)
             if write_fn:
-                write_fn(f"{initial_message}\n".encode())
+                write_fn(f"{initial_message}\r".encode())
 
         # Notify the frontend so it can show the agent as active
         ws = connections.get(cwd)
