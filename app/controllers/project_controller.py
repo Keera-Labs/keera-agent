@@ -155,21 +155,23 @@ async def store(request: Request):
 
     expanded_path = os.path.expanduser(path)
     base_url = env("KEERA_AGENT_URL", "http://localhost:4545")
-    ensure_claude_settings(expanded_path, base_url, apply_default_permissions=True)
+    ensure_claude_settings(expanded_path, base_url, apply_default_permissions=False)
 
     # Create a default PM agent for every new project
+    import json as _json
     from app.models.Agent import Agent
+    from app.controllers.permission_controller import read_default_permissions
+    from app.controllers.agent_controller import _default_system_prompt
+    _dp = read_default_permissions()
     await Agent.create({
         "project_id": project.id,
         "name": "PM",
         "agent_type": "pm",
         "description": "Project manager agent that coordinates work across the team.",
         "model": "claude-sonnet-4-6",
-        "system_prompt": (
-            "You are a project manager AI agent. Your role is to understand the project goals, "
-            "break down work into clear tasks, coordinate with other agents, and ensure delivery. "
-            "Spawn specialist agents (software_engineer, qa) when needed and relay tasks to them."
-        ),
+        "system_prompt": _default_system_prompt("pm"),
+        "permissions_allow": _json.dumps(_dp.get("allow", [])),
+        "permissions_deny": _json.dumps(_dp.get("deny", [])),
         "status": "idle",
         "has_session": False,
     })

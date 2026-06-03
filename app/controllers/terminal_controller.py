@@ -18,6 +18,27 @@ from app.models.TerminalSession import TerminalSession
 
 _ANSI_ESCAPE = re.compile(rb'\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[^[]')
 
+
+def _permission_flags(allow_json: str | None, deny_json: str | None) -> str:
+    """Build --allowedTools / --disallowedTools flags from JSON column values."""
+    flags = []
+    if allow_json:
+        try:
+            allow = json.loads(allow_json)
+            if allow:
+                flags.append(f'--allowedTools {shlex.quote(",".join(allow))}')
+        except (json.JSONDecodeError, TypeError):
+            pass
+    if deny_json:
+        try:
+            deny = json.loads(deny_json)
+            if deny:
+                flags.append(f'--disallowedTools {shlex.quote(",".join(deny))}')
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return (' ' + ' '.join(flags)) if flags else ''
+
+
 # Registry: project_path -> active WebSocket (frontend connection)
 connections: dict[str, WebSocket] = {}
 
@@ -150,7 +171,7 @@ async def terminal_ws(websocket: WebSocket, project: str, path: str = Query(defa
     stopped = asyncio.Event()
 
     # Shared agent flags — computed in auto_continue, used as fallback in pty_to_ws
-    _agent_flags: dict = {'sp_flag': '', 'model_flag': '', 'ready': False}
+    _agent_flags: dict = {'sp_flag': '', 'model_flag': '', 'perm_flag': '', 'ready': False}
 
     async def auto_continue():
         """Wait for the shell to be ready, cd into the project dir, then launch claude."""
@@ -172,6 +193,10 @@ async def terminal_ws(websocket: WebSocket, project: str, path: str = Query(defa
             system_prompt = getattr(agent_record, 'system_prompt', None) or ''
             model = getattr(agent_record, 'model', None)
             has_session = bool(getattr(agent_record, 'has_session', False))
+            perm_flag = _permission_flags(
+                getattr(agent_record, 'permissions_allow', None),
+                getattr(agent_record, 'permissions_deny', None),
+            )
 
             from fastapi_startkit.environment import env as _env
             base_url = _env("KEERA_AGENT_URL", "http://localhost:4545")
@@ -214,14 +239,15 @@ async def terminal_ws(websocket: WebSocket, project: str, path: str = Query(defa
             # Store flags for pty_to_ws fallback (used if --continue finds no conversation)
             _agent_flags['sp_flag'] = sp_flag
             _agent_flags['model_flag'] = model_flag
+            _agent_flags['perm_flag'] = perm_flag
             _agent_flags['ready'] = True
 
             if has_session:
-                # Resume existing conversation — system prompt is already embedded
-                os.write(master_fd, f'claude --continue{model_flag}\n'.encode())
+                # Resume existing conversation, re-inject system prompt so role is never lost
+                os.write(master_fd, f'claude --continue{sp_flag}{model_flag}{perm_flag}\n'.encode())
             else:
                 # First run: start fresh with full system prompt
-                os.write(master_fd, f'claude{sp_flag}{model_flag}\n'.encode())
+                os.write(master_fd, f'claude{sp_flag}{model_flag}{perm_flag}\n'.encode())
                 await _Agent.where("id", agent_record.id).update({"has_session": True})
 
             asyncio.create_task(_deliver_pending_relay_messages(agent_record.id, cwd))
@@ -229,12 +255,16 @@ async def terminal_ws(websocket: WebSocket, project: str, path: str = Query(defa
             # Project terminal: resume previous session if one exists
             system_prompt = getattr(project_record, 'system_prompt', None) if project_record else None
             sp_flag = f' --system-prompt {shlex.quote(system_prompt)}' if system_prompt else ''
+            perm_flag = _permission_flags(
+                getattr(project_record, 'permissions_allow', None) if project_record else None,
+                getattr(project_record, 'permissions_deny', None) if project_record else None,
+            )
 
             prior = await TerminalSession.where('project_path', path or cwd).get()
             if len(prior) > 1:
-                os.write(master_fd, f'claude --continue{sp_flag}\n'.encode())
+                os.write(master_fd, f'claude --continue{sp_flag}{perm_flag}\n'.encode())
             else:
-                os.write(master_fd, f'claude{sp_flag}\n'.encode())
+                os.write(master_fd, f'claude{sp_flag}{perm_flag}\n'.encode())
 
             if project_record:
                 await _deliver_pending_messages(project_record, cwd)
@@ -272,12 +302,17 @@ async def terminal_ws(websocket: WebSocket, project: str, path: str = Query(defa
                                 # Agent --continue found no conversation: fresh start with system prompt
                                 sp = _agent_flags['sp_flag']
                                 mf = _agent_flags['model_flag']
-                                os.write(master_fd, f'claude{sp}{mf}\n'.encode())
+                                pf = _agent_flags.get('perm_flag', '')
+                                os.write(master_fd, f'claude{sp}{mf}{pf}\n'.encode())
                             else:
                                 # Project terminal fallback
                                 system_prompt = getattr(project_record, 'system_prompt', None) if project_record else None
                                 sp_flag = f' --system-prompt {shlex.quote(system_prompt)}' if system_prompt else ''
-                                os.write(master_fd, f'claude{sp_flag}\n'.encode())
+                                perm_flag = _permission_flags(
+                                    getattr(project_record, 'permissions_allow', None) if project_record else None,
+                                    getattr(project_record, 'permissions_deny', None) if project_record else None,
+                                )
+                                os.write(master_fd, f'claude{sp_flag}{perm_flag}\n'.encode())
                     if text and '(thinking)' not in text:
                         await TerminalOutput.create({
                             'session_id': session.id,

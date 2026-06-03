@@ -1,11 +1,11 @@
 import json
 import os
-import shutil
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from app.models.Project import Project
+from app.models.Agent import Agent
 
 
 def _parse_json_list(value) -> list:
@@ -98,17 +98,9 @@ async def update_project_permissions(request: Request, project_id: int):
     allow = [s for s in (body.get("allow") or []) if isinstance(s, str) and s.strip()]
     deny  = [s for s in (body.get("deny")  or []) if isinstance(s, str) and s.strip()]
 
-    # Persist to DB
     project.permissions_allow = json.dumps(allow)
     project.permissions_deny  = json.dumps(deny)
     await project.save()
-
-    # Persist to .claude/settings.json
-    settings = _read_project_settings(project.path)
-    settings.setdefault("permissions", {})
-    settings["permissions"]["allow"] = allow
-    settings["permissions"]["deny"]  = deny
-    _write_project_settings(project.path, settings)
 
     return JSONResponse({"allow": allow, "deny": deny})
 
@@ -116,23 +108,23 @@ async def update_project_permissions(request: Request, project_id: int):
 # ── Default permissions ────────────────────────────────────────────────────────
 
 async def _apply_to_all_projects(perms: dict) -> int:
-    """Write permissions to every project's .claude/settings.json. Returns count updated."""
+    """Persist updated default permissions to every project and agent in the DB."""
+    allow_json = json.dumps(perms.get("allow", []))
+    deny_json  = json.dumps(perms.get("deny", []))
     projects = await Project.all()
-    updated = 0
     for project in projects:
         if not project.path:
             continue
-        settings = _read_project_settings(project.path)
-        settings["defaultMode"] = "acceptEdits"
-        settings.setdefault("permissions", {})
-        settings["permissions"]["allow"] = perms.get("allow", [])
-        settings["permissions"]["deny"] = perms.get("deny", [])
-        try:
-            _write_project_settings(project.path, settings)
-            updated += 1
-        except OSError:
-            pass
-    return updated
+        project.permissions_allow = allow_json
+        project.permissions_deny  = deny_json
+        await project.save()
+        # Propagate to all agents belonging to this project
+        agents = await Agent.where("project_id", project.id).get()
+        for agent in agents:
+            agent.permissions_allow = allow_json
+            agent.permissions_deny  = deny_json
+            await agent.save()
+    return len(projects)
 
 
 async def get_default_permissions(request: Request):
@@ -147,3 +139,31 @@ async def update_default_permissions(request: Request):
     write_default_permissions(perms)
     updated = await _apply_to_all_projects(perms)
     return JSONResponse({**perms, "applied_to_projects": updated})
+
+
+# ── Agent permissions ──────────────────────────────────────────────────────────
+
+async def get_agent_permissions(request: Request, agent_id: int):
+    agent = await Agent.find(agent_id)
+    if not agent:
+        return JSONResponse({"error": "Agent not found"}, status_code=404)
+    allow = _parse_json_list(getattr(agent, "permissions_allow", None))
+    deny  = _parse_json_list(getattr(agent, "permissions_deny", None))
+    if not allow and not deny:
+        perms = read_default_permissions()
+        allow = perms.get("allow", [])
+        deny  = perms.get("deny", [])
+    return JSONResponse({"allow": allow, "deny": deny})
+
+
+async def update_agent_permissions(request: Request, agent_id: int):
+    agent = await Agent.find(agent_id)
+    if not agent:
+        return JSONResponse({"error": "Agent not found"}, status_code=404)
+    body = await request.json()
+    allow = [s for s in (body.get("allow") or []) if isinstance(s, str) and s.strip()]
+    deny  = [s for s in (body.get("deny")  or []) if isinstance(s, str) and s.strip()]
+    agent.permissions_allow = json.dumps(allow)
+    agent.permissions_deny  = json.dumps(deny)
+    await agent.save()
+    return JSONResponse({"allow": allow, "deny": deny})
