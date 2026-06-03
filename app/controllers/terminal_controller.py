@@ -47,7 +47,7 @@ async def _deliver_pending_relay_messages(agent_id: int, cwd: str) -> None:
         from_agent = await Agent.find(msg.from_agent_id)
         sender_name = from_agent.name if from_agent else f"Agent #{msg.from_agent_id}"
         if write_fn:
-            text = f"[Message from Agent '{sender_name}']: {msg.content}\n"
+            text = f"[Message from Agent '{sender_name}']: {msg.content}\r"
             write_fn(text.encode())
         await AgentRelayMessage.where("id", msg.id).update({"status": "delivered"})
 
