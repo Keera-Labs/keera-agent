@@ -87,8 +87,12 @@ async def _spawn_headless_agent(agent, project, cwd: str, conn_key: str, initial
     loop = asyncio.get_event_loop()
     stopped = asyncio.Event()
 
+    # Shared state for the "no conversation" fallback
+    _fallback: dict = {'sp_flag': '', 'model_flag': '', 'perm_flag': '', 'done': False}
+
     async def read_output():
         queue: asyncio.Queue = asyncio.Queue()
+        output_buf = ''
 
         def on_readable():
             try:
@@ -104,6 +108,16 @@ async def _spawn_headless_agent(agent, project, cwd: str, conn_key: str, initial
                 try:
                     item = await asyncio.wait_for(queue.get(), timeout=0.1)
                     text = _ANSI_ESCAPE.sub(b'', item).decode('utf-8', errors='replace').strip()
+                    # Detect "--continue" finding no session and fall back to a fresh start
+                    if not _fallback['done'] and _fallback['sp_flag']:
+                        output_buf = (output_buf + ' ' + text)[-2000:]
+                        if 'No conversation' in output_buf and 'continue' in output_buf:
+                            _fallback['done'] = True
+                            await asyncio.sleep(0.2)
+                            sp = _fallback['sp_flag']
+                            mf = _fallback['model_flag']
+                            pf = _fallback['perm_flag']
+                            os.write(master_fd, f'claude{sp}{mf}{pf}\n'.encode())
                     if text and '(thinking)' not in text:
                         await TerminalOutput.create({'session_id': session.id, 'data': text})
                 except asyncio.TimeoutError:
@@ -130,6 +144,12 @@ async def _spawn_headless_agent(agent, project, cwd: str, conn_key: str, initial
         model = getattr(agent, 'model', None)
         has_session = bool(getattr(agent, 'has_session', False))
         base_url = _env("KEERA_AGENT_URL", "http://localhost:4545")
+
+        from app.controllers.terminal_controller import _permission_flags
+        perm_flag = _permission_flags(
+            getattr(agent, 'permissions_allow', None),
+            getattr(agent, 'permissions_deny', None),
+        )
 
         siblings = await _Agent.where("project_id", agent.project_id)\
             .where("id", "!=", agent.id).get()
@@ -165,12 +185,15 @@ async def _spawn_headless_agent(agent, project, cwd: str, conn_key: str, initial
         full_prompt = (system_prompt + relay_instructions).strip()
         sp_flag = f' --system-prompt {shlex.quote(full_prompt)}'
         model_flag = f' --model {shlex.quote(model)}' if model else ''
+        _fallback['sp_flag'] = sp_flag
+        _fallback['model_flag'] = model_flag
+        _fallback['perm_flag'] = perm_flag
         if has_session:
-            # Resume existing conversation — system prompt is already embedded
-            os.write(master_fd, f'claude --continue{model_flag}\n'.encode())
+            # Resume existing conversation, re-inject system prompt so role is never lost
+            os.write(master_fd, f'claude --continue{sp_flag}{model_flag}{perm_flag}\n'.encode())
         else:
             # First run: start fresh with full system prompt
-            os.write(master_fd, f'claude{sp_flag}{model_flag}\n'.encode())
+            os.write(master_fd, f'claude{sp_flag}{model_flag}{perm_flag}\n'.encode())
             await _Agent.where("id", agent.id).update({"has_session": True})
 
         # Wait for Claude to finish starting up, then send the initial message
