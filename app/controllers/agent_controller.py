@@ -7,6 +7,30 @@ from fastapi.responses import JSONResponse
 
 from app.models.Agent import Agent
 
+DEFAULT_PERMISSIONS_ALLOW = {
+    "filesystem": {
+        "read": True,
+        "write": False,
+        "execute": False,
+        "allowed_paths": ["/home/user/projects", "/home/user/docs"],
+        "allowed_commands": ["ls", "cat", "find"],
+    },
+    "network": {
+        "curl": True,
+        "http_methods": ["GET"],
+        "allowed_domains": [
+            "api.github.com",
+            "raw.githubusercontent.com",
+            "example.com",
+        ],
+        "blocked_domains": ["*"],
+    },
+    "git": {
+        "enabled": True,
+        "allowed_operations": ["clone", "pull", "fetch", "status", "log", "diff"],
+    },
+}
+
 
 def _serialize(a: Agent) -> dict:
     return {
@@ -18,6 +42,9 @@ def _serialize(a: Agent) -> dict:
         "system_prompt": a.system_prompt,
         "agent_type": a.agent_type,
         "status": a.status,
+        "task_id": getattr(a, "task_id", None),
+        "permissions_allow": getattr(a, "permissions_allow", None),
+        "permissions_deny": getattr(a, "permissions_deny", None),
         "created_at": str(a.created_at) if a.created_at else None,
     }
 
@@ -39,6 +66,7 @@ async def index(request: Request, project_id: int):
             ),
             "status": "idle",
             "has_session": False,
+            "permissions_allow": _json.dumps(DEFAULT_PERMISSIONS_ALLOW),
         })
         agents = [agent]
     return JSONResponse([_serialize(a) for a in agents])
@@ -64,6 +92,7 @@ async def store(request: Request, project_id: int):
         "model": model,
         "system_prompt": system_prompt,
         "status": "idle",
+        "permissions_allow": _json.dumps(DEFAULT_PERMISSIONS_ALLOW),
     })
 
     return JSONResponse(_serialize(agent), status_code=201)
@@ -111,6 +140,7 @@ async def spawn(request: Request, project_id: int):
     model = (body.get("model") or "claude-sonnet-4-6").strip()
     system_prompt = (body.get("system_prompt") or "").strip() or None
     message = (body.get("message") or "").strip() or None
+    task_id = body.get("task_id")
 
     if not name:
         return JSONResponse({"error": "name is required"}, status_code=422)
@@ -122,22 +152,25 @@ async def spawn(request: Request, project_id: int):
         "description": description,
         "model": model,
         "system_prompt": system_prompt,
+        "task_id": task_id,
         "status": "idle",
+        "permissions_allow": _json.dumps(DEFAULT_PERMISSIONS_ALLOW),
     })
 
-    # Push agent_created event so the sidebar updates immediately
+
+    # Push agent_created to ALL active connections for this project
+    # (project terminal + every agent terminal) so the sidebar updates regardless
+    # of which WebSocket the frontend is currently listening on.
     project = await Project.find(project_id)
     if project:
         cwd = os.path.expanduser(project.path)
-        ws = connections.get(cwd)
-        if ws:
-            try:
-                await ws.send_text(_json.dumps({
-                    "type": "agent_created",
-                    "agent": _serialize(agent),
-                }))
-            except Exception:
-                pass
+        payload = _json.dumps({"type": "agent_created", "agent": _serialize(agent)})
+        for key, ws in list(connections.items()):
+            if key == cwd or key.startswith(cwd + ':agent:'):
+                try:
+                    await ws.send_text(payload)
+                except Exception:
+                    pass
 
         # Trigger the agent headlessly if an initial message was provided
         if message:
