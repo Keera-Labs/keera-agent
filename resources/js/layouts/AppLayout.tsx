@@ -1835,18 +1835,70 @@ function Sidebar({
 
 // ─── Create Task Modal ────────────────────────────────────────────────────────
 
+const LS_TASK_PROJECT_ID = 'keera:task_project_id'
+const LS_TASK_WORKSPACE_ID = 'keera:task_workspace_id'
+
 function CreateTaskModal({
     onClose,
     onCreated,
+    projects,
+    workspaces,
+    defaultProjectId,
 }: {
     onClose: () => void
-    onCreated: (title: string, body: string, assignees: string[]) => void
+    onCreated: (title: string, body: string, assignees: string[], projectId: number) => void
+    projects: Project[]
+    workspaces: Workspace[]
+    defaultProjectId: number | null
 }) {
     const [title, setTitle] = useState('')
     const [body, setBody] = useState('')
     const [assigneeInput, setAssigneeInput] = useState('')
     const [assignees, setAssignees] = useState<string[]>([])
     const [error, setError] = useState('')
+
+    // Restore last-used workspace and project from localStorage
+    const initWorkspaceId = (): number | null => {
+        const stored = localStorage.getItem(LS_TASK_WORKSPACE_ID)
+        if (stored !== null) {
+            const id = parseInt(stored, 10)
+            if (workspaces.some(w => w.id === id)) return id
+        }
+        const proj = projects.find(p => p.id === defaultProjectId)
+        return proj?.workspace_id ?? null
+    }
+    const initProjectId = (): number | null => {
+        const stored = localStorage.getItem(LS_TASK_PROJECT_ID)
+        if (stored !== null) {
+            const id = parseInt(stored, 10)
+            if (projects.some(p => p.id === id)) return id
+        }
+        return defaultProjectId
+    }
+
+    const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<number | null>(initWorkspaceId)
+    const [selectedProjectId, setSelectedProjectId] = useState<number | null>(initProjectId)
+
+    const visibleProjects = selectedWorkspaceId !== null
+        ? projects.filter(p => p.workspace_id === selectedWorkspaceId)
+        : projects
+
+    function handleWorkspaceChange(id: number | null) {
+        setSelectedWorkspaceId(id)
+        if (id !== null) localStorage.setItem(LS_TASK_WORKSPACE_ID, String(id))
+        else localStorage.removeItem(LS_TASK_WORKSPACE_ID)
+        // Pick first project in new workspace, or clear
+        const first = id !== null ? projects.find(p => p.workspace_id === id) : projects[0]
+        const newProjectId = first?.id ?? null
+        setSelectedProjectId(newProjectId)
+        if (newProjectId !== null) localStorage.setItem(LS_TASK_PROJECT_ID, String(newProjectId))
+        else localStorage.removeItem(LS_TASK_PROJECT_ID)
+    }
+
+    function handleProjectChange(id: number) {
+        setSelectedProjectId(id)
+        localStorage.setItem(LS_TASK_PROJECT_ID, String(id))
+    }
 
     function addAssignee() {
         const name = assigneeInput.trim()
@@ -1862,8 +1914,13 @@ function CreateTaskModal({
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
         if (!title.trim()) { setError('Title is required'); return }
-        onCreated(title.trim(), body.trim(), assignees)
+        if (!selectedProjectId) { setError('Select a project'); return }
+        onCreated(title.trim(), body.trim(), assignees, selectedProjectId)
         onClose()
+    }
+
+    const selectStyle: React.CSSProperties = {
+        ...inputStyle, width: '100%', boxSizing: 'border-box' as const, cursor: 'pointer',
     }
 
     return (
@@ -1880,6 +1937,38 @@ function CreateTaskModal({
                 {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
 
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {/* Workspace + Project row */}
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        {workspaces.length > 0 && (
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+                                <span style={labelStyle}>Workspace</span>
+                                <select
+                                    value={selectedWorkspaceId ?? ''}
+                                    onChange={e => handleWorkspaceChange(e.target.value === '' ? null : parseInt(e.target.value, 10))}
+                                    style={selectStyle}
+                                >
+                                    <option value="">All</option>
+                                    {workspaces.map(w => (
+                                        <option key={w.id} value={w.id}>{w.name}</option>
+                                    ))}
+                                </select>
+                            </label>
+                        )}
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+                            <span style={labelStyle}>Project <span style={{ color: color.danger }}>*</span></span>
+                            <select
+                                value={selectedProjectId ?? ''}
+                                onChange={e => handleProjectChange(parseInt(e.target.value, 10))}
+                                style={selectStyle}
+                            >
+                                <option value="" disabled>Select project</option>
+                                {visibleProjects.map(p => (
+                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                            </select>
+                        </label>
+                    </div>
+
                     {/* Title */}
                     <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <span style={labelStyle}>Title <span style={{ color: color.danger }}>*</span></span>
@@ -2112,6 +2201,24 @@ function TaskDetailModal({ task, onClose }: { task: Task; onClose: () => void })
 
 // ─── Agent types ─────────────────────────────────────────────────────────────
 
+interface AgentFlags {
+    dangerously_skip_permissions?: boolean
+    plan_mode?: boolean
+    verbose?: boolean
+    max_turns?: number | null
+}
+
+interface AgentTemplate {
+    id: number
+    name: string
+    description: string | null
+    agent_type: string
+    system_prompt: string | null
+    model: string
+    flags: AgentFlags
+    is_builtin: boolean
+}
+
 interface ProjectAgent {
     id: number
     project_id: number
@@ -2121,6 +2228,7 @@ interface ProjectAgent {
     system_prompt: string | null
     agent_type: string
     status: 'idle' | 'running'
+    flags: AgentFlags
     created_at: string | null
 }
 
@@ -2177,26 +2285,57 @@ Focus on thoroughness, coverage, and clear communication of quality issues.`,
 
 // ─── Add Agent Modal ──────────────────────────────────────────────────────────
 
-function AddAgentModal({ projectId, onClose, onCreated }: {
+function AddAgentModal({ projectId, onClose, onCreated, templates }: {
     projectId: number
     onClose: () => void
     onCreated: (a: ProjectAgent) => void
+    templates: AgentTemplate[]
 }) {
     const [name, setName] = useState('')
     const [agentType, setAgentType] = useState<string>('software_engineer')
     const [description, setDescription] = useState(AGENT_TYPE_DEFAULTS.software_engineer.description)
     const [systemPrompt, setSystemPrompt] = useState(AGENT_TYPE_DEFAULTS.software_engineer.system_prompt)
     const [model, setModel] = useState('claude-sonnet-4-6')
+    const [flags, setFlags] = useState<AgentFlags>({})
+    const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null)
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
 
     function handleTypeChange(type: string) {
         setAgentType(type)
+        setSelectedTemplateId(null)
         const defaults = AGENT_TYPE_DEFAULTS[type]
         if (defaults) {
             setDescription(defaults.description)
             setSystemPrompt(defaults.system_prompt)
         }
+    }
+
+    function applyTemplate(tpl: AgentTemplate | null) {
+        if (!tpl) {
+            // Blank — reset to defaults
+            setSelectedTemplateId(null)
+            setAgentType('custom')
+            setDescription('')
+            setSystemPrompt('')
+            setModel('claude-sonnet-4-6')
+            setFlags({})
+            return
+        }
+        setSelectedTemplateId(tpl.id)
+        setAgentType(tpl.agent_type)
+        setModel(tpl.model)
+        setFlags(tpl.flags ?? {})
+        if (tpl.description) setDescription(tpl.description)
+        if (tpl.system_prompt) setSystemPrompt(tpl.system_prompt)
+        else {
+            const defaults = AGENT_TYPE_DEFAULTS[tpl.agent_type]
+            if (defaults) setSystemPrompt(defaults.system_prompt)
+        }
+    }
+
+    function setFlag(key: keyof AgentFlags, value: boolean | number | null) {
+        setFlags(prev => ({ ...prev, [key]: value }))
     }
 
     async function handleSubmit(e: React.FormEvent) {
@@ -2207,7 +2346,7 @@ function AddAgentModal({ projectId, onClose, onCreated }: {
             const res = await fetch(`/api/projects/${projectId}/agents`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, agent_type: agentType, description, system_prompt: systemPrompt, model }),
+                body: JSON.stringify({ name, agent_type: agentType, description, system_prompt: systemPrompt, model, flags }),
             })
             const data = await res.json()
             if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
@@ -2220,6 +2359,31 @@ function AddAgentModal({ projectId, onClose, onCreated }: {
         }
     }
 
+    const templateCardStyle = (active: boolean): React.CSSProperties => ({
+        padding: '8px 10px',
+        borderRadius: '6px',
+        border: `1px solid ${active ? color.accent : color.borderMuted}`,
+        background: active ? `${color.accent}18` : color.bgCanvas,
+        cursor: 'pointer',
+        flexShrink: 0,
+        minWidth: '100px',
+        maxWidth: '140px',
+        textAlign: 'left',
+    })
+
+    const flagRowStyle: React.CSSProperties = {
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '6px 10px', borderRadius: '6px',
+        background: color.bgCanvas, border: `1px solid ${color.borderMuted}`,
+    }
+
+    const toggleStyle = (on: boolean): React.CSSProperties => ({
+        width: '32px', height: '18px', borderRadius: '9px',
+        background: on ? color.accent : color.borderMuted,
+        border: 'none', cursor: 'pointer', position: 'relative',
+        flexShrink: 0, transition: 'background 0.15s',
+    })
+
     return (
         <div style={{
             position: 'fixed', inset: 0, background: color.overlay,
@@ -2227,12 +2391,60 @@ function AddAgentModal({ projectId, onClose, onCreated }: {
         }}>
             <div style={{
                 background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
-                padding: '24px', width: '480px', display: 'flex', flexDirection: 'column', gap: '14px',
+                padding: '24px', width: '520px', display: 'flex', flexDirection: 'column', gap: '14px',
                 maxHeight: '90vh', overflowY: 'auto',
             }}>
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                     <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>Add Agent</h2>
                     {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
+
+                    {/* Template selector */}
+                    {templates.length > 0 && (
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <span style={labelStyle}>Template</span>
+                            <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+                                {/* Blank option */}
+                                <button
+                                    key="blank"
+                                    type="button"
+                                    onClick={() => applyTemplate(null)}
+                                    style={templateCardStyle(selectedTemplateId === null && agentType === 'custom' && !systemPrompt)}
+                                >
+                                    <div style={{ fontSize: '11px', fontWeight: 600, color: color.textSecondary }}>Blank</div>
+                                    <div style={{ fontSize: '10px', color: color.textFaint, marginTop: '2px' }}>Start from scratch</div>
+                                </button>
+                                {templates.map(tpl => {
+                                    const active = selectedTemplateId === tpl.id
+                                    const typeColor = AGENT_TYPE_COLORS[tpl.agent_type] ?? color.textMuted
+                                    return (
+                                        <button
+                                            key={tpl.id}
+                                            type="button"
+                                            onClick={() => applyTemplate(tpl)}
+                                            style={templateCardStyle(active)}
+                                        >
+                                            <div style={{ fontSize: '11px', fontWeight: 600, color: active ? color.accent : color.textSecondary }}>
+                                                {tpl.name}
+                                            </div>
+                                            <div style={{ fontSize: '10px', color: typeColor, marginTop: '2px' }}>
+                                                {AGENT_TYPE_LABELS[tpl.agent_type] ?? tpl.agent_type}
+                                            </div>
+                                            {(tpl.flags?.dangerously_skip_permissions || tpl.flags?.plan_mode) && (
+                                                <div style={{ display: 'flex', gap: '3px', marginTop: '4px', flexWrap: 'wrap' }}>
+                                                    {tpl.flags.dangerously_skip_permissions && (
+                                                        <span style={{ fontSize: '9px', padding: '1px 4px', borderRadius: '3px', background: '#ff6b3518', color: '#ff6b35', fontWeight: 600 }}>FULL AUTO</span>
+                                                    )}
+                                                    {tpl.flags.plan_mode && (
+                                                        <span style={{ fontSize: '9px', padding: '1px 4px', borderRadius: '3px', background: `${color.accent}18`, color: color.accent, fontWeight: 600 }}>PLAN ONLY</span>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                        </label>
+                    )}
 
                     {/* Type selector */}
                     <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -2302,6 +2514,87 @@ function AddAgentModal({ projectId, onClose, onCreated }: {
                             style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }}
                         />
                     </label>
+
+                    {/* Launch Options */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <span style={labelStyle}>Launch Options</span>
+
+                        <div style={flagRowStyle}>
+                            <div>
+                                <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Skip Permissions</div>
+                                <div style={{ fontSize: '10px', color: color.textFaint }}>--dangerously-skip-permissions — no prompts</div>
+                            </div>
+                            <button
+                                type="button"
+                                style={toggleStyle(!!flags.dangerously_skip_permissions)}
+                                onClick={() => setFlag('dangerously_skip_permissions', !flags.dangerously_skip_permissions)}
+                                title="Toggle --dangerously-skip-permissions"
+                            >
+                                <span style={{
+                                    position: 'absolute', top: '3px',
+                                    left: flags.dangerously_skip_permissions ? '17px' : '3px',
+                                    width: '12px', height: '12px', borderRadius: '50%',
+                                    background: '#fff', transition: 'left 0.15s',
+                                }} />
+                            </button>
+                        </div>
+
+                        <div style={flagRowStyle}>
+                            <div>
+                                <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Plan Mode</div>
+                                <div style={{ fontSize: '10px', color: color.textFaint }}>Read-only — analyse and plan, never edit files</div>
+                            </div>
+                            <button
+                                type="button"
+                                style={toggleStyle(!!flags.plan_mode)}
+                                onClick={() => setFlag('plan_mode', !flags.plan_mode)}
+                                title="Toggle plan mode"
+                            >
+                                <span style={{
+                                    position: 'absolute', top: '3px',
+                                    left: flags.plan_mode ? '17px' : '3px',
+                                    width: '12px', height: '12px', borderRadius: '50%',
+                                    background: '#fff', transition: 'left 0.15s',
+                                }} />
+                            </button>
+                        </div>
+
+                        <div style={flagRowStyle}>
+                            <div>
+                                <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Verbose</div>
+                                <div style={{ fontSize: '10px', color: color.textFaint }}>--verbose — detailed claude output</div>
+                            </div>
+                            <button
+                                type="button"
+                                style={toggleStyle(!!flags.verbose)}
+                                onClick={() => setFlag('verbose', !flags.verbose)}
+                                title="Toggle --verbose"
+                            >
+                                <span style={{
+                                    position: 'absolute', top: '3px',
+                                    left: flags.verbose ? '17px' : '3px',
+                                    width: '12px', height: '12px', borderRadius: '50%',
+                                    background: '#fff', transition: 'left 0.15s',
+                                }} />
+                            </button>
+                        </div>
+
+                        <div style={{ ...flagRowStyle, gap: '12px' }}>
+                            <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Max Turns</div>
+                                <div style={{ fontSize: '10px', color: color.textFaint }}>--max-turns N — limit conversation turns</div>
+                            </div>
+                            <input
+                                type="number"
+                                min={1}
+                                max={500}
+                                placeholder="∞"
+                                value={flags.max_turns ?? ''}
+                                onChange={e => setFlag('max_turns', e.target.value ? parseInt(e.target.value, 10) : null)}
+                                style={{ ...inputStyle, width: '72px', textAlign: 'center', padding: '4px 8px' }}
+                            />
+                        </div>
+                    </div>
 
                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                         <button type="button" onClick={onClose} style={cancelBtnStyle}>Cancel</button>
@@ -3670,6 +3963,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const [selectedTask, setSelectedTask] = useState<Task | null>(null)
     const [newMessageIds, setNewMessageIds] = useState<number[]>([])
     const [projectAgents, setProjectAgents] = useState<ProjectAgent[]>([])
+    const [agentTemplates, setAgentTemplates] = useState<AgentTemplate[]>([])
     const [showAddAgent, setShowAddAgent] = useState(false)
     const [activeAgentId, setActiveAgentId] = useState<number | null>(null)
     const [showProjectSearch, setShowProjectSearch] = useState(false)
@@ -3735,6 +4029,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             .then(setProjectAgents)
             .catch(() => {})
     }, [activeProject?.id])
+
+    // Fetch agent templates once on mount (global, not project-specific)
+    useEffect(() => {
+        fetch('/api/agent-templates')
+            .then(r => r.json())
+            .then(setAgentTemplates)
+            .catch(() => {})
+    }, [])
 
     // Launch a terminal session for a single agent (reusable helper)
     function launchAgentSession(agentId: number, focus: boolean = true) {
@@ -3820,9 +4122,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     function handleOpenTask(task: Task) { setSelectedTask(task) }
     function handleCloseTask() { setSelectedTask(null) }
 
-    async function handleAddTask(title: string, body: string, assignees: string[]) {
-        if (!activeProject) return
-        const res = await fetch(`/api/projects/${activeProject.id}/tasks`, {
+    async function handleAddTask(title: string, body: string, assignees: string[], projectId: number) {
+        const res = await fetch(`/api/projects/${projectId}/tasks`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ title, body, assignees }),
@@ -3884,9 +4185,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         if (sessions.current.has(activeProject.id)) {
             const { fitAddon, term } = sessions.current.get(activeProject.id)!
-            requestAnimationFrame(() => { fitAddon.fit(); term.focus() })
+            requestAnimationFrame(() => {
+                fitAddon.fit();
+                term.focus()
+            })
             return
         }
+    })
 
         requestAnimationFrame(() => {
         const term = makeTerminal()
@@ -4256,8 +4561,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                                 <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                     {agent.name}
                                                 </div>
-                                                <div style={{ fontSize: '10px', color: AGENT_TYPE_COLORS[agent.agent_type] ?? color.textFaint }}>
-                                                    {AGENT_TYPE_LABELS[agent.agent_type] ?? agent.agent_type}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                                    <span style={{ fontSize: '10px', color: AGENT_TYPE_COLORS[agent.agent_type] ?? color.textFaint }}>
+                                                        {AGENT_TYPE_LABELS[agent.agent_type] ?? agent.agent_type}
+                                                    </span>
+                                                    {agent.flags?.dangerously_skip_permissions && (
+                                                        <span style={{ fontSize: '9px', padding: '0px 3px', borderRadius: '3px', background: '#ff6b3518', color: '#ff6b35', fontWeight: 600, lineHeight: '14px' }}>
+                                                            AUTO
+                                                        </span>
+                                                    )}
+                                                    {agent.flags?.plan_mode && (
+                                                        <span style={{ fontSize: '9px', padding: '0px 3px', borderRadius: '3px', background: `${color.accent}18`, color: color.accent, fontWeight: 600, lineHeight: '14px' }}>
+                                                            PLAN
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
                                             {!isRunning && (
@@ -4508,7 +4825,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {showCreateTask && (
                 <CreateTaskModal
                     onClose={() => setShowCreateTask(false)}
-                    onCreated={(title, body, assignees) => handleAddTask(title, body, assignees)}
+                    onCreated={(title, body, assignees, projectId) => handleAddTask(title, body, assignees, projectId)}
+                    projects={allProjects}
+                    workspaces={workspaces}
+                    defaultProjectId={activeProject?.id ?? null}
                 />
             )}
 
@@ -4577,6 +4897,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {showAddAgent && activeProject && (
                 <AddAgentModal
                     projectId={activeProject.id}
+                    templates={agentTemplates}
                     onClose={() => setShowAddAgent(false)}
                     onCreated={agent => { setProjectAgents(prev => [...prev, agent]); setShowAddAgent(false) }}
                 />

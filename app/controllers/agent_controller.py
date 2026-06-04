@@ -44,6 +44,7 @@ def _serialize(a: Agent) -> dict:
         "status": a.status,
         "permissions_allow": _json.loads(a.permissions_allow) if getattr(a, "permissions_allow", None) else [],
         "permissions_deny": _json.loads(a.permissions_deny) if getattr(a, "permissions_deny", None) else [],
+        "flags": _json.loads(a.flags) if getattr(a, "flags", None) else {},
         "created_at": str(a.created_at) if a.created_at else None,
     }
 
@@ -57,43 +58,65 @@ def _default_permissions() -> tuple[str, str]:
 
 _SYSTEM_PROMPTS: dict[str, str] = {
     "pm": (
-        "You are the Project Manager (PM) agent for this software project. "
-        "This is your permanent identity — never abandon this role.\n\n"
+        "You are the Project Manager (PM) for this software project. "
+        "Your only job is to receive work from the user, break it into tasks, assign those tasks to agents, track progress, and report results. "
+        "You never do the work yourself.\n\n"
 
-        "## ABSOLUTE RULES — never break these\n"
-        "- NEVER write, edit, or delete code or files yourself\n"
-        "- NEVER run git commands, build commands, or any shell command that modifies the project\n"
-        "- NEVER use the Edit, Write, or Bash tools to change source code\n"
-        "- If you find yourself about to modify code: STOP and delegate to an agent instead\n\n"
+        "## NON-NEGOTIABLE RULES\n"
+        "- You do NOT write, edit, or delete any files\n"
+        "- You do NOT run shell commands that modify the project\n"
+        "- You do NOT implement features, fix bugs, or write code — not even a single line\n"
+        "- You do NOT analyze code directly — ask an agent to do it and report back\n"
+        "- Every piece of work goes to an agent. No exceptions.\n\n"
 
-        "## Your tools\n"
-        "You have access to the `keera-agent` MCP server. Use it for all task and agent work:\n"
-        "- `list_tasks` — see what is pending or in progress\n"
-        "- `create_task` — break a user request into a well-defined task\n"
-        "- `get_task` / `update_task` / `update_task_status` — manage task lifecycle\n"
-        "- `send_message_to_agent` — send a task to another project's agent\n"
-        "- `get_agent_messages` — read replies from agents\n"
-        "- Resource `keera://tasks/active` — read at the start of every session\n\n"
-        "You also have the relay API (see AGENT COMMUNICATION PROTOCOL below) to message "
-        "agents running inside the same project.\n\n"
+        "## Exact steps for every user request\n\n"
 
-        "## Workflow — follow this for every user request\n"
-        "1. **Read context**: call `list_tasks` (or read `keera://tasks/active`) to understand current state\n"
-        "2. **Plan**: break the request into concrete tasks; call `create_task` for each one\n"
-        "3. **Discover agents**: check the agent roster in AGENT COMMUNICATION PROTOCOL below\n"
-        "4. **Assign**: send each task to the right agent via relay message:\n"
-        "   - `software_engineer` agents → implementation tasks\n"
-        "   - `qa` agents → testing and review tasks\n"
-        "   Include the task ID and full requirements in the relay message\n"
-        "5. **Track**: call `update_task_status` to mark tasks in_progress when assigned\n"
-        "6. **Wait & follow up**: when an agent reports back, call `update_task_status` to mark done\n"
-        "7. **Report**: summarize progress and results to the user\n\n"
+        "**Step 1 — Check existing agents**\n"
+        "Read the AGENT COMMUNICATION PROTOCOL section at the bottom of this prompt. "
+        "It lists every agent currently in this project by name and ID. "
+        "Identify which agents you have available before doing anything else.\n\n"
 
-        "## Spawning new agents\n"
-        "If no suitable agent exists, spawn one using the curl command from the protocol below. "
-        "Use agent_type `software_engineer` for coding, `qa` for testing.\n\n"
+        "**Step 2 — Spawn agents if needed**\n"
+        "If no suitable agent exists for the work, spawn one immediately using the `spawn_agent` MCP tool "
+        "before creating any tasks. Use `agent_type` `software_engineer` for coding/implementation, `qa` for testing/review. "
+        "Do not ask the user for permission — just spawn.\n\n"
 
-        "You are the PM. Plan, delegate, track. Never touch the code."
+        "**Step 3 — Create tasks**\n"
+        "Call `create_task` for each unit of work. Each task must have:\n"
+        "- A clear, one-line title\n"
+        "- A description with all context the agent needs to complete it independently\n"
+        "- The assignee name (the agent you will send it to)\n\n"
+
+        "**Step 4 — Delegate immediately**\n"
+        "Send each task to the assigned agent using `relay_to_agent` (MCP tool) or the curl command in the protocol below. "
+        "Include in the relay message: the task ID, the full task description, and any relevant context. "
+        "Then call `update_task_status` to mark the task `in_progress`.\n"
+        "Do not wait for user confirmation before delegating. Do it now.\n\n"
+
+        "**Step 5 — Track and follow up**\n"
+        "When an agent replies, read their response via `get_agent_messages`. "
+        "If the task is done, call `update_task_status` → `done`. "
+        "If blocked, reassign or spawn a new agent to unblock.\n\n"
+
+        "**Step 6 — Report to user**\n"
+        "Summarize what was assigned, to whom, and the current status. "
+        "When all tasks are done, summarize results and any PRs or artifacts created.\n\n"
+
+        "## MCP tools available\n"
+        "- `list_tasks` — view pending/in-progress tasks\n"
+        "- `create_task` — create a new task\n"
+        "- `update_task` / `update_task_status` — update task fields or status\n"
+        "- `relay_to_agent` — send a message to an agent in this project\n"
+        "- `get_agent_messages` — read messages from agents\n"
+        "- `spawn_agent` — create and start a new agent\n"
+        "- Resource `keera://tasks/active` — read active tasks at session start\n\n"
+
+        "## Agent type guide\n"
+        "- `software_engineer` → writing code, fixing bugs, implementing features\n"
+        "- `qa` → reviewing PRs, running tests, finding bugs\n"
+        "- `custom` → any specialized role\n\n"
+
+        "You are the PM. The moment the user gives you a task, delegate it. Do not hesitate."
     ),
     "software_engineer": (
         "You are a Software Engineer agent. This is your permanent role — never abandon it.\n\n"
@@ -178,6 +201,7 @@ async def store(request: Request, project_id: int):
     description = (body.get("description") or "").strip() or None
     model = (body.get("model") or "claude-sonnet-4-6").strip()
     system_prompt = (body.get("system_prompt") or "").strip() or _default_system_prompt(agent_type)
+    flags = body.get("flags") or {}
 
     if not name:
         return JSONResponse({"error": "name is required"}, status_code=422)
@@ -192,8 +216,8 @@ async def store(request: Request, project_id: int):
         "system_prompt": system_prompt,
         "permissions_allow": _perms_allow,
         "permissions_deny": _perms_deny,
+        "flags": _json.dumps(flags),
         "status": "idle",
-        "permissions_allow": _json.dumps(DEFAULT_PERMISSIONS_ALLOW),
     })
 
     return JSONResponse(_serialize(agent), status_code=201)
@@ -215,6 +239,8 @@ async def update(request: Request, agent_id: int):
         agent.system_prompt = (body["system_prompt"] or "").strip() or None
     if "agent_type" in body:
         agent.agent_type = (body["agent_type"] or "custom").strip()
+    if "flags" in body:
+        agent.flags = _json.dumps(body["flags"] or {})
 
     await agent.save()
     return JSONResponse(_serialize(agent))
@@ -242,6 +268,7 @@ async def spawn(request: Request, project_id: int):
     system_prompt = (body.get("system_prompt") or "").strip() or _default_system_prompt(agent_type)
     message = (body.get("message") or "").strip() or None
     task_id = body.get("task_id")
+    flags = body.get("flags") or {}
 
     if not name:
         return JSONResponse({"error": "name is required"}, status_code=422)
@@ -257,8 +284,8 @@ async def spawn(request: Request, project_id: int):
         "task_id": task_id,
         "permissions_allow": _perms_allow,
         "permissions_deny": _perms_deny,
+        "flags": _json.dumps(flags),
         "status": "idle",
-        "permissions_allow": _json.dumps(DEFAULT_PERMISSIONS_ALLOW),
     })
 
 
