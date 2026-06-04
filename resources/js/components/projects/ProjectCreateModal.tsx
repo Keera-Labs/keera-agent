@@ -1,24 +1,13 @@
 import { useState } from 'react'
 import { useForm } from '@inertiajs/react'
-import { color } from '@/tokens'
 import type { Workspace, Project } from '@/types/type'
 
 const LANGUAGES = ['Python', 'TypeScript', 'JavaScript', 'Go', 'Rust', 'Other']
 
-const labelStyle: React.CSSProperties = { color: color.textMuted, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }
-const inputStyle: React.CSSProperties = {
-    background: color.bgBase, border: `1px solid ${color.borderMuted}`, borderRadius: '6px',
-    color: color.textPrimary, fontSize: '13px', padding: '6px 10px',
-    fontFamily: '"JetBrains Mono", monospace', outline: 'none',
-}
-const cancelBtnStyle: React.CSSProperties = {
-    background: 'transparent', border: `1px solid ${color.borderMuted}`, borderRadius: '6px',
-    color: color.textMuted, fontSize: '12px', padding: '6px 14px', cursor: 'pointer',
-}
-const submitBtnStyle: React.CSSProperties = {
-    background: color.successEmphasis, border: `1px solid ${color.successBorder}`, borderRadius: '6px',
-    color: '#fff', fontSize: '12px', padding: '6px 14px', cursor: 'pointer',
-}
+const inputCls = 'bg-bg-base border border-border-muted rounded-md text-text-primary text-[13px] px-2.5 py-1.5 font-mono outline-none w-full'
+const labelSpanCls = 'text-text-muted text-[11px] uppercase tracking-[0.05em]'
+const cancelCls = 'bg-transparent border border-border-muted rounded-md text-text-muted text-xs px-3.5 py-1.5 cursor-pointer disabled:opacity-50'
+const submitCls = 'bg-success-emphasis border border-success-border rounded-md text-white text-xs px-3.5 py-1.5 cursor-pointer disabled:opacity-50'
 
 export default function ProjectCreateModal({
     workspaces,
@@ -61,61 +50,55 @@ export default function ProjectCreateModal({
     }
 
     return (
-        <div style={{
-            position: 'fixed', inset: 0, background: color.overlay,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
-        }}>
-            <div style={{
-                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
-                padding: '24px', width: '340px', display: 'flex', flexDirection: 'column', gap: '14px',
-            }}>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100]">
+            <div className="bg-bg-surface border border-border-muted rounded-lg p-6 w-[340px] flex flex-col gap-3.5">
                 {confirmCreate ? (
                     <>
-                        <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>Directory not found</h2>
-                        <p style={{ margin: 0, color: color.textMuted, fontSize: '13px', lineHeight: 1.5 }}>
-                            <span style={{ color: color.textSecondary, fontFamily: '"JetBrains Mono", monospace', fontSize: '12px' }}>{confirmCreate.expanded}</span>
+                        <h2 className="m-0 text-text-primary text-[15px] font-semibold">Directory not found</h2>
+                        <p className="m-0 text-text-muted text-[13px] leading-relaxed">
+                            <span className="text-text-secondary font-mono text-xs">{confirmCreate.expanded}</span>
                             {' '}does not exist. Create it?
                         </p>
-                        {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                            <button type="button" onClick={() => setConfirmCreate(null)} style={cancelBtnStyle}>Back</button>
-                            <button type="button" disabled={form.processing} onClick={() => submit(true)} style={submitBtnStyle}>
+                        {error && <span className="text-danger text-xs">{error}</span>}
+                        <div className="flex gap-2 justify-end">
+                            <button type="button" onClick={() => setConfirmCreate(null)} className={cancelCls}>Back</button>
+                            <button type="button" disabled={form.processing} onClick={() => submit(true)} className={submitCls}>
                                 {form.processing ? 'Creating…' : 'Create & Add'}
                             </button>
                         </div>
                     </>
                 ) : (
-                    <form onSubmit={e => { e.preventDefault(); submit() }} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                        <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>New Project</h2>
-                        {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <span style={labelStyle}>Workspace</span>
+                    <form onSubmit={e => { e.preventDefault(); submit() }} className="flex flex-col gap-3.5">
+                        <h2 className="m-0 text-text-primary text-[15px] font-semibold">New Project</h2>
+                        {error && <span className="text-danger text-xs">{error}</span>}
+                        <label className="flex flex-col gap-1">
+                            <span className={labelSpanCls}>Workspace</span>
                             <select
                                 value={form.data.workspace_id ?? ''}
                                 onChange={e => form.setData('workspace_id', e.target.value ? Number(e.target.value) : null)}
-                                style={inputStyle}
+                                className={inputCls}
                             >
                                 <option value="">— No workspace —</option>
                                 {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                             </select>
                         </label>
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <span style={labelStyle}>Name</span>
-                            <input value={form.data.name} onChange={e => form.setData('name', e.target.value)} placeholder="my-project" required style={inputStyle} />
+                        <label className="flex flex-col gap-1">
+                            <span className={labelSpanCls}>Name</span>
+                            <input value={form.data.name} onChange={e => form.setData('name', e.target.value)} placeholder="my-project" required className={inputCls} />
                         </label>
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <span style={labelStyle}>Path</span>
-                            <input value={form.data.path} onChange={e => form.setData('path', e.target.value)} placeholder="~/code/my-project" required style={inputStyle} />
+                        <label className="flex flex-col gap-1">
+                            <span className={labelSpanCls}>Path</span>
+                            <input value={form.data.path} onChange={e => form.setData('path', e.target.value)} placeholder="~/code/my-project" required className={inputCls} />
                         </label>
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <span style={labelStyle}>Language</span>
-                            <select value={form.data.language} onChange={e => form.setData('language', e.target.value)} style={inputStyle}>
+                        <label className="flex flex-col gap-1">
+                            <span className={labelSpanCls}>Language</span>
+                            <select value={form.data.language} onChange={e => form.setData('language', e.target.value)} className={inputCls}>
                                 {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
                             </select>
                         </label>
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                            <button type="button" onClick={onClose} style={cancelBtnStyle}>Cancel</button>
-                            <button type="submit" disabled={form.processing} style={submitBtnStyle}>
+                        <div className="flex gap-2 justify-end">
+                            <button type="button" onClick={onClose} className={cancelCls}>Cancel</button>
+                            <button type="submit" disabled={form.processing} className={submitCls}>
                                 {form.processing ? 'Checking…' : 'Add Project'}
                             </button>
                         </div>
