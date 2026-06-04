@@ -144,6 +144,17 @@ const submitBtnStyle: React.CSSProperties = {
     background: color.successEmphasis, border: `1px solid ${color.successBorder}`, borderRadius: '6px',
     color: '#fff', fontSize: '12px', padding: '6px 14px', cursor: 'pointer',
 }
+const flagRowStyle: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    padding: '6px 10px', borderRadius: '6px',
+    background: color.bgCanvas, border: `1px solid ${color.borderMuted}`, cursor: 'pointer',
+}
+const toggleStyle = (on: boolean): React.CSSProperties => ({
+    width: '32px', height: '18px', borderRadius: '9px',
+    background: on ? color.accent : color.borderMuted,
+    border: 'none', cursor: 'pointer', position: 'relative',
+    flexShrink: 0, transition: 'background 0.15s',
+})
 
 // ─── Add Workspace Modal ──────────────────────────────────────────────────────
 
@@ -780,6 +791,315 @@ function DefaultPermissionsModal({ onClose }: { onClose: () => void }) {
             onSubmit={handleSubmit}
             onClose={onClose}
         />
+    )
+}
+
+// ─── Global Settings Modal ────────────────────────────────────────────────────
+
+function GlobalSettingsModal({
+    onClose,
+    initialTemplates,
+    onTemplatesChange,
+}: {
+    onClose: () => void
+    initialTemplates: AgentTemplate[]
+    onTemplatesChange: (templates: AgentTemplate[]) => void
+}) {
+    type SettingsTab = 'templates' | 'permissions'
+    const [tab, setTab] = useState<SettingsTab>('templates')
+    const [templates, setTemplates] = useState<AgentTemplate[]>(initialTemplates)
+
+    // Template editor
+    const [selected, setSelected] = useState<AgentTemplate | null>(null)
+    const [isNew, setIsNew] = useState(false)
+    const [tplName, setTplName] = useState('')
+    const [tplDesc, setTplDesc] = useState('')
+    const [tplType, setTplType] = useState('custom')
+    const [tplModel, setTplModel] = useState('claude-sonnet-4-6')
+    const [tplPrompt, setTplPrompt] = useState('')
+    const [tplFlags, setTplFlags] = useState<AgentFlags>({})
+    const [formError, setFormError] = useState('')
+    const [saving, setSaving] = useState(false)
+
+    // Permissions
+    const [permAllow, setPermAllow] = useState<string[]>([])
+    const [permDeny, setPermDeny] = useState<string[]>([])
+    const [permError, setPermError] = useState('')
+    const [permFetching, setPermFetching] = useState(true)
+    const [permSaving, setPermSaving] = useState(false)
+    const [permSaved, setPermSaved] = useState(false)
+
+    useEffect(() => {
+        fetch('/api/default-permissions')
+            .then(r => r.json())
+            .then(d => { setPermAllow(d.allow ?? []); setPermDeny(d.deny ?? []) })
+            .catch(() => setPermError('Failed to load'))
+            .finally(() => setPermFetching(false))
+    }, [])
+
+    function loadTemplate(tpl: AgentTemplate) {
+        setSelected(tpl); setIsNew(false)
+        setTplName(tpl.name); setTplDesc(tpl.description ?? '')
+        setTplType(tpl.agent_type); setTplModel(tpl.model)
+        setTplPrompt(tpl.system_prompt ?? ''); setTplFlags(tpl.flags ?? {})
+        setFormError('')
+    }
+
+    function startNew() {
+        setSelected(null); setIsNew(true)
+        setTplName(''); setTplDesc(''); setTplType('custom')
+        setTplModel('claude-sonnet-4-6'); setTplPrompt(''); setTplFlags({})
+        setFormError('')
+    }
+
+    async function saveTemplate() {
+        if (!tplName.trim()) { setFormError('Name is required'); return }
+        setSaving(true); setFormError('')
+        try {
+            const body = { name: tplName, description: tplDesc, agent_type: tplType, model: tplModel, system_prompt: tplPrompt, flags: tplFlags }
+            const url = isNew ? '/api/agent-templates' : `/api/agent-templates/${selected!.id}`
+            const res = await fetch(url, { method: isNew ? 'POST' : 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+            if (!res.ok) { const d = await res.json(); setFormError(d.error ?? 'Save failed'); return }
+            const tpl: AgentTemplate = await res.json()
+            const updated = isNew ? [...templates, tpl] : templates.map(t => t.id === tpl.id ? tpl : t)
+            setTemplates(updated); onTemplatesChange(updated)
+            setIsNew(false); setSelected(tpl)
+        } finally { setSaving(false) }
+    }
+
+    async function deleteTemplate() {
+        if (!selected || selected.is_builtin) return
+        const res = await fetch(`/api/agent-templates/${selected.id}`, { method: 'DELETE' })
+        if (!res.ok) return
+        const updated = templates.filter(t => t.id !== selected.id)
+        setTemplates(updated); onTemplatesChange(updated)
+        setSelected(null); setIsNew(false)
+    }
+
+    async function savePermissions() {
+        setPermSaving(true); setPermError(''); setPermSaved(false)
+        try {
+            const res = await fetch('/api/default-permissions', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ allow: permAllow, deny: permDeny }),
+            })
+            const d = await res.json()
+            if (!res.ok) { setPermError(d.error ?? 'Save failed'); return }
+            setPermAllow(d.allow ?? []); setPermDeny(d.deny ?? [])
+            setPermSaved(true); setTimeout(() => setPermSaved(false), 2000)
+        } catch { setPermError('Network error') }
+        finally { setPermSaving(false) }
+    }
+
+    const canEdit = isNew || (selected !== null && !selected.is_builtin)
+    const showEditor = isNew || selected !== null
+
+    const tabBtnStyle = (t: SettingsTab): React.CSSProperties => ({
+        background: tab === t ? color.bgCanvas : 'transparent',
+        border: tab === t ? `1px solid ${color.borderMuted}` : '1px solid transparent',
+        borderRadius: '6px', color: tab === t ? color.textPrimary : color.textMuted,
+        fontSize: '12px', padding: '4px 14px', cursor: 'pointer',
+    })
+
+    return (
+        <div
+            style={{ position: 'fixed', inset: 0, background: color.overlay, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}
+            onClick={e => { if (e.target === e.currentTarget) onClose() }}
+        >
+            <div style={{
+                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '10px',
+                width: '880px', height: '620px', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+            }}>
+                {/* Header */}
+                <div style={{ display: 'flex', alignItems: 'center', padding: '14px 20px', borderBottom: `1px solid ${color.border}`, gap: '12px', flexShrink: 0 }}>
+                    <span style={{ color: color.textPrimary, fontSize: '14px', fontWeight: 600 }}>Settings</span>
+                    <div style={{ display: 'flex', gap: '4px', flex: 1 }}>
+                        <button style={tabBtnStyle('templates')} onClick={() => setTab('templates')}>Templates</button>
+                        <button style={tabBtnStyle('permissions')} onClick={() => setTab('permissions')}>Default Permissions</button>
+                    </div>
+                    <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: color.textFaint, cursor: 'pointer', fontSize: '18px', lineHeight: 1, padding: '0 4px' }}>×</button>
+                </div>
+
+                {/* ── Templates tab ── */}
+                {tab === 'templates' && (
+                    <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+                        {/* Left list */}
+                        <div style={{ width: '220px', flexShrink: 0, borderRight: `1px solid ${color.border}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                            <div style={{ padding: '10px', borderBottom: `1px solid ${color.border}` }}>
+                                <button onClick={startNew} style={{ ...submitBtnStyle, width: '100%', textAlign: 'center' as const, padding: '6px 0' }}>
+                                    + New Template
+                                </button>
+                            </div>
+                            <div style={{ flex: 1, overflowY: 'auto' }}>
+                                {templates.map(tpl => {
+                                    const active = !isNew && selected?.id === tpl.id
+                                    return (
+                                        <button
+                                            key={tpl.id}
+                                            onClick={() => loadTemplate(tpl)}
+                                            style={{
+                                                width: '100%', textAlign: 'left' as const, background: active ? color.bgCanvas : 'transparent',
+                                                border: 'none', borderLeft: `2px solid ${active ? color.accent : 'transparent'}`,
+                                                padding: '9px 12px', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '3px',
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <span style={{ color: color.textPrimary, fontSize: '12px', fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{tpl.name}</span>
+                                                {tpl.is_builtin && <span style={{ color: color.textFaint, fontSize: '9px', letterSpacing: '0.03em' }}>built-in</span>}
+                                            </div>
+                                            <span style={{ color: AGENT_TYPE_COLORS[tpl.agent_type] ?? color.textFaint, fontSize: '10px' }}>
+                                                {AGENT_TYPE_LABELS[tpl.agent_type] ?? tpl.agent_type}
+                                            </span>
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Right editor */}
+                        {showEditor ? (
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                                {selected?.is_builtin && (
+                                    <div style={{ padding: '7px 16px', background: color.bgCanvas, borderBottom: `1px solid ${color.border}`, color: color.textMuted, fontSize: '11px' }}>
+                                        Built-in templates are read-only.
+                                    </div>
+                                )}
+                                <div style={{ flex: 1, overflowY: 'auto', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                    {formError && <span style={{ color: color.danger, fontSize: '12px' }}>{formError}</span>}
+
+                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                        <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                            <span style={labelStyle}>Name *</span>
+                                            <input value={tplName} disabled={!canEdit} onChange={e => setTplName(e.target.value)}
+                                                style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' as const, opacity: canEdit ? 1 : 0.55 }} />
+                                        </label>
+                                        <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                            <span style={labelStyle}>Type</span>
+                                            <select value={tplType} disabled={!canEdit} onChange={e => setTplType(e.target.value)}
+                                                style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' as const, opacity: canEdit ? 1 : 0.55 }}>
+                                                {Object.entries(AGENT_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                                            </select>
+                                        </label>
+                                    </div>
+
+                                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <span style={labelStyle}>Description</span>
+                                        <input value={tplDesc} disabled={!canEdit} onChange={e => setTplDesc(e.target.value)}
+                                            placeholder="Short description of this template's role…"
+                                            style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' as const, opacity: canEdit ? 1 : 0.55 }} />
+                                    </label>
+
+                                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <span style={labelStyle}>Model</span>
+                                        <select value={tplModel} disabled={!canEdit} onChange={e => setTplModel(e.target.value)}
+                                            style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' as const, opacity: canEdit ? 1 : 0.55 }}>
+                                            <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
+                                            <option value="claude-opus-4-8">Claude Opus 4.8</option>
+                                            <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+                                        </select>
+                                    </label>
+
+                                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <span style={labelStyle}>System Prompt</span>
+                                        <textarea value={tplPrompt} disabled={!canEdit} onChange={e => setTplPrompt(e.target.value)}
+                                            placeholder="Instructions passed to Claude when an agent using this template starts…"
+                                            rows={9}
+                                            style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' as const, resize: 'vertical' as const,
+                                                lineHeight: 1.6, fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', opacity: canEdit ? 1 : 0.55 }} />
+                                    </label>
+
+                                    {canEdit && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                            <span style={labelStyle}>Launch Flags</span>
+                                            {([
+                                                { key: 'dangerously_skip_permissions' as const, label: 'Skip Permissions', hint: '--dangerously-skip-permissions — no prompts' },
+                                                { key: 'plan_mode' as const, label: 'Plan Mode', hint: 'Read-only — analyse and plan, never edit files' },
+                                                { key: 'verbose' as const, label: 'Verbose', hint: '--verbose — detailed output' },
+                                            ] as const).map(({ key, label, hint }) => (
+                                                <div key={key} style={flagRowStyle} onClick={() => setTplFlags(f => ({ ...f, [key]: !f[key] }))}>
+                                                    <div>
+                                                        <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>{label}</div>
+                                                        <div style={{ fontSize: '10px', color: color.textFaint }}>{hint}</div>
+                                                    </div>
+                                                    <button type="button" style={toggleStyle(!!tplFlags[key])} onClick={e => e.stopPropagation()}>
+                                                        <span style={{ position: 'absolute', top: '3px', left: tplFlags[key] ? '17px' : '3px', width: '12px', height: '12px', borderRadius: '50%', background: '#fff', transition: 'left 0.15s' }} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            <div style={{ ...flagRowStyle, gap: '12px' }}>
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Max Turns</div>
+                                                    <div style={{ fontSize: '10px', color: color.textFaint }}>--max-turns N — limit conversation turns</div>
+                                                </div>
+                                                <input type="number" min={1} max={500} placeholder="∞"
+                                                    value={tplFlags.max_turns ?? ''}
+                                                    onChange={e => setTplFlags(f => ({ ...f, max_turns: e.target.value ? parseInt(e.target.value, 10) : null }))}
+                                                    onClick={e => e.stopPropagation()}
+                                                    style={{ ...inputStyle, width: '72px', textAlign: 'center' as const, padding: '4px 8px' }} />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                {canEdit && (
+                                    <div style={{ padding: '12px 20px', borderTop: `1px solid ${color.border}`, display: 'flex', gap: '8px', justifyContent: 'flex-end', flexShrink: 0 }}>
+                                        {!isNew && (
+                                            <button onClick={deleteTemplate} style={{ ...cancelBtnStyle, color: color.danger, borderColor: color.danger }}>
+                                                Delete
+                                            </button>
+                                        )}
+                                        <button onClick={saveTemplate} disabled={saving} style={{ ...submitBtnStyle, opacity: saving ? 0.6 : 1 }}>
+                                            {saving ? 'Saving…' : isNew ? 'Create Template' : 'Save Changes'}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <span style={{ color: color.textFaint, fontSize: '13px' }}>Select a template to view, or create a new one</span>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* ── Permissions tab ── */}
+                {tab === 'permissions' && (
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', maxWidth: '520px' }}>
+                            <p style={{ margin: 0, color: color.textMuted, fontSize: '11px' }}>
+                                Default allow/deny rules applied to all projects and agents. Changing these syncs to every project and agent in the database.
+                            </p>
+                            {permError && <span style={{ color: color.danger, fontSize: '12px' }}>{permError}</span>}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <span style={labelStyle}>Allow</span>
+                                <TagInput tags={permAllow} onChange={setPermAllow}
+                                    placeholder={permFetching ? '' : 'e.g. Bash(npm run *)'}
+                                    disabled={permFetching} tagColor={color.success} />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <span style={labelStyle}>Deny</span>
+                                <TagInput tags={permDeny} onChange={setPermDeny}
+                                    placeholder={permFetching ? '' : 'e.g. Bash(rm *)'}
+                                    disabled={permFetching} tagColor={color.danger} />
+                            </div>
+                            <p style={{ margin: 0, color: color.textFaint, fontSize: '10px', lineHeight: 1.5 }}>
+                                Rules follow Claude Code syntax, e.g.{' '}
+                                <code style={{ fontFamily: 'monospace' }}>Bash(*)</code>,{' '}
+                                <code style={{ fontFamily: 'monospace' }}>Bash(npm run *)</code>,{' '}
+                                <code style={{ fontFamily: 'monospace' }}>Read</code>.{' '}
+                                Leave both empty to rely on interactive prompts.
+                            </p>
+                            <div>
+                                <button onClick={savePermissions} disabled={permFetching || permSaving}
+                                    style={{ ...submitBtnStyle, opacity: (permFetching || permSaving) ? 0.6 : 1, minWidth: '120px' }}>
+                                    {permSaving ? 'Saving…' : permSaved ? 'Saved ✓' : 'Save Permissions'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
     )
 }
 
@@ -1588,7 +1908,7 @@ function Sidebar({
                 </div>
                 <button
                     onClick={onOpenDefaultPermissions}
-                    title="Default permissions"
+                    title="Settings"
                     style={{
                         background: 'transparent', border: 'none', cursor: 'pointer',
                         color: color.textFaint, padding: '2px', lineHeight: 1,
@@ -1598,7 +1918,8 @@ function Sidebar({
                     onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
                 >
                     <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M8.533.133a1.75 1.75 0 00-1.066 0l-5.25 1.68A1.75 1.75 0 001 3.48V8c0 3.183 1.958 5.837 4.798 7.319a.75.75 0 00.404.119.75.75 0 00.404-.119C9.042 13.837 11 11.183 11 8V3.48a1.75 1.75 0 00-1.217-1.667L8.533.133zm-.61 1.429a.25.25 0 01.153 0l5.25 1.68a.25.25 0 01.174.238V8c0 2.67-1.625 4.91-4 6.282C7.875 12.91 6.25 10.67 6.25 8V3.48a.25.25 0 01.173-.238l1.5-.48z"/>
+                        <path d="M8 4.754a3.246 3.246 0 100 6.492 3.246 3.246 0 000-6.492zM5.754 8a2.246 2.246 0 114.492 0 2.246 2.246 0 01-4.492 0z"/>
+                        <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 01-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 01-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 01.52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 011.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 011.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 01.52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 01-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 01-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 002.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 001.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 00-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 00-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 00-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 003.06 8.311l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 004.175 3.85l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 002.692-1.115l.094-.319z"/>
                     </svg>
                 </button>
             </div>
@@ -2369,19 +2690,6 @@ function AddAgentModal({ projectId, onClose, onCreated, templates }: {
         minWidth: '100px',
         maxWidth: '140px',
         textAlign: 'left',
-    })
-
-    const flagRowStyle: React.CSSProperties = {
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '6px 10px', borderRadius: '6px',
-        background: color.bgCanvas, border: `1px solid ${color.borderMuted}`,
-    }
-
-    const toggleStyle = (on: boolean): React.CSSProperties => ({
-        width: '32px', height: '18px', borderRadius: '9px',
-        background: on ? color.accent : color.borderMuted,
-        border: 'none', cursor: 'pointer', position: 'relative',
-        flexShrink: 0, transition: 'background 0.15s',
     })
 
     return (
@@ -3946,7 +4254,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const [editingProject, setEditingProject] = useState<Project | null>(null)
     const [systemPromptProject, setSystemPromptProject] = useState<Project | null>(null)
     const [permissionsProject, setPermissionsProject] = useState<Project | null>(null)
-    const [showDefaultPermissions, setShowDefaultPermissions] = useState(false)
+    const [showGlobalSettings, setShowGlobalSettings] = useState(false)
     const [deletingProject, setDeletingProject] = useState<Project | null>(null)
     const [tasks, setTasks] = useState<Task[]>(props.tasks ?? [])
     // 'running' = Claude is working, 'done' = Claude finished (Stop hook received)
@@ -4397,7 +4705,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 onEditProject={setEditingProject}
                 onSystemPromptProject={setSystemPromptProject}
                 onPermissionsProject={setPermissionsProject}
-                onOpenDefaultPermissions={() => setShowDefaultPermissions(true)}
+                onOpenDefaultPermissions={() => setShowGlobalSettings(true)}
                 onDeleteProject={setDeletingProject}
                 tasks={tasks}
                 onOpenCreateTask={() => setShowCreateTask(true)}
@@ -4598,7 +4906,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                             <button
                                                 onClick={async (e) => {
                                                     e.stopPropagation()
-                                                    await fetch(`/api/agents/${agent.id}`, { method: 'DELETE' })
+                                                    const res = await fetch(`/api/agents/${agent.id}`, { method: 'DELETE' })
+                                                    if (!res.ok) return
+                                                    // Clean up terminal session
+                                                    const session = agentSessions.current.get(agent.id)
+                                                    if (session) {
+                                                        session.observer.disconnect()
+                                                        session.term.dispose()
+                                                        session.ws.close()
+                                                        agentSessions.current.delete(agent.id)
+                                                    }
+                                                    agentContainerRefs.current.delete(agent.id)
+                                                    // Reset active selection if we deleted the active agent
+                                                    if (activeAgentId === agent.id) {
+                                                        const remaining = projectAgents.filter(a => a.id !== agent.id)
+                                                        setActiveAgentId(remaining.length > 0 ? remaining[0].id : null)
+                                                    }
                                                     setProjectAgents(prev => prev.filter(a => a.id !== agent.id))
                                                 }}
                                                 title="Remove"
@@ -4880,9 +5203,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 />
             )}
 
-            {showDefaultPermissions && (
-                <DefaultPermissionsModal
-                    onClose={() => setShowDefaultPermissions(false)}
+            {showGlobalSettings && (
+                <GlobalSettingsModal
+                    onClose={() => setShowGlobalSettings(false)}
+                    initialTemplates={agentTemplates}
+                    onTemplatesChange={setAgentTemplates}
                 />
             )}
 
