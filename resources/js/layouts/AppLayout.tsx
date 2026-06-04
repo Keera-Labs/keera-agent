@@ -6,6 +6,7 @@ import '@xterm/xterm/css/xterm.css'
 import { color } from "@/tokens"
 import type { Task, Workspace, Project } from "@/types/type"
 import ProjectCreateModal from '@/components/projects/ProjectCreateModal'
+import ProjectPathEditModal from '@/components/projects/ProjectPathEditModal'
 
 // ─── Agent color ──────────────────────────────────────────────────────────────
 
@@ -178,73 +179,6 @@ function AddWorkspaceModal({ onClose, onCreated }: { onClose: () => void; onCrea
                         <button type="button" onClick={onClose} style={cancelBtnStyle}>Cancel</button>
                         <button type="submit" disabled={loading} style={submitBtnStyle}>
                             {loading ? 'Creating…' : 'Create'}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    )
-}
-
-// ─── Edit Project Path Modal ──────────────────────────────────────────────────
-
-function EditProjectPathModal({
-    project,
-    onClose,
-    onUpdated,
-}: {
-    project: Project
-    onClose: () => void
-    onUpdated: (p: Project) => void
-}) {
-    const [path, setPath] = useState(project.path)
-    const [error, setError] = useState('')
-    const [loading, setLoading] = useState(false)
-
-    async function handleSubmit(e: React.FormEvent) {
-        e.preventDefault()
-        setError('')
-        setLoading(true)
-        try {
-            const res = await fetch(`/api/projects/${project.id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ path: path.trim() }),
-            })
-            const data = await res.json()
-            if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
-            onUpdated(data as Project)
-            onClose()
-        } catch {
-            setError('Network error')
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    return (
-        <div style={{
-            position: 'fixed', inset: 0, background: color.overlay,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
-        }}>
-            <div style={{
-                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
-                padding: '24px', width: '340px', display: 'flex', flexDirection: 'column', gap: '14px',
-            }}>
-                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                    <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>
-                        Change Directory —{' '}
-                        <span style={{ fontFamily: '"JetBrains Mono", monospace', color: color.accent }}>{project.name}</span>
-                    </h2>
-                    {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
-                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <span style={labelStyle}>Path</span>
-                        <input value={path} onChange={e => setPath(e.target.value)} placeholder="~/code/my-project" required style={inputStyle} />
-                    </label>
-                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                        <button type="button" onClick={onClose} style={cancelBtnStyle}>Cancel</button>
-                        <button type="submit" disabled={loading} style={submitBtnStyle}>
-                            {loading ? 'Saving…' : 'Save'}
                         </button>
                     </div>
                 </form>
@@ -5028,7 +4962,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             )}
 
             {editingProject && (
-                <EditProjectPathModal
+                <ProjectPathEditModal
                     project={editingProject}
                     onClose={() => setEditingProject(null)}
                     onUpdated={p => { handleProjectUpdated(p); setEditingProject(null) }}

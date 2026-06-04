@@ -43,9 +43,12 @@ async def validate_path(request: Request):
 
 async def update(request: Request, project_id: int):
     body = await request.json()
+    is_inertia = request.headers.get("X-Inertia") == "true"
 
     project = await Project.find(project_id)
     if not project:
+        if is_inertia:
+            return _inertia_error(request, {"_": "Project not found"}, 404)
         return JSONResponse({"error": "Project not found"}, status_code=404)
 
     if "workspace_id" in body:
@@ -54,9 +57,13 @@ async def update(request: Request, project_id: int):
     if "path" in body:
         new_path = (body.get("path") or "").strip()
         if not new_path:
+            if is_inertia:
+                return _inertia_error(request, {"_": "Path is required"}, 422)
             return JSONResponse({"error": "Path is required"}, status_code=422)
         expanded = os.path.expanduser(new_path)
         if not os.path.isdir(expanded):
+            if is_inertia:
+                return _inertia_error(request, {"_": "Directory does not exist"}, 422)
             return JSONResponse({"error": "Directory does not exist"}, status_code=422)
         project.path = new_path
         ensure_claude_settings(expanded, BASE_URL)
@@ -66,7 +73,7 @@ async def update(request: Request, project_id: int):
 
     await project.save()
 
-    return JSONResponse({
+    project_data = {
         "id": project.id,
         "name": project.name,
         "slug": project.slug,
@@ -75,7 +82,13 @@ async def update(request: Request, project_id: int):
         "workspace_id": project.workspace_id,
         "claude_status": project.claude_status,
         "system_prompt": project.system_prompt,
-    })
+    }
+
+    if is_inertia:
+        from fastapi_startkit.inertia.inertia import Inertia
+        return Inertia.render("Home", {"updated_project": project_data})
+
+    return JSONResponse(project_data)
 
 
 async def open_directory(request: Request, project_id: int):
