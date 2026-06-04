@@ -4,6 +4,8 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { color } from "@/tokens"
+import type { Task, Workspace, Project } from "@/types/type"
+import ProjectCreateModal from '@/components/projects/ProjectCreateModal'
 
 // ─── Agent color ──────────────────────────────────────────────────────────────
 
@@ -64,44 +66,11 @@ function playSound(type: 'done' | 'input') {
     } catch { /* AudioContext not available */ }
 }
 
-interface Workspace {
-    id: number
-    name: string
-    description: string | null
-    projects: Project[]
-}
-
-interface Project {
-    id: number
-    name: string
-    slug: string
-    path: string
-    language: string
-    workspace_id: number | null
-    claude_status: 'running' | 'idle' | null
-    system_prompt: string | null
-}
-
 interface Session {
     term: Terminal
     ws: WebSocket
     fitAddon: FitAddon
     observer: ResizeObserver
-}
-
-interface Task {
-    id: number
-    project_id: number
-    title: string
-    description: string
-    body: string | null
-    priority: 'low' | 'medium' | 'high'
-    assignees: string[]
-    acceptance_criteria: string[]
-    testing_methods: string[]
-    validation_steps: string[]
-    status: 'pending' | 'in_progress' | 'completed' | 'cancelled'
-    created_at: string
 }
 
 const STATUS_CYCLE: Task['status'][] = ['pending', 'in_progress', 'completed', 'cancelled']
@@ -212,128 +181,6 @@ function AddWorkspaceModal({ onClose, onCreated }: { onClose: () => void; onCrea
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
-    )
-}
-
-// ─── Add Project Modal ────────────────────────────────────────────────────────
-
-function AddProjectModal({
-    workspaces,
-    defaultWorkspaceId,
-    onClose,
-    onCreated,
-}: {
-    workspaces: Workspace[]
-    defaultWorkspaceId: number | null
-    onClose: () => void
-    onCreated: (p: Project) => void
-}) {
-    const [name, setName] = useState('')
-    const [path, setPath] = useState('')
-    const [language, setLanguage] = useState('Python')
-    const [workspaceId, setWorkspaceId] = useState<number | null>(defaultWorkspaceId ?? workspaces[0]?.id ?? null)
-    const [error, setError] = useState('')
-    const [loading, setLoading] = useState(false)
-    const [confirmCreate, setConfirmCreate] = useState<{ expanded: string } | null>(null)
-
-    async function handleSubmit(e: React.FormEvent) {
-        e.preventDefault()
-        setError('')
-        setLoading(true)
-        try {
-            const check = await fetch(`/api/validate-path?path=${encodeURIComponent(path)}`)
-            const { exists, expanded } = await check.json()
-            if (!exists) { setConfirmCreate({ expanded }); return }
-            await createProject()
-        } catch {
-            setError('Network error')
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    async function createProject() {
-        setLoading(true)
-        try {
-            const res = await fetch('/api/projects', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, path, language, workspace_id: workspaceId }),
-            })
-            const data = await res.json()
-            if (!res.ok) { setConfirmCreate(null); setError(data.error ?? 'Something went wrong'); return }
-            onCreated(data as Project)
-            onClose()
-        } catch {
-            setError('Network error')
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    return (
-        <div style={{
-            position: 'fixed', inset: 0, background: color.overlay,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
-        }}>
-            <div style={{
-                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
-                padding: '24px', width: '340px', display: 'flex', flexDirection: 'column', gap: '14px',
-            }}>
-                {confirmCreate ? (
-                    <>
-                        <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>Directory not found</h2>
-                        <p style={{ margin: 0, color: color.textMuted, fontSize: '13px', lineHeight: 1.5 }}>
-                            <span style={{ color: color.textSecondary, fontFamily: '"JetBrains Mono", monospace', fontSize: '12px' }}>{confirmCreate.expanded}</span>
-                            {' '}does not exist. Create it?
-                        </p>
-                        {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                            <button type="button" onClick={() => setConfirmCreate(null)} style={cancelBtnStyle}>Back</button>
-                            <button type="button" disabled={loading} onClick={createProject} style={submitBtnStyle}>
-                                {loading ? 'Creating…' : 'Create & Add'}
-                            </button>
-                        </div>
-                    </>
-                ) : (
-                    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                        <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>New Project</h2>
-                        {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <span style={labelStyle}>Workspace</span>
-                            <select
-                                value={workspaceId ?? ''}
-                                onChange={e => setWorkspaceId(e.target.value ? Number(e.target.value) : null)}
-                                style={inputStyle}
-                            >
-                                <option value="">— No workspace —</option>
-                                {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                            </select>
-                        </label>
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <span style={labelStyle}>Name</span>
-                            <input value={name} onChange={e => setName(e.target.value)} placeholder="my-project" required style={inputStyle} />
-                        </label>
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <span style={labelStyle}>Path</span>
-                            <input value={path} onChange={e => setPath(e.target.value)} placeholder="~/code/my-project" required style={inputStyle} />
-                        </label>
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <span style={labelStyle}>Language</span>
-                            <select value={language} onChange={e => setLanguage(e.target.value)} style={inputStyle}>
-                                {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
-                            </select>
-                        </label>
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                            <button type="button" onClick={onClose} style={cancelBtnStyle}>Cancel</button>
-                            <button type="submit" disabled={loading} style={submitBtnStyle}>
-                                {loading ? 'Checking…' : 'Add Project'}
-                            </button>
-                        </div>
-                    </form>
-                )}
             </div>
         </div>
     )
@@ -5163,7 +5010,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             )}
 
             {addProjectWorkspaceId !== undefined && (
-                <AddProjectModal
+                <ProjectCreateModal
                     workspaces={workspaces}
                     defaultWorkspaceId={addProjectWorkspaceId}
                     onClose={() => setAddProjectWorkspaceId(undefined)}
