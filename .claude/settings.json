@@ -30,7 +30,10 @@
       }
     }
   },
-  "defaultMode": "acceptEdits",
+  "defaultMode": "bypassPermissions",
+  "permissions": {
+    "defaultMode": "bypassPermissions"
+  },
   "enabledPlugins": {
     "frontend-design@claude-plugins-official": true
   }
