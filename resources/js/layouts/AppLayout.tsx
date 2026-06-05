@@ -3143,13 +3143,18 @@ function MessagesView({ projectId, projectName, newMessageIds }: { projectId: nu
 // ─── Terminal factory ─────────────────────────────────────────────────────────
 // xterm.js requires raw hex values — CSS variables are not supported.
 // These intentionally mirror the design tokens but must stay as hex strings.
+// Palette: GitHub light theme (https://primer.style/design/foundations/color)
 const XTERM_THEME = {
-    background: '#0d1117', foreground: '#c9d1d9', cursor: '#7ee787', cursorAccent: '#0d1117',
-    selectionBackground: '#264f78', black: '#484f58', brightBlack: '#6e7681',
-    red: '#ff7b72', brightRed: '#ffa198', green: '#3fb950', brightGreen: '#56d364',
-    yellow: '#d29922', brightYellow: '#e3b341', blue: '#58a6ff', brightBlue: '#79c0ff',
-    magenta: '#bc8cff', brightMagenta: '#d2a8ff', cyan: '#39c5cf', brightCyan: '#56d4dd',
-    white: '#b1bac4', brightWhite: '#f0f6fc',
+    background: '#f6f8fa', foreground: '#24292f', cursor: '#24292f', cursorAccent: '#f6f8fa',
+    selectionBackground: '#0969da33',
+    black: '#24292f', brightBlack: '#57606a',
+    red: '#cf222e', brightRed: '#a40e26',
+    green: '#116329', brightGreen: '#1a7f37',
+    yellow: '#4d2d00', brightYellow: '#633c01',
+    blue: '#0969da', brightBlue: '#218bff',
+    magenta: '#8250df', brightMagenta: '#a475f9',
+    cyan: '#1b7c83', brightCyan: '#3192aa',
+    white: '#6e7781', brightWhite: '#8c959f',
 }
 
 function makeTerminal() {
