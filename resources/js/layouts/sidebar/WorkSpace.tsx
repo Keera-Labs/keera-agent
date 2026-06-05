@@ -56,7 +56,7 @@ export function WorkspacePicker({
                     {(current?.name[0] ?? "A").toUpperCase()}
                 </div>
                 <span style={{ color: color.textSecondary, fontSize: "12px", fontWeight: 500, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {current?.name ?? "All Projects"}
+                    {current?.name ?? "All Workspaces"}
                 </span>
                 <svg width="10" height="10" viewBox="0 0 16 16" fill={color.textFaint} style={{ flexShrink: 0 }}>
                     <path d="M4.427 7.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 7H4.604a.25.25 0 00-.177.427z"/>

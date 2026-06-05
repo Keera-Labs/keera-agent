@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { router, usePage } from '@inertiajs/react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
-import '@xterm/xterm/css/xterm.css' 
+import '@xterm/xterm/css/xterm.css'
 import { color } from "@/tokens"
 import type { Task, Workspace, Project } from "@/types/type"
 import ProjectCreateModal from '@/components/project/ProjectCreateModal'
@@ -3167,7 +3167,7 @@ function makeTerminal() {
     return new Terminal({
         theme: XTERM_THEME,
         fontFamily: '"Dank Mono", "Fira Code", "Cascadia Code", monospace',
-        fontSize: 14, lineHeight: 1.2, cursorBlink: true, scrollback: 5000,
+        fontSize: 16, lineHeight: 1.4, cursorBlink: true, scrollback: 5000,
     })
 }
 
