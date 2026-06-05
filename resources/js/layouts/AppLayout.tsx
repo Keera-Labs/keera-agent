@@ -3292,6 +3292,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const [outputChars, setOutputChars] = useState<Record<number, number>>({})
 
     const isTasksPage = component === 'Tasks'
+    // Pages that render their own content into the content area via children
+    const pageHasContent = new Set(['Settings']).has(component)
     const [projectView, setProjectView] = useState<ProjectView>('agents')
     const activeView: ProjectView = isTasksPage ? 'tasks' : projectView
     const [showCreateTask, setShowCreateTask] = useState(false)
@@ -3758,9 +3760,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         </button>
                         {/* Settings */}
                         <button
-                            onClick={() => setShowDefaultPermissions(true)}
+                            onClick={() => router.visit('/settings')}
                             title="Settings"
-                            className="bg-transparent border-none cursor-pointer text-gray-400 p-1.5 flex items-center rounded hover:text-gray-700 transition-colors"
+                            className={[
+                                'bg-transparent border-none cursor-pointer p-1.5 flex items-center rounded transition-colors',
+                                pageHasContent ? 'text-blue-500' : 'text-gray-400 hover:text-gray-700',
+                            ].join(' ')}
                         >
                             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                                 <path d="M8 0a8.2 8.2 0 01.701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.103-.303c.644-.176 1.392.021 1.82.63.27.385.506.792.704 1.218.315.675.111 1.422-.364 1.891l-.814.806c-.049.048-.098.147-.088.294.016.257.016.515 0 .772-.01.147.038.246.087.294l.814.806c.475.469.679 1.216.364 1.891a7.977 7.977 0 01-.704 1.217c-.428.61-1.176.807-1.82.63l-1.103-.303c-.066-.019-.176-.011-.299.071a5.909 5.909 0 01-.668.386c-.133.066-.194.158-.211.224l-.29 1.106c-.168.646-.715 1.196-1.458 1.26a8.006 8.006 0 01-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106c-.018-.066-.079-.158-.212-.224a5.738 5.738 0 01-.668-.386c-.123-.082-.233-.09-.299-.071l-1.103.303c-.644.176-1.392-.021-1.82-.63a8.12 8.12 0 01-.704-1.218c-.315-.675-.111-1.422.363-1.891l.815-.806c.05-.048.098-.147.088-.294a6.214 6.214 0 010-.772c.01-.147-.038-.246-.088-.294l-.815-.806C.635 6.045.431 5.298.746 4.623a7.92 7.92 0 01.704-1.217c.428-.61 1.176-.807 1.82-.63l1.102.302c.067.019.177.011.3-.071a5.659 5.659 0 01.668-.386c.133-.066.194-.158.211-.224l.29-1.106C6.156.421 6.703-.129 7.445.031 7.645.015 7.825 0 8 0zm1.5 8a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/>
@@ -3775,6 +3780,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
                 {/* Body: content */}
                 <div className="flex-1 flex overflow-hidden bg-white">
+
+                    {pageHasContent ? children : (<>
 
                     {/* Agents view: agent card list (left) + terminal (right) — always rendered to keep sessions alive */}
                     <div style={{ flex: 1, overflow: 'hidden', display: activeView === 'agents' ? 'flex' : 'none' }}>
@@ -4102,6 +4109,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                             <span style={{ color: color.textFaint, fontSize: '13px' }}>No project selected</span>
                         </div>
                     )}
+
+                    </>)}
                 </div>
             </div>
 
@@ -4208,7 +4217,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 />
             )}
 
-            {children}
         </div>
     )
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type React from 'react'
+import { router, usePage } from '@inertiajs/react'
 import { color } from '@/tokens'
 import type { Project } from '@/types/type'
 import { ProjectItem } from './Project'
@@ -80,6 +81,8 @@ export default function Sidebar({
     claudeStatus: Record<number, 'running' | 'done'>
 }) {
     const [filterWorkspaceId, setFilterWorkspaceId] = useState<number | null>(null)
+    const { component } = usePage()
+    const isSettingsPage = component === 'Settings'
 
     const filteredProjects = filterWorkspaceId !== null
         ? allProjects.filter(p => p.workspace_id === filterWorkspaceId)
@@ -238,9 +241,33 @@ export default function Sidebar({
                 </div>
             </div>
 
-            {/* New Agent button */}
-            {activeProject && (
-                <div style={{ padding: '8px 10px 12px', borderTop: `1px solid ${color.border}` }}>
+            {/* Bottom bar: Settings link + (optional) New Agent */}
+            <div style={{ borderTop: `1px solid ${color.border}`, display: 'flex', flexDirection: 'column', gap: '6px', padding: '8px 10px 10px' }}>
+                {/* Settings link */}
+                <button
+                    onClick={() => router.visit('/settings')}
+                    style={{
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                        padding: '7px 10px', width: '100%',
+                        background: isSettingsPage ? color.accentSubtle : 'transparent',
+                        border: `1px solid ${isSettingsPage ? color.accentEmphasis : 'transparent'}`,
+                        borderRadius: '6px',
+                        color: isSettingsPage ? color.accentMuted : color.textMuted,
+                        fontSize: '12px', fontWeight: isSettingsPage ? 600 : 400,
+                        cursor: 'pointer', textAlign: 'left',
+                        transition: 'all 0.1s',
+                    }}
+                    onMouseEnter={e => { if (!isSettingsPage) { e.currentTarget.style.background = color.bgSurface; e.currentTarget.style.color = color.textSecondary } }}
+                    onMouseLeave={e => { if (!isSettingsPage) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = color.textMuted } }}
+                >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M8 0a8.2 8.2 0 01.701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.103-.303c.644-.176 1.392.021 1.82.63.27.385.506.792.704 1.218.315.675.111 1.422-.364 1.891l-.814.806c-.049.048-.098.147-.088.294.016.257.016.515 0 .772-.01.147.038.246.087.294l.814.806c.475.469.679 1.216.364 1.891a7.977 7.977 0 01-.704 1.217c-.428.61-1.176.807-1.82.63l-1.103-.303c-.066-.019-.176-.011-.299.071a5.909 5.909 0 01-.668.386c-.133.066-.194.158-.211.224l-.29 1.106c-.168.646-.715 1.196-1.458 1.26a8.006 8.006 0 01-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106c-.018-.066-.079-.158-.212-.224a5.738 5.738 0 01-.668-.386c-.123-.082-.233-.09-.299-.071l-1.103.303c-.644.176-1.392-.021-1.82-.63a8.12 8.12 0 01-.704-1.218c-.315-.675-.111-1.422.363-1.891l.815-.806c.05-.048.098-.147.088-.294a6.214 6.214 0 010-.772c.01-.147-.038-.246-.088-.294l-.815-.806C.635 6.045.431 5.298.746 4.623a7.92 7.92 0 01.704-1.217c.428-.61 1.176-.807 1.82-.63l1.102.302c.067.019.177.011.3-.071a5.659 5.659 0 01.668-.386c.133-.066.194-.158.211-.224l.29-1.106C6.156.421 6.703-.129 7.445.031 7.645.015 7.825 0 8 0zm1.5 8a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/>
+                    </svg>
+                    <span>Settings</span>
+                </button>
+
+                {/* New Agent button */}
+                {activeProject && (
                     <button
                         onClick={onAddAgent}
                         style={{
@@ -258,8 +285,8 @@ export default function Sidebar({
                         </svg>
                         New Agent
                     </button>
-                </div>
-            )}
+                )}
+            </div>
         </aside>
     )
 }
