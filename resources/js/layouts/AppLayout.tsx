@@ -9,6 +9,10 @@ import ProjectCreateModal from '@/components/project/ProjectCreateModal'
 import ProjectPathEditModal from '@/components/project/ProjectPathEditModal'
 import Sidebar, { type ProjectView, PROJECT_NAV } from './sidebar/Sidebar'
 import { DotsIndicator } from './sidebar/Project'
+import { useWorkspace } from './hooks/workspace'
+import { useTasks } from './hooks/tasks'
+import { useAgents, type ProjectAgent } from './hooks/agents'
+import { useProjects } from './hooks/projects'
 
 // ─── Agent color ──────────────────────────────────────────────────────────────
 
@@ -130,30 +134,22 @@ const toggleStyle = (on: boolean): React.CSSProperties => ({
 
 // ─── Add Workspace Modal ──────────────────────────────────────────────────────
 
-function AddWorkspaceModal({ onClose, onCreated }: { onClose: () => void; onCreated: (w: Workspace) => void }) {
+function AddWorkspaceModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+    const { create, creating } = useWorkspace()
     const [name, setName] = useState('')
     const [description, setDescription] = useState('')
     const [error, setError] = useState('')
-    const [loading, setLoading] = useState(false)
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
         setError('')
-        setLoading(true)
+        if (!name.trim()) { setError('Name is required'); return }
         try {
-            const res = await fetch('/api/workspaces', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, description }),
-            })
-            const data = await res.json()
-            if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
-            onCreated(data as Workspace)
+            await create({ name: name.trim(), description: description.trim() || undefined })
+            onCreated()
             onClose()
         } catch {
             setError('Network error')
-        } finally {
-            setLoading(false)
         }
     }
 
@@ -179,8 +175,8 @@ function AddWorkspaceModal({ onClose, onCreated }: { onClose: () => void; onCrea
                     </label>
                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                         <button type="button" onClick={onClose} style={cancelBtnStyle}>Cancel</button>
-                        <button type="submit" disabled={loading} style={submitBtnStyle}>
-                            {loading ? 'Creating…' : 'Create'}
+                        <button type="submit" disabled={creating} style={submitBtnStyle}>
+                            {creating ? 'Creating…' : 'Create'}
                         </button>
                     </div>
                 </form>
@@ -1614,18 +1610,7 @@ interface AgentTemplate {
     is_builtin: boolean
 }
 
-interface ProjectAgent {
-    id: number
-    project_id: number
-    name: string
-    description: string | null
-    model: string
-    system_prompt: string | null
-    agent_type: string
-    status: 'idle' | 'running'
-    flags: AgentFlags
-    created_at: string | null
-}
+// ProjectAgent is imported from './hooks/agents'
 
 const AGENT_TYPE_LABELS: Record<string, string> = {
     pm: 'PM',
@@ -3279,8 +3264,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const { props, component } = usePage<{ project?: string; tasks?: Task[] }>()
     const projectName = props.project
 
-    const [workspaces, setWorkspaces] = useState<Workspace[]>([])
-    const [allProjects, setAllProjects] = useState<Project[]>([])
+    // ── Data hooks ────────────────────────────────────────────────────────────
+    const { workspaces, invalidate: invalidateWorkspaces } = useWorkspace()
+    const { allProjects, unassigned: unassignedProjects, invalidate: invalidateProjects, update: updateProject, remove: removeProject } = useProjects()
+
+    // Modal/UI state
     const [showWorkspaceModal, setShowWorkspaceModal] = useState(false)
     const [addProjectWorkspaceId, setAddProjectWorkspaceId] = useState<number | null | undefined>(undefined)
     const [movingProject, setMovingProject] = useState<Project | null>(null)
@@ -3291,8 +3279,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const [showDefaultPermissions, setShowDefaultPermissions] = useState(false)
     const [deletingProject, setDeletingProject] = useState<Project | null>(null)
     const [deletingWorkspace, setDeletingWorkspace] = useState<Workspace | null>(null)
-    const [tasks, setTasks] = useState<Task[]>(props.tasks ?? [])
-    // 'running' = Claude is working, 'done' = Claude finished (Stop hook received)
+
+    // Terminal / Claude status state (not in react-query — driven by WebSocket events)
     const [claudeStatus, setClaudeStatus] = useState<Record<number, 'running' | 'done'>>({})
     const [lastActivity, setLastActivity] = useState<Record<number, string>>({})
     const [sessionStart, setSessionStart] = useState<Record<number, Date>>({})
@@ -3305,7 +3293,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const [isDraggingOver, setIsDraggingOver] = useState(false)
     const [selectedTask, setSelectedTask] = useState<Task | null>(null)
     const [newMessageIds, setNewMessageIds] = useState<number[]>([])
-    const [projectAgents, setProjectAgents] = useState<ProjectAgent[]>([])
     const [agentTemplates, setAgentTemplates] = useState<AgentTemplate[]>([])
     const [showAddAgent, setShowAddAgent] = useState(false)
     const [activeAgentId, setActiveAgentId] = useState<number | null>(null)
@@ -3319,9 +3306,30 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
     const activeProject = allProjects.find(p => p.slug === projectName) ?? allProjects[0] ?? null
 
-    // Flatten all projects from workspaces for terminal management
-    const workspaceProjects = workspaces.flatMap(w => w.projects)
-    const unassignedProjects = allProjects.filter(p => p.workspace_id === null || p.workspace_id === undefined)
+    // Per-project hooks (re-run when active project changes)
+    const taskHook = useTasks(activeProject?.id ?? null)
+    const agentHook = useAgents(activeProject?.id ?? null)
+    const tasks = taskHook.tasks
+    const projectAgents = agentHook.agents
+
+    // Seed claudeStatus from fetched project data on first load
+    useEffect(() => {
+        const initial: Record<number, 'running' | 'done'> = {}
+        for (const p of allProjects) {
+            if (p.claude_status === 'running') initial[p.id] = 'running'
+            else if (p.claude_status === 'idle') initial[p.id] = 'done'
+        }
+        setClaudeStatus(prev => ({ ...initial, ...prev }))
+    }, [allProjects.length])
+
+    // Reset active agent when switching projects
+    useEffect(() => {
+        setActiveAgentId(null)
+        agentSessions.current.forEach(({ term, ws, observer }) => {
+            observer.disconnect(); term.dispose(); ws.close()
+        })
+        agentSessions.current.clear()
+    }, [activeProject?.id])
 
     useEffect(() => {
         function onKeyDown(e: KeyboardEvent) {
@@ -3333,45 +3341,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         window.addEventListener('keydown', onKeyDown)
         return () => window.removeEventListener('keydown', onKeyDown)
     }, [])
-
-    useEffect(() => {
-        Promise.all([
-            fetch('/api/workspaces').then(r => r.json()),
-            fetch('/api/projects').then(r => r.json()),
-        ]).then(([ws, ps]: [Workspace[], Project[]]) => {
-            setWorkspaces(ws)
-            setAllProjects(ps)
-            // Restore status from DB — map 'idle' → 'done' for the frontend
-            const initial: Record<number, 'running' | 'done'> = {}
-            for (const p of ps) {
-                if (p.claude_status === 'running') initial[p.id] = 'running'
-                else if (p.claude_status === 'idle') initial[p.id] = 'done'
-            }
-            setClaudeStatus(initial)
-        }).catch(() => {})
-    }, [])
-
-    useEffect(() => {
-        if (!activeProject) { setTasks([]); return }
-        fetch(`/api/projects/${activeProject.id}/tasks`)
-            .then(r => r.json())
-            .then(setTasks)
-            .catch(() => {})
-    }, [activeProject?.id])
-
-    useEffect(() => {
-        if (!activeProject) { setProjectAgents([]); return }
-        setActiveAgentId(null)
-        // Tear down any existing agent terminal sessions for this project switch
-        agentSessions.current.forEach(({ term, ws, observer }) => {
-            observer.disconnect(); term.dispose(); ws.close()
-        })
-        agentSessions.current.clear()
-        fetch(`/api/projects/${activeProject.id}/agents`)
-            .then(r => r.json())
-            .then(setProjectAgents)
-            .catch(() => {})
-    }, [activeProject?.id])
 
     // Fetch agent templates once on mount (global, not project-specific)
     useEffect(() => {
@@ -3424,10 +3393,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 try {
                     const event = JSON.parse(e.data)
                     if (event.type === 'agent_created') {
-                        setProjectAgents(prev => {
-                            if (prev.some(a => a.id === event.agent.id)) return prev
-                            return [...prev, event.agent as ProjectAgent]
-                        })
+                        agentHook.addAgent(event.agent as ProjectAgent)
                     }
                 } catch { /* not JSON, ignore */ }
             }
@@ -3465,27 +3431,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     function handleOpenTask(task: Task) { setSelectedTask(task) }
     function handleCloseTask() { setSelectedTask(null) }
 
-    async function handleAddTask(title: string, body: string, assignees: string[], projectId: number) {
-        const res = await fetch(`/api/projects/${projectId}/tasks`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title, body, assignees }),
-        })
-        if (res.ok) { const task = await res.json(); setTasks(prev => [...prev, task]) }
+    async function handleAddTask(title: string, body: string, assignees: string[]): Promise<Task | null> {
+        try {
+            return await taskHook.create.mutateAsync({ title, body, assignees })
+        } catch { return null }
     }
 
     async function handleUpdateStatus(task: Task, status: Task['status']) {
-        const res = await fetch(`/api/tasks/${task.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status }),
-        })
-        if (res.ok) setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status } : t))
+        taskHook.updateStatus.mutate({ taskId: task.id, status })
     }
 
     async function handleDeleteTask(task: Task) {
-        await fetch(`/api/tasks/${task.id}`, { method: 'DELETE' })
-        setTasks(prev => prev.filter(t => t.id !== task.id))
+        taskHook.remove.mutate(task.id)
     }
 
     useEffect(() => {
@@ -3528,13 +3485,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         if (sessions.current.has(activeProject.id)) {
             const { fitAddon, term } = sessions.current.get(activeProject.id)!
-            requestAnimationFrame(() => {
-                fitAddon.fit();
-                term.focus()
-            })
+            requestAnimationFrame(() => { fitAddon.fit(); term.focus() })
             return
         }
-    })
 
         requestAnimationFrame(() => {
         const term = makeTerminal()
@@ -3574,11 +3527,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         setNewMessageIds(prev => [...prev, msg.message_id])
                         playSound('input')
                     } else if (msg.type === 'agent_created') {
-                        // An agent spawned a new agent — add it to the sidebar
-                        setProjectAgents(prev => {
-                            if (prev.some(a => a.id === msg.agent.id)) return prev
-                            return [...prev, msg.agent as ProjectAgent]
-                        })
+                        agentHook.addAgent(msg.agent as ProjectAgent)
                     }
                 } catch { /* ignore */ }
             } else {
@@ -3632,30 +3581,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         observer.observe(container)
 
         sessions.current.set(activeProject.id, { term, ws, fitAddon, observer })
+        }) // requestAnimationFrame
     }, [activeProject, projectAgents])
 
-    function handleWorkspaceCreated(workspace: Workspace) {
-        setWorkspaces(prev => [...prev, workspace])
-    }
-
-    function handleWorkspaceDeleted(workspaceId: number) {
-        setWorkspaces(prev => prev.filter(w => w.id !== workspaceId))
-        // Projects in this workspace become unassigned (backend handles unlinking)
-        setAllProjects(prev => prev.map(p =>
-            p.workspace_id === workspaceId ? { ...p, workspace_id: null } : p
-        ))
-    }
+    function handleWorkspaceCreated() { invalidateWorkspaces() }
+    function handleWorkspaceDeleted() { invalidateWorkspaces(); invalidateProjects() }
 
     function handleProjectCreated(project: Project) {
-        setAllProjects(prev => [...prev, project])
-        // Also update workspace's project list if it belongs to one
-        if (project.workspace_id !== null && project.workspace_id !== undefined) {
-            setWorkspaces(prev => prev.map(w =>
-                w.id === project.workspace_id
-                    ? { ...w, projects: [...w.projects, project] }
-                    : w
-            ))
-        }
+        invalidateProjects()
         router.visit(`/${project.slug}`)
     }
 
@@ -3664,47 +3597,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
 
     async function handleMoveProject(project: Project, newWorkspaceId: number | null) {
-        const res = await fetch(`/api/projects/${project.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ workspace_id: newWorkspaceId }),
-        })
-        if (!res.ok) throw new Error('Failed to move project')
-        const updated: Project = await res.json()
-
-        setAllProjects(prev => prev.map(p => p.id === project.id ? updated : p))
-        setWorkspaces(prev => prev.map(w => {
-            // Remove from old workspace
-            if (w.id === project.workspace_id) {
-                return { ...w, projects: w.projects.filter(p => p.id !== project.id) }
-            }
-            // Add to new workspace
-            if (w.id === newWorkspaceId) {
-                return { ...w, projects: [...w.projects, updated] }
-            }
-            return w
-        }))
+        await updateProject.mutateAsync({ id: project.id, workspace_id: newWorkspaceId })
+        invalidateWorkspaces()
     }
 
-    function handleProjectUpdated(updated: Project) {
-        setAllProjects(prev => prev.map(p => p.id === updated.id ? updated : p))
-        setWorkspaces(prev => prev.map(w => ({
-            ...w,
-            projects: w.projects.map(p => p.id === updated.id ? updated : p),
-        })))
+    function handleProjectUpdated(_updated: Project) {
+        invalidateProjects()
+        invalidateWorkspaces()
     }
 
     function handleProjectDeleted(projectId: number) {
         const project = allProjects.find(p => p.id === projectId)
-        setAllProjects(prev => prev.filter(p => p.id !== projectId))
-        setWorkspaces(prev => prev.map(w => ({
-            ...w,
-            projects: w.projects.filter(p => p.id !== projectId),
-        })))
-        // Navigate away if the deleted project was active
-        if (project && projectName === project.slug) {
-            router.visit('/')
-        }
+        removeProject.mutate(projectId)
+        if (project && projectName === project.slug) router.visit('/')
     }
 
     async function uploadImage(file: File) {
@@ -3963,7 +3868,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                                         const remaining = projectAgents.filter(a => a.id !== agent.id)
                                                         setActiveAgentId(remaining.length > 0 ? remaining[0].id : null)
                                                     }
-                                                    setProjectAgents(prev => prev.filter(a => a.id !== agent.id))
+                                                    agentHook.remove.mutate(agent.id)
                                                 }}
                                                 title="Remove"
                                                 className="bg-transparent border-none text-gray-300 cursor-pointer text-sm p-1 rounded shrink-0 hover:text-red-500 transition-colors"
@@ -4182,7 +4087,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {showCreateTask && (
                 <CreateTaskModal
                     onClose={() => setShowCreateTask(false)}
-                    onCreated={(title, body, assignees, projectId) => handleAddTask(title, body, assignees, projectId)}
+                    onCreated={(title, body, assignees) => handleAddTask(title, body, assignees)}
                     projects={allProjects}
                     workspaces={workspaces}
                     defaultProjectId={activeProject?.id ?? null}
@@ -4192,7 +4097,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {showWorkspaceModal && (
                 <AddWorkspaceModal
                     onClose={() => setShowWorkspaceModal(false)}
-                    onCreated={handleWorkspaceCreated}
+                    onCreated={() => handleWorkspaceCreated()}
                 />
             )}
 
@@ -4257,7 +4162,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <ConfirmDeleteWorkspaceModal
                     workspace={deletingWorkspace}
                     onClose={() => setDeletingWorkspace(null)}
-                    onDeleted={id => { handleWorkspaceDeleted(id); setDeletingWorkspace(null) }}
+                    onDeleted={_id => { handleWorkspaceDeleted(); setDeletingWorkspace(null) }}
                 />
             )}
 
@@ -4266,7 +4171,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     projectId={activeProject.id}
                     templates={agentTemplates}
                     onClose={() => setShowAddAgent(false)}
-                    onCreated={agent => { setProjectAgents(prev => [...prev, agent]); setShowAddAgent(false) }}
+                    onCreated={agent => { agentHook.addAgent(agent); setShowAddAgent(false) }}
                 />
             )}
 
