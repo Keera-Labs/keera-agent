@@ -10,7 +10,7 @@ class QueueWorkCommand(Command):
     """
 
     name = "queue:work"
-    description = "Start the Taskiq queue worker."
+    description = "Start the taskiq queue worker."
     options = [
         option("workers", "w", "Number of worker processes to spawn.", flag=False, default=1)
     ]
