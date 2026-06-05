@@ -1,12 +1,12 @@
 from pathlib import Path
 
 from fastapi_startkit import Application
-from fastapi_startkit.masoniteorm.providers.DatabaseProvider import DatabaseProvider
-from fastapi_startkit.fastapi.providers.fastapi_provider import FastAPIProvider
-from fastapi_startkit.inertia.provider import InertiaProvider
+from fastapi_startkit.fastapi import FastAPIProvider
+from fastapi_startkit.inertia import InertiaProvider
 from fastapi_startkit.logging import LogProvider
-from fastapi_startkit.storage.providers.provider import StorageProvider
-from fastapi_startkit.vite.providers.provider import ViteProvider
+from fastapi_startkit.masoniteorm import DatabaseProvider
+from fastapi_startkit.storage import StorageProvider
+from fastapi_startkit.vite import ViteProvider
 
 from config.database import DatabaseConfig
 from config.fastapi import FastAPIConfig

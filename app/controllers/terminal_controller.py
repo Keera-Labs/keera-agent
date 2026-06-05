@@ -39,6 +39,52 @@ def _permission_flags(allow_json: str | None, deny_json: str | None) -> str:
     return (' ' + ' '.join(flags)) if flags else ''
 
 
+def _extra_flags(flags_json: str | None) -> str:
+    """Build extra claude CLI flags from agent.flags JSON.
+
+    Supported keys:
+      dangerously_skip_permissions: bool  → --dangerously-skip-permissions
+      verbose: bool                       → --verbose
+      max_turns: int | null               → --max-turns N
+    """
+    if not flags_json:
+        return ''
+    try:
+        flags = json.loads(flags_json)
+    except (json.JSONDecodeError, TypeError):
+        return ''
+    parts = []
+    if flags.get('dangerously_skip_permissions'):
+        parts.append('--dangerously-skip-permissions')
+    if flags.get('verbose'):
+        parts.append('--verbose')
+    max_turns = flags.get('max_turns')
+    if max_turns:
+        try:
+            parts.append(f'--max-turns {int(max_turns)}')
+        except (TypeError, ValueError):
+            pass
+    return (' ' + ' '.join(parts)) if parts else ''
+
+
+_PLAN_MODE_PREFIX = (
+    "You are in PLAN-ONLY mode. Analyze and plan — do NOT write or edit any files, "
+    "run commands, or execute any tool that modifies the filesystem or codebase. "
+    "Only Read and Glob tools are permitted.\n\n"
+)
+
+
+def _apply_plan_mode(system_prompt: str, flags_json: str | None) -> str:
+    """Prepend the plan-mode instruction to the system prompt when plan_mode flag is set."""
+    try:
+        flags = json.loads(flags_json) if flags_json else {}
+    except (json.JSONDecodeError, TypeError):
+        flags = {}
+    if flags.get('plan_mode'):
+        return _PLAN_MODE_PREFIX + system_prompt
+    return system_prompt
+
+
 # Registry: project_path -> active WebSocket (frontend connection)
 connections: dict[str, WebSocket] = {}
 
@@ -224,8 +270,11 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
         task_id = agent_record.task_id or None
         worktree_name = f'agent-{task_id}' if task_id else f'agent-{agent_record.id}'
 
-        full_prompt = (system_prompt).strip()
+        # Apply plan-mode prefix and build extra CLI flags from agent.flags
+        agent_flags_json = getattr(agent_record, 'flags', None)
+        full_prompt = _apply_plan_mode(system_prompt, agent_flags_json).strip()
         model_flag = f' --model {shlex.quote(model)}' if model else ''
+        extra_flags = _extra_flags(agent_flags_json)
 
         prompt_file = f'/tmp/keera-agent-{agent_record.id}.txt'
         with open(prompt_file, 'w') as _pf:
@@ -234,9 +283,9 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
 
         wt_flag = f' --worktree {shlex.quote(worktree_name)}'
         if has_session:
-            os.write(master_fd, f'claude{wt_flag} --continue{model_flag}\n'.encode())
+            os.write(master_fd, f'claude{wt_flag} --continue{model_flag}{extra_flags}\n'.encode())
         else:
-            os.write(master_fd, f'claude{wt_flag}{sp_ref}{model_flag}\n'.encode())
+            os.write(master_fd, f'claude{wt_flag}{sp_ref}{model_flag}{extra_flags}\n'.encode())
             await Agent.where("id", agent_record.id).update({"has_session": True})
 
         # Signal that Claude is ready for input
