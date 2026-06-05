@@ -3761,7 +3761,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     <div style={{ flex: 1, overflow: 'hidden', display: activeView === 'agents' ? 'flex' : 'none' }}>
 
                         {/* Agent cards list */}
-                        <div className="w-[230px] shrink-0 overflow-y-auto bg-white border-r border-gray-200 flex flex-col">
+                        <div className="w-57.5 shrink-0 overflow-y-auto bg-white border-r border-gray-200 flex flex-col">
                             {/* Per-project agents */}
                             {activeProject && (
                                 <>
