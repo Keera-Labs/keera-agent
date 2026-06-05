@@ -7,6 +7,7 @@ import { color } from "@/tokens"
 import type { Task, Workspace, Project } from "@/types/type"
 import ProjectCreateModal from '@/components/project/ProjectCreateModal'
 import ProjectPathEditModal from '@/components/project/ProjectPathEditModal'
+import AddWorkspaceModal from '@/components/AddWorkspaceModal'
 import Sidebar, { type ProjectView, PROJECT_NAV } from './sidebar/Sidebar'
 import { DotsIndicator } from './sidebar/Project'
 import { useWorkspace } from './hooks/workspace'
@@ -132,59 +133,6 @@ const toggleStyle = (on: boolean): React.CSSProperties => ({
     border: 'none', cursor: 'pointer', position: 'relative',
     flexShrink: 0, transition: 'background 0.15s',
 })
-
-// ─── Add Workspace Modal ──────────────────────────────────────────────────────
-
-function AddWorkspaceModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-    const { create, creating } = useWorkspace()
-    const [name, setName] = useState('')
-    const [description, setDescription] = useState('')
-    const [error, setError] = useState('')
-
-    async function handleSubmit(e: React.FormEvent) {
-        e.preventDefault()
-        setError('')
-        if (!name.trim()) { setError('Name is required'); return }
-        try {
-            await create({ name: name.trim(), description: description.trim() || undefined })
-            onCreated()
-            onClose()
-        } catch {
-            setError('Network error')
-        }
-    }
-
-    return (
-        <div style={{
-            position: 'fixed', inset: 0, background: color.overlay,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
-        }}>
-            <div style={{
-                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
-                padding: '24px', width: '340px', display: 'flex', flexDirection: 'column', gap: '14px',
-            }}>
-                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                    <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>New Workspace</h2>
-                    {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
-                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <span style={labelStyle}>Name</span>
-                        <input value={name} onChange={e => setName(e.target.value)} placeholder="my-workspace" required style={inputStyle} />
-                    </label>
-                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <span style={labelStyle}>Description</span>
-                        <input value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional description" style={inputStyle} />
-                    </label>
-                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                        <button type="button" onClick={onClose} style={cancelBtnStyle}>Cancel</button>
-                        <button type="submit" disabled={creating} style={submitBtnStyle}>
-                            {creating ? 'Creating…' : 'Create'}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    )
-}
 
 // ─── System Prompt Modal ──────────────────────────────────────────────────────
 
@@ -3143,13 +3091,18 @@ function MessagesView({ projectId, projectName, newMessageIds }: { projectId: nu
 // ─── Terminal factory ─────────────────────────────────────────────────────────
 // xterm.js requires raw hex values — CSS variables are not supported.
 // These intentionally mirror the design tokens but must stay as hex strings.
+// Palette: GitHub light theme (https://primer.style/design/foundations/color)
 const XTERM_THEME = {
-    background: '#0d1117', foreground: '#c9d1d9', cursor: '#7ee787', cursorAccent: '#0d1117',
-    selectionBackground: '#264f78', black: '#484f58', brightBlack: '#6e7681',
-    red: '#ff7b72', brightRed: '#ffa198', green: '#3fb950', brightGreen: '#56d364',
-    yellow: '#d29922', brightYellow: '#e3b341', blue: '#58a6ff', brightBlue: '#79c0ff',
-    magenta: '#bc8cff', brightMagenta: '#d2a8ff', cyan: '#39c5cf', brightCyan: '#56d4dd',
-    white: '#b1bac4', brightWhite: '#f0f6fc',
+    background: '#f6f8fa', foreground: '#24292f', cursor: '#24292f', cursorAccent: '#f6f8fa',
+    selectionBackground: '#0969da33',
+    black: '#24292f', brightBlack: '#57606a',
+    red: '#cf222e', brightRed: '#a40e26',
+    green: '#116329', brightGreen: '#1a7f37',
+    yellow: '#4d2d00', brightYellow: '#633c01',
+    blue: '#0969da', brightBlue: '#218bff',
+    magenta: '#8250df', brightMagenta: '#a475f9',
+    cyan: '#1b7c83', brightCyan: '#3192aa',
+    white: '#6e7781', brightWhite: '#8c959f',
 }
 
 function makeTerminal() {
