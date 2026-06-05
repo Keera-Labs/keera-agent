@@ -15,6 +15,7 @@ from app.controllers import agent_relay_controller
 from app.controllers import agent_trigger_controller
 from app.controllers import agent_template_controller
 from app.controllers import poc_controller
+from app.controllers import settings_controller
 from app.mcp import controller as mcp_controller
 
 router = Router()
@@ -84,6 +85,9 @@ router.patch("/api/default-permissions", permission_controller.update_default_pe
 # MCP — JSON-RPC 2.0 endpoint (same server, no extra process)
 router.post("/mcp", mcp_controller.handle)
 router.get("/mcp", mcp_controller.handle_get)
+
+# Settings page — before wildcard
+router.get("/settings", settings_controller.settings)
 
 # POC route — before wildcard
 router.get("/poc", poc_controller.poc_page)
