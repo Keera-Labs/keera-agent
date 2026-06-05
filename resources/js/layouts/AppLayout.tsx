@@ -13,7 +13,6 @@ import { useWorkspace } from './hooks/workspace'
 import { useTasks } from './hooks/tasks'
 import { useAgents, type ProjectAgent } from './hooks/agents'
 import { useProjects } from './hooks/projects'
-import SettingsView from './SettingsView'
 
 
 // ─── Agent color ──────────────────────────────────────────────────────────────
@@ -3293,7 +3292,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const [outputChars, setOutputChars] = useState<Record<number, number>>({})
 
     const isTasksPage = component === 'Tasks'
-    const isSettingsPage = component === 'Settings'
+    // Pages that render their own content into the content area via children
+    const pageHasContent = new Set(['Settings']).has(component)
     const [projectView, setProjectView] = useState<ProjectView>('agents')
     const activeView: ProjectView = isTasksPage ? 'tasks' : projectView
     const [showCreateTask, setShowCreateTask] = useState(false)
@@ -3764,7 +3764,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                             title="Settings"
                             className={[
                                 'bg-transparent border-none cursor-pointer p-1.5 flex items-center rounded transition-colors',
-                                isSettingsPage ? 'text-blue-500' : 'text-gray-400 hover:text-gray-700',
+                                pageHasContent ? 'text-blue-500' : 'text-gray-400 hover:text-gray-700',
                             ].join(' ')}
                         >
                             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -3781,11 +3781,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 {/* Body: content */}
                 <div className="flex-1 flex overflow-hidden bg-white">
 
-                    {/* Settings page — rendered in place of project content */}
-                    {isSettingsPage && <SettingsView />}
+                    {pageHasContent ? children : (<>
 
                     {/* Agents view: agent card list (left) + terminal (right) — always rendered to keep sessions alive */}
-                    <div style={{ flex: 1, overflow: 'hidden', display: activeView === 'agents' && !isSettingsPage ? 'flex' : 'none' }}>
+                    <div style={{ flex: 1, overflow: 'hidden', display: activeView === 'agents' ? 'flex' : 'none' }}>
 
                         {/* Agent cards list */}
                         <div className="w-57.5 shrink-0 overflow-y-auto bg-white border-r border-gray-200 flex flex-col">
@@ -4078,12 +4077,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     </div>
 
                     {/* Commands view */}
-                    {activeView === 'commands' && activeProject && !isSettingsPage && (
+                    {activeView === 'commands' && activeProject && (
                         <CommandsView project={activeProject} projectId={activeProject.id} />
                     )}
 
                     {/* Tasks view */}
-                    {activeView === 'tasks' && activeProject && !isSettingsPage && (
+                    {activeView === 'tasks' && activeProject && (
                         <TasksView
                             tasks={tasks}
                             onOpenCreateTask={() => setShowCreateTask(true)}
@@ -4094,7 +4093,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     )}
 
                     {/* Messages view */}
-                    {activeView === 'messages' && activeProject && !isSettingsPage && (
+                    {activeView === 'messages' && activeProject && (
                         <MessagesView
                             projectId={activeProject.id}
                             projectName={activeProject.name}
@@ -4103,13 +4102,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     )}
 
                     {/* Empty state when no project */}
-                    {!activeProject && !isSettingsPage && (
+                    {!activeProject && (
                         <div style={{
                             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
                         }}>
                             <span style={{ color: color.textFaint, fontSize: '13px' }}>No project selected</span>
                         </div>
                     )}
+
+                    </>)}
                 </div>
             </div>
 
@@ -4216,7 +4217,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 />
             )}
 
-            {children}
         </div>
     )
 }
