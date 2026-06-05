@@ -3261,8 +3261,9 @@ function ClaudeStatusBadge({ status }: { status?: 'running' | 'done' }) {
 // ─── Persistent layout ────────────────────────────────────────────────────────
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-    const { props, component } = usePage<{ project?: string; tasks?: Task[] }>()
+    const { props, component } = usePage<{ project?: string; agent?: string; tasks?: Task[] }>()
     const projectName = props.project
+    const agentSlug = props.agent  // set by /{project}/{agent} route
 
     // ── Data hooks ────────────────────────────────────────────────────────────
     const { workspaces, invalidate: invalidateWorkspaces } = useWorkspace()
@@ -3312,6 +3313,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const tasks = taskHook.tasks
     const projectAgents = agentHook.agents
 
+    // Derive active agent from URL slug (agentSlug prop from server)
+    const activeAgentFromUrl = agentSlug
+        ? projectAgents.find(a => a.slug === agentSlug) ?? null
+        : null
+
     // Seed claudeStatus from fetched project data on first load
     useEffect(() => {
         const initial: Record<number, 'running' | 'done'> = {}
@@ -3321,6 +3327,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         }
         setClaudeStatus(prev => ({ ...initial, ...prev }))
     }, [allProjects.length])
+
+    // When agents load and URL has a slug, set the active agent ID
+    useEffect(() => {
+        if (activeAgentFromUrl) {
+            setActiveAgentId(activeAgentFromUrl.id)
+        }
+    }, [activeAgentFromUrl?.id])
 
     // Reset active agent when switching projects
     useEffect(() => {
@@ -3811,7 +3824,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                         return (
                                         <div
                                             key={agent.id}
-                                            onClick={() => setActiveAgentId(agent.id)}
+                                            onClick={() => {
+                                                if (activeProject && agent.slug) {
+                                                    router.visit(`/${activeProject.slug}/${agent.slug}`)
+                                                } else {
+                                                    setActiveAgentId(agent.id)
+                                                }
+                                            }}
                                             className={[
                                                 'px-3 py-2 cursor-pointer flex items-center gap-2.5 mx-2 my-0.5 rounded-lg border transition-colors',
                                                 isSelected
