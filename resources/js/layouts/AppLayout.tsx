@@ -4,6 +4,14 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { color } from "@/tokens"
+import {
+    RiRobot2Line, RiTerminalLine, RiCheckboxMultipleLine, RiMailLine,
+    RiAddLine, RiSearchLine, RiSettings4Line, RiBellLine, RiAttachment2,
+    RiPlayFill, RiFolder3Line, RiArrowDownSLine,
+} from 'react-icons/ri'
+import { type ProjectAgent } from '@/hooks/useAgents'
+import type { Task } from '@/hooks/useTasks'
+import type { Workspace, Project } from '@/hooks/useWorkspaces'
 
 // ─── Agent color ──────────────────────────────────────────────────────────────
 
@@ -64,44 +72,11 @@ function playSound(type: 'done' | 'input') {
     } catch { /* AudioContext not available */ }
 }
 
-interface Workspace {
-    id: number
-    name: string
-    description: string | null
-    projects: Project[]
-}
-
-interface Project {
-    id: number
-    name: string
-    slug: string
-    path: string
-    language: string
-    workspace_id: number | null
-    claude_status: 'running' | 'idle' | null
-    system_prompt: string | null
-}
-
 interface Session {
     term: Terminal
     ws: WebSocket
     fitAddon: FitAddon
     observer: ResizeObserver
-}
-
-interface Task {
-    id: number
-    project_id: number
-    title: string
-    description: string
-    body: string | null
-    priority: 'low' | 'medium' | 'high'
-    assignees: string[]
-    acceptance_criteria: string[]
-    testing_methods: string[]
-    validation_steps: string[]
-    status: 'pending' | 'in_progress' | 'completed' | 'cancelled'
-    created_at: string
 }
 
 const STATUS_CYCLE: Task['status'][] = ['pending', 'in_progress', 'completed', 'cancelled']
@@ -1139,9 +1114,7 @@ function SectionHeader({ label, onAdd }: { label: string; onAdd?: () => void }) 
                     background: 'transparent', border: 'none', cursor: 'pointer',
                     color: color.textMuted, padding: '0', lineHeight: 1, display: 'flex', alignItems: 'center',
                 }}>
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
-                    </svg>
+                    <RiAddLine size={13} />
                 </button>
             )}
         </div>
@@ -1801,9 +1774,7 @@ function Sidebar({
                         onMouseEnter={e => (e.currentTarget.style.color = color.textMuted)}
                         onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
                     >
-                        <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
-                        </svg>
+                        <RiAddLine size={11} />
                     </button>
                 </div>
 
@@ -1934,9 +1905,7 @@ function Sidebar({
                         onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
                         onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
                     >
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
-                        </svg>
+                        <RiAddLine size={13} />
                         New Agent
                     </button>
                 </div>
@@ -1947,18 +1916,34 @@ function Sidebar({
 
 // ─── Create Task Modal ────────────────────────────────────────────────────────
 
+const SPAWN_AGENT_TYPES = [
+    { type: 'software_engineer', label: 'Software Engineer', color: '#3fb950' },
+    { type: 'qa', label: 'QA', color: '#ffa657' },
+    { type: 'pm', label: 'PM', color: '#58a6ff' },
+    { type: 'custom', label: 'Custom', color: '#bc8cff' },
+]
+
 function CreateTaskModal({
     onClose,
     onCreated,
+    projectPath,
 }: {
     onClose: () => void
-    onCreated: (title: string, body: string, assignees: string[]) => void
+    onCreated: (title: string, body: string, assignees: string[]) => Promise<Task | null>
+    projectPath: string | null
 }) {
     const [title, setTitle] = useState('')
     const [body, setBody] = useState('')
     const [assigneeInput, setAssigneeInput] = useState('')
     const [assignees, setAssignees] = useState<string[]>([])
     const [error, setError] = useState('')
+    const [loading, setLoading] = useState(false)
+
+    // Agent assignment via MCP
+    const [spawnAgent, setSpawnAgent] = useState(false)
+    const [agentType, setAgentType] = useState('software_engineer')
+    const [agentName, setAgentName] = useState('')
+    const [mcpResult, setMcpResult] = useState<string | null>(null)
 
     function addAssignee() {
         const name = assigneeInput.trim()
@@ -1971,11 +1956,60 @@ function CreateTaskModal({
         setAssignees(prev => prev.filter(a => a !== name))
     }
 
-    function handleSubmit(e: React.FormEvent) {
+    async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
         if (!title.trim()) { setError('Title is required'); return }
-        onCreated(title.trim(), body.trim(), assignees)
-        onClose()
+        if (spawnAgent && !agentName.trim()) { setError('Agent name is required'); return }
+
+        setLoading(true)
+        setError('')
+        try {
+            const task = await onCreated(title.trim(), body.trim(), assignees)
+
+            if (spawnAgent && task && projectPath) {
+                // Use MCP spawn_agent to create and start the agent with the task
+                const message = [
+                    `You have been assigned Task #${task.id}: ${task.title}`,
+                    task.body ? `\n\n${task.body}` : '',
+                    '\n\nPlease start working on this task immediately.',
+                ].join('')
+
+                const res = await fetch('/mcp', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Project-Path': projectPath,
+                    },
+                    body: JSON.stringify({
+                        jsonrpc: '2.0',
+                        id: Date.now(),
+                        method: 'tools/call',
+                        params: {
+                            name: 'spawn_agent',
+                            arguments: {
+                                project_path: projectPath,
+                                name: agentName.trim(),
+                                agent_type: agentType,
+                                message,
+                                task_id: task.id,
+                            },
+                        },
+                    }),
+                })
+                const data = await res.json()
+                const text: string = data?.result?.content?.[0]?.text ?? data?.error?.message ?? 'Unknown'
+                setMcpResult(text)
+                // Stay open briefly to show result
+                setTimeout(onClose, 1800)
+                return
+            }
+
+            onClose()
+        } catch {
+            setError('Network error')
+        } finally {
+            setLoading(false)
+        }
     }
 
     return (
@@ -1985,11 +2019,25 @@ function CreateTaskModal({
         }}>
             <div style={{
                 background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
-                padding: '24px', width: '420px', display: 'flex', flexDirection: 'column', gap: '16px',
+                padding: '24px', width: '460px', display: 'flex', flexDirection: 'column', gap: '16px',
+                maxHeight: '90vh', overflowY: 'auto',
             }}>
-                <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>New Task</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <RiCheckboxMultipleLine size={16} color={color.accent} />
+                    <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>New Task</h2>
+                </div>
 
                 {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
+                {mcpResult && (
+                    <div style={{
+                        background: '#0d2818', border: `1px solid ${color.successBorder}`,
+                        borderRadius: '6px', padding: '10px 12px',
+                        fontSize: '11px', color: color.success, fontFamily: '"JetBrains Mono", monospace',
+                        whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                    }}>
+                        {mcpResult}
+                    </div>
+                )}
 
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                     {/* Title */}
@@ -2022,7 +2070,6 @@ function CreateTaskModal({
                     {/* Assignees */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         <span style={labelStyle}>Assignees</span>
-                        {/* Tags */}
                         {assignees.length > 0 && (
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                                 {assignees.map(a => (
@@ -2046,7 +2093,6 @@ function CreateTaskModal({
                                 ))}
                             </div>
                         )}
-                        {/* Input row */}
                         <div style={{ display: 'flex', gap: '6px' }}>
                             <input
                                 value={assigneeInput}
@@ -2069,9 +2115,82 @@ function CreateTaskModal({
                         </div>
                     </div>
 
+                    {/* Assign to new agent via MCP */}
+                    <div style={{
+                        border: `1px solid ${spawnAgent ? color.accentEmphasis : color.borderMuted}`,
+                        borderRadius: '8px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px',
+                        background: spawnAgent ? color.accentSubtle : 'transparent',
+                        transition: 'all 0.15s',
+                    }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                            <input
+                                type="checkbox"
+                                checked={spawnAgent}
+                                onChange={e => setSpawnAgent(e.target.checked)}
+                                style={{ accentColor: color.accent, width: '14px', height: '14px', cursor: 'pointer' }}
+                            />
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '5px', color: spawnAgent ? color.accentMuted : color.textMuted, fontSize: '12px', fontWeight: 500 }}>
+                                <RiRobot2Line size={13} />
+                                Assign to new agent via MCP
+                            </span>
+                        </label>
+
+                        {spawnAgent && (
+                            <>
+                                {/* Agent type selector */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                    <span style={labelStyle}>Agent Type</span>
+                                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                        {SPAWN_AGENT_TYPES.map(({ type, label, color: c }) => {
+                                            const active = agentType === type
+                                            return (
+                                                <button
+                                                    key={type}
+                                                    type="button"
+                                                    onClick={() => setAgentType(type)}
+                                                    style={{
+                                                        padding: '4px 10px', borderRadius: '6px',
+                                                        border: `1px solid ${active ? c : color.borderMuted}`,
+                                                        background: active ? `${c}18` : 'transparent',
+                                                        color: active ? c : color.textMuted,
+                                                        fontSize: '11px', fontWeight: active ? 600 : 400,
+                                                        cursor: 'pointer',
+                                                    }}
+                                                >
+                                                    {label}
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Agent name */}
+                                <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <span style={labelStyle}>Agent Name <span style={{ color: color.danger }}>*</span></span>
+                                    <input
+                                        value={agentName}
+                                        onChange={e => { setAgentName(e.target.value); setError('') }}
+                                        placeholder={
+                                            agentType === 'software_engineer' ? 'e.g. Dev Agent' :
+                                            agentType === 'qa' ? 'e.g. QA Bot' :
+                                            agentType === 'pm' ? 'e.g. Alice' : 'e.g. Helper'
+                                        }
+                                        style={inputStyle}
+                                    />
+                                </label>
+
+                                <p style={{ margin: 0, fontSize: '10px', color: color.textFaint, lineHeight: 1.5 }}>
+                                    The agent will be spawned via MCP <code style={{ fontFamily: 'monospace', color: color.accent }}>spawn_agent</code> and immediately sent this task.
+                                </p>
+                            </>
+                        )}
+                    </div>
+
                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', paddingTop: '4px' }}>
                         <button type="button" onClick={onClose} style={cancelBtnStyle}>Cancel</button>
-                        <button type="submit" style={submitBtnStyle}>Create Task</button>
+                        <button type="submit" disabled={loading} style={submitBtnStyle}>
+                            {loading ? (spawnAgent ? 'Spawning…' : 'Creating…') : (spawnAgent ? 'Create & Spawn Agent' : 'Create Task')}
+                        </button>
                     </div>
                 </form>
             </div>
@@ -2223,18 +2342,6 @@ function TaskDetailModal({ task, onClose }: { task: Task; onClose: () => void })
 }
 
 // ─── Agent types ─────────────────────────────────────────────────────────────
-
-interface ProjectAgent {
-    id: number
-    project_id: number
-    name: string
-    description: string | null
-    model: string
-    system_prompt: string | null
-    agent_type: string
-    status: 'idle' | 'running'
-    created_at: string | null
-}
 
 const AGENT_TYPE_LABELS: Record<string, string> = {
     pm: 'PM',
@@ -2432,42 +2539,10 @@ function AddAgentModal({ projectId, onClose, onCreated }: {
 type ProjectView = 'agents' | 'commands' | 'tasks' | 'messages'
 
 const PROJECT_NAV: { id: ProjectView; label: string; icon: React.ReactNode }[] = [
-    {
-        id: 'agents',
-        label: 'Agents',
-        icon: (
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M0 8a8 8 0 1116 0A8 8 0 010 8zm8-6.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM6.5 7.75A.75.75 0 017.25 7h1a.75.75 0 01.75.75v2.75h.25a.75.75 0 010 1.5h-2a.75.75 0 010-1.5h.25v-2h-.25a.75.75 0 01-.75-.75zM8 6a1 1 0 110-2 1 1 0 010 2z"/>
-            </svg>
-        ),
-    },
-    {
-        id: 'commands',
-        label: 'Commands',
-        icon: (
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25V2.75zm1.75-.25a.25.25 0 00-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V2.75a.25.25 0 00-.25-.25H1.75zM3.5 6.25a.75.75 0 000 1.5h.268l-.01.034L2.76 10.5a.75.75 0 001.44.42l.04-.138H6.76l.04.138a.75.75 0 001.44-.42L7.242 7.784l-.01-.034H7.5a.75.75 0 000-1.5h-4zm.751 1.5H6.25l-.609 2.099H4.86L4.251 7.75zm5.5-1.5a.75.75 0 000 1.5h3.5a.75.75 0 000-1.5h-3.5zm0 3a.75.75 0 000 1.5h3.5a.75.75 0 000-1.5h-3.5z"/>
-            </svg>
-        ),
-    },
-    {
-        id: 'tasks',
-        label: 'Tasks',
-        icon: (
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M2.5 1.75v11.5c0 .138.112.25.25.25h10.5a.25.25 0 00.25-.25V1.75a.25.25 0 00-.25-.25H2.75a.25.25 0 00-.25.25zM2.75 0h10.5c.966 0 1.75.784 1.75 1.75v11.5A1.75 1.75 0 0113.25 15H2.75A1.75 1.75 0 011 13.25V1.75C1 .784 1.784 0 2.75 0zM11.78 6.28a.75.75 0 00-1.06-1.06L7.25 8.69 5.28 6.72a.75.75 0 00-1.06 1.06l2.5 2.5a.75.75 0 001.06 0l4-4z"/>
-            </svg>
-        ),
-    },
-    {
-        id: 'messages',
-        label: 'Messages',
-        icon: (
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0114.25 14H1.75A1.75 1.75 0 010 12.25v-8.5C0 2.784.784 2 1.75 2zM1.5 12.251c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V5.06l-5.563 3.516a1.75 1.75 0 01-1.874 0L1.5 5.06v7.19zm13-8.181L8.312 7.512a.25.25 0 01-.264 0L1.5 4.07v-.32a.25.25 0 01.25-.25h12.5a.25.25 0 01.25.25v.32z"/>
-            </svg>
-        ),
-    },
+    { id: 'agents',   label: 'Agents',   icon: <RiRobot2Line size={15} /> },
+    { id: 'commands', label: 'Commands', icon: <RiTerminalLine size={15} /> },
+    { id: 'tasks',    label: 'Tasks',    icon: <RiCheckboxMultipleLine size={15} /> },
+    { id: 'messages', label: 'Messages', icon: <RiMailLine size={15} /> },
 ]
 
 function ProjectSidebar({ view, projectName, onChange, taskCount, newMessageCount }: {
@@ -3933,14 +4008,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     function handleOpenTask(task: Task) { setSelectedTask(task) }
     function handleCloseTask() { setSelectedTask(null) }
 
-    async function handleAddTask(title: string, body: string, assignees: string[]) {
-        if (!activeProject) return
+    async function handleAddTask(title: string, body: string, assignees: string[]): Promise<Task | null> {
+        if (!activeProject) return null
         const res = await fetch(`/api/projects/${activeProject.id}/tasks`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ title, body, assignees }),
         })
-        if (res.ok) { const task = await res.json(); setTasks(prev => [...prev, task]) }
+        if (!res.ok) return null
+        const task: Task = await res.json()
+        setTasks(prev => [...prev, task])
+        return task
     }
 
     async function handleUpdateStatus(task: Task, status: Task['status']) {
@@ -4097,6 +4175,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         observer.observe(container)
 
         sessions.current.set(activeProject.id, { term, ws, fitAddon, observer })
+        }) // requestAnimationFrame
     }, [activeProject, projectAgents])
 
     function handleWorkspaceCreated(workspace: Workspace) {
@@ -4275,9 +4354,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     <div className="flex items-center gap-1 pr-3">
                         {/* Search */}
                         <div className="flex items-center gap-1.5 bg-ui-surface border border-ui-border rounded-md px-2.5 py-1 mr-1">
-                            <svg width="12" height="12" viewBox="0 0 16 16" className="text-ui-faint fill-current shrink-0">
-                                <path d="M10.68 11.74a6 6 0 01-7.922-8.982 6 6 0 018.982 7.922l3.04 3.04a.749.749 0 11-1.06 1.06l-3.04-3.04zM11.5 7a4.499 4.499 0 11-8.997 0A4.499 4.499 0 0111.5 7z"/>
-                            </svg>
+                            <RiSearchLine size={12} className="text-ui-faint shrink-0" />
                             <input
                                 placeholder="Search agents..."
                                 className="bg-transparent border-none outline-none text-ui-body text-[12px] w-32"
@@ -4290,16 +4367,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                 title="Attach image"
                                 className="bg-transparent border-none cursor-pointer text-ui-faint p-1.5 flex items-center rounded hover:text-ui-blue transition-colors"
                             >
-                                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                                    <path d="M4.5 3a2.5 2.5 0 015 0v9a1.5 1.5 0 01-3 0V5a.5.5 0 011 0v7a.5.5 0 001 0V3a1.5 1.5 0 10-3 0v9a2.5 2.5 0 005 0V5a.5.5 0 011 0v7a3.5 3.5 0 11-7 0V3z"/>
-                                </svg>
+                                <RiAttachment2 size={14} />
                             </button>
                         )}
                         {/* Bell */}
                         <button className="bg-transparent border-none cursor-pointer text-ui-faint p-1.5 flex items-center rounded hover:text-ui-body transition-colors">
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                                <path d="M8 16a2 2 0 001.985-1.75c.017-.137-.097-.25-.235-.25h-3.5c-.138 0-.252.113-.235.25A2 2 0 008 16zm.25-14.25A5.25 5.25 0 003 7v2.047c0 .334-.102.656-.29.932L1.55 11.698A1.5 1.5 0 002.8 13.5h10.4a1.5 1.5 0 001.258-2.302l-1.16-1.719A1.625 1.625 0 0113 8.047V7A5.25 5.25 0 008.25 1.75z"/>
-                            </svg>
+                            <RiBellLine size={14} />
                         </button>
                         {/* Settings */}
                         <button
@@ -4307,9 +4380,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                             title="Settings"
                             className="bg-transparent border-none cursor-pointer text-ui-faint p-1.5 flex items-center rounded hover:text-ui-body transition-colors"
                         >
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                                <path d="M8 0a8.2 8.2 0 01.701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.103-.303c.644-.176 1.392.021 1.82.63.27.385.506.792.704 1.218.315.675.111 1.422-.364 1.891l-.814.806c-.049.048-.098.147-.088.294.016.257.016.515 0 .772-.01.147.038.246.087.294l.814.806c.475.469.679 1.216.364 1.891a7.977 7.977 0 01-.704 1.217c-.428.61-1.176.807-1.82.63l-1.103-.303c-.066-.019-.176-.011-.299.071a5.909 5.909 0 01-.668.386c-.133.066-.194.158-.211.224l-.29 1.106c-.168.646-.715 1.196-1.458 1.26a8.006 8.006 0 01-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106c-.018-.066-.079-.158-.212-.224a5.738 5.738 0 01-.668-.386c-.123-.082-.233-.09-.299-.071l-1.103.303c-.644.176-1.392-.021-1.82-.63a8.12 8.12 0 01-.704-1.218c-.315-.675-.111-1.422.363-1.891l.815-.806c.05-.048.098-.147.088-.294a6.214 6.214 0 010-.772c.01-.147-.038-.246-.088-.294l-.815-.806C.635 6.045.431 5.298.746 4.623a7.92 7.92 0 01.704-1.217c.428-.61 1.176-.807 1.82-.63l1.102.302c.067.019.177.011.3-.071a5.659 5.659 0 01.668-.386c.133-.066.194-.158.211-.224l.29-1.106C6.156.421 6.703-.129 7.445.031 7.645.015 7.825 0 8 0zm1.5 8a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/>
-                            </svg>
+                            <RiSettings4Line size={14} />
                         </button>
                         {/* Avatar */}
                         <div className="w-7 h-7 rounded-full bg-[#7c6af7] flex items-center justify-center text-[11px] font-bold text-white cursor-pointer ml-1 shrink-0">
@@ -4636,7 +4707,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {showCreateTask && (
                 <CreateTaskModal
                     onClose={() => setShowCreateTask(false)}
-                    onCreated={(title, body, assignees) => handleAddTask(title, body, assignees)}
+                    onCreated={handleAddTask}
+                    projectPath={activeProject?.path ?? null}
                 />
             )}
 
