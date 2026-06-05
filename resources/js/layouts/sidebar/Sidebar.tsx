@@ -94,15 +94,8 @@ export default function Sidebar({
     return (
         <aside style={{
             width: '220px', flexShrink: 0, background: color.bgCanvas,
-            borderRight: '1px solid #21262d', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+            borderRight: `1px solid ${color.stroke}`, display: 'flex', flexDirection: 'column', overflow: 'hidden',
         }}>
-            {/* Header */}
-            <div style={{ padding: '14px 14px 10px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ color: color.accent, fontSize: '17px', fontWeight: 700, letterSpacing: '-0.01em', flex: 1 }}>
-                    Keera Agent
-                </span>
-            </div>
-
             <WorkspacePicker
                 selected={filterWorkspaceId}
                 onSelect={setFilterWorkspaceId}
@@ -241,8 +234,8 @@ export default function Sidebar({
                 </div>
             </div>
 
-            {/* Bottom bar: Settings link + (optional) New Agent */}
-            <div style={{ borderTop: `1px solid ${color.border}`, display: 'flex', flexDirection: 'column', gap: '6px', padding: '8px 10px 10px' }}>
+            {/* Bottom bar: Settings link + New Agent button */}
+            <div style={{ borderTop: `1px solid ${color.stroke}`, display: 'flex', flexDirection: 'column', gap: '4px', padding: '8px 10px 10px' }}>
                 {/* Settings link */}
                 <button
                     onClick={() => router.visit('/settings')}
@@ -266,26 +259,30 @@ export default function Sidebar({
                     <span>Settings</span>
                 </button>
 
-                {/* New Agent button */}
-                {activeProject && (
-                    <button
-                        onClick={onAddAgent}
-                        style={{
-                            width: '100%', padding: '8px 12px',
-                            background: color.accentEmphasis, border: 'none', borderRadius: '7px',
-                            color: '#fff', fontSize: '13px', fontWeight: 600,
-                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                            transition: 'opacity 0.1s',
-                        }}
-                        onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
-                        onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
-                    >
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
-                        </svg>
-                        New Agent
-                    </button>
-                )}
+                {/* New Agent button — always shown, disabled when no project */}
+                <button
+                    onClick={activeProject ? onAddAgent : undefined}
+                    disabled={!activeProject}
+                    style={{
+                        width: '100%', padding: '8px 12px',
+                        background: activeProject ? color.accentEmphasis : color.bgSurface,
+                        border: activeProject ? 'none' : `1px solid ${color.stroke}`,
+                        borderRadius: '7px',
+                        color: activeProject ? '#fff' : color.textFaint,
+                        fontSize: '13px', fontWeight: 600,
+                        cursor: activeProject ? 'pointer' : 'default',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                        transition: 'opacity 0.1s',
+                        opacity: activeProject ? 1 : 0.5,
+                    }}
+                    onMouseEnter={e => { if (activeProject) e.currentTarget.style.opacity = '0.88' }}
+                    onMouseLeave={e => { if (activeProject) e.currentTarget.style.opacity = '1' }}
+                >
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
+                    </svg>
+                    + New Agent
+                </button>
             </div>
         </aside>
     )

@@ -19,14 +19,14 @@ export function DotsIndicator() {
     return (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', flexShrink: 0, position: 'relative' }}>
             <style>{dotsStyle}</style>
-            <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: color.warningSubtle, animation: 'bounce1 1.0s ease-in-out infinite 0.0s' }} />
-            <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: color.warningSubtle, animation: 'bounce2 1.0s ease-in-out infinite 0.15s' }} />
-            <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: color.warningSubtle, animation: 'bounce3 1.0s ease-in-out infinite 0.3s' }} />
+            <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: '#f59e0b', animation: 'bounce1 1.0s ease-in-out infinite 0.0s' }} />
+            <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: '#f59e0b', animation: 'bounce2 1.0s ease-in-out infinite 0.15s' }} />
+            <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: '#f59e0b', animation: 'bounce3 1.0s ease-in-out infinite 0.3s' }} />
             <span style={{
                 position: 'absolute', top: '50%', marginTop: '-2px',
                 width: '4px', height: '4px', borderRadius: '50%',
-                background: color.warningBright,
-                boxShadow: `0 0 5px 2px ${color.warningGlow}`,
+                background: '#d97706',
+                boxShadow: '0 0 4px 1px rgba(217,119,6,0.4)',
                 animation: 'traveler 1.0s linear infinite',
             }} />
         </span>
@@ -125,7 +125,7 @@ export function ProjectItem({ project, active, status, onMove, onEdit, onSystemP
                 <div ref={menuRef} style={{
                     position: 'absolute', right: '0', top: '100%', zIndex: 200,
                     background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
-                    borderRadius: '6px', boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                    borderRadius: '6px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
                     minWidth: '170px', padding: '4px 0', overflow: 'hidden',
                 }}>
                     <button
