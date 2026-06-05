@@ -1,5 +1,6 @@
 import asyncio
 import os
+import subprocess
 import uuid
 
 from fastapi import Request
@@ -58,10 +59,49 @@ async def trigger(request: Request, agent_id: int):
     return JSONResponse({"status": "starting", "message": "Agent is starting up..."})
 
 
-async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) -> None:
+def _cleanup_stale_worktree(agent, cwd: str) -> None:
+    """Remove a stale git worktree (and its branch) left over from a prior agent session.
+
+    Claude creates worktrees under .claude/worktrees/<name> with a matching branch
+    worktree-<name>.  If a previous session exited without cleaning up, the next
+    spawn attempt fails with "branch already checked out".  This function detects
+    and removes both the worktree directory and the stale branch before Claude runs.
+    """
+    task_id = getattr(agent, 'task_id', None)
+    worktree_name = f'agent-{task_id}' if task_id else f'agent-{agent.id}'
+    worktree_path = os.path.join(cwd, '.claude', 'worktrees', worktree_name)
+    branch_name = f'worktree-{worktree_name}'
+
+    # Check if the worktree path is registered with git
+    wt_list = subprocess.run(
+        ["git", "worktree", "list", "--porcelain"],
+        capture_output=True, text=True, cwd=cwd,
+    )
+    if worktree_path in wt_list.stdout:
+        subprocess.run(
+            ["git", "worktree", "remove", "--force", worktree_path],
+            capture_output=True, cwd=cwd,
+        )
+
+    # Delete the stale branch so Claude can recreate it fresh
+    branch_list = subprocess.run(
+        ["git", "branch", "--list", branch_name],
+        capture_output=True, text=True, cwd=cwd,
+    )
+    if branch_list.stdout.strip():
+        subprocess.run(
+            ["git", "branch", "-D", branch_name],
+            capture_output=True, cwd=cwd,
+        )
+
+
+async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str, conn_key: str | None = None) -> None:
     """Spawn a Terminal for the agent without a WebSocket — triggered from the backend."""
     from app.models.Agent import Agent as _Agent
     from app.utils.hook_setup import BASE_URL as base_url
+
+    # Remove any stale worktree/branch from a prior session to avoid git conflicts
+    _cleanup_stale_worktree(agent, cwd)
 
     session_id = str(uuid.uuid4())
     await _Agent.where("id", agent.id).update({"session_id": session_id})
