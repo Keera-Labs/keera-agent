@@ -92,7 +92,7 @@ router.router.add_api_websocket_route("/poc/ws", poc_controller.poc_ws)
 # Wildcard page routes — must come last
 router.get("/", home_controller.home)
 router.get("/{project}/tasks", tasks_page_controller.tasks_page)
-router.get("/{project}/{agent}", home_controller.agent_page)
+router.get("/{project}/agents/{agent_id}", home_controller.agent_page)
 router.get("/{project}", home_controller.project_home)
 
 router.router.add_api_websocket_route("/{project}/ws", terminal_controller.terminal_ws)
