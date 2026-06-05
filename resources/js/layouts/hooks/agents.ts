@@ -1,5 +1,12 @@
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query'
 
+export interface AgentFlags {
+    dangerously_skip_permissions?: boolean
+    plan_mode?: boolean
+    verbose?: boolean
+    max_turns?: number | null
+}
+
 export interface ProjectAgent {
     id: number
     project_id: number
@@ -10,6 +17,7 @@ export interface ProjectAgent {
     system_prompt: string | null
     agent_type: string
     status: 'idle' | 'running'
+    flags: AgentFlags
     task_id?: number | null
     created_at: string | null
 }
@@ -66,19 +74,22 @@ export function useAgents(projectId: number | null) {
         },
     })
 
-    const rename = useMutation({
-        mutationFn: async ({ agentId, name }: { agentId: number; name: string }) => {
+    const update = useMutation({
+        mutationFn: async ({
+            agentId,
+            ...fields
+        }: { agentId: number } & Partial<Pick<ProjectAgent, 'name' | 'model' | 'system_prompt'> & { flags: AgentFlags }>) => {
             const res = await fetch(`/api/agents/${agentId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name }),
+                body: JSON.stringify(fields),
             })
-            if (!res.ok) throw new Error('Failed to rename agent')
+            if (!res.ok) throw new Error('Failed to update agent')
             return res.json() as Promise<ProjectAgent>
         },
         onSuccess: (updated) => {
             queryClient.setQueryData<ProjectAgent[]>(key, prev =>
-                (prev ?? []).map(a => a.id === updated.id ? { ...a, name: updated.name } : a)
+                (prev ?? []).map(a => a.id === updated.id ? { ...a, ...updated } : a)
             )
         },
     })
@@ -133,7 +144,7 @@ export function useAgents(projectId: number | null) {
         addAgent,
         create,
         remove,
-        rename,
+        update,
         setDefault,
         spawnViaMCP,
     }

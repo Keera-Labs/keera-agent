@@ -12,7 +12,7 @@ import Sidebar, { type ProjectView, PROJECT_NAV } from './sidebar/Sidebar'
 import { DotsIndicator } from './sidebar/Project'
 import { useWorkspace } from './hooks/workspace'
 import { useTasks } from './hooks/tasks'
-import { useAgents, type ProjectAgent } from './hooks/agents'
+import { useAgents, type ProjectAgent, type AgentFlags } from './hooks/agents'
 import { useProjects } from './hooks/projects'
 
 
@@ -1541,13 +1541,6 @@ function TaskDetailModal({ task, onClose }: { task: Task; onClose: () => void })
 
 // ─── Agent types ─────────────────────────────────────────────────────────────
 
-interface AgentFlags {
-    dangerously_skip_permissions?: boolean
-    plan_mode?: boolean
-    verbose?: boolean
-    max_turns?: number | null
-}
-
 interface AgentTemplate {
     id: number
     name: string
@@ -1916,6 +1909,216 @@ function AddAgentModal({ projectId, onClose, onCreated, templates }: {
                         <button type="button" onClick={onClose} style={cancelBtnStyle}>Cancel</button>
                         <button type="submit" disabled={loading} style={submitBtnStyle}>
                             {loading ? 'Adding…' : 'Add Agent'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    )
+}
+
+// ─── Edit Agent Modal ─────────────────────────────────────────────────────────
+
+function EditAgentModal({
+    agent,
+    onClose,
+    onSaved,
+}: {
+    agent: ProjectAgent
+    onClose: () => void
+    onSaved: (updated: ProjectAgent) => void
+}) {
+    const [name, setName] = useState(agent.name)
+    const [model, setModel] = useState(agent.model ?? 'claude-sonnet-4-6')
+    const [systemPrompt, setSystemPrompt] = useState(agent.system_prompt ?? '')
+    const [flags, setFlags] = useState<AgentFlags>(agent.flags ?? {})
+    const [error, setError] = useState('')
+    const [loading, setLoading] = useState(false)
+
+    function setFlag(key: keyof AgentFlags, value: boolean | number | null) {
+        setFlags(prev => ({ ...prev, [key]: value }))
+    }
+
+    async function handleSubmit(e: React.FormEvent) {
+        e.preventDefault()
+        const trimmedName = name.trim()
+        if (!trimmedName) { setError('Name is required'); return }
+        setError('')
+        setLoading(true)
+        try {
+            const res = await fetch(`/api/agents/${agent.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: trimmedName,
+                    model,
+                    system_prompt: systemPrompt.trim() || null,
+                    flags,
+                }),
+            })
+            const data = await res.json()
+            if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
+            onSaved(data as ProjectAgent)
+            onClose()
+        } catch {
+            setError('Network error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    // Close on Escape
+    useEffect(() => {
+        function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+        document.addEventListener('keydown', onKey)
+        return () => document.removeEventListener('keydown', onKey)
+    }, [onClose])
+
+    const agentBg = AGENT_TYPE_COLORS[agent.agent_type] ?? color.accent
+
+    return (
+        <div
+            style={{
+                position: 'fixed', inset: 0, background: color.overlay,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200,
+            }}
+            onClick={e => { if (e.target === e.currentTarget) onClose() }}
+        >
+            <div style={{
+                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '10px',
+                width: '480px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto',
+                display: 'flex', flexDirection: 'column',
+            }}>
+                {/* Header */}
+                <div style={{
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                    padding: '16px 20px', borderBottom: `1px solid ${color.border}`, flexShrink: 0,
+                }}>
+                    <div style={{
+                        width: '28px', height: '28px', borderRadius: '8px', flexShrink: 0,
+                        background: agentBg, display: 'flex', alignItems: 'center',
+                        justifyContent: 'center', fontSize: '11px', fontWeight: 700, color: '#fff',
+                    }}>
+                        {agent.name.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                        <div style={{ color: color.textPrimary, fontSize: '14px', fontWeight: 600 }}>Edit Agent</div>
+                        <div style={{ color: color.textMuted, fontSize: '11px', marginTop: '1px' }}>
+                            {AGENT_TYPE_LABELS[agent.agent_type] ?? agent.agent_type}
+                        </div>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        style={{ background: 'transparent', border: 'none', color: color.textFaint, cursor: 'pointer', fontSize: '18px', lineHeight: 1, padding: '0 4px' }}
+                    >×</button>
+                </div>
+
+                {/* Body */}
+                <form onSubmit={handleSubmit} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
+
+                    {/* Name */}
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={labelStyle}>Name</span>
+                        <input
+                            autoFocus
+                            value={name}
+                            onChange={e => setName(e.target.value)}
+                            placeholder="Agent name"
+                            required
+                            style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' as const }}
+                        />
+                    </label>
+
+                    {/* Model */}
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={labelStyle}>Model</span>
+                        <select
+                            value={model}
+                            onChange={e => setModel(e.target.value)}
+                            style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' as const }}
+                        >
+                            <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
+                            <option value="claude-opus-4-6">Claude Opus 4.6</option>
+                            <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+                        </select>
+                    </label>
+
+                    {/* System Prompt */}
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={labelStyle}>System Prompt</span>
+                        <textarea
+                            value={systemPrompt}
+                            onChange={e => setSystemPrompt(e.target.value)}
+                            placeholder="Instructions for this agent… (leave blank to use none)"
+                            rows={8}
+                            style={{
+                                ...inputStyle,
+                                width: '100%', boxSizing: 'border-box' as const,
+                                resize: 'vertical' as const, lineHeight: 1.5,
+                                fontFamily: '"JetBrains Mono", monospace', fontSize: '12px',
+                            }}
+                        />
+                    </label>
+
+                    {/* Launch Flags */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <span style={labelStyle}>Launch Options</span>
+
+                        {/* Skip Permissions */}
+                        <div
+                            style={flagRowStyle}
+                            onClick={() => setFlag('dangerously_skip_permissions', !flags.dangerously_skip_permissions)}
+                        >
+                            <div>
+                                <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Skip Permissions</div>
+                                <div style={{ fontSize: '10px', color: color.textFaint }}>--dangerously-skip-permissions — no prompts</div>
+                            </div>
+                            <button
+                                type="button"
+                                style={toggleStyle(!!flags.dangerously_skip_permissions)}
+                                onClick={e => e.stopPropagation()}
+                                title="Toggle --dangerously-skip-permissions"
+                            >
+                                <span style={{
+                                    position: 'absolute', top: '3px',
+                                    left: flags.dangerously_skip_permissions ? '17px' : '3px',
+                                    width: '12px', height: '12px', borderRadius: '50%',
+                                    background: '#fff', transition: 'left 0.15s',
+                                }} />
+                            </button>
+                        </div>
+
+                        {/* Plan Mode */}
+                        <div
+                            style={flagRowStyle}
+                            onClick={() => setFlag('plan_mode', !flags.plan_mode)}
+                        >
+                            <div>
+                                <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Plan Mode</div>
+                                <div style={{ fontSize: '10px', color: color.textFaint }}>Read-only — analyse and plan, never edit files</div>
+                            </div>
+                            <button
+                                type="button"
+                                style={toggleStyle(!!flags.plan_mode)}
+                                onClick={e => e.stopPropagation()}
+                                title="Toggle plan mode"
+                            >
+                                <span style={{
+                                    position: 'absolute', top: '3px',
+                                    left: flags.plan_mode ? '17px' : '3px',
+                                    width: '12px', height: '12px', borderRadius: '50%',
+                                    background: '#fff', transition: 'left 0.15s',
+                                }} />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', paddingTop: '4px' }}>
+                        <button type="button" onClick={onClose} style={cancelBtnStyle}>Cancel</button>
+                        <button type="submit" disabled={loading} style={{ ...submitBtnStyle, opacity: loading ? 0.7 : 1 }}>
+                            {loading ? 'Saving…' : 'Save Changes'}
                         </button>
                     </div>
                 </form>
@@ -3257,8 +3460,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const [showAddAgent, setShowAddAgent] = useState(false)
     const [activeAgentId, setActiveAgentId] = useState<number | null>(null)
     const [showProjectSearch, setShowProjectSearch] = useState(false)
-    const [renamingAgentId, setRenamingAgentId] = useState<number | null>(null)
-    const [renameValue, setRenameValue] = useState('')
+    const [editingAgent, setEditingAgent] = useState<ProjectAgent | null>(null)
 
     const sessions = useRef<Map<number, Session>>(new Map())
     const containerRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
@@ -3836,7 +4038,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                         <div
                                             key={agent.id}
                                             onClick={() => {
-                                                if (renamingAgentId === agent.id) return
                                                 if (activeProject) {
                                                     router.visit(`/${activeProject.slug}/agents/${agent.id}`)
                                                 } else {
@@ -3846,8 +4047,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                             style={{
                                                 display: 'flex', alignItems: 'center', gap: '10px',
                                                 padding: '9px 12px', margin: '0 8px 2px', borderRadius: '8px',
-                                                cursor: renamingAgentId === agent.id ? 'default' : 'pointer',
-                                                transition: 'background 0.1s',
+                                                cursor: 'pointer', transition: 'background 0.1s',
                                                 background: isSelected ? color.accentSubtle : 'transparent',
                                                 border: `1px solid ${isSelected ? '#b6d0f7' : 'transparent'}`,
                                             }}
@@ -3877,87 +4077,39 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
                                             {/* Name + status */}
                                             <div style={{ flex: 1, minWidth: 0 }}>
-                                                {renamingAgentId === agent.id ? (
-                                                    <input
-                                                        autoFocus
-                                                        value={renameValue}
-                                                        onChange={e => setRenameValue(e.target.value)}
-                                                        onKeyDown={async e => {
-                                                            if (e.key === 'Enter') {
-                                                                e.preventDefault()
-                                                                const trimmed = renameValue.trim()
-                                                                if (trimmed && trimmed !== agent.name) {
-                                                                    await agentHook.rename.mutateAsync({ agentId: agent.id, name: trimmed })
-                                                                }
-                                                                setRenamingAgentId(null)
-                                                            } else if (e.key === 'Escape') {
-                                                                e.preventDefault()
-                                                                setRenamingAgentId(null)
-                                                            }
-                                                        }}
-                                                        onBlur={() => setRenamingAgentId(null)}
-                                                        onClick={e => e.stopPropagation()}
-                                                        style={{
-                                                            background: color.bgBase,
-                                                            border: `1px solid ${color.accent}`,
-                                                            borderRadius: '4px',
-                                                            color: color.textPrimary,
-                                                            fontSize: '12px',
-                                                            fontWeight: 500,
-                                                            padding: '2px 6px',
-                                                            outline: 'none',
-                                                            width: '100%',
-                                                            boxSizing: 'border-box' as const,
-                                                        }}
-                                                    />
-                                                ) : (
-                                                    <div
-                                                        onDoubleClick={e => {
-                                                            e.stopPropagation()
-                                                            setRenameValue(agent.name)
-                                                            setRenamingAgentId(agent.id)
-                                                        }}
-                                                        style={{
-                                                            fontSize: '13px', fontWeight: isSelected ? 600 : 500,
-                                                            color: isSelected ? color.accent : color.textPrimary,
-                                                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                                        }}
-                                                    >
-                                                        {agent.name}
-                                                    </div>
-                                                )}
+                                                <div style={{
+                                                    fontSize: '13px', fontWeight: isSelected ? 600 : 500,
+                                                    color: isSelected ? color.accent : color.textPrimary,
+                                                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                                }}>
+                                                    {agent.name}
+                                                </div>
                                                 <div style={{ fontSize: '11px', color: isRunning ? '#16a34a' : color.textFaint, marginTop: '1px' }}>
                                                     {isRunning ? '● Active' : AGENT_TYPE_LABELS[agent.agent_type] ?? agent.agent_type}
                                                 </div>
                                             </div>
 
-                                            {/* Rename button */}
-                                            {renamingAgentId !== agent.id && (
-                                                <button
-                                                    onClick={e => {
-                                                        e.stopPropagation()
-                                                        setRenameValue(agent.name)
-                                                        setRenamingAgentId(agent.id)
-                                                    }}
-                                                    title="Rename"
-                                                    style={{
-                                                        background: 'transparent', border: 'none',
-                                                        color: color.textFaint, cursor: 'pointer',
-                                                        padding: '3px', borderRadius: '4px',
-                                                        display: 'flex', alignItems: 'center',
-                                                        flexShrink: 0,
-                                                    }}
-                                                    onMouseEnter={e => (e.currentTarget.style.color = color.textPrimary)}
-                                                    onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
-                                                >
-                                                    <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
-                                                        <path d="M11.013 1.427a1.75 1.75 0 012.474 0l1.086 1.086a1.75 1.75 0 010 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 01-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61zm1.414 1.06a.25.25 0 00-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 000-.354l-1.086-1.086zM11.189 6.25L9.75 4.81l-6.286 6.287a.25.25 0 00-.064.108l-.558 1.953 1.953-.558a.249.249 0 00.108-.064l6.286-6.286z"/>
-                                                    </svg>
-                                                </button>
-                                            )}
+                                            {/* Settings/edit button */}
+                                            <button
+                                                onClick={e => { e.stopPropagation(); setEditingAgent(agent) }}
+                                                title="Edit agent"
+                                                style={{
+                                                    background: 'transparent', border: 'none',
+                                                    color: color.textFaint, cursor: 'pointer',
+                                                    padding: '3px', borderRadius: '4px',
+                                                    display: 'flex', alignItems: 'center', flexShrink: 0,
+                                                }}
+                                                onMouseEnter={e => (e.currentTarget.style.color = color.textPrimary)}
+                                                onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
+                                            >
+                                                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                                                    <path d="M8 9.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
+                                                    <path fillRule="evenodd" d="M8 0a8 8 0 100 16A8 8 0 008 0zM1.5 8a6.5 6.5 0 1113 0 6.5 6.5 0 01-13 0z"/>
+                                                </svg>
+                                            </button>
 
                                             {/* Run button (when idle) */}
-                                            {!isRunning && renamingAgentId !== agent.id && (
+                                            {!isRunning && (
                                                 <button
                                                     onClick={e => { e.stopPropagation(); setActiveAgentId(agent.id) }}
                                                     title="Run"
@@ -3976,7 +4128,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                                     </svg>
                                                 </button>
                                             )}
-                                            {renamingAgentId !== agent.id && (
+
+                                            {/* Delete button */}
                                             <button
                                                 onClick={async (e) => {
                                                     e.stopPropagation()
@@ -4008,7 +4161,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                             >
                                                 ×
                                             </button>
-                                            )}
                                         </div>
                                     )})}
                                 </>
@@ -4384,6 +4536,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     templates={agentTemplates}
                     onClose={() => setShowAddAgent(false)}
                     onCreated={agent => { agentHook.addAgent(agent); setShowAddAgent(false) }}
+                />
+            )}
+
+            {editingAgent && (
+                <EditAgentModal
+                    agent={editingAgent}
+                    onClose={() => setEditingAgent(null)}
+                    onSaved={updated => {
+                        agentHook.update.mutate({ agentId: updated.id, ...updated })
+                        setEditingAgent(null)
+                    }}
                 />
             )}
 
