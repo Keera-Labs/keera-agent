@@ -59,4 +59,20 @@
     --color-lang-go:         #00add8;
     --color-lang-rust:       #dea584;
     --color-lang-javascript: #f1e05a;
+
+    /* ── Light UI theme (content area, white background) ─── */
+    --color-ui-white:        #ffffff;   /* pure white backgrounds          */
+    --color-ui-page:         #f1f5f9;   /* outer page behind sidebar       */
+    --color-ui-surface:      #f9fafb;   /* inputs, hover fills             */
+    --color-ui-border:       #e5e7eb;   /* dividers, card edges            */
+    --color-ui-border-focus: #bfdbfe;   /* selected / active border        */
+    --color-ui-text:         #111827;   /* primary body text               */
+    --color-ui-body:         #374151;   /* secondary body text             */
+    --color-ui-muted:        #6b7280;   /* muted / inactive labels         */
+    --color-ui-faint:        #9ca3af;   /* placeholders, faint icons       */
+    --color-ui-ghost:        #d1d5db;   /* very faint — disabled states    */
+    --color-ui-blue:         #3b82f6;   /* primary action blue             */
+    --color-ui-blue-bg:      #eff6ff;   /* selected agent card background  */
+    --color-ui-green:        #22c55e;   /* running / live indicator        */
+    --color-ui-red:          #ef4444;   /* delete / danger action          */
 }

@@ -13,6 +13,7 @@ from app.controllers import permission_controller
 from app.controllers import agent_controller
 from app.controllers import agent_relay_controller
 from app.controllers import agent_trigger_controller
+from app.controllers import agent_template_controller
 from app.mcp import controller as mcp_controller
 
 router = Router()
@@ -56,6 +57,12 @@ router.post("/api/projects/{project_id}/agents/spawn", agent_controller.spawn)
 router.patch("/api/agents/{agent_id}", agent_controller.update)
 router.delete("/api/agents/{agent_id}", agent_controller.destroy)
 router.get("/api/agents/{agent_id}/output", agent_controller.output)
+
+# Agent templates
+router.get("/api/agent-templates", agent_template_controller.index)
+router.post("/api/agent-templates", agent_template_controller.store)
+router.patch("/api/agent-templates/{template_id}", agent_template_controller.update)
+router.delete("/api/agent-templates/{template_id}", agent_template_controller.destroy)
 
 # Agent-to-agent relay
 router.post("/api/agent-relay", agent_relay_controller.relay)
