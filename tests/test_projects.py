@@ -21,6 +21,7 @@ class TestProjects(HttpTestCase):
             "name": "my-project",
             "path": "~/code/my-project",
             "language": "Python",
+            "create_dir": True,
         })
         self.assertEqual(response.status_code, 201)
         data = response.json()
@@ -29,11 +30,23 @@ class TestProjects(HttpTestCase):
         self.assertEqual(data["language"], "Python")
         self.assertIn("id", data)
 
+    async def test_create_project_returns_422_when_path_missing(self):
+        response = await self.post("/api/projects", json={
+            "name": "no-dir-project",
+            "path": "~/code/nonexistent-test-dir-xyzzy",
+            "language": "Python",
+        })
+        self.assertEqual(response.status_code, 422)
+        data = response.json()
+        self.assertEqual(data["error"], "path_not_found")
+        self.assertIn("expanded", data)
+
     async def test_created_project_appears_in_list(self):
         await self.post("/api/projects", json={
             "name": "listed-project",
             "path": "~/code/listed-project",
             "language": "TypeScript",
+            "create_dir": True,
         })
         response = await self.get("/api/projects")
         self.assertEqual(response.status_code, 200)
@@ -55,7 +68,7 @@ class TestProjects(HttpTestCase):
         self.assertEqual(response.status_code, 422)
 
     async def test_duplicate_project_name_returns_conflict(self):
-        payload = {"name": "dup-project", "path": "~/code/dup", "language": "Rust"}
+        payload = {"name": "dup-project", "path": "~/code/dup", "language": "Rust", "create_dir": True}
         await self.post("/api/projects", json=payload)
         response = await self.post("/api/projects", json=payload)
         self.assertEqual(response.status_code, 409)

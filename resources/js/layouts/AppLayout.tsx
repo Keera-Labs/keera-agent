@@ -119,6 +119,17 @@ const submitBtnStyle: React.CSSProperties = {
     background: color.successEmphasis, border: `1px solid ${color.successBorder}`, borderRadius: '6px',
     color: '#fff', fontSize: '12px', padding: '6px 14px', cursor: 'pointer',
 }
+const flagRowStyle: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    padding: '6px 10px', borderRadius: '6px',
+    background: color.bgCanvas, border: `1px solid ${color.borderMuted}`, cursor: 'pointer',
+}
+const toggleStyle = (on: boolean): React.CSSProperties => ({
+    width: '32px', height: '18px', borderRadius: '9px',
+    background: on ? color.accent : color.borderMuted,
+    border: 'none', cursor: 'pointer', position: 'relative',
+    flexShrink: 0, transition: 'background 0.15s',
+})
 
 // ─── Add Workspace Modal ──────────────────────────────────────────────────────
 
@@ -173,195 +184,6 @@ function AddWorkspaceModal({ onClose, onCreated }: { onClose: () => void; onCrea
                         <button type="button" onClick={onClose} style={cancelBtnStyle}>Cancel</button>
                         <button type="submit" disabled={loading} style={submitBtnStyle}>
                             {loading ? 'Creating…' : 'Create'}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    )
-}
-
-// ─── Add Project Modal ────────────────────────────────────────────────────────
-
-function AddProjectModal({
-    workspaces,
-    defaultWorkspaceId,
-    onClose,
-    onCreated,
-}: {
-    workspaces: Workspace[]
-    defaultWorkspaceId: number | null
-    onClose: () => void
-    onCreated: (p: Project) => void
-}) {
-    const [name, setName] = useState('')
-    const [path, setPath] = useState('')
-    const [language, setLanguage] = useState('Python')
-    const [workspaceId, setWorkspaceId] = useState<number | null>(defaultWorkspaceId ?? workspaces[0]?.id ?? null)
-    const [error, setError] = useState('')
-    const [loading, setLoading] = useState(false)
-    const [confirmCreate, setConfirmCreate] = useState<{ expanded: string } | null>(null)
-
-    async function handleSubmit(e: React.FormEvent) {
-        e.preventDefault()
-        setError('')
-        setLoading(true)
-        try {
-            const check = await fetch(`/api/validate-path?path=${encodeURIComponent(path)}`)
-            const { exists, expanded } = await check.json()
-            if (!exists) { setConfirmCreate({ expanded }); return }
-            await createProject()
-        } catch {
-            setError('Network error')
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    async function createProject() {
-        setLoading(true)
-        try {
-            const res = await fetch('/api/projects', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, path, language, workspace_id: workspaceId }),
-            })
-            const data = await res.json()
-            if (!res.ok) { setConfirmCreate(null); setError(data.error ?? 'Something went wrong'); return }
-            onCreated(data as Project)
-            onClose()
-        } catch {
-            setError('Network error')
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    return (
-        <div style={{
-            position: 'fixed', inset: 0, background: color.overlay,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
-        }}>
-            <div style={{
-                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
-                padding: '24px', width: '340px', display: 'flex', flexDirection: 'column', gap: '14px',
-            }}>
-                {confirmCreate ? (
-                    <>
-                        <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>Directory not found</h2>
-                        <p style={{ margin: 0, color: color.textMuted, fontSize: '13px', lineHeight: 1.5 }}>
-                            <span style={{ color: color.textSecondary, fontFamily: '"JetBrains Mono", monospace', fontSize: '12px' }}>{confirmCreate.expanded}</span>
-                            {' '}does not exist. Create it?
-                        </p>
-                        {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                            <button type="button" onClick={() => setConfirmCreate(null)} style={cancelBtnStyle}>Back</button>
-                            <button type="button" disabled={loading} onClick={createProject} style={submitBtnStyle}>
-                                {loading ? 'Creating…' : 'Create & Add'}
-                            </button>
-                        </div>
-                    </>
-                ) : (
-                    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                        <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>New Project</h2>
-                        {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <span style={labelStyle}>Workspace</span>
-                            <select
-                                value={workspaceId ?? ''}
-                                onChange={e => setWorkspaceId(e.target.value ? Number(e.target.value) : null)}
-                                style={inputStyle}
-                            >
-                                <option value="">— No workspace —</option>
-                                {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                            </select>
-                        </label>
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <span style={labelStyle}>Name</span>
-                            <input value={name} onChange={e => setName(e.target.value)} placeholder="my-project" required style={inputStyle} />
-                        </label>
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <span style={labelStyle}>Path</span>
-                            <input value={path} onChange={e => setPath(e.target.value)} placeholder="~/code/my-project" required style={inputStyle} />
-                        </label>
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <span style={labelStyle}>Language</span>
-                            <select value={language} onChange={e => setLanguage(e.target.value)} style={inputStyle}>
-                                {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
-                            </select>
-                        </label>
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                            <button type="button" onClick={onClose} style={cancelBtnStyle}>Cancel</button>
-                            <button type="submit" disabled={loading} style={submitBtnStyle}>
-                                {loading ? 'Checking…' : 'Add Project'}
-                            </button>
-                        </div>
-                    </form>
-                )}
-            </div>
-        </div>
-    )
-}
-
-// ─── Edit Project Path Modal ──────────────────────────────────────────────────
-
-function EditProjectPathModal({
-    project,
-    onClose,
-    onUpdated,
-}: {
-    project: Project
-    onClose: () => void
-    onUpdated: (p: Project) => void
-}) {
-    const [path, setPath] = useState(project.path)
-    const [error, setError] = useState('')
-    const [loading, setLoading] = useState(false)
-
-    async function handleSubmit(e: React.FormEvent) {
-        e.preventDefault()
-        setError('')
-        setLoading(true)
-        try {
-            const res = await fetch(`/api/projects/${project.id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ path: path.trim() }),
-            })
-            const data = await res.json()
-            if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
-            onUpdated(data as Project)
-            onClose()
-        } catch {
-            setError('Network error')
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    return (
-        <div style={{
-            position: 'fixed', inset: 0, background: color.overlay,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
-        }}>
-            <div style={{
-                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
-                padding: '24px', width: '340px', display: 'flex', flexDirection: 'column', gap: '14px',
-            }}>
-                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                    <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>
-                        Change Directory —{' '}
-                        <span style={{ fontFamily: '"JetBrains Mono", monospace', color: color.accent }}>{project.name}</span>
-                    </h2>
-                    {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
-                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <span style={labelStyle}>Path</span>
-                        <input value={path} onChange={e => setPath(e.target.value)} placeholder="~/code/my-project" required style={inputStyle} />
-                    </label>
-                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                        <button type="button" onClick={onClose} style={cancelBtnStyle}>Cancel</button>
-                        <button type="submit" disabled={loading} style={submitBtnStyle}>
-                            {loading ? 'Saving…' : 'Save'}
                         </button>
                     </div>
                 </form>
@@ -755,6 +577,315 @@ function DefaultPermissionsModal({ onClose }: { onClose: () => void }) {
             onSubmit={handleSubmit}
             onClose={onClose}
         />
+    )
+}
+
+// ─── Global Settings Modal ────────────────────────────────────────────────────
+
+function GlobalSettingsModal({
+    onClose,
+    initialTemplates,
+    onTemplatesChange,
+}: {
+    onClose: () => void
+    initialTemplates: AgentTemplate[]
+    onTemplatesChange: (templates: AgentTemplate[]) => void
+}) {
+    type SettingsTab = 'templates' | 'permissions'
+    const [tab, setTab] = useState<SettingsTab>('templates')
+    const [templates, setTemplates] = useState<AgentTemplate[]>(initialTemplates)
+
+    // Template editor
+    const [selected, setSelected] = useState<AgentTemplate | null>(null)
+    const [isNew, setIsNew] = useState(false)
+    const [tplName, setTplName] = useState('')
+    const [tplDesc, setTplDesc] = useState('')
+    const [tplType, setTplType] = useState('custom')
+    const [tplModel, setTplModel] = useState('claude-sonnet-4-6')
+    const [tplPrompt, setTplPrompt] = useState('')
+    const [tplFlags, setTplFlags] = useState<AgentFlags>({})
+    const [formError, setFormError] = useState('')
+    const [saving, setSaving] = useState(false)
+
+    // Permissions
+    const [permAllow, setPermAllow] = useState<string[]>([])
+    const [permDeny, setPermDeny] = useState<string[]>([])
+    const [permError, setPermError] = useState('')
+    const [permFetching, setPermFetching] = useState(true)
+    const [permSaving, setPermSaving] = useState(false)
+    const [permSaved, setPermSaved] = useState(false)
+
+    useEffect(() => {
+        fetch('/api/default-permissions')
+            .then(r => r.json())
+            .then(d => { setPermAllow(d.allow ?? []); setPermDeny(d.deny ?? []) })
+            .catch(() => setPermError('Failed to load'))
+            .finally(() => setPermFetching(false))
+    }, [])
+
+    function loadTemplate(tpl: AgentTemplate) {
+        setSelected(tpl); setIsNew(false)
+        setTplName(tpl.name); setTplDesc(tpl.description ?? '')
+        setTplType(tpl.agent_type); setTplModel(tpl.model)
+        setTplPrompt(tpl.system_prompt ?? ''); setTplFlags(tpl.flags ?? {})
+        setFormError('')
+    }
+
+    function startNew() {
+        setSelected(null); setIsNew(true)
+        setTplName(''); setTplDesc(''); setTplType('custom')
+        setTplModel('claude-sonnet-4-6'); setTplPrompt(''); setTplFlags({})
+        setFormError('')
+    }
+
+    async function saveTemplate() {
+        if (!tplName.trim()) { setFormError('Name is required'); return }
+        setSaving(true); setFormError('')
+        try {
+            const body = { name: tplName, description: tplDesc, agent_type: tplType, model: tplModel, system_prompt: tplPrompt, flags: tplFlags }
+            const url = isNew ? '/api/agent-templates' : `/api/agent-templates/${selected!.id}`
+            const res = await fetch(url, { method: isNew ? 'POST' : 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+            if (!res.ok) { const d = await res.json(); setFormError(d.error ?? 'Save failed'); return }
+            const tpl: AgentTemplate = await res.json()
+            const updated = isNew ? [...templates, tpl] : templates.map(t => t.id === tpl.id ? tpl : t)
+            setTemplates(updated); onTemplatesChange(updated)
+            setIsNew(false); setSelected(tpl)
+        } finally { setSaving(false) }
+    }
+
+    async function deleteTemplate() {
+        if (!selected || selected.is_builtin) return
+        const res = await fetch(`/api/agent-templates/${selected.id}`, { method: 'DELETE' })
+        if (!res.ok) return
+        const updated = templates.filter(t => t.id !== selected.id)
+        setTemplates(updated); onTemplatesChange(updated)
+        setSelected(null); setIsNew(false)
+    }
+
+    async function savePermissions() {
+        setPermSaving(true); setPermError(''); setPermSaved(false)
+        try {
+            const res = await fetch('/api/default-permissions', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ allow: permAllow, deny: permDeny }),
+            })
+            const d = await res.json()
+            if (!res.ok) { setPermError(d.error ?? 'Save failed'); return }
+            setPermAllow(d.allow ?? []); setPermDeny(d.deny ?? [])
+            setPermSaved(true); setTimeout(() => setPermSaved(false), 2000)
+        } catch { setPermError('Network error') }
+        finally { setPermSaving(false) }
+    }
+
+    const canEdit = isNew || (selected !== null && !selected.is_builtin)
+    const showEditor = isNew || selected !== null
+
+    const tabBtnStyle = (t: SettingsTab): React.CSSProperties => ({
+        background: tab === t ? color.bgCanvas : 'transparent',
+        border: tab === t ? `1px solid ${color.borderMuted}` : '1px solid transparent',
+        borderRadius: '6px', color: tab === t ? color.textPrimary : color.textMuted,
+        fontSize: '12px', padding: '4px 14px', cursor: 'pointer',
+    })
+
+    return (
+        <div
+            style={{ position: 'fixed', inset: 0, background: color.overlay, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}
+            onClick={e => { if (e.target === e.currentTarget) onClose() }}
+        >
+            <div style={{
+                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '10px',
+                width: '880px', height: '620px', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+            }}>
+                {/* Header */}
+                <div style={{ display: 'flex', alignItems: 'center', padding: '14px 20px', borderBottom: `1px solid ${color.border}`, gap: '12px', flexShrink: 0 }}>
+                    <span style={{ color: color.textPrimary, fontSize: '14px', fontWeight: 600 }}>Settings</span>
+                    <div style={{ display: 'flex', gap: '4px', flex: 1 }}>
+                        <button style={tabBtnStyle('templates')} onClick={() => setTab('templates')}>Templates</button>
+                        <button style={tabBtnStyle('permissions')} onClick={() => setTab('permissions')}>Default Permissions</button>
+                    </div>
+                    <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: color.textFaint, cursor: 'pointer', fontSize: '18px', lineHeight: 1, padding: '0 4px' }}>×</button>
+                </div>
+
+                {/* ── Templates tab ── */}
+                {tab === 'templates' && (
+                    <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+                        {/* Left list */}
+                        <div style={{ width: '220px', flexShrink: 0, borderRight: `1px solid ${color.border}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                            <div style={{ padding: '10px', borderBottom: `1px solid ${color.border}` }}>
+                                <button onClick={startNew} style={{ ...submitBtnStyle, width: '100%', textAlign: 'center' as const, padding: '6px 0' }}>
+                                    + New Template
+                                </button>
+                            </div>
+                            <div style={{ flex: 1, overflowY: 'auto' }}>
+                                {templates.map(tpl => {
+                                    const active = !isNew && selected?.id === tpl.id
+                                    return (
+                                        <button
+                                            key={tpl.id}
+                                            onClick={() => loadTemplate(tpl)}
+                                            style={{
+                                                width: '100%', textAlign: 'left' as const, background: active ? color.bgCanvas : 'transparent',
+                                                border: 'none', borderLeft: `2px solid ${active ? color.accent : 'transparent'}`,
+                                                padding: '9px 12px', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '3px',
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <span style={{ color: color.textPrimary, fontSize: '12px', fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{tpl.name}</span>
+                                                {tpl.is_builtin && <span style={{ color: color.textFaint, fontSize: '9px', letterSpacing: '0.03em' }}>built-in</span>}
+                                            </div>
+                                            <span style={{ color: AGENT_TYPE_COLORS[tpl.agent_type] ?? color.textFaint, fontSize: '10px' }}>
+                                                {AGENT_TYPE_LABELS[tpl.agent_type] ?? tpl.agent_type}
+                                            </span>
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Right editor */}
+                        {showEditor ? (
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                                {selected?.is_builtin && (
+                                    <div style={{ padding: '7px 16px', background: color.bgCanvas, borderBottom: `1px solid ${color.border}`, color: color.textMuted, fontSize: '11px' }}>
+                                        Built-in templates are read-only.
+                                    </div>
+                                )}
+                                <div style={{ flex: 1, overflowY: 'auto', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                    {formError && <span style={{ color: color.danger, fontSize: '12px' }}>{formError}</span>}
+
+                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                        <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                            <span style={labelStyle}>Name *</span>
+                                            <input value={tplName} disabled={!canEdit} onChange={e => setTplName(e.target.value)}
+                                                style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' as const, opacity: canEdit ? 1 : 0.55 }} />
+                                        </label>
+                                        <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                            <span style={labelStyle}>Type</span>
+                                            <select value={tplType} disabled={!canEdit} onChange={e => setTplType(e.target.value)}
+                                                style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' as const, opacity: canEdit ? 1 : 0.55 }}>
+                                                {Object.entries(AGENT_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                                            </select>
+                                        </label>
+                                    </div>
+
+                                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <span style={labelStyle}>Description</span>
+                                        <input value={tplDesc} disabled={!canEdit} onChange={e => setTplDesc(e.target.value)}
+                                            placeholder="Short description of this template's role…"
+                                            style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' as const, opacity: canEdit ? 1 : 0.55 }} />
+                                    </label>
+
+                                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <span style={labelStyle}>Model</span>
+                                        <select value={tplModel} disabled={!canEdit} onChange={e => setTplModel(e.target.value)}
+                                            style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' as const, opacity: canEdit ? 1 : 0.55 }}>
+                                            <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
+                                            <option value="claude-opus-4-8">Claude Opus 4.8</option>
+                                            <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+                                        </select>
+                                    </label>
+
+                                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <span style={labelStyle}>System Prompt</span>
+                                        <textarea value={tplPrompt} disabled={!canEdit} onChange={e => setTplPrompt(e.target.value)}
+                                            placeholder="Instructions passed to Claude when an agent using this template starts…"
+                                            rows={9}
+                                            style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' as const, resize: 'vertical' as const,
+                                                lineHeight: 1.6, fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', opacity: canEdit ? 1 : 0.55 }} />
+                                    </label>
+
+                                    {canEdit && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                            <span style={labelStyle}>Launch Flags</span>
+                                            {([
+                                                { key: 'dangerously_skip_permissions' as const, label: 'Skip Permissions', hint: '--dangerously-skip-permissions — no prompts' },
+                                                { key: 'plan_mode' as const, label: 'Plan Mode', hint: 'Read-only — analyse and plan, never edit files' },
+                                                { key: 'verbose' as const, label: 'Verbose', hint: '--verbose — detailed output' },
+                                            ] as const).map(({ key, label, hint }) => (
+                                                <div key={key} style={flagRowStyle} onClick={() => setTplFlags(f => ({ ...f, [key]: !f[key] }))}>
+                                                    <div>
+                                                        <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>{label}</div>
+                                                        <div style={{ fontSize: '10px', color: color.textFaint }}>{hint}</div>
+                                                    </div>
+                                                    <button type="button" style={toggleStyle(!!tplFlags[key])} onClick={e => e.stopPropagation()}>
+                                                        <span style={{ position: 'absolute', top: '3px', left: tplFlags[key] ? '17px' : '3px', width: '12px', height: '12px', borderRadius: '50%', background: '#fff', transition: 'left 0.15s' }} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            <div style={{ ...flagRowStyle, gap: '12px' }}>
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Max Turns</div>
+                                                    <div style={{ fontSize: '10px', color: color.textFaint }}>--max-turns N — limit conversation turns</div>
+                                                </div>
+                                                <input type="number" min={1} max={500} placeholder="∞"
+                                                    value={tplFlags.max_turns ?? ''}
+                                                    onChange={e => setTplFlags(f => ({ ...f, max_turns: e.target.value ? parseInt(e.target.value, 10) : null }))}
+                                                    onClick={e => e.stopPropagation()}
+                                                    style={{ ...inputStyle, width: '72px', textAlign: 'center' as const, padding: '4px 8px' }} />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                {canEdit && (
+                                    <div style={{ padding: '12px 20px', borderTop: `1px solid ${color.border}`, display: 'flex', gap: '8px', justifyContent: 'flex-end', flexShrink: 0 }}>
+                                        {!isNew && (
+                                            <button onClick={deleteTemplate} style={{ ...cancelBtnStyle, color: color.danger, borderColor: color.danger }}>
+                                                Delete
+                                            </button>
+                                        )}
+                                        <button onClick={saveTemplate} disabled={saving} style={{ ...submitBtnStyle, opacity: saving ? 0.6 : 1 }}>
+                                            {saving ? 'Saving…' : isNew ? 'Create Template' : 'Save Changes'}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <span style={{ color: color.textFaint, fontSize: '13px' }}>Select a template to view, or create a new one</span>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* ── Permissions tab ── */}
+                {tab === 'permissions' && (
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', maxWidth: '520px' }}>
+                            <p style={{ margin: 0, color: color.textMuted, fontSize: '11px' }}>
+                                Default allow/deny rules applied to all projects and agents. Changing these syncs to every project and agent in the database.
+                            </p>
+                            {permError && <span style={{ color: color.danger, fontSize: '12px' }}>{permError}</span>}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <span style={labelStyle}>Allow</span>
+                                <TagInput tags={permAllow} onChange={setPermAllow}
+                                    placeholder={permFetching ? '' : 'e.g. Bash(npm run *)'}
+                                    disabled={permFetching} tagColor={color.success} />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <span style={labelStyle}>Deny</span>
+                                <TagInput tags={permDeny} onChange={setPermDeny}
+                                    placeholder={permFetching ? '' : 'e.g. Bash(rm *)'}
+                                    disabled={permFetching} tagColor={color.danger} />
+                            </div>
+                            <p style={{ margin: 0, color: color.textFaint, fontSize: '10px', lineHeight: 1.5 }}>
+                                Rules follow Claude Code syntax, e.g.{' '}
+                                <code style={{ fontFamily: 'monospace' }}>Bash(*)</code>,{' '}
+                                <code style={{ fontFamily: 'monospace' }}>Bash(npm run *)</code>,{' '}
+                                <code style={{ fontFamily: 'monospace' }}>Read</code>.{' '}
+                                Leave both empty to rely on interactive prompts.
+                            </p>
+                            <div>
+                                <button onClick={savePermissions} disabled={permFetching || permSaving}
+                                    style={{ ...submitBtnStyle, opacity: (permFetching || permSaving) ? 0.6 : 1, minWidth: '120px' }}>
+                                    {permSaving ? 'Saving…' : permSaved ? 'Saved ✓' : 'Save Permissions'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
     )
 }
 
@@ -1945,6 +2076,49 @@ function CreateTaskModal({
     const [agentName, setAgentName] = useState('')
     const [mcpResult, setMcpResult] = useState<string | null>(null)
 
+    // Restore last-used workspace and project from localStorage
+    const initWorkspaceId = (): number | null => {
+        const stored = localStorage.getItem(LS_TASK_WORKSPACE_ID)
+        if (stored !== null) {
+            const id = parseInt(stored, 10)
+            if (workspaces.some(w => w.id === id)) return id
+        }
+        const proj = projects.find(p => p.id === defaultProjectId)
+        return proj?.workspace_id ?? null
+    }
+    const initProjectId = (): number | null => {
+        const stored = localStorage.getItem(LS_TASK_PROJECT_ID)
+        if (stored !== null) {
+            const id = parseInt(stored, 10)
+            if (projects.some(p => p.id === id)) return id
+        }
+        return defaultProjectId
+    }
+
+    const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<number | null>(initWorkspaceId)
+    const [selectedProjectId, setSelectedProjectId] = useState<number | null>(initProjectId)
+
+    const visibleProjects = selectedWorkspaceId !== null
+        ? projects.filter(p => p.workspace_id === selectedWorkspaceId)
+        : projects
+
+    function handleWorkspaceChange(id: number | null) {
+        setSelectedWorkspaceId(id)
+        if (id !== null) localStorage.setItem(LS_TASK_WORKSPACE_ID, String(id))
+        else localStorage.removeItem(LS_TASK_WORKSPACE_ID)
+        // Pick first project in new workspace, or clear
+        const first = id !== null ? projects.find(p => p.workspace_id === id) : projects[0]
+        const newProjectId = first?.id ?? null
+        setSelectedProjectId(newProjectId)
+        if (newProjectId !== null) localStorage.setItem(LS_TASK_PROJECT_ID, String(newProjectId))
+        else localStorage.removeItem(LS_TASK_PROJECT_ID)
+    }
+
+    function handleProjectChange(id: number) {
+        setSelectedProjectId(id)
+        localStorage.setItem(LS_TASK_PROJECT_ID, String(id))
+    }
+
     function addAssignee() {
         const name = assigneeInput.trim()
         if (!name || assignees.includes(name)) return
@@ -2012,6 +2186,10 @@ function CreateTaskModal({
         }
     }
 
+    const selectStyle: React.CSSProperties = {
+        ...inputStyle, width: '100%', boxSizing: 'border-box' as const, cursor: 'pointer',
+    }
+
     return (
         <div style={{
             position: 'fixed', inset: 0, background: color.overlay,
@@ -2040,6 +2218,38 @@ function CreateTaskModal({
                 )}
 
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {/* Workspace + Project row */}
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        {workspaces.length > 0 && (
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+                                <span style={labelStyle}>Workspace</span>
+                                <select
+                                    value={selectedWorkspaceId ?? ''}
+                                    onChange={e => handleWorkspaceChange(e.target.value === '' ? null : parseInt(e.target.value, 10))}
+                                    style={selectStyle}
+                                >
+                                    <option value="">All</option>
+                                    {workspaces.map(w => (
+                                        <option key={w.id} value={w.id}>{w.name}</option>
+                                    ))}
+                                </select>
+                            </label>
+                        )}
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+                            <span style={labelStyle}>Project <span style={{ color: color.danger }}>*</span></span>
+                            <select
+                                value={selectedProjectId ?? ''}
+                                onChange={e => handleProjectChange(parseInt(e.target.value, 10))}
+                                style={selectStyle}
+                            >
+                                <option value="" disabled>Select project</option>
+                                {visibleProjects.map(p => (
+                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                            </select>
+                        </label>
+                    </div>
+
                     {/* Title */}
                     <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <span style={labelStyle}>Title <span style={{ color: color.danger }}>*</span></span>
@@ -2396,26 +2606,57 @@ Focus on thoroughness, coverage, and clear communication of quality issues.`,
 
 // ─── Add Agent Modal ──────────────────────────────────────────────────────────
 
-function AddAgentModal({ projectId, onClose, onCreated }: {
+function AddAgentModal({ projectId, onClose, onCreated, templates }: {
     projectId: number
     onClose: () => void
     onCreated: (a: ProjectAgent) => void
+    templates: AgentTemplate[]
 }) {
     const [name, setName] = useState('')
     const [agentType, setAgentType] = useState<string>('software_engineer')
     const [description, setDescription] = useState(AGENT_TYPE_DEFAULTS.software_engineer.description)
     const [systemPrompt, setSystemPrompt] = useState(AGENT_TYPE_DEFAULTS.software_engineer.system_prompt)
     const [model, setModel] = useState('claude-sonnet-4-6')
+    const [flags, setFlags] = useState<AgentFlags>({})
+    const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null)
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
 
     function handleTypeChange(type: string) {
         setAgentType(type)
+        setSelectedTemplateId(null)
         const defaults = AGENT_TYPE_DEFAULTS[type]
         if (defaults) {
             setDescription(defaults.description)
             setSystemPrompt(defaults.system_prompt)
         }
+    }
+
+    function applyTemplate(tpl: AgentTemplate | null) {
+        if (!tpl) {
+            // Blank — reset to defaults
+            setSelectedTemplateId(null)
+            setAgentType('custom')
+            setDescription('')
+            setSystemPrompt('')
+            setModel('claude-sonnet-4-6')
+            setFlags({})
+            return
+        }
+        setSelectedTemplateId(tpl.id)
+        setAgentType(tpl.agent_type)
+        setModel(tpl.model)
+        setFlags(tpl.flags ?? {})
+        if (tpl.description) setDescription(tpl.description)
+        if (tpl.system_prompt) setSystemPrompt(tpl.system_prompt)
+        else {
+            const defaults = AGENT_TYPE_DEFAULTS[tpl.agent_type]
+            if (defaults) setSystemPrompt(defaults.system_prompt)
+        }
+    }
+
+    function setFlag(key: keyof AgentFlags, value: boolean | number | null) {
+        setFlags(prev => ({ ...prev, [key]: value }))
     }
 
     async function handleSubmit(e: React.FormEvent) {
@@ -2426,7 +2667,7 @@ function AddAgentModal({ projectId, onClose, onCreated }: {
             const res = await fetch(`/api/projects/${projectId}/agents`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, agent_type: agentType, description, system_prompt: systemPrompt, model }),
+                body: JSON.stringify({ name, agent_type: agentType, description, system_prompt: systemPrompt, model, flags }),
             })
             const data = await res.json()
             if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
@@ -2439,6 +2680,18 @@ function AddAgentModal({ projectId, onClose, onCreated }: {
         }
     }
 
+    const templateCardStyle = (active: boolean): React.CSSProperties => ({
+        padding: '8px 10px',
+        borderRadius: '6px',
+        border: `1px solid ${active ? color.accent : color.borderMuted}`,
+        background: active ? `${color.accent}18` : color.bgCanvas,
+        cursor: 'pointer',
+        flexShrink: 0,
+        minWidth: '100px',
+        maxWidth: '140px',
+        textAlign: 'left',
+    })
+
     return (
         <div style={{
             position: 'fixed', inset: 0, background: color.overlay,
@@ -2446,12 +2699,60 @@ function AddAgentModal({ projectId, onClose, onCreated }: {
         }}>
             <div style={{
                 background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
-                padding: '24px', width: '480px', display: 'flex', flexDirection: 'column', gap: '14px',
+                padding: '24px', width: '520px', display: 'flex', flexDirection: 'column', gap: '14px',
                 maxHeight: '90vh', overflowY: 'auto',
             }}>
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                     <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>Add Agent</h2>
                     {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
+
+                    {/* Template selector */}
+                    {templates.length > 0 && (
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <span style={labelStyle}>Template</span>
+                            <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+                                {/* Blank option */}
+                                <button
+                                    key="blank"
+                                    type="button"
+                                    onClick={() => applyTemplate(null)}
+                                    style={templateCardStyle(selectedTemplateId === null && agentType === 'custom' && !systemPrompt)}
+                                >
+                                    <div style={{ fontSize: '11px', fontWeight: 600, color: color.textSecondary }}>Blank</div>
+                                    <div style={{ fontSize: '10px', color: color.textFaint, marginTop: '2px' }}>Start from scratch</div>
+                                </button>
+                                {templates.map(tpl => {
+                                    const active = selectedTemplateId === tpl.id
+                                    const typeColor = AGENT_TYPE_COLORS[tpl.agent_type] ?? color.textMuted
+                                    return (
+                                        <button
+                                            key={tpl.id}
+                                            type="button"
+                                            onClick={() => applyTemplate(tpl)}
+                                            style={templateCardStyle(active)}
+                                        >
+                                            <div style={{ fontSize: '11px', fontWeight: 600, color: active ? color.accent : color.textSecondary }}>
+                                                {tpl.name}
+                                            </div>
+                                            <div style={{ fontSize: '10px', color: typeColor, marginTop: '2px' }}>
+                                                {AGENT_TYPE_LABELS[tpl.agent_type] ?? tpl.agent_type}
+                                            </div>
+                                            {(tpl.flags?.dangerously_skip_permissions || tpl.flags?.plan_mode) && (
+                                                <div style={{ display: 'flex', gap: '3px', marginTop: '4px', flexWrap: 'wrap' }}>
+                                                    {tpl.flags.dangerously_skip_permissions && (
+                                                        <span style={{ fontSize: '9px', padding: '1px 4px', borderRadius: '3px', background: '#ff6b3518', color: '#ff6b35', fontWeight: 600 }}>FULL AUTO</span>
+                                                    )}
+                                                    {tpl.flags.plan_mode && (
+                                                        <span style={{ fontSize: '9px', padding: '1px 4px', borderRadius: '3px', background: `${color.accent}18`, color: color.accent, fontWeight: 600 }}>PLAN ONLY</span>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                        </label>
+                    )}
 
                     {/* Type selector */}
                     <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -2521,6 +2822,87 @@ function AddAgentModal({ projectId, onClose, onCreated }: {
                             style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }}
                         />
                     </label>
+
+                    {/* Launch Options */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <span style={labelStyle}>Launch Options</span>
+
+                        <div style={flagRowStyle}>
+                            <div>
+                                <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Skip Permissions</div>
+                                <div style={{ fontSize: '10px', color: color.textFaint }}>--dangerously-skip-permissions — no prompts</div>
+                            </div>
+                            <button
+                                type="button"
+                                style={toggleStyle(!!flags.dangerously_skip_permissions)}
+                                onClick={() => setFlag('dangerously_skip_permissions', !flags.dangerously_skip_permissions)}
+                                title="Toggle --dangerously-skip-permissions"
+                            >
+                                <span style={{
+                                    position: 'absolute', top: '3px',
+                                    left: flags.dangerously_skip_permissions ? '17px' : '3px',
+                                    width: '12px', height: '12px', borderRadius: '50%',
+                                    background: '#fff', transition: 'left 0.15s',
+                                }} />
+                            </button>
+                        </div>
+
+                        <div style={flagRowStyle}>
+                            <div>
+                                <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Plan Mode</div>
+                                <div style={{ fontSize: '10px', color: color.textFaint }}>Read-only — analyse and plan, never edit files</div>
+                            </div>
+                            <button
+                                type="button"
+                                style={toggleStyle(!!flags.plan_mode)}
+                                onClick={() => setFlag('plan_mode', !flags.plan_mode)}
+                                title="Toggle plan mode"
+                            >
+                                <span style={{
+                                    position: 'absolute', top: '3px',
+                                    left: flags.plan_mode ? '17px' : '3px',
+                                    width: '12px', height: '12px', borderRadius: '50%',
+                                    background: '#fff', transition: 'left 0.15s',
+                                }} />
+                            </button>
+                        </div>
+
+                        <div style={flagRowStyle}>
+                            <div>
+                                <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Verbose</div>
+                                <div style={{ fontSize: '10px', color: color.textFaint }}>--verbose — detailed claude output</div>
+                            </div>
+                            <button
+                                type="button"
+                                style={toggleStyle(!!flags.verbose)}
+                                onClick={() => setFlag('verbose', !flags.verbose)}
+                                title="Toggle --verbose"
+                            >
+                                <span style={{
+                                    position: 'absolute', top: '3px',
+                                    left: flags.verbose ? '17px' : '3px',
+                                    width: '12px', height: '12px', borderRadius: '50%',
+                                    background: '#fff', transition: 'left 0.15s',
+                                }} />
+                            </button>
+                        </div>
+
+                        <div style={{ ...flagRowStyle, gap: '12px' }}>
+                            <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Max Turns</div>
+                                <div style={{ fontSize: '10px', color: color.textFaint }}>--max-turns N — limit conversation turns</div>
+                            </div>
+                            <input
+                                type="number"
+                                min={1}
+                                max={500}
+                                placeholder="∞"
+                                value={flags.max_turns ?? ''}
+                                onChange={e => setFlag('max_turns', e.target.value ? parseInt(e.target.value, 10) : null)}
+                                style={{ ...inputStyle, width: '72px', textAlign: 'center', padding: '4px 8px' }}
+                            />
+                        </div>
+                    </div>
 
                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                         <button type="button" onClick={onClose} style={cancelBtnStyle}>Cancel</button>
@@ -3840,7 +4222,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const [editingProject, setEditingProject] = useState<Project | null>(null)
     const [systemPromptProject, setSystemPromptProject] = useState<Project | null>(null)
     const [permissionsProject, setPermissionsProject] = useState<Project | null>(null)
-    const [showDefaultPermissions, setShowDefaultPermissions] = useState(false)
+    const [showGlobalSettings, setShowGlobalSettings] = useState(false)
     const [deletingProject, setDeletingProject] = useState<Project | null>(null)
     const [deletingWorkspace, setDeletingWorkspace] = useState<Workspace | null>(null)
     const [tasks, setTasks] = useState<Task[]>(props.tasks ?? [])
@@ -3858,6 +4240,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const [selectedTask, setSelectedTask] = useState<Task | null>(null)
     const [newMessageIds, setNewMessageIds] = useState<number[]>([])
     const [projectAgents, setProjectAgents] = useState<ProjectAgent[]>([])
+    const [agentTemplates, setAgentTemplates] = useState<AgentTemplate[]>([])
     const [showAddAgent, setShowAddAgent] = useState(false)
     const [activeAgentId, setActiveAgentId] = useState<number | null>(null)
     const [showProjectSearch, setShowProjectSearch] = useState(false)
@@ -3923,6 +4306,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             .then(setProjectAgents)
             .catch(() => {})
     }, [activeProject?.id])
+
+    // Fetch agent templates once on mount (global, not project-specific)
+    useEffect(() => {
+        fetch('/api/agent-templates')
+            .then(r => r.json())
+            .then(setAgentTemplates)
+            .catch(() => {})
+    }, [])
 
     // Launch a terminal session for a single agent (reusable helper)
     function launchAgentSession(agentId: number, focus: boolean = true) {
@@ -4075,9 +4466,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         if (sessions.current.has(activeProject.id)) {
             const { fitAddon, term } = sessions.current.get(activeProject.id)!
-            requestAnimationFrame(() => { fitAddon.fit(); term.focus() })
+            requestAnimationFrame(() => {
+                fitAddon.fit();
+                term.focus()
+            })
             return
         }
+    })
 
         requestAnimationFrame(() => {
         const term = makeTerminal()
@@ -4487,7 +4882,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                             <button
                                                 onClick={async (e) => {
                                                     e.stopPropagation()
-                                                    await fetch(`/api/agents/${agent.id}`, { method: 'DELETE' })
+                                                    const res = await fetch(`/api/agents/${agent.id}`, { method: 'DELETE' })
+                                                    if (!res.ok) return
+                                                    // Clean up terminal session
+                                                    const session = agentSessions.current.get(agent.id)
+                                                    if (session) {
+                                                        session.observer.disconnect()
+                                                        session.term.dispose()
+                                                        session.ws.close()
+                                                        agentSessions.current.delete(agent.id)
+                                                    }
+                                                    agentContainerRefs.current.delete(agent.id)
+                                                    // Reset active selection if we deleted the active agent
+                                                    if (activeAgentId === agent.id) {
+                                                        const remaining = projectAgents.filter(a => a.id !== agent.id)
+                                                        setActiveAgentId(remaining.length > 0 ? remaining[0].id : null)
+                                                    }
                                                     setProjectAgents(prev => prev.filter(a => a.id !== agent.id))
                                                 }}
                                                 title="Remove"
@@ -4720,7 +5130,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             )}
 
             {addProjectWorkspaceId !== undefined && (
-                <AddProjectModal
+                <ProjectCreateModal
                     workspaces={workspaces}
                     defaultWorkspaceId={addProjectWorkspaceId}
                     onClose={() => setAddProjectWorkspaceId(undefined)}
@@ -4738,7 +5148,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             )}
 
             {editingProject && (
-                <EditProjectPathModal
+                <ProjectPathEditModal
                     project={editingProject}
                     onClose={() => setEditingProject(null)}
                     onUpdated={p => { handleProjectUpdated(p); setEditingProject(null) }}
@@ -4760,9 +5170,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 />
             )}
 
-            {showDefaultPermissions && (
-                <DefaultPermissionsModal
-                    onClose={() => setShowDefaultPermissions(false)}
+            {showGlobalSettings && (
+                <GlobalSettingsModal
+                    onClose={() => setShowGlobalSettings(false)}
+                    initialTemplates={agentTemplates}
+                    onTemplatesChange={setAgentTemplates}
                 />
             )}
 
@@ -4785,6 +5197,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {showAddAgent && activeProject && (
                 <AddAgentModal
                     projectId={activeProject.id}
+                    templates={agentTemplates}
                     onClose={() => setShowAddAgent(false)}
                     onCreated={agent => { setProjectAgents(prev => [...prev, agent]); setShowAddAgent(false) }}
                 />

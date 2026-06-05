@@ -23,6 +23,8 @@ class AppProvider(Provider):
             from app.models.Project import Project
             from app.models.Agent import Agent
             from app.utils.hook_setup import ensure_claude_settings, BASE_URL
+            from app.controllers.agent_template_controller import seed_builtin_templates
+            await seed_builtin_templates()
 
             projects = await Project.all()
             for project in projects:

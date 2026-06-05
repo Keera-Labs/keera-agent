@@ -43,9 +43,12 @@ async def validate_path(request: Request):
 
 async def update(request: Request, project_id: int):
     body = await request.json()
+    is_inertia = request.headers.get("X-Inertia") == "true"
 
     project = await Project.find(project_id)
     if not project:
+        if is_inertia:
+            return _inertia_error(request, {"_": "Project not found"}, 404)
         return JSONResponse({"error": "Project not found"}, status_code=404)
 
     if "workspace_id" in body:
@@ -54,9 +57,13 @@ async def update(request: Request, project_id: int):
     if "path" in body:
         new_path = (body.get("path") or "").strip()
         if not new_path:
+            if is_inertia:
+                return _inertia_error(request, {"_": "Path is required"}, 422)
             return JSONResponse({"error": "Path is required"}, status_code=422)
         expanded = os.path.expanduser(new_path)
         if not os.path.isdir(expanded):
+            if is_inertia:
+                return _inertia_error(request, {"_": "Directory does not exist"}, 422)
             return JSONResponse({"error": "Directory does not exist"}, status_code=422)
         project.path = new_path
         ensure_claude_settings(expanded, BASE_URL)
@@ -66,7 +73,7 @@ async def update(request: Request, project_id: int):
 
     await project.save()
 
-    return JSONResponse({
+    project_data = {
         "id": project.id,
         "name": project.name,
         "slug": project.slug,
@@ -75,7 +82,13 @@ async def update(request: Request, project_id: int):
         "workspace_id": project.workspace_id,
         "claude_status": project.claude_status,
         "system_prompt": project.system_prompt,
-    })
+    }
+
+    if is_inertia:
+        from fastapi_startkit.inertia.inertia import Inertia
+        return Inertia.render("Home", {"updated_project": project_data})
+
+    return JSONResponse(project_data)
 
 
 async def open_directory(request: Request, project_id: int):
@@ -136,20 +149,48 @@ async def upload_image(request: Request, project_id: int, file: UploadFile = Fil
     return JSONResponse({"path": driver.get_path(rel_path)})
 
 
+def _inertia_error(request: Request, errors: dict, status: int) -> JSONResponse:
+    from fastapi_startkit.inertia.inertia import Inertia
+    return JSONResponse(
+        content={
+            "component": "Home",
+            "props": {"errors": errors},
+            "url": str(request.url.path),
+            "version": Inertia.get_version() or "",
+        },
+        status_code=status,
+        headers={"X-Inertia": "true"},
+    )
+
+
 async def store(request: Request):
     body = await request.json()
+    is_inertia = request.headers.get("X-Inertia") == "true"
 
     name = (body.get("name") or "").strip()
     path = (body.get("path") or "").strip()
     language = (body.get("language") or "Unknown").strip()
     workspace_id = body.get("workspace_id") or None
+    create_dir = bool(body.get("create_dir", False))
 
     if not name or not path:
+        if is_inertia:
+            return _inertia_error(request, {"_": "name and path are required"}, 422)
         return JSONResponse({"error": "name and path are required"}, status_code=422)
 
     existing = await Project.where("name", name).first()
     if existing:
+        if is_inertia:
+            return _inertia_error(request, {"_": "A project with that name already exists"}, 409)
         return JSONResponse({"error": "A project with that name already exists"}, status_code=409)
+
+    expanded_path = os.path.expanduser(path)
+    if not os.path.isdir(expanded_path):
+        if not create_dir:
+            if is_inertia:
+                return _inertia_error(request, {"path_not_found": expanded_path}, 422)
+            return JSONResponse({"error": "path_not_found", "expanded": expanded_path}, status_code=422)
+        os.makedirs(expanded_path, exist_ok=True)
 
     project = await Project.create({
         "name": name,
@@ -159,7 +200,6 @@ async def store(request: Request):
         "workspace_id": workspace_id,
     })
 
-    expanded_path = os.path.expanduser(path)
     ensure_claude_settings(expanded_path, BASE_URL, apply_default_permissions=True)
 
     # Create a default PM agent for every new project
@@ -181,15 +221,18 @@ async def store(request: Request):
         "has_session": False,
     })
 
-    return JSONResponse(
-        {
-            "id": project.id,
-            "name": project.name,
-            "slug": project.slug,
-            "path": project.path,
-            "language": project.language,
-            "workspace_id": project.workspace_id,
-            "system_prompt": project.system_prompt,
-        },
-        status_code=201,
-    )
+    project_data = {
+        "id": project.id,
+        "name": project.name,
+        "slug": project.slug,
+        "path": project.path,
+        "language": project.language,
+        "workspace_id": project.workspace_id,
+        "system_prompt": project.system_prompt,
+    }
+
+    if is_inertia:
+        from fastapi_startkit.inertia.inertia import Inertia
+        return Inertia.render("Home", {"new_project": project_data})
+
+    return JSONResponse(project_data, status_code=201)

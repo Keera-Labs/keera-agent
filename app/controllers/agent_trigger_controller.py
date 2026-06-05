@@ -162,11 +162,13 @@ async def _spawn_headless_agent(agent, project, cwd: str, conn_key: str, initial
         task_id = getattr(agent, 'task_id', None)
         worktree_name = f'agent-{task_id}' if task_id else f'agent-{agent.id}'
 
-        from app.controllers.terminal_controller import _permission_flags
+        from app.controllers.terminal_controller import _permission_flags, _extra_flags, _apply_plan_mode
         perm_flag = _permission_flags(
             getattr(agent, 'permissions_allow', None),
             getattr(agent, 'permissions_deny', None),
         )
+        agent_flags_json = getattr(agent, 'flags', None)
+        extra_flags = _extra_flags(agent_flags_json)
 
         siblings = await _Agent.where("project_id", agent.project_id)\
             .where("id", "!=", agent.id).get()
@@ -190,6 +192,7 @@ async def _spawn_headless_agent(agent, project, cwd: str, conn_key: str, initial
             f"Messages you receive appear as: [Message from Agent '<name>']: <content>\n"
             f"To create and start a NEW agent use the MCP tool spawn_agent."
         )
+        system_prompt = _apply_plan_mode(system_prompt, agent_flags_json)
         full_prompt = (system_prompt + relay_instructions).strip()
 
         # Write system prompt to temp file — newlines break PTY input if passed inline
@@ -203,9 +206,9 @@ async def _spawn_headless_agent(agent, project, cwd: str, conn_key: str, initial
         sp_ref = f" --system-prompt \"$(cat {shlex.quote(prompt_file)})\""
         has_session = bool(getattr(agent, 'has_session', False))
         if has_session:
-            os.write(master_fd, f'claude{wt_flag} --continue{model_flag}\n'.encode())
+            os.write(master_fd, f'claude{wt_flag} --continue{model_flag}{extra_flags}\n'.encode())
         else:
-            os.write(master_fd, f'claude{wt_flag}{sp_ref}{model_flag}\n'.encode())
+            os.write(master_fd, f'claude{wt_flag}{sp_ref}{model_flag}{extra_flags}\n'.encode())
             await _Agent.where("id", agent.id).update({"has_session": True})
 
         # Signal ready after Claude's startup banner, then inject the initial message
