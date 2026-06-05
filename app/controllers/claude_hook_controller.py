@@ -100,7 +100,7 @@ async def claude_stopped(request: Request):
             if active_agent:
                 # Give Claude a moment to return to the prompt before sending input
                 await asyncio.sleep(0.5)
-                terminal_manager.write(active_agent.session_id, next_task.description + '\n')
+                await terminal_manager.write_input(active_agent.session_id, next_task.description + '\n')
                 await Project.where('id', project.id).update({'claude_status': 'running'})
 
                 # Notify the frontend that a new task started
@@ -158,7 +158,7 @@ async def _deliver_agent_relay_messages(project, cwd: str) -> None:
         for msg in pending:
             from_agent = await Agent.find(msg.from_agent_id)
             sender_name = from_agent.name if from_agent else f"Agent #{msg.from_agent_id}"
-            terminal_manager.write(agent.session_id, f"[Message from Agent '{sender_name}']: {msg.content}\n")
+            await terminal_manager.write_input(agent.session_id, f"[Message from Agent '{sender_name}']: {msg.content}\n")
             await AgentRelayMessage.where('id', msg.id).update({'status': 'delivered'})
 
         # Notify frontend about the delivered messages
