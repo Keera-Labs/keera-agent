@@ -63,7 +63,7 @@ class Terminal:
             return
         os.write(self.master_fd, data)
 
-    async def write_input(self, data: bytes) -> None:
+    async def write_raw(self, data: bytes) -> None:
         if self.master_fd is None or not data:
             return
         if len(data) <= 1:
@@ -72,6 +72,11 @@ class Terminal:
         for byte in data:
             os.write(self.master_fd, bytes([byte]))
             await asyncio.sleep(0.002)
+
+    async def write_input(self, data: bytes) -> None:
+        """Write a complete message: strips trailing CR/LF then appends \\r."""
+        data = data.rstrip(b'\r\n') + b'\r'
+        await self.write_raw(data)
 
     def resize(self, cols: int, rows: int) -> None:
         self._cols = cols

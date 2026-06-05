@@ -89,39 +89,17 @@ async def claude_stopped(request: Request):
     # worktree cwds (e.g. <project>/.claude/worktrees/agent-N) resolve correctly.
     project_cwd = os.path.expanduser(project.path) if project else cwd
 
-    # Check for pending tasks and process the next one
+    # Fire background work and return immediately so the hook client doesn't time out.
+    # All deferred I/O (sleeps + PTY writes) runs in the background task.
     if project:
-        next_task = await Task.where('project_id', project.id).where('status', 'pending').first()
-        if next_task:
-            await Task.where('id', next_task.id).update({'status': 'in_progress'})
-            terminal_manager: TerminalManager = app().make('terminal')
-            agents = await Agent.where('project_id', project.id).get()
-            active_agent = next((ag for ag in agents if ag.session_id and terminal_manager.find(ag.session_id)), None)
-            if active_agent:
-                # Give Claude a moment to return to the prompt before sending input
-                await asyncio.sleep(0.5)
-                await terminal_manager.write_input(active_agent.session_id, next_task.description + '\n')
-                await Project.where('id', project.id).update({'claude_status': 'running'})
+        asyncio.create_task(_handle_claude_stopped(project, project_cwd))
 
-                # Notify the frontend that a new task started
-                bridge = _find_project_bridge(project_cwd)
-                if bridge:
-                    try:
-                        await bridge.send_text(json.dumps({
-                            'type': 'task_started',
-                            'cwd': project_cwd,
-                            'task_id': next_task.id,
-                            'description': next_task.description,
-                        }))
-                    except Exception:
-                        pass
-                return JSONResponse({}, status_code=200)
+    return JSONResponse({}, status_code=200)
 
-    # Deliver pending agent relay messages to any agents with active PTYs
-    if project:
-        await _deliver_agent_relay_messages(project, project_cwd)
 
-    # Notify the connected frontend WebSocket for this project
+async def _handle_claude_stopped(project, project_cwd: str) -> None:
+    """Background work after Claude stops — runs after HTTP 200 is already sent."""
+    # Notify the frontend that Claude is idle
     bridge = _find_project_bridge(project_cwd)
     if bridge:
         try:
@@ -129,7 +107,32 @@ async def claude_stopped(request: Request):
         except Exception:
             pass
 
-    return JSONResponse({}, status_code=200)
+    # Check for pending tasks and dispatch the next one
+    next_task = await Task.where('project_id', project.id).where('status', 'pending').first()
+    if next_task:
+        await Task.where('id', next_task.id).update({'status': 'in_progress'})
+        terminal_manager: TerminalManager = app().make('terminal')
+        agents = await Agent.where('project_id', project.id).get()
+        active_agent = next((ag for ag in agents if ag.session_id and terminal_manager.find(ag.session_id)), None)
+        if active_agent:
+            await asyncio.sleep(0.5)
+            await terminal_manager.write_input(active_agent.session_id, next_task.description)
+            await Project.where('id', project.id).update({'claude_status': 'running'})
+
+            bridge = _find_project_bridge(project_cwd)
+            if bridge:
+                try:
+                    await bridge.send_text(json.dumps({
+                        'type': 'task_started',
+                        'cwd': project_cwd,
+                        'task_id': next_task.id,
+                        'description': next_task.description,
+                    }))
+                except Exception:
+                    pass
+
+    # Deliver pending agent relay messages to any agents with active PTYs
+    await _deliver_agent_relay_messages(project, project_cwd)
 
 
 async def _deliver_agent_relay_messages(project, cwd: str) -> None:
@@ -158,7 +161,7 @@ async def _deliver_agent_relay_messages(project, cwd: str) -> None:
         for msg in pending:
             from_agent = await Agent.find(msg.from_agent_id)
             sender_name = from_agent.name if from_agent else f"Agent #{msg.from_agent_id}"
-            await terminal_manager.write_input(agent.session_id, f"[Message from Agent '{sender_name}']: {msg.content}\n")
+            await terminal_manager.write_input(agent.session_id, f"[Message from Agent '{sender_name}']: {msg.content}")
             await AgentRelayMessage.where('id', msg.id).update({'status': 'delivered'})
 
         # Notify frontend about the delivered messages

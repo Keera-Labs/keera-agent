@@ -84,7 +84,8 @@ class WebsocketTerminal:
                 if msg.get('type') == 'websocket.disconnect':
                     break
                 if msg.get('bytes'):
-                    await self._write_input(msg['bytes'])
+                    # Binary = message send → write_input auto-appends \r
+                    await self._terminal.write_input(msg['bytes'])
                 elif msg.get('text'):
                     text: str = msg['text']
                     try:
@@ -92,15 +93,13 @@ class WebsocketTerminal:
                         if isinstance(parsed, dict) and parsed.get('type') == 'resize':
                             self._terminal.resize(int(parsed['cols']), int(parsed['rows']))
                         else:
-                            await self._write_input(text.encode())
+                            # Text = raw keyboard from term.onData → no modification
+                            await self._terminal.write_raw(text.encode())
                     except (json.JSONDecodeError, ValueError):
-                        await self._write_input(text.encode())
+                        await self._terminal.write_raw(text.encode())
             except (WebSocketDisconnect, Exception):
                 break
         self._stopped.set()
-
-    async def _write_input(self, data: bytes) -> None:
-        await self._terminal.write_input(data)
 
     async def _watch_process(self, loop: asyncio.AbstractEventLoop) -> None:
         while self._terminal.is_alive() and not self._stopped.is_set():

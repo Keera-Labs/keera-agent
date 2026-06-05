@@ -22,7 +22,7 @@ async def _inject_when_ready(session_id: str, message: str, timeout: float = 30.
         except asyncio.TimeoutError:
             pass
     terminal_manager: TerminalManager = app().make('terminal')
-    await terminal_manager.write_input(session_id, f"{message}\r")
+    await terminal_manager.write_input(session_id, message)
 
 
 async def trigger(request: Request, agent_id: int):
@@ -96,7 +96,7 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
         f"To create and start a NEW agent use the MCP tool spawn_agent."
     )
 
-    await terminal.write_input(f'{agent.to_command(relay_instructions)}\n'.encode())
+    await terminal.write_input(agent.to_command(relay_instructions).encode())
     if not agent.has_session:
         await _Agent.where("id", agent.id).update({"has_session": True})
 
@@ -104,7 +104,7 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     ready_event = claude_ready.setdefault(session_id, asyncio.Event())
     await asyncio.sleep(1.5)
     ready_event.set()
-    await terminal_manager.write_input(session_id, f"{initial_message}\r")
+    await terminal_manager.write_input(session_id, initial_message)
 
     # Notify the frontend if it's already connected
     conn_manager: ConnectionManager = app().make('connections')

@@ -1,5 +1,5 @@
-import AppLayout from '../layouts/AppLayout'
-import SettingsView from '../layouts/SettingsView'
+import AppLayout from '@/layouts/AppLayout'
+import SettingsView from '@/layouts/SettingsView'
 
 export default function Settings() {
     return <SettingsView />
