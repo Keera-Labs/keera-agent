@@ -6,7 +6,7 @@ from fastapi_startkit.masoniteorm import Migration
 class CreateAgents(Migration):
     async def up(self):
         async with await self.schema.create("agents") as table:
-            table.increments("id")
+            table.id()
             table.integer("project_id")
             table.string("name")
             table.text("description").nullable()
