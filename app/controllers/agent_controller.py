@@ -138,6 +138,20 @@ _SYSTEM_PROMPTS: dict[str, str] = {
         "- `qa` → reviewing PRs, running tests, finding bugs\n"
         "- `custom` → any specialized role\n\n"
 
+        "## Additional PM rules\n"
+        "- **Never assign a task to an agent whose status is `running`** — spawn a new agent instead.\n"
+        "- After task completion, always instruct the assigned agent to open a PR and report the PR URL back to you.\n"
+        "- All agents must report back to you (PM, agent 30) when their task is done.\n\n"
+
+        "## MCP endpoint\n"
+        "The MCP server is reachable at `POST http://localhost:4545/mcp` (JSON-RPC 2.0).\n"
+        "Example call:\n"
+        "```\n"
+        "curl -X POST http://localhost:4545/mcp \\\n"
+        "  -H 'Content-Type: application/json' \\\n"
+        "  -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"list_tasks\",\"arguments\":{\"project_path\":\"/path/to/project\"}}}'\n"
+        "```\n\n"
+
         "You are the PM. The moment the user gives you a task, delegate it. Do not hesitate."
     ),
     "software_engineer": (
@@ -176,7 +190,18 @@ _SYSTEM_PROMPTS: dict[str, str] = {
         "- Always use a worktree — never work on the main branch\n"
         "- Always open a PR — never merge directly\n"
         "- Always report back to the PM when done\n"
-        "- If you get stuck, relay that to the PM immediately\n\n"
+        "- If you get stuck, relay that to the PM immediately\n"
+        "- **When the task is done, ping PM (agent 30) with the PR URL** using `relay_to_agent` (or `send_message_to_agent`).\n\n"
+
+        "## MCP endpoint\n"
+        "The MCP server is reachable at `POST http://localhost:4545/mcp` (JSON-RPC 2.0).\n"
+        "Example call:\n"
+        "```\n"
+        "curl -X POST http://localhost:4545/mcp \\\n"
+        "  -H 'Content-Type: application/json' \\\n"
+        "  -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"list_tasks\",\"arguments\":{\"project_path\":\"/path/to/project\"}}}'\n"
+        "```\n\n"
+
         "You are the Software Engineer. Stay in this role throughout the entire conversation."
     ),
     "qa": (
@@ -196,7 +221,17 @@ _SYSTEM_PROMPTS: dict[str, str] = {
         "4. Run tests: identify the test command from package.json / pytest / Makefile\n"
         "5. Document: passed tests, failed tests, missing coverage, any bugs found\n"
         "6. Call `update_task_status` → `completed`\n"
-        "7. Use `relay_to_agent` to report back to the PM with a clear pass/fail summary and any issues\n\n"
+        "7. Use `relay_to_agent` to **ping PM (agent 30)** with your verdict (pass/fail) and a list of any issues found.\n\n"
+
+        "## MCP endpoint\n"
+        "The MCP server is reachable at `POST http://localhost:4545/mcp` (JSON-RPC 2.0).\n"
+        "Example call:\n"
+        "```\n"
+        "curl -X POST http://localhost:4545/mcp \\\n"
+        "  -H 'Content-Type: application/json' \\\n"
+        "  -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"list_tasks\",\"arguments\":{\"project_path\":\"/path/to/project\"}}}'\n"
+        "```\n\n"
+
         "You are the QA agent. Stay in this role throughout the entire conversation."
     ),
 }
@@ -242,7 +277,7 @@ async def store(request: Request, project_id: int):
     description = (body.get("description") or "").strip() or None
     model = (body.get("model") or "claude-sonnet-4-6").strip()
     system_prompt = (body.get("system_prompt") or "").strip() or _default_system_prompt(agent_type)
-    flags = {"dangerously_skip_permissions": True, **(body.get("flags") or {})}
+    flags = {**(body.get("flags") or {}), "dangerously_skip_permissions": True}
 
     if not name:
         return JSONResponse({"error": "name is required"}, status_code=422)
@@ -374,7 +409,7 @@ async def spawn(request: Request, project_id: int):
     system_prompt = (body.get("system_prompt") or "").strip() or _default_system_prompt(agent_type)
     message = (body.get("message") or "").strip() or None
     task_id = body.get("task_id")
-    flags = body.get("flags") or {}
+    flags = {**(body.get("flags") or {}), "dangerously_skip_permissions": True}
 
     if not name:
         return JSONResponse({"error": "name is required"}, status_code=422)
