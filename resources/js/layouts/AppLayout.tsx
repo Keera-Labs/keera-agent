@@ -3813,6 +3813,28 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                                 All
                                             </button>
                                         )}
+                                        {projectAgents.some(a => !agentSessions.current.has(a.id)) && (
+                                            <button
+                                                onClick={async () => {
+                                                    const idle = projectAgents.filter(a => !agentSessions.current.has(a.id))
+                                                    for (const agent of idle) {
+                                                        const res = await fetch(`/api/agents/${agent.id}`, { method: 'DELETE' })
+                                                        if (!res.ok) continue
+                                                        agentContainerRefs.current.delete(agent.id)
+                                                        agentHook.remove.mutate(agent.id)
+                                                    }
+                                                    const idleIds = new Set(idle.map(a => a.id))
+                                                    if (activeAgentId !== null && idleIds.has(activeAgentId)) {
+                                                        const remaining = projectAgents.filter(a => !idleIds.has(a.id))
+                                                        setActiveAgentId(remaining.length > 0 ? remaining[0].id : null)
+                                                    }
+                                                }}
+                                                title="Delete idle agents"
+                                                className="border border-gray-200 rounded text-gray-500 text-[10px] leading-none px-1.5 py-0.5 cursor-pointer bg-transparent hover:border-red-400 hover:text-red-400 transition-colors"
+                                            >
+                                                ✕ idle
+                                            </button>
+                                        )}
                                         <button
                                             onClick={() => setShowAddAgent(true)}
                                             title="Add agent"
@@ -3892,6 +3914,35 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                                     {isRunning ? '● Active' : AGENT_TYPE_LABELS[agent.agent_type] ?? agent.agent_type}
                                                 </div>
                                             </div>
+                                            {isRunning && (
+                                                <button
+                                                    onClick={e => {
+                                                        e.stopPropagation()
+                                                        const session = agentSessions.current.get(agent.id)
+                                                        if (session) {
+                                                            session.observer.disconnect()
+                                                            session.term.dispose()
+                                                            session.ws.close()
+                                                            agentSessions.current.delete(agent.id)
+                                                        }
+                                                        setTimeout(() => launchAgentSession(agent.id, agent.id === activeAgentId), 300)
+                                                    }}
+                                                    title="Restart"
+                                                    style={{
+                                                        background: 'transparent', border: 'none',
+                                                        color: color.textFaint, cursor: 'pointer',
+                                                        padding: '3px', borderRadius: '4px',
+                                                        display: 'flex', alignItems: 'center', flexShrink: 0,
+                                                    }}
+                                                    onMouseEnter={e => (e.currentTarget.style.color = '#ca8a04')}
+                                                    onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
+                                                >
+                                                    <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+                                                        <path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+                                                        <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+                                                    </svg>
+                                                </button>
+                                            )}
 
                                             {/* Settings/edit button */}
                                             <button

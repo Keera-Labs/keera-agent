@@ -274,6 +274,33 @@ async def handle_update_task(args: dict) -> str:
     return f"Task #{task.id} '{task.title or task.description}' updated."
 
 
+# ── tool: delete_task ─────────────────────────────────────────────────────────
+
+DELETE_TASK_SCHEMA = {
+    "name": "delete_task",
+    "description": "Permanently delete a task by ID.",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "task_id": {
+                "type": "integer",
+                "description": "The numeric task ID to delete.",
+            },
+        },
+        "required": ["task_id"],
+    },
+}
+
+
+async def handle_delete_task(args: dict) -> str:
+    task = await Task.find(args["task_id"])
+    if not task:
+        return f"Error: task #{args['task_id']} not found"
+    title = task.title or task.description or f"#{task.id}"
+    await Task.where("id", task.id).delete()
+    return f"Task '{title}' deleted."
+
+
 # ── tool: update_task_status ──────────────────────────────────────────────────
 
 UPDATE_STATUS_SCHEMA = {
@@ -612,6 +639,7 @@ TOOLS: list[dict] = [
     GET_TASK_SCHEMA,
     UPDATE_TASK_SCHEMA,
     UPDATE_STATUS_SCHEMA,
+    DELETE_TASK_SCHEMA,
     SEND_MESSAGE_SCHEMA,
     GET_MESSAGES_SCHEMA,
     LIST_AGENTS_SCHEMA,
@@ -625,6 +653,7 @@ HANDLERS: dict = {
     "get_task": handle_get_task,
     "update_task": handle_update_task,
     "update_task_status": handle_update_task_status,
+    "delete_task": handle_delete_task,
     "send_message_to_agent": handle_send_message,
     "get_agent_messages": handle_get_messages,
     "list_agents": handle_list_agents,
