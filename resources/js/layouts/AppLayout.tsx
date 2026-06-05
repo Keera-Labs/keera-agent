@@ -14,6 +14,7 @@ import { useTasks } from './hooks/tasks'
 import { useAgents, type ProjectAgent } from './hooks/agents'
 import { useProjects } from './hooks/projects'
 
+
 // ─── Agent color ──────────────────────────────────────────────────────────────
 
 function agentColor(name: string): string {
@@ -2241,14 +2242,17 @@ function CommandsView({ project, projectId }: { project: Project; projectId: num
                 setCommands(prev => prev.map(x => x.id === c.id ? { ...x, status: 'running' } : x))
             }
             ws.onmessage = e => {
-                if (typeof e.data !== 'string') term.write(new Uint8Array(e.data as ArrayBuffer))
+                if (typeof e.data !== 'string') {
+                    term.write(new Uint8Array(e.data as ArrayBuffer))
+                    console.log("hello i got message ")
+                }
             }
             ws.onclose = () => {
                 term.write('\r\n\x1b[31m[exited]\x1b[0m\r\n')
                 setCommands(prev => prev.map(x => x.id === c.id ? { ...x, status: 'stopped', pid: null } : x))
                 setOutputCmd(prev => prev?.id === c.id ? { ...prev, status: 'stopped', pid: null } : prev)
             }
-            term.onData(data => { if (ws.readyState === WebSocket.OPEN) ws.send(new TextEncoder().encode(data)) })
+            term.onData(data => { if (ws.readyState === WebSocket.OPEN) ws.send(data) })
             term.onResize(({ cols, rows }) => {
                 if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'resize', cols, rows }))
             })
@@ -3261,9 +3265,9 @@ function ClaudeStatusBadge({ status }: { status?: 'running' | 'done' }) {
 // ─── Persistent layout ────────────────────────────────────────────────────────
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-    const { props, component } = usePage<{ project?: string; agent?: string; tasks?: Task[] }>()
+    const { props, component } = usePage<{ project?: string; agent_id?: number; tasks?: Task[] }>()
     const projectName = props.project
-    const agentSlug = props.agent  // set by /{project}/{agent} route
+    const agentIdFromUrl = props.agent_id  // set by /{project}/agents/{agent_id} route
 
     // ── Data hooks ────────────────────────────────────────────────────────────
     const { workspaces, invalidate: invalidateWorkspaces } = useWorkspace()
@@ -3313,9 +3317,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const tasks = taskHook.tasks
     const projectAgents = agentHook.agents
 
-    // Derive active agent from URL slug (agentSlug prop from server)
-    const activeAgentFromUrl = agentSlug
-        ? projectAgents.find(a => a.slug === agentSlug) ?? null
+    // Derive active agent from URL agent_id (agentIdFromUrl prop from server)
+    const activeAgentFromUrl = agentIdFromUrl
+        ? projectAgents.find(a => a.id === agentIdFromUrl) ?? null
         : null
 
     // Seed claudeStatus from fetched project data on first load
@@ -3399,6 +3403,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         ws.binaryType = 'arraybuffer'
         ws.onopen = () => ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
         ws.onmessage = e => {
+            console.log("WS message: ", e.data)
             if (typeof e.data !== 'string') {
                 term.write(new Uint8Array(e.data as ArrayBuffer))
             } else {
@@ -3412,7 +3417,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             }
         }
         ws.onclose = () => term.write('\r\n\x1b[31m[disconnected]\x1b[0m\r\n')
-        term.onData(data => { if (ws.readyState === WebSocket.OPEN) ws.send(new TextEncoder().encode(data)) })
+        term.onData(data => { if (ws.readyState === WebSocket.OPEN) ws.send(data) })
         term.onResize(({ cols, rows }) => {
             if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'resize', cols, rows }))
         })
@@ -3530,6 +3535,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         let lastInputSoundAt = 0
 
         ws.onmessage = e => {
+            console.log("WS message: 4", e.data)
             if (typeof e.data === 'string') {
                 try {
                     const msg = JSON.parse(e.data)
@@ -3577,12 +3583,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         term.attachCustomKeyEventHandler(e => {
             if (e.key === 'Enter' && e.ctrlKey && e.type === 'keydown') {
-                if (ws.readyState === WebSocket.OPEN) ws.send(new TextEncoder().encode('\n'))
+                if (ws.readyState === WebSocket.OPEN) ws.send('\n')
                 return false
             }
             return true
         })
-        term.onData(data => { if (ws.readyState === WebSocket.OPEN) ws.send(new TextEncoder().encode(data)) })
+        term.onData(data => { if (ws.readyState === WebSocket.OPEN) ws.send(data) })
         term.onResize(({ cols, rows }) => {
             if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'resize', cols, rows }))
         })
@@ -3638,7 +3644,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         const { path } = await res.json()
         const session = sessions.current.get(activeProject.id)
         if (session && session.ws.readyState === WebSocket.OPEN) {
-            session.ws.send(new TextEncoder().encode(path))
+            session.ws.send(path)
         }
     }
 
@@ -3646,10 +3652,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         if (!activeProject) return
         const session = sessions.current.get(activeProject.id)
         if (!session || session.ws.readyState !== WebSocket.OPEN) return
-        session.ws.send(new TextEncoder().encode('\x03'))
+        session.ws.send(new Uint8Array([0x03]))
         setTimeout(() => {
             if (session.ws.readyState === WebSocket.OPEN) {
-                session.ws.send(new TextEncoder().encode('claude --continue\n'))
+                session.ws.send('claude --continue\n')
             }
         }, 800)
     }
@@ -3825,8 +3831,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                         <div
                                             key={agent.id}
                                             onClick={() => {
-                                                if (activeProject && agent.slug) {
-                                                    router.visit(`/${activeProject.slug}/${agent.slug}`)
+                                                if (activeProject) {
+                                                    router.visit(`/${activeProject.slug}/agents/${agent.id}`)
                                                 } else {
                                                     setActiveAgentId(agent.id)
                                                 }

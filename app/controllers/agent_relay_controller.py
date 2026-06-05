@@ -49,25 +49,25 @@ async def relay(request: Request):
     })
 
     # Try to inject directly into the running PTY
-    from app.controllers.terminal_controller import pty_writers, connections
+    from app.terminal.connection_manager import ConnectionManager
+    from fastapi_startkit.application import app as _app
     import json as _json
     project = await Project.find(to_agent.project_id)
     delivered = False
+    conn_manager: ConnectionManager = _app().make('connections')
     if project:
         cwd = os.path.expanduser(project.path)
-        key = f"{cwd}:agent:{to_agent_id}"
-        write_fn = pty_writers.get(key)
-        if write_fn:
-            text = f"[Message from Agent '{from_agent.name}']: {content}\n"
-            write_fn(text.encode())
+        bridge = conn_manager.get(to_agent.session_id) if to_agent.session_id else None
+        if bridge:
+            bridge.write(f"[Message from Agent '{from_agent.name}']: {content}\r")
             await AgentRelayMessage.where("id", msg.id).update({"status": "delivered"})
             delivered = True
 
         # Notify the frontend WebSocket (project terminal connection) so the UI updates
-        ws = connections.get(cwd)
-        if ws:
+        bridge = conn_manager.find_by_cwd(cwd)
+        if bridge:
             try:
-                await ws.send_text(_json.dumps({
+                await bridge.send_text(_json.dumps({
                     "type": "agent_relay_message",
                     "message_id": msg.id,
                     "from_agent_id": from_agent_id,
