@@ -12,7 +12,8 @@ import Sidebar, { type ProjectView, PROJECT_NAV } from './sidebar/Sidebar'
 import { DotsIndicator } from './sidebar/Project'
 import { useWorkspace } from './hooks/workspace'
 import { useTasks } from './hooks/tasks'
-import { useAgents, type ProjectAgent } from './hooks/agents'
+import { useAgents, type ProjectAgent, type AgentFlags } from './hooks/agents'
+import AgentEditModal from '@/components/agent/AgentEditModal'
 import { useProjects } from './hooks/projects'
 
 
@@ -1540,13 +1541,6 @@ function TaskDetailModal({ task, onClose }: { task: Task; onClose: () => void })
 }
 
 // ─── Agent types ─────────────────────────────────────────────────────────────
-
-interface AgentFlags {
-    dangerously_skip_permissions?: boolean
-    plan_mode?: boolean
-    verbose?: boolean
-    max_turns?: number | null
-}
 
 interface AgentTemplate {
     id: number
@@ -3257,6 +3251,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const [showAddAgent, setShowAddAgent] = useState(false)
     const [activeAgentId, setActiveAgentId] = useState<number | null>(null)
     const [showProjectSearch, setShowProjectSearch] = useState(false)
+    const [editingAgent, setEditingAgent] = useState<ProjectAgent | null>(null)
 
     const sessions = useRef<Map<number, Session>>(new Map())
     const containerRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
@@ -3885,6 +3880,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                                 </div>
                                             </div>
 
+                                            {/* Settings/edit button */}
+                                            <button
+                                                onClick={e => { e.stopPropagation(); setEditingAgent(agent) }}
+                                                title="Edit agent"
+                                                style={{
+                                                    background: 'transparent', border: 'none',
+                                                    color: color.textFaint, cursor: 'pointer',
+                                                    padding: '3px', borderRadius: '4px',
+                                                    display: 'flex', alignItems: 'center', flexShrink: 0,
+                                                }}
+                                                onMouseEnter={e => (e.currentTarget.style.color = color.textPrimary)}
+                                                onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
+                                            >
+                                                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                                                    <path d="M8 9.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
+                                                    <path fillRule="evenodd" d="M8 0a8 8 0 100 16A8 8 0 008 0zM1.5 8a6.5 6.5 0 1113 0 6.5 6.5 0 01-13 0z"/>
+                                                </svg>
+                                            </button>
+
                                             {/* Run button (when idle) */}
                                             {!isRunning && (
                                                 <button
@@ -3905,6 +3919,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                                     </svg>
                                                 </button>
                                             )}
+
+                                            {/* Delete button */}
                                             <button
                                                 onClick={async (e) => {
                                                     e.stopPropagation()
@@ -4311,6 +4327,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     templates={agentTemplates}
                     onClose={() => setShowAddAgent(false)}
                     onCreated={agent => { agentHook.addAgent(agent); setShowAddAgent(false) }}
+                />
+            )}
+
+            {editingAgent && (
+                <AgentEditModal
+                    agent={editingAgent}
+                    onClose={() => setEditingAgent(null)}
+                    onSaved={(updated: ProjectAgent) => {
+                        agentHook.update.mutate({ agentId: updated.id, ...updated })
+                        setEditingAgent(null)
+                    }}
                 />
             )}
 
