@@ -30,7 +30,7 @@
       }
     }
   },
-  "defaultMode": "bypassPermissions",
+  "defaultMode": "acceptEdits",
   "permissions": {
     "defaultMode": "bypassPermissions"
   },

@@ -3310,6 +3310,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const agentSessions = useRef<Map<number, Session>>(new Map())
     const agentContainerRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const msgInputRef = useRef<HTMLInputElement>(null)
 
     const activeProject = allProjects.find(p => p.slug === projectName) ?? allProjects[0] ?? null
 
@@ -3631,6 +3632,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         const project = allProjects.find(p => p.id === projectId)
         removeProject.mutate(projectId)
         if (project && projectName === project.slug) router.visit('/')
+    }
+
+    function sendMsgInput() {
+        const val = msgInputRef.current?.value.trim()
+        if (!val || !activeProject) return
+        const session = activeAgentId !== null
+            ? agentSessions.current.get(activeAgentId)
+            : sessions.current.get(activeProject.id)
+        if (session && session.ws.readyState === WebSocket.OPEN) {
+            session.ws.send(val + '\r')
+        }
+        if (msgInputRef.current) msgInputRef.current.value = ''
     }
 
     async function uploadImage(file: File) {
@@ -4169,6 +4182,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                         padding: '8px 12px', background: color.bgCanvas,
                                     }}>
                                         <input
+                                            ref={msgInputRef}
                                             placeholder={`Message ${activeAgentId !== null ? (projectAgents.find(a => a.id === activeAgentId)?.name ?? 'agent') : activeProject.name}…`}
                                             style={{
                                                 flex: 1, background: 'transparent', border: 'none', outline: 'none',
@@ -4177,20 +4191,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                             onKeyDown={e => {
                                                 if (e.key === 'Enter' && !e.shiftKey) {
                                                     e.preventDefault()
-                                                    const val = (e.target as HTMLInputElement).value.trim()
-                                                    if (!val) return
-                                                    const projectId = activeAgentId !== null ? activeAgentId : activeProject.id
-                                                    const session = activeAgentId !== null
-                                                        ? agentSessions.current.get(activeAgentId)
-                                                        : sessions.current.get(activeProject.id)
-                                                    if (session && session.ws.readyState === WebSocket.OPEN) {
-                                                        session.ws.send(new TextEncoder().encode(val + '\n'))
-                                                    }
-                                                    ;(e.target as HTMLInputElement).value = ''
+                                                    sendMsgInput()
                                                 }
                                             }}
                                         />
                                         <button
+                                            onClick={sendMsgInput}
                                             style={{
                                                 flexShrink: 0, background: color.accent, border: 'none',
                                                 borderRadius: '6px', padding: '5px 10px', cursor: 'pointer',

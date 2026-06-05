@@ -367,7 +367,7 @@ async def handle_send_message(args: dict) -> str:
 
     if terminal:
         # \x15 clears any pending input before injecting; \r submits
-        msg_bytes = f"\x15[Message from Agent '{sender.name}']: {content}\r".encode()
+        msg_bytes = f"\x15[Message from Agent '{sender.name}']: {content}".encode()
         asyncio.create_task(WebsocketTerminal(None, terminal).run(auto_send=msg_bytes))
         await AgentMessage.where("id", msg.id).update({"status": "delivered"})
         return f"Message delivered to agent '{receiver.name}' (#{msg.id})"

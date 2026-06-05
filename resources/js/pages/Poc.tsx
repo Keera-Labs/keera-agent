@@ -54,7 +54,7 @@ export default function Poc() {
     function sendMessage() {
         const ws = wsRef.current
         if (!message.trim() || !ws || ws.readyState !== WebSocket.OPEN) return
-        ws.send(message.replace(/\n/g, '\r') + '\r')
+        ws.send(new TextEncoder().encode(message.replace(/\n/g, '\r')))
         setMessage('')
     }
 
