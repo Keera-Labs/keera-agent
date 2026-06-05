@@ -63,6 +63,7 @@ export default function Sidebar({
     onPermissionsProject,
     onDeleteProject,
     claudeStatus,
+    onCreateWorkspace,
 }: {
     allProjects: Project[]
     activeProject: Project | null
@@ -79,6 +80,7 @@ export default function Sidebar({
     onPermissionsProject: (project: Project) => void
     onDeleteProject: (project: Project) => void
     claudeStatus: Record<number, 'running' | 'done'>
+    onCreateWorkspace: () => void
 }) {
     const [filterWorkspaceId, setFilterWorkspaceId] = useState<number | null>(null)
     const { component } = usePage()
@@ -99,6 +101,7 @@ export default function Sidebar({
             <WorkspacePicker
                 selected={filterWorkspaceId}
                 onSelect={setFilterWorkspaceId}
+                onCreateWorkspace={onCreateWorkspace}
             />
 
             {/* Scrollable middle */}

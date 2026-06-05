@@ -3810,6 +3810,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     onPermissionsProject={setPermissionsProject}
                     onDeleteProject={setDeletingProject}
                     claudeStatus={claudeStatus}
+                    onCreateWorkspace={() => setShowWorkspaceModal(true)}
                 />
 
                 {/* Main content area */}

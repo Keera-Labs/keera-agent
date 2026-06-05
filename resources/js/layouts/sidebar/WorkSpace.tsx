@@ -5,14 +5,14 @@ import { useEffect, useRef, useState } from "react"
 export function WorkspacePicker({
                                     selected,
                                     onSelect,
+                                    onCreateWorkspace,
                                 }: {
     selected: number | null
     onSelect: (id: number | null) => void
+    onCreateWorkspace: () => void
 }) {
-    const { workspaces, create, destroy, creating } = useWorkspace()
+    const { workspaces, destroy } = useWorkspace()
     const [open, setOpen] = useState(false)
-    const [newName, setNewName] = useState("")
-    const [showCreate, setShowCreate] = useState(false)
     const ref = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
@@ -27,14 +27,6 @@ export function WorkspacePicker({
     }, [open])
 
     const current = selected !== null ? workspaces.find(w => w.id === selected) ?? null : null
-
-    function handleCreate(e: React.FormEvent) {
-        e.preventDefault()
-        if (!newName.trim()) return
-        create({ name: newName.trim() })
-        setNewName("")
-        setShowCreate(false)
-    }
 
     return (
         <div style={{ padding: "8px 10px 6px", position: "relative" }} ref={ref}>
@@ -141,48 +133,24 @@ export function WorkspacePicker({
 
                     <div style={{ height: "1px", background: color.border, margin: "4px 0" }}/>
 
-                    {showCreate ? (
-                        <form onSubmit={handleCreate} style={{ display: "flex", gap: "6px", padding: "6px 8px" }}>
-                            <input
-                                autoFocus
-                                value={newName}
-                                onChange={e => setNewName(e.target.value)}
-                                placeholder="Workspace name"
-                                style={{
-                                    flex: 1, background: color.bgBase, border: `1px solid ${color.accent}`,
-                                    borderRadius: "5px", color: color.textSecondary,
-                                    fontSize: "11px", padding: "5px 8px", outline: "none",
-                                }}
-                            />
-                            <button
-                                type="submit"
-                                disabled={creating || !newName.trim()}
-                                style={{
-                                    background: color.bgBase, border: `1px solid ${color.borderMuted}`,
-                                    borderRadius: "5px", color: color.textSecondary,
-                                    fontSize: "11px", padding: "5px 10px", cursor: "pointer",
-                                }}
-                            >
-                                {creating ? "…" : "Add"}
-                            </button>
-                        </form>
-                    ) : (
-                        <button
-                            onClick={() => setShowCreate(true)}
-                            style={{
-                                display: "flex", alignItems: "center", gap: "6px",
-                                width: "100%", padding: "7px 12px", background: "transparent",
-                                border: "none", cursor: "pointer", fontSize: "12px", color: color.accent,
-                            }}
-                            onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
-                            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-                        >
-                            <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
-                                <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
-                            </svg>
-                            New Workspace
-                        </button>
-                    )}
+                    <button
+                        onClick={() => {
+                            setOpen(false)
+                            onCreateWorkspace()
+                        }}
+                        style={{
+                            display: "flex", alignItems: "center", gap: "6px",
+                            width: "100%", padding: "7px 12px", background: "transparent",
+                            border: "none", cursor: "pointer", fontSize: "12px", color: color.accent,
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
+                        onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                    >
+                        <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
+                        </svg>
+                        New Workspace
+                    </button>
                 </div>
             )}
         </div>
