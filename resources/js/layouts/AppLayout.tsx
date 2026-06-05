@@ -1065,6 +1065,74 @@ function ConfirmDeleteProjectModal({
     )
 }
 
+// ─── Confirm Delete Workspace Modal ──────────────────────────────────────────
+
+function ConfirmDeleteWorkspaceModal({
+    workspace,
+    onClose,
+    onDeleted,
+}: {
+    workspace: Workspace
+    onClose: () => void
+    onDeleted: (workspaceId: number) => void
+}) {
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState('')
+
+    async function handleDelete() {
+        setLoading(true)
+        setError('')
+        try {
+            const res = await fetch(`/api/workspaces/${workspace.id}`, { method: 'DELETE' })
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}))
+                setError(data.error ?? 'Failed to delete workspace')
+                return
+            }
+            onDeleted(workspace.id)
+            onClose()
+        } catch {
+            setError('Network error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    return (
+        <div style={{
+            position: 'fixed', inset: 0, background: color.overlay,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+        }}>
+            <div style={{
+                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
+                padding: '24px', width: '340px', display: 'flex', flexDirection: 'column', gap: '14px',
+            }}>
+                <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>Delete Workspace</h2>
+                <p style={{ margin: 0, color: color.textMuted, fontSize: '13px', lineHeight: 1.5 }}>
+                    Delete{' '}
+                    <span style={{ color: color.textSecondary, fontFamily: '"JetBrains Mono", monospace', fontSize: '12px' }}>{workspace.name}</span>
+                    {' '}? Projects in this workspace will become unassigned.
+                </p>
+                {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                    <button type="button" onClick={onClose} disabled={loading} style={cancelBtnStyle}>Cancel</button>
+                    <button
+                        type="button"
+                        disabled={loading}
+                        onClick={handleDelete}
+                        style={{
+                            background: '#da3633', border: `1px solid ${color.danger}`,
+                            borderRadius: '6px', color: '#fff', fontSize: '12px', padding: '6px 14px', cursor: 'pointer',
+                        }}
+                    >
+                        {loading ? 'Deleting…' : 'Delete'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 // ─── Move Project Modal ───────────────────────────────────────────────────────
 
 function MoveProjectModal({
@@ -1394,6 +1462,7 @@ function WorkspaceSection({
     onSystemPromptProject,
     onPermissionsProject,
     onDeleteProject,
+    onDeleteWorkspace,
     claudeStatus,
 }: {
     workspace: Workspace
@@ -1404,6 +1473,7 @@ function WorkspaceSection({
     onSystemPromptProject: (project: Project) => void
     onPermissionsProject: (project: Project) => void
     onDeleteProject: (project: Project) => void
+    onDeleteWorkspace: (workspace: Workspace) => void
     claudeStatus: Record<number, 'running' | 'done'>
 }) {
     const [collapsed, setCollapsed] = useState(false)
@@ -1450,6 +1520,21 @@ function WorkspaceSection({
                 >
                     <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
                         <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
+                    </svg>
+                </button>
+                <button
+                    onClick={() => onDeleteWorkspace(workspace)}
+                    title="Delete workspace"
+                    style={{
+                        background: 'transparent', border: 'none', cursor: 'pointer',
+                        color: color.textFaint, padding: '0 2px', lineHeight: 1,
+                        display: 'flex', alignItems: 'center', flexShrink: 0,
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.color = color.danger)}
+                    onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
+                >
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M6.5 1.75a.25.25 0 01.25-.25h2.5a.25.25 0 01.25.25V3h-3V1.75zm4.5 0V3h2.25a.75.75 0 010 1.5H2.75a.75.75 0 010-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75zM4.496 6.675l.66 6.6a.25.25 0 00.249.225h5.19a.25.25 0 00.249-.225l.66-6.6a.75.75 0 011.492.149l-.66 6.6A1.748 1.748 0 0110.595 15h-5.19a1.75 1.75 0 01-1.741-1.575l-.66-6.6a.75.75 0 011.492-.15z"/>
                     </svg>
                 </button>
             </div>
@@ -1623,6 +1708,13 @@ function WorkspaceSwitcher({
 function Sidebar({
     workspaces,
     unassignedProjects,
+    allProjects,
+    activeProject,
+    projectView,
+    onChangeView,
+    taskCount,
+    newMessageCount,
+    onAddAgent,
     activeId,
     onAddWorkspace,
     onAddProject,
@@ -1630,16 +1722,19 @@ function Sidebar({
     onEditProject,
     onSystemPromptProject,
     onPermissionsProject,
-    onOpenDefaultPermissions,
     onDeleteProject,
-    tasks,
-    onOpenCreateTask,
-    onUpdateStatus,
-    onDeleteTask,
+    onDeleteWorkspace,
     claudeStatus,
 }: {
     workspaces: Workspace[]
     unassignedProjects: Project[]
+    allProjects: Project[]
+    activeProject: Project | null
+    projectView: ProjectView
+    onChangeView: (v: ProjectView) => void
+    taskCount: number
+    newMessageCount: number
+    onAddAgent: () => void
     activeId: number | null
     onAddWorkspace: () => void
     onAddProject: (workspaceId: number | null) => void
@@ -1647,290 +1742,306 @@ function Sidebar({
     onEditProject: (project: Project) => void
     onSystemPromptProject: (project: Project) => void
     onPermissionsProject: (project: Project) => void
-    onOpenDefaultPermissions: () => void
     onDeleteProject: (project: Project) => void
-    tasks: Task[]
-    onOpenCreateTask: () => void
-    onUpdateStatus: (task: Task, status: Task['status']) => void
-    onDeleteTask: (task: Task) => void
+    onDeleteWorkspace: (workspace: Workspace) => void
     claudeStatus: Record<number, 'running' | 'done'>
 }) {
     const [filterWorkspaceId, setFilterWorkspaceId] = useState<number | null>(null)
-    const [dragTaskId, setDragTaskId] = useState<number | null>(null)
-    const [dragOverStatus, setDragOverStatus] = useState<Task['status'] | null>(null)
+    const [wsDropdownOpen, setWsDropdownOpen] = useState(false)
+    const wsDropdownRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        if (!wsDropdownOpen) return
+        function handleClick(e: MouseEvent) {
+            if (wsDropdownRef.current && !wsDropdownRef.current.contains(e.target as Node)) setWsDropdownOpen(false)
+        }
+        document.addEventListener('mousedown', handleClick)
+        return () => document.removeEventListener('mousedown', handleClick)
+    }, [wsDropdownOpen])
+
+    const currentWorkspace = filterWorkspaceId !== null ? workspaces.find(w => w.id === filterWorkspaceId) ?? null : null
+    const filteredProjects = filterWorkspaceId !== null
+        ? allProjects.filter(p => p.workspace_id === filterWorkspaceId)
+        : allProjects
+
+    const initials = (name: string) =>
+        name.split(/\s+/).map(w => w[0] ?? '').join('').toUpperCase().slice(0, 2) || '??'
 
     return (
         <aside style={{
-            width: '240px', flexShrink: 0, background: color.bgCanvas,
+            width: '220px', flexShrink: 0, background: color.bgCanvas,
             borderRight: '1px solid #21262d', display: 'flex', flexDirection: 'column', overflow: 'hidden',
         }}>
-            {/* App header */}
-            <div style={{
-                padding: '16px 14px 14px 16px', borderBottom: `1px solid ${color.border}`,
-                display: 'flex', alignItems: 'center', gap: '12px',
-            }}>
-                {/* Purple terminal icon */}
-                <div style={{
-                    width: '40px', height: '40px', borderRadius: '10px',
-                    background: 'rgba(124,106,247,0.2)', border: '1px solid rgba(124,106,247,0.35)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                }}>
-                    <svg width="20" height="20" viewBox="0 0 16 16" fill="#7c6af7">
-                        <path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25V2.75zm1.75-.25a.25.25 0 00-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V2.75a.25.25 0 00-.25-.25H1.75zM3.72 6.78a.75.75 0 011.06-1.06l2 2a.75.75 0 010 1.06l-2 2a.75.75 0 01-1.06-1.06L5.19 8 3.72 6.78zM8.25 9.5a.75.75 0 000 1.5h3a.75.75 0 000-1.5h-3z"/>
-                    </svg>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', flex: 1, minWidth: 0 }}>
-                    <span style={{ color: color.textPrimary, fontSize: '15px', fontWeight: 700, letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>
-                        Keera Agent
-                    </span>
-                    <span style={{ color: color.textMuted, fontSize: '11px', fontFamily: '"JetBrains Mono", monospace', whiteSpace: 'nowrap' }}>
-                        AI Coding Manager
-                    </span>
-                </div>
+            {/* Header */}
+            <div style={{ padding: '14px 14px 10px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ color: color.accent, fontSize: '17px', fontWeight: 700, letterSpacing: '-0.01em', flex: 1 }}>
+                    Keera Agent
+                </span>
+            </div>
+
+            {/* Workspace picker */}
+            <div style={{ padding: '0 10px 10px', position: 'relative' }} ref={wsDropdownRef}>
                 <button
-                    onClick={onOpenDefaultPermissions}
-                    title="Settings"
+                    onClick={() => setWsDropdownOpen(o => !o)}
                     style={{
-                        background: 'transparent', border: 'none', cursor: 'pointer',
-                        color: color.textFaint, padding: '2px', lineHeight: 1,
-                        display: 'flex', alignItems: 'center', flexShrink: 0,
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                        width: '100%', padding: '7px 10px', borderRadius: '8px',
+                        background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
+                        cursor: 'pointer', textAlign: 'left',
                     }}
-                    onMouseEnter={e => (e.currentTarget.style.color = color.textMuted)}
-                    onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
                 >
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M8 4.754a3.246 3.246 0 100 6.492 3.246 3.246 0 000-6.492zM5.754 8a2.246 2.246 0 114.492 0 2.246 2.246 0 01-4.492 0z"/>
-                        <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 01-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 01-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 01.52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 011.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 011.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 01.52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 01-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 01-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 002.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 001.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 00-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 00-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 00-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 003.06 8.311l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 004.175 3.85l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 002.692-1.115l.094-.319z"/>
+                    <div style={{
+                        width: '22px', height: '22px', borderRadius: '5px',
+                        background: color.accentEmphasis,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '11px', fontWeight: 700, color: '#fff', flexShrink: 0,
+                    }}>
+                        {(currentWorkspace?.name[0] ?? 'A').toUpperCase()}
+                    </div>
+                    <span style={{ color: color.textSecondary, fontSize: '12px', fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {currentWorkspace?.name ?? 'All Projects'}
+                    </span>
+                    <svg width="10" height="10" viewBox="0 0 16 16" fill={color.textFaint} style={{ flexShrink: 0 }}>
+                        <path d="M4.427 7.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 7H4.604a.25.25 0 00-.177.427z"/>
                     </svg>
                 </button>
-            </div>
 
-            {/* Workspace switcher */}
-            <div style={{ padding: '8px 10px 4px' }}>
-                <WorkspaceSwitcher
-                    workspaces={workspaces}
-                    selected={filterWorkspaceId}
-                    onChange={setFilterWorkspaceId}
-                    onAdd={onAddWorkspace}
-                />
-            </div>
-
-            {/* Workspaces + Projects section */}
-            <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column' }}>
-                {filterWorkspaceId !== null ? (
-                    // ── Filtered view: just the selected workspace's projects ──
-                    (() => {
-                        const ws = workspaces.find(w => w.id === filterWorkspaceId)
-                        if (!ws) return null
-                        return (
-                            <>
-                                <SectionHeader
-                                    label={ws.name}
-                                    onAdd={() => onAddProject(ws.id)}
-                                />
-                                <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                                    {ws.projects.length === 0 && (
-                                        <li style={{ padding: '4px 16px 4px 24px', color: color.textFaint, fontSize: '11px', fontStyle: 'italic' }}>
-                                            No projects
-                                        </li>
-                                    )}
-                                    {ws.projects.map(project => (
-                                        <li key={project.id}>
-                                            <ProjectItem project={project} active={project.id === activeId} status={claudeStatus[project.id]} onMove={onMoveProject} onEdit={onEditProject} onSystemPrompt={onSystemPromptProject} onPermissions={onPermissionsProject} onDelete={onDeleteProject} />
-                                        </li>
-                                    ))}
-                                </ul>
-                            </>
-                        )
-                    })()
-                ) : (
-                    // ── Unfiltered view: all workspaces + unassigned ──
-                    <>
-
-                        {workspaces.length === 0 && (
-                            <p style={{ margin: '0 16px 8px', color: color.textFaint, fontSize: '11px', fontStyle: 'italic' }}>
-                                No workspaces yet
-                            </p>
-                        )}
-
-                        {workspaces.map(workspace => (
-                            <WorkspaceSection
-                                key={workspace.id}
-                                workspace={workspace}
-                                activeId={activeId}
-                                onAddProject={onAddProject}
-                                onMoveProject={onMoveProject}
-                                onEditProject={onEditProject}
-                                onSystemPromptProject={onSystemPromptProject}
-                                onPermissionsProject={onPermissionsProject}
-                                onDeleteProject={onDeleteProject}
-                                claudeStatus={claudeStatus}
-                            />
-                        ))}
-
-                        {/* Unassigned projects */}
-                        {unassignedProjects.length > 0 && (
-                            <>
-                                <div style={{ height: '1px', background: color.border, margin: '4px 0' }} />
-                                <div style={{ padding: '5px 16px 4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <span style={{ color: color.textFaint, fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', flex: 1 }}>
-                                        Unassigned
-                                    </span>
-                                    <button
-                                        onClick={() => onAddProject(null)}
-                                        title="Add project"
-                                        style={{
-                                            background: 'transparent', border: 'none', cursor: 'pointer',
-                                            color: color.textFaint, padding: '0 2px', lineHeight: 1, display: 'flex', alignItems: 'center',
-                                        }}
-                                        onMouseEnter={e => (e.currentTarget.style.color = color.textMuted)}
-                                        onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
-                                    >
-                                        <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
-                                            <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
+                {wsDropdownOpen && (
+                    <div style={{
+                        position: 'absolute', top: 'calc(100% - 2px)', left: '10px', right: '10px', zIndex: 200,
+                        background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
+                        borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                        padding: '4px 0', overflow: 'hidden',
+                    }}>
+                        <button
+                            onClick={() => { setFilterWorkspaceId(null); setWsDropdownOpen(false) }}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: '8px',
+                                width: '100%', padding: '7px 12px', background: 'transparent',
+                                border: 'none', cursor: 'pointer', fontSize: '12px',
+                                color: filterWorkspaceId === null ? color.textPrimary : color.textSecondary,
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        >
+                            All Projects
+                            {filterWorkspaceId === null && (
+                                <svg width="10" height="10" viewBox="0 0 16 16" fill={color.accent} style={{ marginLeft: 'auto' }}>
+                                    <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/>
+                                </svg>
+                            )}
+                        </button>
+                        {workspaces.map(w => (
+                            <div key={w.id} style={{ display: 'flex', alignItems: 'center' }}>
+                                <button
+                                    onClick={() => { setFilterWorkspaceId(w.id); setWsDropdownOpen(false) }}
+                                    style={{
+                                        flex: 1, display: 'flex', alignItems: 'center', gap: '8px',
+                                        padding: '7px 12px', background: 'transparent',
+                                        border: 'none', cursor: 'pointer', fontSize: '12px',
+                                        color: filterWorkspaceId === w.id ? color.textPrimary : color.textSecondary,
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
+                                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                                >
+                                    {w.name}
+                                    {filterWorkspaceId === w.id && (
+                                        <svg width="10" height="10" viewBox="0 0 16 16" fill={color.accent} style={{ marginLeft: 'auto' }}>
+                                            <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/>
                                         </svg>
-                                    </button>
-                                </div>
-                                <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                                    {unassignedProjects.map(project => (
-                                        <li key={project.id}>
-                                            <ProjectItem project={project} active={project.id === activeId} status={claudeStatus[project.id]} onMove={onMoveProject} onEdit={onEditProject} onSystemPrompt={onSystemPromptProject} onPermissions={onPermissionsProject} onDelete={onDeleteProject} />
-                                        </li>
-                                    ))}
-                                </ul>
-                            </>
-                        )}
+                                    )}
+                                </button>
+                                <button
+                                    onClick={e => { e.stopPropagation(); setWsDropdownOpen(false); onDeleteWorkspace(w) }}
+                                    title="Delete workspace"
+                                    style={{
+                                        background: 'transparent', border: 'none', cursor: 'pointer',
+                                        color: color.textFaint, padding: '7px 10px 7px 4px', display: 'flex', alignItems: 'center',
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget.style.color = color.danger)}
+                                    onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
+                                >
+                                    <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+                                        <path d="M6.5 1.75a.25.25 0 01.25-.25h2.5a.25.25 0 01.25.25V3h-3V1.75zm4.5 0V3h2.25a.75.75 0 010 1.5H2.75a.75.75 0 010-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75zM4.496 6.675l.66 6.6a.25.25 0 00.249.225h5.19a.25.25 0 00.249-.225l.66-6.6a.75.75 0 011.492.149l-.66 6.6A1.748 1.748 0 0110.595 15h-5.19a1.75 1.75 0 01-1.741-1.575l-.66-6.6a.75.75 0 011.492-.15z"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        ))}
+                        <div style={{ height: '1px', background: color.border, margin: '4px 0' }} />
+                        <button
+                            onClick={() => { onAddWorkspace(); setWsDropdownOpen(false) }}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: '6px',
+                                width: '100%', padding: '7px 12px', background: 'transparent',
+                                border: 'none', cursor: 'pointer', fontSize: '12px', color: color.accent,
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        >
+                            <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
+                            </svg>
+                            New Workspace
+                        </button>
+                    </div>
+                )}
+            </div>
 
-                        {/* Add project shortcut when no workspaces */}
-                        {workspaces.length === 0 && unassignedProjects.length === 0 && (
+            {/* Scrollable middle */}
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+
+                {/* PROJECTS */}
+                <div style={{ padding: '2px 10px 4px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ color: color.textFaint, fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                        Projects
+                    </span>
+                    <button
+                        onClick={() => onAddProject(filterWorkspaceId)}
+                        title="Add project"
+                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: color.textFaint, padding: '0 2px', display: 'flex', alignItems: 'center' }}
+                        onMouseEnter={e => (e.currentTarget.style.color = color.textMuted)}
+                        onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
+                    >
+                        <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                    {filteredProjects.length === 0 && (
+                        <li style={{ padding: '4px 16px', color: color.textFaint, fontSize: '11px', fontStyle: 'italic' }}>
+                            No projects
+                        </li>
+                    )}
+                    {filteredProjects.map(project => (
+                        <li key={project.id}>
+                            <ProjectItem
+                                project={project}
+                                active={project.id === activeId}
+                                status={claudeStatus[project.id]}
+                                onMove={onMoveProject}
+                                onEdit={onEditProject}
+                                onSystemPrompt={onSystemPromptProject}
+                                onPermissions={onPermissionsProject}
+                                onDelete={onDeleteProject}
+                            />
+                        </li>
+                    ))}
+                    {filteredProjects.length === 0 && (
+                        <li>
                             <button
-                                onClick={() => onAddProject(null)}
+                                onClick={() => onAddProject(filterWorkspaceId)}
                                 style={{
-                                    margin: '0 16px 8px', background: 'transparent', border: `1px dashed ${color.borderMuted}`,
+                                    margin: '2px 10px 6px', width: 'calc(100% - 20px)',
+                                    background: 'transparent', border: `1px dashed ${color.borderMuted}`,
                                     borderRadius: '6px', color: color.textFaint, fontSize: '11px', padding: '6px',
-                                    cursor: 'pointer', textAlign: 'center',
+                                    cursor: 'pointer', textAlign: 'center', display: 'block',
                                 }}
                                 onMouseEnter={e => { e.currentTarget.style.color = color.textMuted; e.currentTarget.style.borderColor = color.textMuted }}
                                 onMouseLeave={e => { e.currentTarget.style.color = color.textFaint; e.currentTarget.style.borderColor = color.borderMuted }}
                             >
                                 + Add project
                             </button>
-                        )}
-                    </>
-                )}
-            </div>
+                        </li>
+                    )}
+                </ul>
 
-            {/* Divider */}
-            <div style={{ height: '1px', background: color.border, margin: '4px 0' }} />
-
-            {/* Tasks section */}
-            <SectionHeader label="Tasks" onAdd={onOpenCreateTask} />
-            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', paddingBottom: '8px' }}>
-                {tasks.length === 0 ? (
-                    <p style={{ padding: '6px 16px', color: color.textFaint, fontSize: '12px', fontStyle: 'italic', margin: 0 }}>
-                        No tasks yet
-                    </p>
-                ) : (
-                    STATUS_CYCLE.map(status => {
-                        const groupTasks = tasks.filter(t => t.status === status)
-                        const isOver = dragOverStatus === status
-                        return (
-                            <div
-                                key={status}
-                                onDragOver={e => { e.preventDefault(); setDragOverStatus(status) }}
-                                onDragLeave={e => {
-                                    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                                        setDragOverStatus(null)
-                                    }
-                                }}
-                                onDrop={e => {
-                                    e.preventDefault()
-                                    setDragOverStatus(null)
-                                    if (dragTaskId !== null) {
-                                        const task = tasks.find(t => t.id === dragTaskId)
-                                        if (task && task.status !== status) onUpdateStatus(task, status)
-                                    }
-                                    setDragTaskId(null)
-                                }}
-                                style={{
-                                    margin: '2px 6px',
-                                    borderRadius: '6px',
-                                    background: isOver ? color.bgSurface : 'transparent',
-                                    border: isOver ? `1px solid ${color.borderMuted}` : '1px solid transparent',
-                                    transition: 'background 0.1s, border-color 0.1s',
-                                    minHeight: '36px',
-                                }}
-                            >
-                                {/* Status group header */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 8px 3px' }}>
-                                    <span style={{
-                                        width: '7px', height: '7px', borderRadius: '50%',
-                                        background: STATUS_COLORS[status], flexShrink: 0, display: 'inline-block',
-                                    }} />
-                                    <span style={{
-                                        fontSize: '10px', color: color.textFaint, fontWeight: 600,
-                                        textTransform: 'uppercase', letterSpacing: '0.06em', flex: 1,
-                                    }}>
-                                        {STATUS_LABELS[status]}
-                                    </span>
-                                    {groupTasks.length > 0 && (
-                                        <span style={{ fontSize: '10px', color: color.textFaint }}>
-                                            {groupTasks.length}
-                                        </span>
-                                    )}
-                                </div>
-                                {/* Tasks in this status */}
-                                <ul style={{ listStyle: 'none', margin: 0, padding: '0 0 4px' }}>
-                                    {groupTasks.length === 0 && isOver && (
-                                        <li style={{
-                                            padding: '4px 8px 4px 20px',
-                                            fontSize: '11px', color: color.textFaint, fontStyle: 'italic',
-                                        }}>
-                                            Drop here
-                                        </li>
-                                    )}
-                                    {groupTasks.map(task => (
-                                        <li
-                                            key={task.id}
-                                            draggable
-                                            onDragStart={() => setDragTaskId(task.id)}
-                                            onDragEnd={() => { setDragTaskId(null); setDragOverStatus(null) }}
-                                            style={{
-                                                display: 'flex', alignItems: 'flex-start',
-                                                padding: '3px 6px 3px 20px', gap: '6px',
-                                                opacity: dragTaskId === task.id ? 0.35 : 1,
-                                                cursor: 'grab',
-                                                borderRadius: '4px',
-                                            }}
-                                        >
-                                            <span style={{
-                                                flex: 1, fontSize: '12px',
-                                                color: task.status === 'completed' || task.status === 'cancelled' ? color.textFaint : color.textSecondary,
-                                                textDecoration: task.status === 'completed' || task.status === 'cancelled' ? 'line-through' : 'none',
-                                                lineHeight: 1.4, wordBreak: 'break-word',
-                                            }}>
-                                                {task.title}
-                                            </span>
-                                            <button
-                                                onClick={() => onDeleteTask(task)}
-                                                style={{
-                                                    flexShrink: 0, background: 'transparent', border: 'none',
-                                                    color: color.textFaint, cursor: 'pointer', padding: '0 2px', lineHeight: 1,
-                                                    opacity: 0, transition: 'opacity 0.1s',
-                                                }}
-                                                onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-                                                onMouseLeave={e => (e.currentTarget.style.opacity = '0')}
-                                            >
-                                                ×
-                                            </button>
-                                        </li>
-                                    ))}
-                                </ul>
+                {/* Active project card */}
+                {activeProject && (
+                    <div style={{ padding: '8px 10px 4px' }}>
+                        <div style={{
+                            display: 'flex', alignItems: 'center', gap: '10px',
+                            padding: '9px 12px', borderRadius: '8px',
+                            background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
+                        }}>
+                            <div style={{
+                                width: '30px', height: '30px', borderRadius: '7px',
+                                background: color.accentEmphasis,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: '11px', fontWeight: 700, color: '#fff', flexShrink: 0, letterSpacing: '-0.02em',
+                            }}>
+                                {initials(activeProject.name)}
                             </div>
-                        )
-                    })
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ color: color.textPrimary, fontSize: '12px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {activeProject.name}
+                                </div>
+                                <div style={{ color: color.textFaint, fontSize: '10px', marginTop: '1px' }}>
+                                    AI Coding Manager
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 )}
+
+                {/* WORKSPACE nav */}
+                <div style={{ padding: '10px 16px 4px' }}>
+                    <span style={{ color: color.textFaint, fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                        Workspace
+                    </span>
+                </div>
+                <div style={{ padding: '0 8px 8px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                    {PROJECT_NAV.map(item => {
+                        const active = item.id === projectView
+                        const count = item.id === 'tasks' ? taskCount : item.id === 'messages' ? newMessageCount : 0
+                        return (
+                            <button
+                                key={item.id}
+                                onClick={() => onChangeView(item.id)}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: '8px',
+                                    padding: '7px 10px',
+                                    background: active ? color.accentSubtle : 'transparent',
+                                    border: `1px solid ${active ? color.accentEmphasis : 'transparent'}`,
+                                    borderRadius: '6px',
+                                    color: active ? color.accentMuted : color.textMuted,
+                                    fontSize: '12px', fontWeight: active ? 600 : 400,
+                                    cursor: 'pointer', textAlign: 'left', width: '100%',
+                                    transition: 'all 0.1s',
+                                }}
+                                onMouseEnter={e => { if (!active) { e.currentTarget.style.background = color.bgSurface; e.currentTarget.style.color = color.textSecondary } }}
+                                onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = color.textMuted } }}
+                            >
+                                {item.icon}
+                                <span style={{ flex: 1 }}>{item.label}</span>
+                                {count > 0 && (
+                                    <span style={{
+                                        fontSize: '10px', fontWeight: 700,
+                                        padding: '1px 6px', borderRadius: '10px',
+                                        background: color.accentSubtle, color: color.accent,
+                                    }}>
+                                        {count}
+                                    </span>
+                                )}
+                            </button>
+                        )
+                    })}
+                </div>
             </div>
+
+            {/* New Agent button */}
+            {activeProject && (
+                <div style={{ padding: '8px 10px 12px', borderTop: `1px solid ${color.border}` }}>
+                    <button
+                        onClick={onAddAgent}
+                        style={{
+                            width: '100%', padding: '8px 12px',
+                            background: color.accentEmphasis, border: 'none', borderRadius: '7px',
+                            color: '#fff', fontSize: '13px', fontWeight: 600,
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                            transition: 'opacity 0.1s',
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
+                        onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+                    >
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
+                        </svg>
+                        New Agent
+                    </button>
+                </div>
+            )}
         </aside>
     )
 }
@@ -4037,6 +4148,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const [permissionsProject, setPermissionsProject] = useState<Project | null>(null)
     const [showGlobalSettings, setShowGlobalSettings] = useState(false)
     const [deletingProject, setDeletingProject] = useState<Project | null>(null)
+    const [deletingWorkspace, setDeletingWorkspace] = useState<Workspace | null>(null)
     const [tasks, setTasks] = useState<Task[]>(props.tasks ?? [])
     // 'running' = Claude is working, 'done' = Claude finished (Stop hook received)
     const [claudeStatus, setClaudeStatus] = useState<Record<number, 'running' | 'done'>>({})
@@ -4384,6 +4496,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         setWorkspaces(prev => [...prev, workspace])
     }
 
+    function handleWorkspaceDeleted(workspaceId: number) {
+        setWorkspaces(prev => prev.filter(w => w.id !== workspaceId))
+        // Projects in this workspace become unassigned (backend handles unlinking)
+        setAllProjects(prev => prev.map(p =>
+            p.workspace_id === workspaceId ? { ...p, workspace_id: null } : p
+        ))
+    }
+
     function handleProjectCreated(project: Project) {
         setAllProjects(prev => [...prev, project])
         // Also update workspace's project list if it belongs to one
@@ -4475,10 +4595,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
 
     return (
-        <div style={{ display: 'flex', width: '100%', height: '100vh', background: color.bgBase, overflow: 'hidden' }}>
+        <div className="flex w-full h-screen overflow-hidden bg-ui-page">
             <Sidebar
                 workspaces={workspaces}
                 unassignedProjects={unassignedProjects}
+                allProjects={allProjects}
+                activeProject={activeProject}
+                projectView={activeView}
+                onChangeView={(view) => {
+                    if (view === 'tasks' && activeProject) { router.visit(`/${activeProject.slug}/tasks`); return }
+                    setProjectView(view)
+                    if (isTasksPage) router.visit(`/${activeProject?.slug}`)
+                }}
+                taskCount={tasks.length}
+                newMessageCount={newMessageIds.length}
+                onAddAgent={() => setShowAddAgent(true)}
                 activeId={activeProject?.id ?? null}
                 onAddWorkspace={() => setShowWorkspaceModal(true)}
                 onAddProject={openAddProject}
@@ -4486,87 +4617,113 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 onEditProject={setEditingProject}
                 onSystemPromptProject={setSystemPromptProject}
                 onPermissionsProject={setPermissionsProject}
-                onOpenDefaultPermissions={() => setShowGlobalSettings(true)}
                 onDeleteProject={setDeletingProject}
-                tasks={tasks}
-                onOpenCreateTask={() => setShowCreateTask(true)}
-                onUpdateStatus={handleUpdateStatus}
-                onDeleteTask={handleDeleteTask}
+                onDeleteWorkspace={setDeletingWorkspace}
                 claudeStatus={claudeStatus}
             />
 
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                {/* Tab bar */}
-                <div style={{
-                    height: '36px', background: color.bgCanvas, borderBottom: '1px solid #21262d',
-                    display: 'flex', alignItems: 'center', paddingLeft: '12px', gap: '6px', flexShrink: 0,
-                }}>
-                    {activeProject ? (
-                        <>
-                            <svg width="13" height="13" viewBox="0 0 16 16" fill={color.success}>
-                                <path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25V2.75zm1.75-.25a.25.25 0 00-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V2.75a.25.25 0 00-.25-.25H1.75zM8 4a.75.75 0 01.75.75v3.5h3.5a.75.75 0 010 1.5h-4.25a.75.75 0 01-.75-.75v-4.25A.75.75 0 018 4zM5 4a.75.75 0 01.75.75v6.5a.75.75 0 01-1.5 0v-6.5A.75.75 0 015 4z"/>
-                            </svg>
-                            <span style={{ color: color.textSecondary, fontSize: '12px', fontFamily: '"JetBrains Mono", monospace' }}>{activeProject.name}</span>
-                            <span style={{ color: color.textFaint, fontSize: '12px', fontFamily: '"JetBrains Mono", monospace' }}>—</span>
-                            <span style={{ color: color.textMuted, fontSize: '12px', fontFamily: '"JetBrains Mono", monospace' }}>{activeProject.path}</span>
-                            <ClaudeStatusBadge status={claudeStatus[activeProject.id]} />
-                            {projectView === 'agents' && (
+                {/* Top nav bar */}
+                <div className="h-11 bg-ui-white border-b border-ui-border flex items-center shrink-0 justify-between">
+                    {/* Tabs */}
+                    <div className="flex items-stretch h-full pl-1">
+                        {([
+                            { id: 'agents' as ProjectView, label: 'Dashboard' },
+                            { id: 'commands' as ProjectView, label: 'Configurations' },
+                            { id: 'tasks' as ProjectView, label: 'Tasks' },
+                            { id: 'messages' as ProjectView, label: 'History' },
+                        ] as const).map(tab => {
+                            const isActive = activeView === tab.id
+                            return (
                                 <button
-                                    onClick={() => fileInputRef.current?.click()}
-                                    title="Attach image"
-                                    style={{
-                                        marginLeft: 'auto', marginRight: '8px',
-                                        background: 'transparent', border: 'none',
-                                        color: color.textFaint, padding: '4px', cursor: 'pointer',
-                                        display: 'flex', alignItems: 'center', borderRadius: '4px',
-                                        transition: 'color 0.15s',
+                                    key={tab.id}
+                                    onClick={() => {
+                                        if (tab.id === 'tasks' && activeProject) { router.visit(`/${activeProject.slug}/tasks`); return }
+                                        setProjectView(tab.id)
+                                        if (isTasksPage) router.visit(`/${activeProject?.slug}`)
                                     }}
-                                    onMouseEnter={e => { e.currentTarget.style.color = color.accent }}
-                                    onMouseLeave={e => { e.currentTarget.style.color = color.textFaint }}
+                                    className={[
+                                        'bg-transparent border-none border-b-2 cursor-pointer px-4 h-full text-[13px] transition-colors duration-100',
+                                        isActive
+                                            ? 'border-ui-blue text-ui-text font-semibold'
+                                            : 'border-transparent text-ui-muted font-normal hover:text-ui-body',
+                                    ].join(' ')}
+                                    style={{ marginBottom: '-1px' }}
                                 >
-                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                                        <path d="M4.5 3a2.5 2.5 0 015 0v9a1.5 1.5 0 01-3 0V5a.5.5 0 011 0v7a.5.5 0 001 0V3a1.5 1.5 0 10-3 0v9a2.5 2.5 0 005 0V5a.5.5 0 011 0v7a3.5 3.5 0 11-7 0V3z"/>
-                                    </svg>
+                                    {tab.label}
                                 </button>
-                            )}
-                        </>
-                    ) : (
-                        <span style={{ color: color.textFaint, fontSize: '12px', fontFamily: '"JetBrains Mono", monospace' }}>No project selected</span>
-                    )}
+                            )
+                        })}
+                        {activeProject && (
+                            <>
+                                <div className="w-px bg-ui-border my-2.5 mx-1" />
+                                <div className="flex items-center gap-1.5 px-2">
+                                    <ClaudeStatusBadge status={claudeStatus[activeProject.id]} />
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    {/* Right: search + icons */}
+                    <div className="flex items-center gap-1 pr-3">
+                        {/* Search */}
+                        <div className="flex items-center gap-1.5 bg-ui-surface border border-ui-border rounded-md px-2.5 py-1 mr-1">
+                            <svg width="12" height="12" viewBox="0 0 16 16" className="text-ui-faint fill-current shrink-0">
+                                <path d="M10.68 11.74a6 6 0 01-7.922-8.982 6 6 0 018.982 7.922l3.04 3.04a.749.749 0 11-1.06 1.06l-3.04-3.04zM11.5 7a4.499 4.499 0 11-8.997 0A4.499 4.499 0 0111.5 7z"/>
+                            </svg>
+                            <input
+                                placeholder="Search agents..."
+                                className="bg-transparent border-none outline-none text-ui-body text-[12px] w-32"
+                            />
+                        </div>
+                        {/* Attach image (agents view) */}
+                        {activeView === 'agents' && activeProject && (
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                title="Attach image"
+                                className="bg-transparent border-none cursor-pointer text-ui-faint p-1.5 flex items-center rounded hover:text-ui-blue transition-colors"
+                            >
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M4.5 3a2.5 2.5 0 015 0v9a1.5 1.5 0 01-3 0V5a.5.5 0 011 0v7a.5.5 0 001 0V3a1.5 1.5 0 10-3 0v9a2.5 2.5 0 005 0V5a.5.5 0 011 0v7a3.5 3.5 0 11-7 0V3z"/>
+                                </svg>
+                            </button>
+                        )}
+                        {/* Bell */}
+                        <button className="bg-transparent border-none cursor-pointer text-ui-faint p-1.5 flex items-center rounded hover:text-ui-body transition-colors">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M8 16a2 2 0 001.985-1.75c.017-.137-.097-.25-.235-.25h-3.5c-.138 0-.252.113-.235.25A2 2 0 008 16zm.25-14.25A5.25 5.25 0 003 7v2.047c0 .334-.102.656-.29.932L1.55 11.698A1.5 1.5 0 002.8 13.5h10.4a1.5 1.5 0 001.258-2.302l-1.16-1.719A1.625 1.625 0 0113 8.047V7A5.25 5.25 0 008.25 1.75z"/>
+                            </svg>
+                        </button>
+                        {/* Settings */}
+                        <button
+                            onClick={() => setShowDefaultPermissions(true)}
+                            title="Settings"
+                            className="bg-transparent border-none cursor-pointer text-ui-faint p-1.5 flex items-center rounded hover:text-ui-body transition-colors"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M8 0a8.2 8.2 0 01.701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.103-.303c.644-.176 1.392.021 1.82.63.27.385.506.792.704 1.218.315.675.111 1.422-.364 1.891l-.814.806c-.049.048-.098.147-.088.294.016.257.016.515 0 .772-.01.147.038.246.087.294l.814.806c.475.469.679 1.216.364 1.891a7.977 7.977 0 01-.704 1.217c-.428.61-1.176.807-1.82.63l-1.103-.303c-.066-.019-.176-.011-.299.071a5.909 5.909 0 01-.668.386c-.133.066-.194.158-.211.224l-.29 1.106c-.168.646-.715 1.196-1.458 1.26a8.006 8.006 0 01-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106c-.018-.066-.079-.158-.212-.224a5.738 5.738 0 01-.668-.386c-.123-.082-.233-.09-.299-.071l-1.103.303c-.644.176-1.392-.021-1.82-.63a8.12 8.12 0 01-.704-1.218c-.315-.675-.111-1.422.363-1.891l.815-.806c.05-.048.098-.147.088-.294a6.214 6.214 0 010-.772c.01-.147-.038-.246-.088-.294l-.815-.806C.635 6.045.431 5.298.746 4.623a7.92 7.92 0 01.704-1.217c.428-.61 1.176-.807 1.82-.63l1.102.302c.067.019.177.011.3-.071a5.659 5.659 0 01.668-.386c.133-.066.194-.158.211-.224l.29-1.106C6.156.421 6.703-.129 7.445.031 7.645.015 7.825 0 8 0zm1.5 8a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/>
+                            </svg>
+                        </button>
+                        {/* Avatar */}
+                        <div className="w-7 h-7 rounded-full bg-[#7c6af7] flex items-center justify-center text-[11px] font-bold text-white cursor-pointer ml-1 shrink-0">
+                            B
+                        </div>
+                    </div>
                 </div>
 
-                {/* Body: project sidebar + content */}
-                <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-                    {activeProject && (
-                        <ProjectSidebar
-                            view={activeView}
-                            projectName={activeProject.name}
-                            onChange={(view) => {
-                                setProjectView(view)
-                                if (isTasksPage) router.visit(`/${activeProject.slug}`)
-                            }}
-                            taskCount={tasks.length}
-                            newMessageCount={newMessageIds.length}
-                        />
-                    )}
+                {/* Body: content */}
+                <div className="flex-1 flex overflow-hidden bg-ui-white">
 
                     {/* Agents view: agent card list (left) + terminal (right) — always rendered to keep sessions alive */}
                     <div style={{ flex: 1, overflow: 'hidden', display: activeView === 'agents' ? 'flex' : 'none' }}>
 
                         {/* Agent cards list */}
-                        <div style={{
-                            width: '230px', flexShrink: 0, overflowY: 'auto', background: color.bgBase,
-                            borderRight: `1px solid ${color.borderMuted}`,
-                            display: 'flex', flexDirection: 'column',
-                        }}>
+                        <div className="w-[230px] shrink-0 overflow-y-auto bg-ui-white border-r border-ui-border flex flex-col">
                             {/* Per-project agents */}
                             {activeProject && (
                                 <>
-                                    <div style={{
-                                        padding: '10px 14px 4px',
-                                        display: 'flex', alignItems: 'center', gap: '6px',
-                                    }}>
-                                        <span style={{ color: color.textFaint, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.07em', flex: 1 }}>
+                                    <div className="px-3.5 pt-2.5 pb-1 flex items-center gap-1.5">
+                                        <span className="text-ui-faint text-[10px] uppercase tracking-widest flex-1">
                                             Team Agents
                                         </span>
                                         {projectAgents.length >= 2 && (
@@ -4596,88 +4753,53 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                         <button
                                             onClick={() => setShowAddAgent(true)}
                                             title="Add agent"
-                                            style={{
-                                                background: 'transparent', border: `1px solid ${color.borderMuted}`,
-                                                borderRadius: '4px', color: color.textMuted,
-                                                fontSize: '14px', lineHeight: 1, padding: '1px 6px',
-                                                cursor: 'pointer',
-                                            }}
-                                            onMouseEnter={e => { e.currentTarget.style.borderColor = color.accent; e.currentTarget.style.color = color.accent }}
-                                            onMouseLeave={e => { e.currentTarget.style.borderColor = color.borderMuted; e.currentTarget.style.color = color.textMuted }}
+                                            className="border border-ui-border rounded text-ui-muted text-sm leading-none px-1.5 py-0.5 cursor-pointer bg-transparent hover:border-ui-blue hover:text-ui-blue transition-colors"
                                         >
                                             +
                                         </button>
                                     </div>
                                     {projectAgents.length === 0 ? (
-                                        <div style={{ padding: '8px 14px 10px', color: color.textFaint, fontSize: '11px' }}>
+                                        <div className="px-3.5 py-2 text-ui-faint text-[11px]">
                                             No agents yet
                                         </div>
                                     ) : projectAgents.map(agent => {
                                         const isRunning = agentSessions.current.has(agent.id)
+                                        const isSelected = agent.id === activeAgentId
                                         return (
                                         <div
                                             key={agent.id}
                                             onClick={() => setActiveAgentId(agent.id)}
-                                            style={{
-                                                padding: '7px 12px', cursor: 'pointer',
-                                                display: 'flex', alignItems: 'center', gap: '8px',
-                                                borderRadius: '6px', margin: '1px 6px',
-                                                background: agent.id === activeAgentId ? color.bgCanvas : 'transparent',
-                                                borderLeft: `2px solid ${agent.id === activeAgentId ? color.accent : 'transparent'}`,
-                                            }}
-                                            onMouseEnter={e => { if (agent.id !== activeAgentId) e.currentTarget.style.background = color.bgSurface }}
-                                            onMouseLeave={e => { if (agent.id !== activeAgentId) e.currentTarget.style.background = 'transparent' }}
+                                            className={[
+                                                'px-3 py-2 cursor-pointer flex items-center gap-2.5 mx-2 my-0.5 rounded-lg border transition-colors',
+                                                isSelected
+                                                    ? 'bg-ui-blue-bg border-ui-border-focus'
+                                                    : 'bg-transparent border-transparent hover:bg-ui-surface',
+                                            ].join(' ')}
                                         >
-                                            <div style={{ position: 'relative', flexShrink: 0 }}>
-                                                <div style={{
-                                                    width: '22px', height: '22px', borderRadius: '50%',
-                                                    background: AGENT_TYPE_COLORS[agent.agent_type] ?? color.accent,
-                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                    fontSize: '10px', fontWeight: 700, color: '#fff',
-                                                }}>
-                                                    {agent.name.charAt(0).toUpperCase()}
+                                            <div className="relative shrink-0">
+                                                <div
+                                                    className="w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold text-white"
+                                                    style={{ background: AGENT_TYPE_COLORS[agent.agent_type] ?? 'var(--color-ui-blue)' }}
+                                                >
+                                                    {agent.name.slice(0, 2).toUpperCase()}
                                                 </div>
                                                 {isRunning && (
-                                                    <div style={{
-                                                        position: 'absolute', bottom: '-1px', right: '-1px',
-                                                        width: '7px', height: '7px', borderRadius: '50%',
-                                                        background: color.success,
-                                                        border: `1.5px solid ${color.bgBase}`,
-                                                    }} />
+                                                    <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-ui-green border-2 border-ui-white" />
                                                 )}
                                             </div>
-                                            <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-[13px] font-medium text-ui-text truncate">
                                                     {agent.name}
                                                 </div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                                                    <span style={{ fontSize: '10px', color: AGENT_TYPE_COLORS[agent.agent_type] ?? color.textFaint }}>
-                                                        {AGENT_TYPE_LABELS[agent.agent_type] ?? agent.agent_type}
-                                                    </span>
-                                                    {agent.flags?.dangerously_skip_permissions && (
-                                                        <span style={{ fontSize: '9px', padding: '0px 3px', borderRadius: '3px', background: '#ff6b3518', color: '#ff6b35', fontWeight: 600, lineHeight: '14px' }}>
-                                                            AUTO
-                                                        </span>
-                                                    )}
-                                                    {agent.flags?.plan_mode && (
-                                                        <span style={{ fontSize: '9px', padding: '0px 3px', borderRadius: '3px', background: `${color.accent}18`, color: color.accent, fontWeight: 600, lineHeight: '14px' }}>
-                                                            PLAN
-                                                        </span>
-                                                    )}
+                                                <div className="text-[11px] text-ui-faint mt-0.5 truncate">
+                                                    {AGENT_TYPE_LABELS[agent.agent_type] ?? agent.agent_type}
                                                 </div>
                                             </div>
                                             {!isRunning && (
                                                 <button
                                                     onClick={e => { e.stopPropagation(); setActiveAgentId(agent.id) }}
                                                     title="Run"
-                                                    style={{
-                                                        background: 'transparent', border: 'none',
-                                                        color: color.textFaint, cursor: 'pointer',
-                                                        padding: '2px 4px', borderRadius: '3px',
-                                                        flexShrink: 0, display: 'flex', alignItems: 'center',
-                                                    }}
-                                                    onMouseEnter={e => { e.currentTarget.style.color = color.success }}
-                                                    onMouseLeave={e => { e.currentTarget.style.color = color.textFaint }}
+                                                    className="bg-transparent border-none text-ui-ghost cursor-pointer p-1 rounded shrink-0 flex items-center hover:text-ui-green transition-colors"
                                                 >
                                                     <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
                                                         <path d="M3 2l11 6-11 6V2z"/>
@@ -4706,14 +4828,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                                     setProjectAgents(prev => prev.filter(a => a.id !== agent.id))
                                                 }}
                                                 title="Remove"
-                                                style={{
-                                                    background: 'transparent', border: 'none',
-                                                    color: color.textFaint, cursor: 'pointer',
-                                                    fontSize: '14px', padding: '2px 4px', borderRadius: '3px',
-                                                    flexShrink: 0,
-                                                }}
-                                                onMouseEnter={e => { e.currentTarget.style.color = color.danger }}
-                                                onMouseLeave={e => { e.currentTarget.style.color = color.textFaint }}
+                                                className="bg-transparent border-none text-ui-ghost cursor-pointer text-sm p-1 rounded shrink-0 hover:text-ui-red transition-colors"
                                             >
                                                 ×
                                             </button>
@@ -4997,6 +5112,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     project={deletingProject}
                     onClose={() => setDeletingProject(null)}
                     onDeleted={id => { handleProjectDeleted(id); setDeletingProject(null) }}
+                />
+            )}
+
+            {deletingWorkspace && (
+                <ConfirmDeleteWorkspaceModal
+                    workspace={deletingWorkspace}
+                    onClose={() => setDeletingWorkspace(null)}
+                    onDeleted={id => { handleWorkspaceDeleted(id); setDeletingWorkspace(null) }}
                 />
             )}
 

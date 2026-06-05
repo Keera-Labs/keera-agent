@@ -1,14 +1,17 @@
 @import "tailwindcss";
+@config "../../tailwind.config.js";
 
 /**
- * Design tokens — edit values here to retheme the entire app.
+ * Design tokens — single source of truth for all colours.
  *
- * Tailwind v4 @theme registers each --color-* variable as both:
- *   • a CSS custom property  (use anywhere: var(--color-accent))
- *   • a Tailwind utility     (e.g. bg-accent, text-text-primary)
+ * Two parallel representations kept in sync:
+ *   1. CSS @theme below  → Tailwind v4 utility classes (bg-ui-white, text-ui-text …)
+ *                          AND CSS custom properties   (var(--color-ui-white) …)
+ *   2. tailwind.config.js → theme.extend.colors mirror of the same values,
+ *                          required for Tailwind v4 JIT / IDE autocomplete.
+ *   3. resources/js/tokens.ts → React inline-style helpers (color.accent …)
  *
- * The JS side (resources/js/tokens.ts) maps human-readable names to
- * var(--color-*) strings for use in React inline styles.
+ * Edit values in tailwind.config.js; keep @theme in sync.
  */
 @theme {
     /* ── Backgrounds ─────────────────────────────────────── */
