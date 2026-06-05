@@ -3817,16 +3817,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                             <button
                                                 onClick={async () => {
                                                     const idle = projectAgents.filter(a => !agentSessions.current.has(a.id))
-                                                    for (const agent of idle) {
-                                                        const res = await fetch(`/api/agents/${agent.id}`, { method: 'DELETE' })
-                                                        if (!res.ok) continue
-                                                        agentContainerRefs.current.delete(agent.id)
-                                                        agentHook.remove.mutate(agent.id)
-                                                    }
                                                     const idleIds = new Set(idle.map(a => a.id))
                                                     if (activeAgentId !== null && idleIds.has(activeAgentId)) {
                                                         const remaining = projectAgents.filter(a => !idleIds.has(a.id))
                                                         setActiveAgentId(remaining.length > 0 ? remaining[0].id : null)
+                                                    }
+                                                    for (const agent of idle) {
+                                                        agentContainerRefs.current.delete(agent.id)
+                                                        await agentHook.remove.mutateAsync(agent.id)
                                                     }
                                                 }}
                                                 title="Delete idle agents"
@@ -3838,6 +3836,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                         {projectAgents.length > 0 && (
                                             <button
                                                 onClick={async () => {
+                                                    setActiveAgentId(null)
                                                     for (const agent of projectAgents) {
                                                         const session = agentSessions.current.get(agent.id)
                                                         if (session) {
@@ -3847,10 +3846,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                                             agentSessions.current.delete(agent.id)
                                                         }
                                                         agentContainerRefs.current.delete(agent.id)
-                                                        const res = await fetch(`/api/agents/${agent.id}`, { method: 'DELETE' })
-                                                        if (res.ok) agentHook.remove.mutate(agent.id)
+                                                        await agentHook.remove.mutateAsync(agent.id)
                                                     }
-                                                    setActiveAgentId(null)
                                                 }}
                                                 title="Delete all agents"
                                                 className="border border-gray-200 rounded text-gray-500 text-[10px] leading-none px-1.5 py-0.5 cursor-pointer bg-transparent hover:border-red-500 hover:text-red-500 transition-colors"
@@ -4011,8 +4008,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                             <button
                                                 onClick={async (e) => {
                                                     e.stopPropagation()
-                                                    const res = await fetch(`/api/agents/${agent.id}`, { method: 'DELETE' })
-                                                    if (!res.ok) return
                                                     const session = agentSessions.current.get(agent.id)
                                                     if (session) {
                                                         session.observer.disconnect()
@@ -4025,7 +4020,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                                         const remaining = projectAgents.filter(a => a.id !== agent.id)
                                                         setActiveAgentId(remaining.length > 0 ? remaining[0].id : null)
                                                     }
-                                                    agentHook.remove.mutate(agent.id)
+                                                    await agentHook.remove.mutateAsync(agent.id)
                                                 }}
                                                 title="Remove"
                                                 style={{
