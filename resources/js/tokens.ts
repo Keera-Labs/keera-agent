@@ -1,60 +1,60 @@
 const v = (name: string) => `var(${name})`
 
 export const color = {
-    // ── Custom tokens ─────────────────────────────────────
-    canvas:  v('--color-canvas'),
-    surface: v('--color-surface'),
-    stroke:  v('--color-stroke'),
-    accent:  v('--color-accent'),
-    success: v('--color-success'),
-    danger:  v('--color-danger'),
-    overlay: 'rgba(0,0,0,0.6)',
+    // ── Custom tokens (light theme) ────────────────────────────────
+    canvas:  v('--color-canvas'),   // #f6f8fa
+    surface: v('--color-surface'),  // #ffffff
+    stroke:  v('--color-stroke'),   // #d0d7de
+    accent:  v('--color-accent'),   // #0969da
+    success: v('--color-success'),  // #1a7f37
+    danger:  v('--color-danger'),   // #cf222e
+    overlay: 'rgba(1,4,9,0.4)',
 
-    // ── Aliases (AppLayout inline-style compat) ────────────
+    // ── Aliases (AppLayout inline-style compat) ────────────────────
     bgCanvas:       v('--color-canvas'),
     bgBase:         v('--color-canvas'),
     bgSurface:      v('--color-surface'),
     border:         v('--color-stroke'),
     borderMuted:    v('--color-stroke'),
 
-    // Text — Tailwind zinc scale
-    textPrimary:   v('--color-zinc-200'),
-    textSecondary: v('--color-zinc-300'),
-    textTertiary:  v('--color-zinc-400'),
-    textMuted:     v('--color-zinc-400'),
-    textGhost:     v('--color-zinc-500'),
-    textFaint:     v('--color-zinc-500'),
+    // Text — dark text for light backgrounds
+    textPrimary:   v('--color-zinc-900'),  // #18181b
+    textSecondary: v('--color-zinc-700'),  // #3f3f46
+    textTertiary:  v('--color-zinc-600'),  // #52525b
+    textMuted:     v('--color-zinc-500'),  // #71717a
+    textGhost:     v('--color-zinc-400'),  // #a1a1aa
+    textFaint:     v('--color-zinc-400'),  // #a1a1aa
 
-    // Accent shades — Tailwind blue scale
-    accentMuted:    v('--color-blue-300'),
-    accentEmphasis: v('--color-blue-700'),
-    accentSubtle:   v('--color-blue-900'),
-    accentGlow:     'rgba(88,166,255,0.07)',
+    // Accent shades — blue on light bg
+    accentMuted:    v('--color-blue-600'),  // #2563eb
+    accentEmphasis: v('--color-blue-600'),  // #2563eb (button bg, avatar bg)
+    accentSubtle:   v('--color-blue-50'),   // #eff6ff (active nav/chip bg)
+    accentGlow:     'rgba(9,105,218,0.08)',
 
     // Success shades
-    successEmphasis: v('--color-success'),
+    successEmphasis: v('--color-success'),  // #1a7f37
     successBorder:   v('--color-success'),
 
-    // Warning — Tailwind amber scale
-    warning:       v('--color-amber-500'),
-    warningBright: v('--color-amber-400'),
-    warningSubtle: v('--color-amber-950'),
-    warningGlow:   'rgba(240,180,41,0.7)',
+    // Warning — amber on light bg
+    warning:       v('--color-amber-700'),  // #b45309
+    warningBright: v('--color-amber-600'),  // #d97706
+    warningSubtle: v('--color-amber-100'),  // #fef3c7
+    warningGlow:   'rgba(180,83,9,0.15)',
 
-    // Danger shades — Tailwind red scale
-    dangerLight:   v('--color-red-300'),
-    dangerSubtle:  v('--color-red-950'),
-    dangerCanvas:  v('--color-red-950'),
+    // Danger shades
+    dangerLight:   v('--color-red-600'),   // #dc2626
+    dangerSubtle:  v('--color-red-50'),    // #fef2f2
+    dangerCanvas:  v('--color-red-50'),    // #fef2f2
 
-    // Priority / misc — Tailwind zinc
-    priorityMediumBg: v('--color-zinc-800'),
+    // Priority / misc
+    priorityMediumBg: v('--color-amber-50'),  // #fffbeb
 
     // Language dot colours — inline, not worth custom tokens
     langPython:     '#3572a5',
     langTypeScript: '#3178c6',
     langGo:         '#00add8',
-    langRust:       '#dea584',
-    langJavaScript: '#f1e05a',
+    langRust:       '#ce422b',
+    langJavaScript: '#f0d52d',
 } as const
 
 export type ColorToken = keyof typeof color

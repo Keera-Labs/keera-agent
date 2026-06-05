@@ -28,13 +28,13 @@ async def project_home(request: Request, project: str):
         agents = await Agent.where("project_id", db_project.id).order_by("id", "asc").get()
         agent = agents[0] if agents else None
 
-    if agent and getattr(agent, "slug", None):
-        return RedirectResponse(url=f"/{project}/{agent.slug}", status_code=302)
+    if agent:
+        return RedirectResponse(url=f"/{project}/agents/{agent.id}", status_code=302)
 
     # No agents yet — render the normal home page
     return Inertia.render("Home", {"project": project})
 
 
-async def agent_page(request: Request, project: str, agent: str):
+async def agent_page(request: Request, project: str, agent_id: int):
     """Render the main UI with active project + agent context."""
-    return Inertia.render("Home", {"project": project, "agent": agent})
+    return Inertia.render("Home", {"project": project, "agent_id": agent_id})

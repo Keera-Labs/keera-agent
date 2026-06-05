@@ -362,7 +362,7 @@ async def set_default(request: Request, project_id: int):
 async def spawn(request: Request, project_id: int):
     """Create a new agent, notify the frontend sidebar, and optionally start it."""
     from app.models.Project import Project
-    from app.controllers.terminal_controller import connections
+    from app.terminal.connection_manager import ConnectionManager
 
     body = await request.json()
 
@@ -401,10 +401,10 @@ async def spawn(request: Request, project_id: int):
     if project:
         cwd = os.path.expanduser(project.path)
         payload = _json.dumps({"type": "agent_created", "agent": _serialize(agent)})
-        for key, ws in list(connections.items()):
-            if key == cwd or key.startswith(cwd + ':agent:'):
+        conn_manager: ConnectionManager = app().make('connections')
+        for bridge in conn_manager.all_for_cwd(cwd):
                 try:
-                    await ws.send_text(payload)
+                    await bridge.send_text(payload)
                 except Exception:
                     pass
 

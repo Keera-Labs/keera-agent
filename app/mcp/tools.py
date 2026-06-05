@@ -337,81 +337,52 @@ async def handle_update_task_status(args: dict) -> str:
 SEND_MESSAGE_SCHEMA = {
     "name": "send_message_to_agent",
     "description": (
-        "Send a message from this agent to another agent running in a different project. "
+        "Send a message from this agent to another agent. "
         "If the target agent is active, the message is delivered immediately to its terminal. "
         "Otherwise it is queued and delivered when it next connects."
     ),
     "inputSchema": {
         "type": "object",
         "properties": {
-            "sender_project_path": {
-                "type": "string",
-                "description": "Absolute path of the sending project (use current working directory).",
+            "sender_agent_id": {
+                "type": "integer",
+                "description": "Your own agent ID.",
             },
-            "receiver_project_path": {
-                "type": "string",
-                "description": "Absolute path of the project whose agent should receive the message.",
+            "receiver_agent_id": {
+                "type": "integer",
+                "description": "The ID of the agent to send the message to.",
             },
             "message": {
                 "type": "string",
                 "description": "The message content to send.",
             },
         },
-        "required": ["sender_project_path", "receiver_project_path", "message"],
+        "required": ["sender_agent_id", "receiver_agent_id", "message"],
     },
 }
 
 
 async def handle_send_message(args: dict) -> str:
-    from app.models.AgentMessage import AgentMessage
-    from app.controllers.terminal_controller import pty_writers, connections
-    import asyncio
-    import json as _json
+    from app.models.Agent import Agent
+    from app.actions.agent_message_send_action import AgentMessageSendAction
 
-    sender = await _project_by_path(args["sender_project_path"])
+    sender = await Agent.find(args["sender_agent_id"])
     if not sender:
-        return f"Error: no Keera project found at path '{args['sender_project_path']}'"
+        return f"Error: agent #{args['sender_agent_id']} not found"
 
-    receiver = await _project_by_path(args["receiver_project_path"])
+    receiver = await Agent.find(args["receiver_agent_id"])
     if not receiver:
-        return f"Error: no Keera project found at path '{args['receiver_project_path']}'"
+        return f"Error: agent #{args['receiver_agent_id']} not found"
 
     content = args["message"].strip()
     if not content:
         return "Error: message cannot be empty"
 
-    msg = await AgentMessage.create({
-        "sender_project_id": sender.id,
-        "receiver_project_id": receiver.id,
-        "content": content,
-        "status": "pending",
-    })
+    msg_id, delivered = await AgentMessageSendAction.prepare(sender, receiver, content).execute()
 
-    # Deliver immediately if receiver has an active PTY
-    receiver_path = os.path.expanduser(receiver.path).rstrip("/")
-    write = pty_writers.get(receiver_path) or pty_writers.get(receiver.path)
-    ws = connections.get(receiver_path) or connections.get(receiver.path)
-
-    if write:
-        await asyncio.sleep(0.2)
-        write(f"\n[Message from {sender.name}]: {content}\n")
-        await AgentMessage.where("id", msg.id).update({"status": "delivered"})
-
-        # Notify receiver's frontend
-        if ws:
-            try:
-                await ws.send_text(_json.dumps({
-                    "type": "agent_message",
-                    "message_id": msg.id,
-                    "sender_name": sender.name,
-                    "content": content,
-                }))
-            except Exception:
-                pass
-
-        return f"Message delivered to {receiver.name} (#{msg.id})"
-
-    return f"Message queued for {receiver.name} (#{msg.id}) — will be delivered when agent connects"
+    if delivered:
+        return f"Message delivered to agent '{receiver.name}' (#{msg_id})"
+    return f"Message queued for agent '{receiver.name}' (#{msg_id}) — will be delivered when Claude is ready"
 
 
 # ── tool: get_agent_messages ──────────────────────────────────────────────────
@@ -537,6 +508,10 @@ SPAWN_AGENT_SCHEMA = {
                 "type": "integer",
                 "description": "ID of the task this agent is working on. Required for non-PM agents. Used to name the agent's worktree.",
             },
+            "from_agent_id": {
+                "type": "integer",
+                "description": "ID of the agent spawning this one. Sets orchestrator_id on the new agent.",
+            },
         },
         "required": ["project_path", "name", "agent_type"],
     },
@@ -547,7 +522,8 @@ async def handle_spawn_agent(args: dict) -> str:
     import asyncio
     import json as _json
     from app.models.Agent import Agent
-    from app.controllers.terminal_controller import connections
+    from app.terminal.connection_manager import ConnectionManager
+    from fastapi_startkit.application import app as _app
 
     project = await _project_by_path(args["project_path"])
     if not project:
@@ -565,6 +541,7 @@ async def handle_spawn_agent(args: dict) -> str:
         "model": args.get("model", "claude-sonnet-4-6"),
         "system_prompt": args.get("system_prompt", "").strip() or None,
         "task_id": args.get("task_id"),
+        "orchestrator_id": args.get("from_agent_id"),
         "status": "idle",
         "has_session": False,
     })
@@ -587,110 +564,71 @@ async def handle_spawn_agent(args: dict) -> str:
             "created_at": str(agent.created_at) if agent.created_at else None,
         },
     })
-    for key, ws in list(connections.items()):
-        if key == cwd or key.startswith(cwd + ':agent:'):
-            try:
-                await ws.send_text(payload)
-            except Exception:
-                pass
+    conn_manager: ConnectionManager = _app().make('connections')
+    for bridge in conn_manager.all_for_cwd(cwd):
+        try:
+            await bridge.send_text(payload)
+        except Exception:
+            pass
 
     # Optionally trigger the agent with an initial message
     message = (args.get("message") or "").strip()
     if message:
         from app.controllers.agent_trigger_controller import _spawn_headless_agent
-        conn_key = f"{cwd}:agent:{agent.id}"
-        asyncio.create_task(_spawn_headless_agent(agent, project, cwd, conn_key, message))
+        asyncio.create_task(_spawn_headless_agent(agent, project, cwd, message))
         return f"Agent '{name}' created (ID: {agent.id}) and starting with task: {message}"
 
-    return f"Agent '{name}' created (ID: {agent.id}). Use relay_to_agent to send it a task."
+    return f"Agent '{name}' created (ID: {agent.id}). Use send_message_to_agent to send it a task."
 
 
-# ── tool: relay_to_agent ──────────────────────────────────────────────────────
+# ── tool: get_orchestrated_agents ─────────────────────────────────────────────
 
-RELAY_TO_AGENT_SCHEMA = {
-    "name": "relay_to_agent",
+GET_ORCHESTRATED_AGENTS_SCHEMA = {
+    "name": "get_orchestrated_agents",
     "description": (
-        "Send a message to another agent in the same project. "
-        "If the agent is running the message is delivered immediately; "
-        "otherwise it is queued and delivered when the agent next starts."
+        "Return all agents that you have orchestrated (spawned). "
+        "Shows their current status so you can track progress across your sub-agents."
     ),
     "inputSchema": {
         "type": "object",
         "properties": {
-            "from_agent_id": {
+            "agent_id": {
                 "type": "integer",
                 "description": "Your own agent ID.",
             },
-            "to_agent_id": {
-                "type": "integer",
-                "description": "The ID of the agent to send the message to (from list_agents).",
-            },
-            "message": {
-                "type": "string",
-                "description": "The message or task to send.",
-            },
         },
-        "required": ["from_agent_id", "to_agent_id", "message"],
+        "required": ["agent_id"],
     },
 }
 
 
-async def handle_relay_to_agent(args: dict) -> str:
-    from app.models.Agent import Agent
-    from app.models.AgentRelayMessage import AgentRelayMessage
-    from app.controllers.terminal_controller import pty_writers, connections
+async def handle_get_orchestrated_agents(args: dict) -> str:
     import json as _json
+    from app.models.Agent import Agent
 
-    from_agent = await Agent.find(args["from_agent_id"])
-    if not from_agent:
-        return f"Error: agent #{args['from_agent_id']} not found"
+    orchestrator_id = args.get("agent_id")
+    if not orchestrator_id:
+        return "Error: agent_id is required"
 
-    to_agent = await Agent.find(args["to_agent_id"])
-    if not to_agent:
-        return f"Error: agent #{args['to_agent_id']} not found"
+    agents = await Agent.where("orchestrator_id", orchestrator_id).order_by("id", "asc").get()
 
-    content = args["message"].strip()
-    if not content:
-        return "Error: message cannot be empty"
+    if not agents:
+        return "You have not orchestrated any agents yet."
 
-    msg = await AgentRelayMessage.create({
-        "from_agent_id": from_agent.id,
-        "to_agent_id": to_agent.id,
-        "content": content,
-        "status": "pending",
-    })
+    rows = []
+    for a in agents:
+        rows.append({
+            "id": a.id,
+            "name": a.name,
+            "agent_type": a.agent_type,
+            "status": getattr(a, "status", "unknown"),
+            "active": bool(getattr(a, "session_id", None)),
+        })
 
-    project = await Project.find(to_agent.project_id)
-    if project:
-        cwd = os.path.expanduser(project.path)
-        conn_key = f"{cwd}:agent:{to_agent.id}"
-        write_fn = pty_writers.get(conn_key)
-        if write_fn:
-            text = f"[Message from Agent '{from_agent.name}']: {content}\r"
-            write_fn(text.encode())
-            await AgentRelayMessage.where("id", msg.id).update({"status": "delivered"})
-
-            # Notify frontend
-            for key, ws in list(connections.items()):
-                if key == cwd or key.startswith(cwd + ':agent:'):
-                    try:
-                        await ws.send_text(_json.dumps({
-                            "type": "agent_relay_delivered",
-                            "message_id": msg.id,
-                        }))
-                    except Exception:
-                        pass
-            return f"Message delivered to agent '{to_agent.name}' (#{msg.id})"
-
-        # Agent is idle — spawn it headlessly and deliver the message as its initial task
-        import asyncio as _asyncio
-        from app.controllers.agent_trigger_controller import _spawn_headless_agent
-        initial_text = f"[Message from Agent '{from_agent.name}']: {content}"
-        _asyncio.create_task(_spawn_headless_agent(to_agent, project, cwd, conn_key, initial_text))
-        await AgentRelayMessage.where("id", msg.id).update({"status": "delivered"})
-        return f"Agent '{to_agent.name}' was idle — started headlessly with message (#{msg.id})"
-
-    return f"Message queued for agent '{to_agent.name}' (#{msg.id}) — project not found"
+    total = len(rows)
+    active = sum(1 for r in rows if r["active"])
+    summary = f"Orchestrated agents: {total} total, {active} active\n\n"
+    return summary + _json.dumps(rows, indent=2)
 
 
 # ── registry ──────────────────────────────────────────────────────────────────
@@ -706,7 +644,7 @@ TOOLS: list[dict] = [
     GET_MESSAGES_SCHEMA,
     LIST_AGENTS_SCHEMA,
     SPAWN_AGENT_SCHEMA,
-    RELAY_TO_AGENT_SCHEMA,
+    GET_ORCHESTRATED_AGENTS_SCHEMA,
 ]
 
 HANDLERS: dict = {
@@ -720,5 +658,5 @@ HANDLERS: dict = {
     "get_agent_messages": handle_get_messages,
     "list_agents": handle_list_agents,
     "spawn_agent": handle_spawn_agent,
-    "relay_to_agent": handle_relay_to_agent,
+    "get_orchestrated_agents": handle_get_orchestrated_agents,
 }

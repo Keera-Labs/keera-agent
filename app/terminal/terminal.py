@@ -1,3 +1,4 @@
+import asyncio
 import fcntl
 import os
 import pty as _pty
@@ -8,12 +9,12 @@ import termios
 
 class Terminal:
     def __init__(
-        self,
-        shell: str | None = None,
-        cwd: str | None = None,
-        cols: int = 80,
-        rows: int = 24,
-        env: dict | None = None,
+            self,
+            shell: str | None = None,
+            cwd: str | None = None,
+            cols: int = 80,
+            rows: int = 24,
+            env: dict | None = None,
     ):
         self._shell = shell or os.environ.get('SHELL', '/bin/bash')
         self._cwd = cwd or os.path.expanduser('~')
@@ -33,6 +34,7 @@ class Terminal:
             stdout=slave_fd,
             stderr=slave_fd,
             close_fds=True,
+            preexec_fn=os.setsid,
             cwd=self._cwd,
             env=self._env,
         )
@@ -57,8 +59,24 @@ class Terminal:
             self.master_fd = None
 
     def write(self, data: bytes) -> None:
-        if self.master_fd is not None:
+        if self.master_fd is None or not data:
+            return
+        os.write(self.master_fd, data)
+
+    async def write_raw(self, data: bytes) -> None:
+        if self.master_fd is None or not data:
+            return
+        if len(data) <= 1:
             os.write(self.master_fd, data)
+            return
+        for byte in data:
+            os.write(self.master_fd, bytes([byte]))
+            await asyncio.sleep(0.002)
+
+    async def write_input(self, data: bytes) -> None:
+        """Write a complete message: strips trailing CR/LF then appends \\r."""
+        data = data.rstrip(b'\r\n') + b'\r'
+        await self.write_raw(data)
 
     def resize(self, cols: int, rows: int) -> None:
         self._cols = cols

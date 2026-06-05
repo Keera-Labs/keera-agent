@@ -1,13 +1,12 @@
 import uuid
 from fastapi_startkit.logging import Logger
-from typing import Dict
 
 from app.terminal.terminal import Terminal
 
 
 class TerminalManager:
     def __init__(self):
-        self.connections: Dict[str, Terminal] = {}
+        self._sessions: dict[str, Terminal] = {}
 
     def create(
         self,
@@ -16,31 +15,42 @@ class TerminalManager:
         cols: int = 80,
         rows: int = 24,
         env: dict | None = None,
+        session_id: str | None = None,
     ) -> str:
         pty = Terminal(shell=shell, cwd=cwd, cols=cols, rows=rows, env=env)
         pty.start()
 
-        session_id = str(uuid.uuid4())
-        self.connections[session_id] = pty
+        sid = session_id if session_id is not None else str(uuid.uuid4())
+        self._sessions[sid] = pty
 
-        return session_id
+        return sid
 
     def get(self, session_id: str) -> Terminal:
-        return self.connections[session_id]
+        return self._sessions[session_id]
 
-    def write(self, session_id: str, data: bytes):
-        self.connections[session_id].write(data)
+    def find(self, session_id: str) -> Terminal | None:
+        return self._sessions.get(session_id)
+
+    def write(self, session_id: str, data: bytes | str) -> None:
+        if isinstance(data, str):
+            data = data.encode()
+        self._sessions[session_id].write(data)
+
+    async def write_input(self, session_id: str, data: bytes | str) -> None:
+        if isinstance(data, str):
+            data = data.encode()
+        await self._sessions[session_id].write_input(data)
 
     def resize(self, session_id: str, cols: int, rows: int):
-        self.connections[session_id].resize(cols, rows)
+        self._sessions[session_id].resize(cols, rows)
 
     def close(self, session_id: str):
-        pty = self.connections.pop(session_id, None)
+        pty = self._sessions.pop(session_id, None)
         if pty:
             pty.stop()
 
     def shutdown(self):
         Logger.info("Shutting down terminal manager")
-        for pty in self.connections.values():
+        for pty in self._sessions.values():
             pty.stop()
-        self.connections.clear()
+        self._sessions.clear()

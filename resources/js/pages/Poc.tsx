@@ -3,6 +3,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 
+
 export default function Poc() {
     const termRef = useRef<HTMLDivElement>(null)
     const wsRef = useRef<WebSocket | null>(null)
@@ -29,14 +30,14 @@ export default function Poc() {
 
         ws.onmessage = (e) => {
             if (e.data instanceof ArrayBuffer) {
-                term.write(new Uint8Array(e.data))
+                term.write(new Uint8Array(e.data as ArrayBuffer))
             }
         }
 
         // Keyboard input → PTY
         term.onData((data) => {
             if (ws.readyState === WebSocket.OPEN) {
-                ws.send(new TextEncoder().encode(data))
+                ws.send(data)
             }
         })
 
@@ -53,8 +54,15 @@ export default function Poc() {
     function sendMessage() {
         const ws = wsRef.current
         if (!message.trim() || !ws || ws.readyState !== WebSocket.OPEN) return
-        ws.send(new TextEncoder().encode(message + '\r'))
+        ws.send(new TextEncoder().encode(message.replace(/\n/g, '\r')))
         setMessage('')
+    }
+
+    function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault()
+            sendMessage()
+        }
     }
 
     return (
@@ -72,16 +80,18 @@ export default function Poc() {
 
             <div ref={termRef} style={{ flex: 1, minHeight: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid #2a2a2a' }} />
 
-            <div style={{ display: 'flex', gap: 8 }}>
-                <input
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                <textarea
                     value={message}
                     onChange={e => setMessage(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && sendMessage()}
-                    placeholder="Send a message to Claude…"
+                    onKeyDown={handleKeyDown}
+                    placeholder="Send a message to Claude… (Shift+Enter for newline)"
+                    rows={3}
                     style={{
                         flex: 1, padding: '8px 12px', borderRadius: 6,
                         border: '1px solid #333', background: '#1a1a1a',
                         color: '#fff', fontSize: 14, fontFamily: 'monospace', outline: 'none',
+                        resize: 'none',
                     }}
                 />
                 <button
