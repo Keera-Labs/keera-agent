@@ -41,35 +41,23 @@ async def relay(request: Request):
     if not to_agent:
         return JSONResponse({"error": f"Agent {to_agent_id} not found"}, status_code=404)
 
-    msg = await AgentRelayMessage.create({
-        "from_agent_id": from_agent_id,
-        "to_agent_id": to_agent_id,
-        "content": content,
-        "status": "pending",
-    })
+    from app.actions.agent_message_send_action import AgentMessageSendAction
+    msg_id, delivered = await AgentMessageSendAction.prepare(from_agent, to_agent, content).execute()
 
-    # Try to inject directly into the running PTY
+    # Notify the frontend WebSocket so the UI updates
     from app.terminal.connection_manager import ConnectionManager
     from fastapi_startkit.application import app as _app
     import json as _json
     project = await Project.find(to_agent.project_id)
-    delivered = False
     conn_manager: ConnectionManager = _app().make('connections')
     if project:
         cwd = os.path.expanduser(project.path)
-        bridge = conn_manager.get(to_agent.session_id) if to_agent.session_id else None
-        if bridge:
-            await bridge.write(f"[Message from Agent '{from_agent.name}']: {content}")
-            await AgentRelayMessage.where("id", msg.id).update({"status": "delivered"})
-            delivered = True
-
-        # Notify the frontend WebSocket (project terminal connection) so the UI updates
-        bridge = conn_manager.find_by_cwd(cwd)
-        if bridge:
+        ui_bridge = conn_manager.find_by_cwd(cwd)
+        if ui_bridge:
             try:
-                await bridge.send_text(_json.dumps({
+                await ui_bridge.send_text(_json.dumps({
                     "type": "agent_relay_message",
-                    "message_id": msg.id,
+                    "message_id": msg_id,
                     "from_agent_id": from_agent_id,
                     "from_agent_name": from_agent.name,
                     "to_agent_id": to_agent_id,
@@ -81,7 +69,7 @@ async def relay(request: Request):
                 pass
 
     return JSONResponse({
-        "id": msg.id,
+        "id": msg_id,
         "delivered": delivered,
         "status": "delivered" if delivered else "pending",
     })
