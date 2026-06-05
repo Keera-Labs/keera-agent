@@ -3752,7 +3752,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         </button>
                         {/* Settings */}
                         <button
-                            onClick={() => setShowDefaultPermissions(true)}
+                            onClick={() => setShowGlobalSettings(true)}
                             title="Settings"
                             className="bg-transparent border-none cursor-pointer text-gray-400 p-1.5 flex items-center rounded hover:text-gray-700 transition-colors"
                         >
@@ -3804,6 +3804,28 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                                     <path d="M2 1.5l7 3.5-7 3.5V1.5z"/>
                                                 </svg>
                                                 All
+                                            </button>
+                                        )}
+                                        {projectAgents.some(a => !agentSessions.current.has(a.id)) && (
+                                            <button
+                                                onClick={async () => {
+                                                    const idle = projectAgents.filter(a => !agentSessions.current.has(a.id))
+                                                    for (const agent of idle) {
+                                                        const res = await fetch(`/api/agents/${agent.id}`, { method: 'DELETE' })
+                                                        if (!res.ok) continue
+                                                        agentContainerRefs.current.delete(agent.id)
+                                                        agentHook.remove.mutate(agent.id)
+                                                    }
+                                                    const idleIds = new Set(idle.map(a => a.id))
+                                                    if (activeAgentId !== null && idleIds.has(activeAgentId)) {
+                                                        const remaining = projectAgents.filter(a => !idleIds.has(a.id))
+                                                        setActiveAgentId(remaining.length > 0 ? remaining[0].id : null)
+                                                    }
+                                                }}
+                                                title="Delete idle agents"
+                                                className="border border-gray-200 rounded text-gray-500 text-[10px] leading-none px-1.5 py-0.5 cursor-pointer bg-transparent hover:border-red-400 hover:text-red-400 transition-colors"
+                                            >
+                                                ✕ idle
                                             </button>
                                         )}
                                         <button
