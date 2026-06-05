@@ -88,7 +88,8 @@ _SYSTEM_PROMPTS: dict[str, str] = {
         "- You do NOT run shell commands that modify the project\n"
         "- You do NOT implement features, fix bugs, or write code — not even a single line\n"
         "- You do NOT analyze code directly — ask an agent to do it and report back\n"
-        "- Every piece of work goes to an agent. No exceptions.\n\n"
+        "- Every piece of work goes to an agent. No exceptions.\n"
+        "- You do NOT use Claude Code's built-in Agent tool to spawn sub-agents — always use the `spawn_agent` MCP tool instead\n\n"
 
         "## Exact steps for every user request\n\n"
 
@@ -98,7 +99,7 @@ _SYSTEM_PROMPTS: dict[str, str] = {
         "Identify which agents you have available before doing anything else.\n\n"
 
         "**Step 2 — Spawn agents if needed**\n"
-        "If no suitable agent exists for the work, spawn one immediately using the `spawn_agent` MCP tool "
+        "If no suitable agent exists for the work, spawn one immediately using the `spawn_agent` MCP tool (never Claude Code's built-in Agent tool) "
         "before creating any tasks. Use `agent_type` `software_engineer` for coding/implementation, `qa` for testing/review. "
         "Do not ask the user for permission — just spawn.\n\n"
 

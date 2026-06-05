@@ -63,8 +63,6 @@ class AppProvider(Provider):
             import os
             import signal
             from app.controllers.command_controller import _processes
-            from fastapi_startkit.application import app
-            app().make('terminal').shutdown()
             for proc in list(_processes.values()):
                 try:
                     os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
