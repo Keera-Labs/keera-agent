@@ -3934,35 +3934,36 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                                     {isRunning ? '● Active' : AGENT_TYPE_LABELS[agent.agent_type] ?? agent.agent_type}
                                                 </div>
                                             </div>
-                                            {isRunning && (
-                                                <button
-                                                    onClick={e => {
-                                                        e.stopPropagation()
-                                                        const session = agentSessions.current.get(agent.id)
-                                                        if (session) {
-                                                            session.observer.disconnect()
-                                                            session.term.dispose()
-                                                            session.ws.close()
-                                                            agentSessions.current.delete(agent.id)
-                                                        }
-                                                        setTimeout(() => launchAgentSession(agent.id, agent.id === activeAgentId), 300)
-                                                    }}
-                                                    title="Restart"
-                                                    style={{
-                                                        background: 'transparent', border: 'none',
-                                                        color: color.textFaint, cursor: 'pointer',
-                                                        padding: '3px', borderRadius: '4px',
-                                                        display: 'flex', alignItems: 'center', flexShrink: 0,
-                                                    }}
-                                                    onMouseEnter={e => (e.currentTarget.style.color = '#ca8a04')}
-                                                    onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
-                                                >
-                                                    <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
-                                                        <path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
-                                                        <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
-                                                    </svg>
-                                                </button>
-                                            )}
+                                            {/* Restart button — always visible */}
+                                            <button
+                                                onClick={e => {
+                                                    e.stopPropagation()
+                                                    const session = agentSessions.current.get(agent.id)
+                                                    if (session) {
+                                                        session.observer.disconnect()
+                                                        session.term.dispose()
+                                                        session.ws.close()
+                                                        agentSessions.current.delete(agent.id)
+                                                    }
+                                                    setTimeout(() => launchAgentSession(agent.id, true), 300)
+                                                    setActiveAgentId(agent.id)
+                                                }}
+                                                title={isRunning ? 'Restart agent' : 'Start agent'}
+                                                style={{
+                                                    background: 'transparent', border: 'none',
+                                                    color: isRunning ? '#ca8a04' : color.textFaint,
+                                                    cursor: 'pointer',
+                                                    padding: '3px', borderRadius: '4px',
+                                                    display: 'flex', alignItems: 'center', flexShrink: 0,
+                                                }}
+                                                onMouseEnter={e => (e.currentTarget.style.color = '#ca8a04')}
+                                                onMouseLeave={e => (e.currentTarget.style.color = isRunning ? '#ca8a04' : color.textFaint)}
+                                            >
+                                                <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+                                                    <path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+                                                    <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+                                                </svg>
+                                            </button>
 
                                             {/* Settings/edit button */}
                                             <button
