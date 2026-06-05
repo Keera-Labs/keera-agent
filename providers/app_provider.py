@@ -62,16 +62,7 @@ class AppProvider(Provider):
         async def on_shutdown():
             import os
             import signal
-            from app.controllers.terminal_controller import _pty_procs
             from app.controllers.command_controller import _processes
-            for proc in list(_pty_procs.values()):
-                try:
-                    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-                except Exception:
-                    try:
-                        proc.kill()
-                    except Exception:
-                        pass
             for proc in list(_processes.values()):
                 try:
                     os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
