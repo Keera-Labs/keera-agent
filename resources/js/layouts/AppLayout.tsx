@@ -14,6 +14,26 @@ import { useTasks } from './hooks/tasks'
 import { useAgents, type ProjectAgent } from './hooks/agents'
 import { useProjects } from './hooks/projects'
 
+// ─── WebSocket framing ────────────────────────────────────────────────────────
+// Frame layout: type(1) + length(4) + payload
+const FRAME_DATA = 0x01
+
+function frameEncode(data: string | Uint8Array, type = FRAME_DATA): Uint8Array {
+    console.log("i am encoding")
+    const payload = typeof data === 'string' ? new TextEncoder().encode(data) : data
+    const frame = new Uint8Array(5 + payload.length)
+    frame[0] = type
+    new DataView(frame.buffer).setUint32(1, payload.length, false)
+    frame.set(payload, 5)
+    return frame
+}
+
+function frameDecode(data: ArrayBuffer): Uint8Array {
+    console.log("i am decoding")
+    const length = new DataView(data).getUint32(1, false)
+    return new Uint8Array(data, 5, length)
+}
+
 // ─── Agent color ──────────────────────────────────────────────────────────────
 
 function agentColor(name: string): string {
@@ -2241,14 +2261,17 @@ function CommandsView({ project, projectId }: { project: Project; projectId: num
                 setCommands(prev => prev.map(x => x.id === c.id ? { ...x, status: 'running' } : x))
             }
             ws.onmessage = e => {
-                if (typeof e.data !== 'string') term.write(new Uint8Array(e.data as ArrayBuffer))
+                if (typeof e.data !== 'string') {
+                    term.write(frameDecode(e.data as ArrayBuffer))
+                    console.log("hello i got message ")
+                }
             }
             ws.onclose = () => {
                 term.write('\r\n\x1b[31m[exited]\x1b[0m\r\n')
                 setCommands(prev => prev.map(x => x.id === c.id ? { ...x, status: 'stopped', pid: null } : x))
                 setOutputCmd(prev => prev?.id === c.id ? { ...prev, status: 'stopped', pid: null } : prev)
             }
-            term.onData(data => { if (ws.readyState === WebSocket.OPEN) ws.send(new TextEncoder().encode(data)) })
+            term.onData(data => { if (ws.readyState === WebSocket.OPEN) ws.send(frameEncode(data)) })
             term.onResize(({ cols, rows }) => {
                 if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'resize', cols, rows }))
             })
@@ -3399,8 +3422,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         ws.binaryType = 'arraybuffer'
         ws.onopen = () => ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
         ws.onmessage = e => {
+            console.log("WS message: ", e.data)
             if (typeof e.data !== 'string') {
-                term.write(new Uint8Array(e.data as ArrayBuffer))
+                term.write(frameDecode(e.data as ArrayBuffer))
             } else {
                 // Handle JSON events (relay messages) from the WebSocket
                 try {
@@ -3412,7 +3436,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             }
         }
         ws.onclose = () => term.write('\r\n\x1b[31m[disconnected]\x1b[0m\r\n')
-        term.onData(data => { if (ws.readyState === WebSocket.OPEN) ws.send(new TextEncoder().encode(data)) })
+        term.onData(data => { if (ws.readyState === WebSocket.OPEN) ws.send(frameEncode(data)) })
         term.onResize(({ cols, rows }) => {
             if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'resize', cols, rows }))
         })
@@ -3530,6 +3554,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         let lastInputSoundAt = 0
 
         ws.onmessage = e => {
+            console.log("WS message: 4", e.data)
             if (typeof e.data === 'string') {
                 try {
                     const msg = JSON.parse(e.data)
@@ -3544,7 +3569,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     }
                 } catch { /* ignore */ }
             } else {
-                const bytes = new Uint8Array(e.data as ArrayBuffer)
+                const bytes = frameDecode(e.data as ArrayBuffer)
                 term.write(bytes)
 
                 // Detect Claude waiting for user input by scanning plain text
@@ -3577,12 +3602,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         term.attachCustomKeyEventHandler(e => {
             if (e.key === 'Enter' && e.ctrlKey && e.type === 'keydown') {
-                if (ws.readyState === WebSocket.OPEN) ws.send(new TextEncoder().encode('\n'))
+                if (ws.readyState === WebSocket.OPEN) ws.send(frameEncode('\n'))
                 return false
             }
             return true
         })
-        term.onData(data => { if (ws.readyState === WebSocket.OPEN) ws.send(new TextEncoder().encode(data)) })
+        term.onData(data => { if (ws.readyState === WebSocket.OPEN) ws.send(frameEncode(data)) })
         term.onResize(({ cols, rows }) => {
             if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'resize', cols, rows }))
         })
@@ -3638,7 +3663,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         const { path } = await res.json()
         const session = sessions.current.get(activeProject.id)
         if (session && session.ws.readyState === WebSocket.OPEN) {
-            session.ws.send(new TextEncoder().encode(path))
+            session.ws.send(frameEncode(path))
         }
     }
 
@@ -3646,10 +3671,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         if (!activeProject) return
         const session = sessions.current.get(activeProject.id)
         if (!session || session.ws.readyState !== WebSocket.OPEN) return
-        session.ws.send(new TextEncoder().encode('\x03'))
+        session.ws.send(frameEncode('\x03'))
         setTimeout(() => {
             if (session.ws.readyState === WebSocket.OPEN) {
-                session.ws.send(new TextEncoder().encode('claude --continue\n'))
+                session.ws.send(frameEncode('claude --continue\n'))
             }
         }, 800)
     }

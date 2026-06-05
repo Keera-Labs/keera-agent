@@ -4,26 +4,20 @@ import os
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from fastapi_startkit.application import app
 
-from app.controllers.terminal_controller import connections, pty_writers
+from app.terminal.manager import TerminalManager
+from app.terminal.connection_manager import ConnectionManager
 from app.models.Agent import Agent
 from app.models.AgentRelayMessage import AgentRelayMessage
 from app.models.Project import Project
 from app.models.Task import Task
 
 
-def _find_project_ws(project_cwd: str):
-    """Return the active frontend WebSocket for a project, searching both the
-    bare project_cwd key and the agent-scoped 'project_cwd:agent:N' keys that
-    the terminal controller now uses exclusively."""
-    ws = connections.get(project_cwd)
-    if ws:
-        return ws
-    prefix = project_cwd + ':agent:'
-    for key, conn in connections.items():
-        if key.startswith(prefix):
-            return conn
-    return None
+def _find_project_bridge(project_cwd: str):
+    """Return any active frontend bridge for the given project directory."""
+    conn_manager: ConnectionManager = app().make('connections')
+    return conn_manager.find_by_cwd(project_cwd)
 
 
 async def _find_project_by_cwd(cwd: str):
@@ -100,22 +94,20 @@ async def claude_stopped(request: Request):
         next_task = await Task.where('project_id', project.id).where('status', 'pending').first()
         if next_task:
             await Task.where('id', next_task.id).update({'status': 'in_progress'})
-            # pty_writers keys are "project_cwd:agent:{id}" — find any active writer for this project
-            write = pty_writers.get(project_cwd) or next(
-                (fn for key, fn in pty_writers.items() if key.startswith(project_cwd + ':agent:')),
-                None
-            )
-            if write:
+            terminal_manager: TerminalManager = app().make('terminal')
+            agents = await Agent.where('project_id', project.id).get()
+            active_agent = next((ag for ag in agents if ag.session_id and terminal_manager.find(ag.session_id)), None)
+            if active_agent:
                 # Give Claude a moment to return to the prompt before sending input
                 await asyncio.sleep(0.5)
-                write(next_task.description + '\n')
+                terminal_manager.write(active_agent.session_id, next_task.description + '\n')
                 await Project.where('id', project.id).update({'claude_status': 'running'})
 
                 # Notify the frontend that a new task started
-                ws = _find_project_ws(project_cwd)
-                if ws:
+                bridge = _find_project_bridge(project_cwd)
+                if bridge:
                     try:
-                        await ws.send_text(json.dumps({
+                        await bridge.send_text(json.dumps({
                             'type': 'task_started',
                             'cwd': project_cwd,
                             'task_id': next_task.id,
@@ -130,10 +122,10 @@ async def claude_stopped(request: Request):
         await _deliver_agent_relay_messages(project, project_cwd)
 
     # Notify the connected frontend WebSocket for this project
-    ws = _find_project_ws(project_cwd)
-    if ws:
+    bridge = _find_project_bridge(project_cwd)
+    if bridge:
         try:
-            await ws.send_text(json.dumps({'type': 'claude_stopped', 'cwd': project_cwd}))
+            await bridge.send_text(json.dumps({'type': 'claude_stopped', 'cwd': project_cwd}))
         except Exception:
             pass
 
@@ -156,9 +148,8 @@ async def _deliver_agent_relay_messages(project, cwd: str) -> None:
         if not pending:
             continue
 
-        conn_key = f"{cwd}:agent:{agent.id}"
-        write_fn = pty_writers.get(conn_key)
-        if not write_fn:
+        terminal_manager: TerminalManager = app().make('terminal')
+        if not (agent.session_id and terminal_manager.find(agent.session_id)):
             continue
 
         # Small delay so Claude has time to return to the prompt
@@ -167,15 +158,14 @@ async def _deliver_agent_relay_messages(project, cwd: str) -> None:
         for msg in pending:
             from_agent = await Agent.find(msg.from_agent_id)
             sender_name = from_agent.name if from_agent else f"Agent #{msg.from_agent_id}"
-            text = f"[Message from Agent '{sender_name}']: {msg.content}\n"
-            write_fn(text.encode())
+            terminal_manager.write(agent.session_id, f"[Message from Agent '{sender_name}']: {msg.content}\n")
             await AgentRelayMessage.where('id', msg.id).update({'status': 'delivered'})
 
         # Notify frontend about the delivered messages
-        ws = _find_project_ws(cwd)
-        if ws:
+        bridge = _find_project_bridge(cwd)
+        if bridge:
             try:
-                await ws.send_text(json.dumps({
+                await bridge.send_text(json.dumps({
                     'type': 'agent_relay_delivered',
                     'agent_id': agent.id,
                     'count': len(pending),

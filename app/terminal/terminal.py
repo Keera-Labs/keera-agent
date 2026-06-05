@@ -1,6 +1,7 @@
 import fcntl
 import os
 import pty as _pty
+import tty
 import struct
 import subprocess
 import termios
@@ -8,12 +9,12 @@ import termios
 
 class Terminal:
     def __init__(
-        self,
-        shell: str | None = None,
-        cwd: str | None = None,
-        cols: int = 80,
-        rows: int = 24,
-        env: dict | None = None,
+            self,
+            shell: str | None = None,
+            cwd: str | None = None,
+            cols: int = 80,
+            rows: int = 24,
+            env: dict | None = None,
     ):
         self._shell = shell or os.environ.get('SHELL', '/bin/bash')
         self._cwd = cwd or os.path.expanduser('~')
@@ -33,6 +34,7 @@ class Terminal:
             stdout=slave_fd,
             stderr=slave_fd,
             close_fds=True,
+            preexec_fn=os.setsid,
             cwd=self._cwd,
             env=self._env,
         )
@@ -57,8 +59,9 @@ class Terminal:
             self.master_fd = None
 
     def write(self, data: bytes) -> None:
-        if self.master_fd is not None:
-            os.write(self.master_fd, data)
+        if self.master_fd is None or not data:
+            return
+        os.write(self.master_fd, data)
 
     def resize(self, cols: int, rows: int) -> None:
         self._cols = cols

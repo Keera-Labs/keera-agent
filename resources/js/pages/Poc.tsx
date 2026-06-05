@@ -3,6 +3,20 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 
+function frameEncode(data: string | Uint8Array, type = 0x01): Uint8Array {
+    const payload = typeof data === 'string' ? new TextEncoder().encode(data) : data
+    const frame = new Uint8Array(5 + payload.length)
+    frame[0] = type
+    new DataView(frame.buffer).setUint32(1, payload.length, false)
+    frame.set(payload, 5)
+    return frame
+}
+
+function frameDecode(data: ArrayBuffer): Uint8Array {
+    const length = new DataView(data).getUint32(1, false)
+    return new Uint8Array(data, 5, length)
+}
+
 export default function Poc() {
     const termRef = useRef<HTMLDivElement>(null)
     const wsRef = useRef<WebSocket | null>(null)
@@ -29,14 +43,14 @@ export default function Poc() {
 
         ws.onmessage = (e) => {
             if (e.data instanceof ArrayBuffer) {
-                term.write(new Uint8Array(e.data))
+                term.write(frameDecode(e.data))
             }
         }
 
         // Keyboard input → PTY
         term.onData((data) => {
             if (ws.readyState === WebSocket.OPEN) {
-                ws.send(new TextEncoder().encode(data))
+                ws.send(frameEncode(data))
             }
         })
 
@@ -53,7 +67,7 @@ export default function Poc() {
     function sendMessage() {
         const ws = wsRef.current
         if (!message.trim() || !ws || ws.readyState !== WebSocket.OPEN) return
-        ws.send(new TextEncoder().encode(message + '\r'))
+        ws.send(frameEncode(message + '\r'))
         setMessage('')
     }
 

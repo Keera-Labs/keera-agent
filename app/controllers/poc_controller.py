@@ -9,7 +9,6 @@ from app.terminal.websocket_terminal import WebsocketTerminal
 async def poc_page(request: Request):
     return Inertia.render("Poc", {})
 
-
 async def poc_ws(websocket: WebSocket):
     await websocket.accept()
     terminal_manager: TerminalManager = app().make('terminal')

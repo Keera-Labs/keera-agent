@@ -276,7 +276,7 @@ async def command_ws(websocket: WebSocket, project: str, command_id: int):
             while not stopped.is_set():
                 try:
                     item = await asyncio.wait_for(queue.get(), timeout=0.1)
-                    await websocket.send_bytes(item)
+                    await websocket.send_bytes(len(item).to_bytes(4, 'big') + item)
                 except asyncio.TimeoutError:
                     continue
                 except Exception:
@@ -294,7 +294,10 @@ async def command_ws(websocket: WebSocket, project: str, command_id: int):
                 if msg.get('type') == 'websocket.disconnect':
                     break
                 if msg.get('bytes'):
-                    os.write(master_fd, msg['bytes'])
+                    data = msg['bytes']
+                    if len(data) >= 4:
+                        length = int.from_bytes(data[:4], 'big')
+                        os.write(master_fd, data[4:4 + length])
                 elif msg.get('text'):
                     try:
                         data = json.loads(msg['text'])
