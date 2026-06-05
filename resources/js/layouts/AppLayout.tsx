@@ -3302,7 +3302,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const agentSessions = useRef<Map<number, Session>>(new Map())
     const agentContainerRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
     const fileInputRef = useRef<HTMLInputElement>(null)
-    const msgInputRef = useRef<HTMLInputElement>(null)
 
     const activeProject = allProjects.find(p => p.slug === projectName) ?? allProjects[0] ?? null
 
@@ -3624,18 +3623,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         const project = allProjects.find(p => p.id === projectId)
         removeProject.mutate(projectId)
         if (project && projectName === project.slug) router.visit('/')
-    }
-
-    function sendMsgInput() {
-        const val = msgInputRef.current?.value.trim()
-        if (!val || !activeProject) return
-        const session = activeAgentId !== null
-            ? agentSessions.current.get(activeAgentId)
-            : sessions.current.get(activeProject.id)
-        if (session && session.ws.readyState === WebSocket.OPEN) {
-            session.ws.send(val + '\r')
-        }
-        if (msgInputRef.current) msgInputRef.current.value = ''
     }
 
     async function uploadImage(file: File) {
@@ -4220,7 +4207,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                             />
 
                             {/* Terminal body — xterm containers */}
-                            <div style={{ flex: 1, position: 'relative', overflow: 'hidden', background: '#0d1117' }}>
+                            <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
                                 {allProjects.map(project => (
                                     <div
                                         key={project.id}
@@ -4251,69 +4238,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                 })}
                             </div>
 
-                            {/* ── Message input footer ── */}
-                            {activeProject && (
-                                <div style={{
-                                    flexShrink: 0, background: '#fff',
-                                    borderTop: `1px solid ${color.stroke}`,
-                                    padding: '10px 14px',
-                                    display: 'flex', flexDirection: 'column', gap: '8px',
-                                }}>
-                                    {/* Input area */}
-                                    <div style={{
-                                        display: 'flex', alignItems: 'center', gap: '8px',
-                                        border: `1px solid ${color.stroke}`, borderRadius: '8px',
-                                        padding: '8px 12px', background: color.bgCanvas,
-                                    }}>
-                                        <input
-                                            ref={msgInputRef}
-                                            placeholder={`Message ${activeAgentId !== null ? (projectAgents.find(a => a.id === activeAgentId)?.name ?? 'agent') : activeProject.name}…`}
-                                            style={{
-                                                flex: 1, background: 'transparent', border: 'none', outline: 'none',
-                                                fontSize: '13px', color: color.textPrimary,
-                                            }}
-                                            onKeyDown={e => {
-                                                if (e.key === 'Enter' && !e.shiftKey) {
-                                                    e.preventDefault()
-                                                    sendMsgInput()
-                                                }
-                                            }}
-                                        />
-                                        <button
-                                            onClick={sendMsgInput}
-                                            style={{
-                                                flexShrink: 0, background: color.accent, border: 'none',
-                                                borderRadius: '6px', padding: '5px 10px', cursor: 'pointer',
-                                                display: 'flex', alignItems: 'center',
-                                            }}
-                                        >
-                                            <svg width="12" height="12" viewBox="0 0 16 16" fill="white">
-                                                <path d="M1.958.686a1.5 1.5 0 012.075.43L14.75 9a1.5 1.5 0 010 2L4.033 18.884a1.5 1.5 0 01-2.505-1.11V2.226a1.5 1.5 0 01.43-1.54z"/>
-                                            </svg>
-                                        </button>
-                                    </div>
-                                    {/* Meta row: model + context */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                        <span style={{
-                                            fontSize: '10px', color: color.textFaint,
-                                            display: 'flex', alignItems: 'center', gap: '4px',
-                                        }}>
-                                            <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
-                                                <path d="M0 8a8 8 0 1116 0A8 8 0 010 8zm8-6.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13z"/>
-                                            </svg>
-                                            claude-sonnet-4-6
-                                        </span>
-                                        <span style={{ color: color.stroke }}>·</span>
-                                        <span style={{ fontSize: '10px', color: color.textFaint }}>
-                                            {activeProject.path.split('/').pop() ?? activeProject.name}
-                                        </span>
-                                        <div style={{ flex: 1 }} />
-                                        <span style={{ fontSize: '10px', color: color.textFaint }}>
-                                            Press Enter to send · Ctrl+C to interrupt
-                                        </span>
-                                    </div>
-                                </div>
-                            )}
                         </div>
 
                     </div>
