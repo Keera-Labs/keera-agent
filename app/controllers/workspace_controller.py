@@ -77,5 +77,5 @@ async def destroy(request: Request, workspace_id: int):
         p.workspace_id = None
         await p.save()
 
-    await workspace.delete()
+    await Workspace.where("id", workspace_id).delete()
     return JSONResponse({"ok": True})

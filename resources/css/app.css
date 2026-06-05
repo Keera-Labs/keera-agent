@@ -1,81 +1,11 @@
 @import "tailwindcss";
 @config "../../tailwind.config.js";
 
-/**
- * Design tokens — single source of truth for all colours.
- *
- * Two parallel representations kept in sync:
- *   1. CSS @theme below  → Tailwind v4 utility classes (bg-ui-white, text-ui-text …)
- *                          AND CSS custom properties   (var(--color-ui-white) …)
- *   2. tailwind.config.js → theme.extend.colors mirror of the same values,
- *                          required for Tailwind v4 JIT / IDE autocomplete.
- *   3. resources/js/tokens.ts → React inline-style helpers (color.accent …)
- *
- * Edit values in tailwind.config.js; keep @theme in sync.
- */
 @theme {
-    /* ── Backgrounds ─────────────────────────────────────── */
-    --color-bg-canvas:  #010409;   /* deepest: sidebar, topbar        */
-    --color-bg-base:    #0d1117;   /* page background, input fills    */
-    --color-bg-surface: #161b22;   /* cards, modals, active rows      */
-
-    /* ── Borders ─────────────────────────────────────────── */
-    --color-border:       #21262d; /* dividers                        */
-    --color-border-muted: #30363d; /* input / card borders            */
-
-    /* ── Text ────────────────────────────────────────────── */
-    --color-text-primary:   #e6edf3;
-    --color-text-secondary: #c9d1d9;
-    --color-text-tertiary:  #8b949e;
-    --color-text-muted:     #7d8590;
-    --color-text-ghost:     #6e7681;
-    --color-text-faint:     #484f58; /* disabled, placeholders         */
-
-    /* ── Accent (blue) ───────────────────────────────────── */
-    --color-accent:          #58a6ff;
-    --color-accent-muted:    #79c0ff;
-    --color-accent-emphasis: #1f6feb; /* selected state, dropdowns     */
-    --color-accent-subtle:   #0d419d; /* tag backgrounds               */
-
-    /* ── Success (green) ─────────────────────────────────── */
-    --color-success:          #3fb950;
-    --color-success-emphasis: #238636; /* create / submit buttons       */
-    --color-success-border:   #2ea043;
-
-    /* ── Warning (yellow) ────────────────────────────────── */
-    --color-warning:        #d29922;
-    --color-warning-bright: #f0b429; /* animated running indicator     */
-    --color-warning-subtle: #4a3800; /* low-contrast badge background  */
-
-    /* ── Danger (red) ────────────────────────────────────── */
-    --color-danger:        #ff7b72;
-    --color-danger-light:  #ffa198;
-    --color-danger-subtle: #67060c; /* high-priority border           */
-    --color-danger-canvas: #1c1012; /* high-priority background       */
-
-    /* ── Priority ────────────────────────────────────────── */
-    --color-priority-medium-bg: #1c2128;
-
-    /* ── Language dot colours ────────────────────────────── */
-    --color-lang-python:     #3572a5;
-    --color-lang-typescript: #3178c6;
-    --color-lang-go:         #00add8;
-    --color-lang-rust:       #dea584;
-    --color-lang-javascript: #f1e05a;
-
-    /* ── Light UI theme (content area, white background) ─── */
-    --color-ui-white:        #ffffff;   /* pure white backgrounds          */
-    --color-ui-page:         #f1f5f9;   /* outer page behind sidebar       */
-    --color-ui-surface:      #f9fafb;   /* inputs, hover fills             */
-    --color-ui-border:       #e5e7eb;   /* dividers, card edges            */
-    --color-ui-border-focus: #bfdbfe;   /* selected / active border        */
-    --color-ui-text:         #111827;   /* primary body text               */
-    --color-ui-body:         #374151;   /* secondary body text             */
-    --color-ui-muted:        #6b7280;   /* muted / inactive labels         */
-    --color-ui-faint:        #9ca3af;   /* placeholders, faint icons       */
-    --color-ui-ghost:        #d1d5db;   /* very faint — disabled states    */
-    --color-ui-blue:         #3b82f6;   /* primary action blue             */
-    --color-ui-blue-bg:      #eff6ff;   /* selected agent card background  */
-    --color-ui-green:        #22c55e;   /* running / live indicator        */
-    --color-ui-red:          #ef4444;   /* delete / danger action          */
+    --color-canvas:  #0d1117;
+    --color-surface: #161b22;
+    --color-stroke:  #30363d;
+    --color-accent:  #58a6ff;
+    --color-success: #238636;
+    --color-danger:  #ff7b72;
 }

@@ -5,8 +5,10 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { color } from "@/tokens"
 import type { Task, Workspace, Project } from "@/types/type"
-import ProjectCreateModal from '@/components/projects/ProjectCreateModal'
-import ProjectPathEditModal from '@/components/projects/ProjectPathEditModal'
+import ProjectCreateModal from '@/components/project/ProjectCreateModal'
+import ProjectPathEditModal from '@/components/project/ProjectPathEditModal'
+import Sidebar, { type ProjectView, PROJECT_NAV } from './sidebar/Sidebar'
+import { DotsIndicator } from './sidebar/Project'
 
 // ─── Agent color ──────────────────────────────────────────────────────────────
 
@@ -1225,826 +1227,6 @@ function MoveProjectModal({
     )
 }
 
-// ─── Sidebar ──────────────────────────────────────────────────────────────────
-
-function SectionHeader({ label, onAdd }: { label: string; onAdd?: () => void }) {
-    return (
-        <div style={{
-            padding: '10px 16px 6px', display: 'flex', alignItems: 'center', gap: '6px',
-        }}>
-            <span style={{ color: color.textMuted, fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', flex: 1 }}>
-                {label}
-            </span>
-            {onAdd && (
-                <button onClick={onAdd} title={`Add ${label.toLowerCase()}`} style={{
-                    background: 'transparent', border: 'none', cursor: 'pointer',
-                    color: color.textMuted, padding: '0', lineHeight: 1, display: 'flex', alignItems: 'center',
-                }}>
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
-                    </svg>
-                </button>
-            )}
-        </div>
-    )
-}
-
-const dotsStyle = `
-@keyframes bounce1 { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-4px)} }
-@keyframes bounce2 { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-4px)} }
-@keyframes bounce3 { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-4px)} }
-@keyframes traveler {
-  0%   { left: 0px;   opacity: 0;   }
-  10%  { opacity: 1;               }
-  90%  { opacity: 1;               }
-  100% { left: 18px;  opacity: 0;  }
-}
-`
-
-function DotsIndicator() {
-    return (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', flexShrink: 0, position: 'relative' }}>
-            <style>{dotsStyle}</style>
-            {/* Track: 3 dim dots */}
-            <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: color.warningSubtle, animation: 'bounce1 1.0s ease-in-out infinite 0.0s' }} />
-            <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: color.warningSubtle, animation: 'bounce2 1.0s ease-in-out infinite 0.15s' }} />
-            <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: color.warningSubtle, animation: 'bounce3 1.0s ease-in-out infinite 0.3s' }} />
-            {/* Traveling bright dot */}
-            <span style={{
-                position: 'absolute', top: '50%', marginTop: '-2px',
-                width: '4px', height: '4px', borderRadius: '50%',
-                background: color.warningBright,
-                boxShadow: `0 0 5px 2px ${color.warningGlow}`,
-                animation: 'traveler 1.0s linear infinite',
-            }} />
-        </span>
-    )
-}
-
-function ProjectItem({ project, active, status, onMove, onEdit, onSystemPrompt, onPermissions, onDelete }: {
-    project: Project; active: boolean; status?: 'running' | 'done';
-    onMove: (p: Project) => void;
-    onEdit: (p: Project) => void;
-    onSystemPrompt: (p: Project) => void;
-    onPermissions: (p: Project) => void;
-    onDelete: (p: Project) => void;
-}) {
-    const [hovered, setHovered] = useState(false)
-    const [menuOpen, setMenuOpen] = useState(false)
-    const menuRef = useRef<HTMLDivElement>(null)
-
-    useEffect(() => {
-        if (!menuOpen) return
-        function handleClickOutside(e: MouseEvent) {
-            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-                setMenuOpen(false)
-            }
-        }
-        document.addEventListener('mousedown', handleClickOutside)
-        return () => document.removeEventListener('mousedown', handleClickOutside)
-    }, [menuOpen])
-
-    const menuItemStyle = (danger = false): React.CSSProperties => ({
-        display: 'flex', alignItems: 'center', gap: '8px',
-        padding: '6px 12px', cursor: 'pointer', fontSize: '12px',
-        color: danger ? color.danger : color.textSecondary,
-        background: 'transparent', border: 'none', width: '100%', textAlign: 'left',
-        whiteSpace: 'nowrap',
-    })
-
-    return (
-        <div
-            onMouseEnter={() => setHovered(true)}
-            onMouseLeave={() => { setHovered(false) }}
-            style={{ position: 'relative', display: 'flex' }}
-        >
-            <div
-                role="button"
-                tabIndex={0}
-                onClick={() => router.visit(`/${project.slug}`)}
-                onKeyDown={e => e.key === 'Enter' && router.visit(`/${project.slug}`)}
-                style={{
-                    flex: 1, display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '6px',
-                    padding: '7px 32px 7px 12px', background: active ? color.bgSurface : 'transparent',
-                    borderLeft: `2px solid ${active ? color.accent : 'transparent'}`,
-                    cursor: 'pointer', textAlign: 'left',
-                }}
-            >
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                    <span style={{
-                        color: active ? color.textPrimary : color.textSecondary, fontSize: '13px',
-                        fontWeight: active ? 600 : 400, fontFamily: '"JetBrains Mono", monospace',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                        {project.name}
-                    </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span style={{ color: color.textMuted, fontSize: '11px' }}>•</span>
-                        <span style={{ color: color.textMuted, fontSize: '11px', fontStyle: 'italic' }}>{project.language}</span>
-                    </span>
-                </div>
-                <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-                    {status === 'running' && <DotsIndicator />}
-                    {status === 'done' && (
-                        <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: color.success }} />
-                    )}
-                </div>
-            </div>
-
-            {/* 3-dot kebab button */}
-            {(hovered || menuOpen) && (
-                <button
-                    onClick={e => { e.stopPropagation(); setMenuOpen(o => !o) }}
-                    style={{
-                        position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)',
-                        background: menuOpen ? color.bgSurface : 'transparent',
-                        border: menuOpen ? `1px solid ${color.borderMuted}` : '1px solid transparent',
-                        borderRadius: '4px', cursor: 'pointer',
-                        color: color.textMuted, padding: '2px 4px',
-                        display: 'flex', alignItems: 'center', lineHeight: 1,
-                    }}
-                    onMouseEnter={e => { if (!menuOpen) e.currentTarget.style.background = color.bgSurface }}
-                    onMouseLeave={e => { if (!menuOpen) e.currentTarget.style.background = 'transparent' }}
-                >
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm0-5.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm0 11a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
-                    </svg>
-                </button>
-            )}
-
-            {/* Dropdown menu */}
-            {menuOpen && (
-                <div ref={menuRef} style={{
-                    position: 'absolute', right: '0', top: '100%', zIndex: 200,
-                    background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
-                    borderRadius: '6px', boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-                    minWidth: '170px', padding: '4px 0', overflow: 'hidden',
-                }}>
-                    <button
-                        style={menuItemStyle()}
-                        onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                        onClick={e => { e.stopPropagation(); setMenuOpen(false); onEdit(project) }}
-                    >
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0 }}>
-                            <path d="M11.013 1.427a1.75 1.75 0 012.474 0l1.086 1.086a1.75 1.75 0 010 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 01-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61zm1.414 1.06a.25.25 0 00-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 000-.354l-1.086-1.086zM11.189 6.25L9.75 4.81l-6.286 6.287a.25.25 0 00-.064.108l-.558 1.953 1.953-.558a.249.249 0 00.108-.064l6.286-6.286z"/>
-                        </svg>
-                        Change directory
-                    </button>
-                    <button
-                        style={{ ...menuItemStyle(), color: project.system_prompt ? color.accent : color.textSecondary }}
-                        onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                        onClick={e => { e.stopPropagation(); setMenuOpen(false); onSystemPrompt(project) }}
-                    >
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0 }}>
-                            <path d="M0 1.75A.75.75 0 01.75 1h9.5a.75.75 0 010 1.5H.75A.75.75 0 010 1.75zM0 8a.75.75 0 01.75-.75h9.5a.75.75 0 010 1.5H.75A.75.75 0 010 8zm0 6.25a.75.75 0 01.75-.75h5.5a.75.75 0 010 1.5H.75a.75.75 0 01-.75-.75z"/>
-                        </svg>
-                        System instructions
-                    </button>
-                    <button
-                        style={menuItemStyle()}
-                        onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                        onClick={e => { e.stopPropagation(); setMenuOpen(false); onPermissions(project) }}
-                    >
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0 }}>
-                            <path d="M8.533.133a1.75 1.75 0 00-1.066 0l-5.25 1.68A1.75 1.75 0 001 3.48V8c0 3.183 1.958 5.837 4.798 7.319a.75.75 0 00.404.119.75.75 0 00.404-.119C9.042 13.837 11 11.183 11 8V3.48a1.75 1.75 0 00-1.217-1.667L8.533.133zm-.61 1.429a.25.25 0 01.153 0l5.25 1.68a.25.25 0 01.174.238V8c0 2.67-1.625 4.91-4 6.282C7.875 12.91 6.25 10.67 6.25 8V3.48a.25.25 0 01.173-.238l1.5-.48z"/>
-                        </svg>
-                        Permissions
-                    </button>
-                    <button
-                        style={menuItemStyle()}
-                        onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                        onClick={e => { e.stopPropagation(); setMenuOpen(false); onMove(project) }}
-                    >
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0 }}>
-                            <path d="M7.47 1.97a.75.75 0 011.06 0l4.5 4.5a.75.75 0 010 1.06l-4.5 4.5a.75.75 0 11-1.06-1.06L11.44 7H3a.75.75 0 010-1.5h8.44L7.47 3.03a.75.75 0 010-1.06z"/>
-                        </svg>
-                        Move to workspace
-                    </button>
-                    <button
-                        style={menuItemStyle()}
-                        onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                        onClick={e => { e.stopPropagation(); setMenuOpen(false); fetch(`/api/projects/${project.id}/open-directory`, { method: 'POST' }) }}
-                    >
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0 }}>
-                            <path d="M1.75 1A1.75 1.75 0 000 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0016 13.25v-8.5A1.75 1.75 0 0014.25 3H7.5L6.066 1.566A.25.25 0 005.89 1.5H1.75zm0 1.5h3.89l1.433 1.434a.25.25 0 00.177.066H14.25a.25.25 0 01.25.25v8.5a.25.25 0 01-.25.25H1.75a.25.25 0 01-.25-.25V2.75a.25.25 0 01.25-.25z"/>
-                        </svg>
-                        Open in directory
-                    </button>
-                    <div style={{ height: '1px', background: color.border, margin: '4px 0' }} />
-                    <button
-                        style={menuItemStyle(true)}
-                        onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                        onClick={e => { e.stopPropagation(); setMenuOpen(false); onDelete(project) }}
-                    >
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0 }}>
-                            <path d="M6.5 1.75a.25.25 0 01.25-.25h2.5a.25.25 0 01.25.25V3h-3V1.75zm4.5 0V3h2.25a.75.75 0 010 1.5H2.75a.75.75 0 010-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75zM4.496 6.675l.66 6.6a.25.25 0 00.249.225h5.19a.25.25 0 00.249-.225l.66-6.6a.75.75 0 011.492.149l-.66 6.6A1.748 1.748 0 0111.095 15H4.905a1.748 1.748 0 01-1.741-1.576l-.66-6.6a.75.75 0 111.492-.149z"/>
-                        </svg>
-                        Delete project
-                    </button>
-                </div>
-            )}
-        </div>
-    )
-}
-
-function WorkspaceSection({
-    workspace,
-    activeId,
-    onAddProject,
-    onMoveProject,
-    onEditProject,
-    onSystemPromptProject,
-    onPermissionsProject,
-    onDeleteProject,
-    onDeleteWorkspace,
-    claudeStatus,
-}: {
-    workspace: Workspace
-    activeId: number | null
-    onAddProject: (workspaceId: number) => void
-    onMoveProject: (project: Project) => void
-    onEditProject: (project: Project) => void
-    onSystemPromptProject: (project: Project) => void
-    onPermissionsProject: (project: Project) => void
-    onDeleteProject: (project: Project) => void
-    onDeleteWorkspace: (workspace: Workspace) => void
-    claudeStatus: Record<number, 'running' | 'done'>
-}) {
-    const [collapsed, setCollapsed] = useState(false)
-
-    return (
-        <div style={{ marginBottom: '2px' }}>
-            {/* Workspace header */}
-            <div style={{
-                display: 'flex', alignItems: 'center', padding: '6px 10px 6px 14px',
-                gap: '4px',
-            }}>
-                <button
-                    onClick={() => setCollapsed(c => !c)}
-                    style={{
-                        flex: 1, display: 'flex', alignItems: 'center', gap: '6px',
-                        background: 'transparent', border: 'none', cursor: 'pointer',
-                        textAlign: 'left', padding: 0,
-                    }}
-                >
-                    <svg
-                        width="9" height="9" viewBox="0 0 16 16" fill={color.textTertiary}
-                        style={{ transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', flexShrink: 0 }}
-                    >
-                        <path d="M4.427 7.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 7H4.604a.25.25 0 00-.177.427z"/>
-                    </svg>
-                    <span style={{
-                        color: color.textSecondary, fontSize: '11px', fontWeight: 700,
-                        textTransform: 'uppercase', letterSpacing: '0.07em',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                        {workspace.name}
-                    </span>
-                </button>
-                <button
-                    onClick={() => onAddProject(workspace.id)}
-                    title="Add project"
-                    style={{
-                        background: 'transparent', border: 'none', cursor: 'pointer',
-                        color: color.textFaint, padding: '0 2px', lineHeight: 1,
-                        display: 'flex', alignItems: 'center', flexShrink: 0,
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.color = color.textMuted)}
-                    onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
-                >
-                    <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
-                    </svg>
-                </button>
-                <button
-                    onClick={() => onDeleteWorkspace(workspace)}
-                    title="Delete workspace"
-                    style={{
-                        background: 'transparent', border: 'none', cursor: 'pointer',
-                        color: color.textFaint, padding: '0 2px', lineHeight: 1,
-                        display: 'flex', alignItems: 'center', flexShrink: 0,
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.color = color.danger)}
-                    onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
-                >
-                    <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M6.5 1.75a.25.25 0 01.25-.25h2.5a.25.25 0 01.25.25V3h-3V1.75zm4.5 0V3h2.25a.75.75 0 010 1.5H2.75a.75.75 0 010-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75zM4.496 6.675l.66 6.6a.25.25 0 00.249.225h5.19a.25.25 0 00.249-.225l.66-6.6a.75.75 0 011.492.149l-.66 6.6A1.748 1.748 0 0110.595 15h-5.19a1.75 1.75 0 01-1.741-1.575l-.66-6.6a.75.75 0 011.492-.15z"/>
-                    </svg>
-                </button>
-            </div>
-
-            {/* Projects list with left border */}
-            {!collapsed && (
-                <div style={{ marginLeft: '20px', borderLeft: `1px solid ${color.border}` }}>
-                    <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                        {workspace.projects.length === 0 && (
-                            <li style={{ padding: '4px 16px 4px 12px', color: color.textFaint, fontSize: '11px', fontStyle: 'italic' }}>
-                                No projects
-                            </li>
-                        )}
-                        {workspace.projects.map(project => (
-                            <li key={project.id}>
-                                <ProjectItem project={project} active={project.id === activeId} status={claudeStatus[project.id]} onMove={onMoveProject} onEdit={onEditProject} onSystemPrompt={onSystemPromptProject} onPermissions={onPermissionsProject} onDelete={onDeleteProject} />
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            )}
-        </div>
-    )
-}
-
-function WorkspaceSwitcher({
-    workspaces,
-    selected,
-    onChange,
-    onAdd,
-}: {
-    workspaces: Workspace[]
-    selected: number | null
-    onChange: (id: number | null) => void
-    onAdd: () => void
-}) {
-    const [open, setOpen] = useState(false)
-    const [search, setSearch] = useState('')
-    const ref = useRef<HTMLDivElement>(null)
-
-    useEffect(() => {
-        if (!open) return
-        function handleClick(e: MouseEvent) {
-            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-        }
-        document.addEventListener('mousedown', handleClick)
-        return () => document.removeEventListener('mousedown', handleClick)
-    }, [open])
-
-    const selectedWs = workspaces.find(w => w.id === selected)
-    const filtered = workspaces.filter(w => w.name.toLowerCase().includes(search.toLowerCase()))
-
-    return (
-        <div ref={ref} style={{ position: 'relative' }}>
-            <button
-                onClick={() => setOpen(o => !o)}
-                style={{
-                    display: 'flex', alignItems: 'center', gap: '6px',
-                    background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
-                    borderRadius: '6px', cursor: 'pointer', padding: '5px 8px',
-                    color: color.textSecondary, fontSize: '12px', fontWeight: 500,
-                    width: '100%',
-                }}
-            >
-                <svg width="11" height="11" viewBox="0 0 16 16" fill={color.textMuted} style={{ flexShrink: 0 }}>
-                    <path d="M4 2.5a.5.5 0 01.5-.5h7a.5.5 0 01.5.5v1a.5.5 0 01-.5.5h-7a.5.5 0 01-.5-.5v-1zm-2 3A.5.5 0 012.5 5h11a.5.5 0 01.5.5v1a.5.5 0 01-.5.5h-11a.5.5 0 01-.5-.5v-1zm0 3a.5.5 0 01.5-.5h11a.5.5 0 01.5.5v1a.5.5 0 01-.5.5h-11a.5.5 0 01-.5-.5v-1zm0 3a.5.5 0 01.5-.5h11a.5.5 0 01.5.5v1a.5.5 0 01-.5.5h-11a.5.5 0 01-.5-.5v-1z"/>
-                </svg>
-                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>
-                    {selectedWs ? selectedWs.name : 'All Workspaces'}
-                </span>
-                <svg width="10" height="10" viewBox="0 0 16 16" fill={color.textMuted} style={{ flexShrink: 0 }}>
-                    <path d="M4.427 7.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 7H4.604a.25.25 0 00-.177.427z"/>
-                </svg>
-            </button>
-
-            {open && (
-                <div style={{
-                    position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 300,
-                    background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
-                    borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                    overflow: 'hidden',
-                }}>
-                    {/* Search + Create */}
-                    <div style={{ display: 'flex', gap: '6px', padding: '8px 8px 6px' }}>
-                        <input
-                            autoFocus
-                            value={search}
-                            onChange={e => setSearch(e.target.value)}
-                            placeholder="Search workspaces..."
-                            style={{
-                                flex: 1, background: color.bgBase,
-                                border: `1px solid ${color.accent}`,
-                                borderRadius: '5px', color: color.textSecondary,
-                                fontSize: '11px', padding: '5px 8px', outline: 'none',
-                            }}
-                        />
-                        <button
-                            onClick={() => { setOpen(false); onAdd() }}
-                            style={{
-                                background: color.bgBase, border: `1px solid ${color.borderMuted}`,
-                                borderRadius: '5px', color: color.textSecondary,
-                                fontSize: '11px', padding: '5px 10px', cursor: 'pointer', whiteSpace: 'nowrap',
-                            }}
-                        >
-                            Create
-                        </button>
-                    </div>
-
-                    {/* Workspace list */}
-                    <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
-                        {filtered.length === 0 && (
-                            <div style={{ padding: '8px 12px', color: color.textFaint, fontSize: '11px', fontStyle: 'italic' }}>
-                                No workspaces found
-                            </div>
-                        )}
-                        {filtered.map(w => (
-                            <button
-                                key={w.id}
-                                onClick={() => { onChange(w.id); setOpen(false); setSearch('') }}
-                                style={{
-                                    display: 'flex', alignItems: 'center', gap: '8px',
-                                    width: '100%', padding: '7px 12px', background: 'transparent',
-                                    border: 'none', cursor: 'pointer', textAlign: 'left',
-                                    color: w.id === selected ? color.textPrimary : color.textSecondary,
-                                    fontSize: '12px',
-                                }}
-                                onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
-                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                            >
-                                <svg width="11" height="11" viewBox="0 0 16 16" fill={w.id === selected ? color.accent : color.textMuted} style={{ flexShrink: 0 }}>
-                                    <path d="M4 2.5a.5.5 0 01.5-.5h7a.5.5 0 01.5.5v1a.5.5 0 01-.5.5h-7a.5.5 0 01-.5-.5v-1zm-2 3A.5.5 0 012.5 5h11a.5.5 0 01.5.5v1a.5.5 0 01-.5.5h-11a.5.5 0 01-.5-.5v-1zm0 3a.5.5 0 01.5-.5h11a.5.5 0 01.5.5v1a.5.5 0 01-.5.5h-11a.5.5 0 01-.5-.5v-1zm0 3a.5.5 0 01.5-.5h11a.5.5 0 01.5.5v1a.5.5 0 01-.5.5h-11a.5.5 0 01-.5-.5v-1z"/>
-                                </svg>
-                                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {w.name}
-                                </span>
-                                {w.id === selected && (
-                                    <svg width="10" height="10" viewBox="0 0 16 16" fill={color.accent}>
-                                        <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/>
-                                    </svg>
-                                )}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* View all */}
-                    <div style={{ borderTop: `1px solid ${color.border}` }}>
-                        <button
-                            onClick={() => { onChange(null); setOpen(false); setSearch('') }}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: '8px',
-                                width: '100%', padding: '8px 12px', background: 'transparent',
-                                border: 'none', cursor: 'pointer', textAlign: 'left',
-                                color: selected === null ? color.textPrimary : color.textSecondary,
-                                fontSize: '12px',
-                            }}
-                            onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
-                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                        >
-                            <svg width="12" height="12" viewBox="0 0 16 16" fill={color.textMuted}>
-                                <path d="M1 2.75A.75.75 0 011.75 2h3.5a.75.75 0 010 1.5h-3.5A.75.75 0 011 2.75zm0 5A.75.75 0 011.75 7h3.5a.75.75 0 010 1.5h-3.5A.75.75 0 011 7.75zm0 5a.75.75 0 01.75-.75h3.5a.75.75 0 010 1.5h-3.5a.75.75 0 01-.75-.75zm7.75-9.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-4.5zm0 5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-4.5zm0 5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-4.5z"/>
-                            </svg>
-                            View all workspaces
-                        </button>
-                    </div>
-                </div>
-            )}
-        </div>
-    )
-}
-
-function Sidebar({
-    workspaces,
-    unassignedProjects,
-    allProjects,
-    activeProject,
-    projectView,
-    onChangeView,
-    taskCount,
-    newMessageCount,
-    onAddAgent,
-    activeId,
-    onAddWorkspace,
-    onAddProject,
-    onMoveProject,
-    onEditProject,
-    onSystemPromptProject,
-    onPermissionsProject,
-    onDeleteProject,
-    onDeleteWorkspace,
-    claudeStatus,
-}: {
-    workspaces: Workspace[]
-    unassignedProjects: Project[]
-    allProjects: Project[]
-    activeProject: Project | null
-    projectView: ProjectView
-    onChangeView: (v: ProjectView) => void
-    taskCount: number
-    newMessageCount: number
-    onAddAgent: () => void
-    activeId: number | null
-    onAddWorkspace: () => void
-    onAddProject: (workspaceId: number | null) => void
-    onMoveProject: (project: Project) => void
-    onEditProject: (project: Project) => void
-    onSystemPromptProject: (project: Project) => void
-    onPermissionsProject: (project: Project) => void
-    onDeleteProject: (project: Project) => void
-    onDeleteWorkspace: (workspace: Workspace) => void
-    claudeStatus: Record<number, 'running' | 'done'>
-}) {
-    const [filterWorkspaceId, setFilterWorkspaceId] = useState<number | null>(null)
-    const [wsDropdownOpen, setWsDropdownOpen] = useState(false)
-    const wsDropdownRef = useRef<HTMLDivElement>(null)
-
-    useEffect(() => {
-        if (!wsDropdownOpen) return
-        function handleClick(e: MouseEvent) {
-            if (wsDropdownRef.current && !wsDropdownRef.current.contains(e.target as Node)) setWsDropdownOpen(false)
-        }
-        document.addEventListener('mousedown', handleClick)
-        return () => document.removeEventListener('mousedown', handleClick)
-    }, [wsDropdownOpen])
-
-    const currentWorkspace = filterWorkspaceId !== null ? workspaces.find(w => w.id === filterWorkspaceId) ?? null : null
-    const filteredProjects = filterWorkspaceId !== null
-        ? allProjects.filter(p => p.workspace_id === filterWorkspaceId)
-        : allProjects
-
-    const initials = (name: string) =>
-        name.split(/\s+/).map(w => w[0] ?? '').join('').toUpperCase().slice(0, 2) || '??'
-
-    return (
-        <aside style={{
-            width: '220px', flexShrink: 0, background: color.bgCanvas,
-            borderRight: '1px solid #21262d', display: 'flex', flexDirection: 'column', overflow: 'hidden',
-        }}>
-            {/* Header */}
-            <div style={{ padding: '14px 14px 10px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ color: color.accent, fontSize: '17px', fontWeight: 700, letterSpacing: '-0.01em', flex: 1 }}>
-                    Keera Agent
-                </span>
-            </div>
-
-            {/* Workspace picker */}
-            <div style={{ padding: '0 10px 10px', position: 'relative' }} ref={wsDropdownRef}>
-                <button
-                    onClick={() => setWsDropdownOpen(o => !o)}
-                    style={{
-                        display: 'flex', alignItems: 'center', gap: '8px',
-                        width: '100%', padding: '7px 10px', borderRadius: '8px',
-                        background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
-                        cursor: 'pointer', textAlign: 'left',
-                    }}
-                >
-                    <div style={{
-                        width: '22px', height: '22px', borderRadius: '5px',
-                        background: color.accentEmphasis,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '11px', fontWeight: 700, color: '#fff', flexShrink: 0,
-                    }}>
-                        {(currentWorkspace?.name[0] ?? 'A').toUpperCase()}
-                    </div>
-                    <span style={{ color: color.textSecondary, fontSize: '12px', fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {currentWorkspace?.name ?? 'All Projects'}
-                    </span>
-                    <svg width="10" height="10" viewBox="0 0 16 16" fill={color.textFaint} style={{ flexShrink: 0 }}>
-                        <path d="M4.427 7.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 7H4.604a.25.25 0 00-.177.427z"/>
-                    </svg>
-                </button>
-
-                {wsDropdownOpen && (
-                    <div style={{
-                        position: 'absolute', top: 'calc(100% - 2px)', left: '10px', right: '10px', zIndex: 200,
-                        background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
-                        borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                        padding: '4px 0', overflow: 'hidden',
-                    }}>
-                        <button
-                            onClick={() => { setFilterWorkspaceId(null); setWsDropdownOpen(false) }}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: '8px',
-                                width: '100%', padding: '7px 12px', background: 'transparent',
-                                border: 'none', cursor: 'pointer', fontSize: '12px',
-                                color: filterWorkspaceId === null ? color.textPrimary : color.textSecondary,
-                            }}
-                            onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
-                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                        >
-                            All Projects
-                            {filterWorkspaceId === null && (
-                                <svg width="10" height="10" viewBox="0 0 16 16" fill={color.accent} style={{ marginLeft: 'auto' }}>
-                                    <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/>
-                                </svg>
-                            )}
-                        </button>
-                        {workspaces.map(w => (
-                            <div key={w.id} style={{ display: 'flex', alignItems: 'center' }}>
-                                <button
-                                    onClick={() => { setFilterWorkspaceId(w.id); setWsDropdownOpen(false) }}
-                                    style={{
-                                        flex: 1, display: 'flex', alignItems: 'center', gap: '8px',
-                                        padding: '7px 12px', background: 'transparent',
-                                        border: 'none', cursor: 'pointer', fontSize: '12px',
-                                        color: filterWorkspaceId === w.id ? color.textPrimary : color.textSecondary,
-                                    }}
-                                    onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
-                                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                                >
-                                    {w.name}
-                                    {filterWorkspaceId === w.id && (
-                                        <svg width="10" height="10" viewBox="0 0 16 16" fill={color.accent} style={{ marginLeft: 'auto' }}>
-                                            <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/>
-                                        </svg>
-                                    )}
-                                </button>
-                                <button
-                                    onClick={e => { e.stopPropagation(); setWsDropdownOpen(false); onDeleteWorkspace(w) }}
-                                    title="Delete workspace"
-                                    style={{
-                                        background: 'transparent', border: 'none', cursor: 'pointer',
-                                        color: color.textFaint, padding: '7px 10px 7px 4px', display: 'flex', alignItems: 'center',
-                                    }}
-                                    onMouseEnter={e => (e.currentTarget.style.color = color.danger)}
-                                    onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
-                                >
-                                    <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
-                                        <path d="M6.5 1.75a.25.25 0 01.25-.25h2.5a.25.25 0 01.25.25V3h-3V1.75zm4.5 0V3h2.25a.75.75 0 010 1.5H2.75a.75.75 0 010-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75zM4.496 6.675l.66 6.6a.25.25 0 00.249.225h5.19a.25.25 0 00.249-.225l.66-6.6a.75.75 0 011.492.149l-.66 6.6A1.748 1.748 0 0110.595 15h-5.19a1.75 1.75 0 01-1.741-1.575l-.66-6.6a.75.75 0 011.492-.15z"/>
-                                    </svg>
-                                </button>
-                            </div>
-                        ))}
-                        <div style={{ height: '1px', background: color.border, margin: '4px 0' }} />
-                        <button
-                            onClick={() => { onAddWorkspace(); setWsDropdownOpen(false) }}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: '6px',
-                                width: '100%', padding: '7px 12px', background: 'transparent',
-                                border: 'none', cursor: 'pointer', fontSize: '12px', color: color.accent,
-                            }}
-                            onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
-                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                        >
-                            <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
-                                <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
-                            </svg>
-                            New Workspace
-                        </button>
-                    </div>
-                )}
-            </div>
-
-            {/* Scrollable middle */}
-            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-
-                {/* PROJECTS */}
-                <div style={{ padding: '2px 10px 4px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ color: color.textFaint, fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                        Projects
-                    </span>
-                    <button
-                        onClick={() => onAddProject(filterWorkspaceId)}
-                        title="Add project"
-                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: color.textFaint, padding: '0 2px', display: 'flex', alignItems: 'center' }}
-                        onMouseEnter={e => (e.currentTarget.style.color = color.textMuted)}
-                        onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
-                    >
-                        <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
-                        </svg>
-                    </button>
-                </div>
-
-                <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                    {filteredProjects.length === 0 && (
-                        <li style={{ padding: '4px 16px', color: color.textFaint, fontSize: '11px', fontStyle: 'italic' }}>
-                            No projects
-                        </li>
-                    )}
-                    {filteredProjects.map(project => (
-                        <li key={project.id}>
-                            <ProjectItem
-                                project={project}
-                                active={project.id === activeId}
-                                status={claudeStatus[project.id]}
-                                onMove={onMoveProject}
-                                onEdit={onEditProject}
-                                onSystemPrompt={onSystemPromptProject}
-                                onPermissions={onPermissionsProject}
-                                onDelete={onDeleteProject}
-                            />
-                        </li>
-                    ))}
-                    {filteredProjects.length === 0 && (
-                        <li>
-                            <button
-                                onClick={() => onAddProject(filterWorkspaceId)}
-                                style={{
-                                    margin: '2px 10px 6px', width: 'calc(100% - 20px)',
-                                    background: 'transparent', border: `1px dashed ${color.borderMuted}`,
-                                    borderRadius: '6px', color: color.textFaint, fontSize: '11px', padding: '6px',
-                                    cursor: 'pointer', textAlign: 'center', display: 'block',
-                                }}
-                                onMouseEnter={e => { e.currentTarget.style.color = color.textMuted; e.currentTarget.style.borderColor = color.textMuted }}
-                                onMouseLeave={e => { e.currentTarget.style.color = color.textFaint; e.currentTarget.style.borderColor = color.borderMuted }}
-                            >
-                                + Add project
-                            </button>
-                        </li>
-                    )}
-                </ul>
-
-                {/* Active project card */}
-                {activeProject && (
-                    <div style={{ padding: '8px 10px 4px' }}>
-                        <div style={{
-                            display: 'flex', alignItems: 'center', gap: '10px',
-                            padding: '9px 12px', borderRadius: '8px',
-                            background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
-                        }}>
-                            <div style={{
-                                width: '30px', height: '30px', borderRadius: '7px',
-                                background: color.accentEmphasis,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: '11px', fontWeight: 700, color: '#fff', flexShrink: 0, letterSpacing: '-0.02em',
-                            }}>
-                                {initials(activeProject.name)}
-                            </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ color: color.textPrimary, fontSize: '12px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {activeProject.name}
-                                </div>
-                                <div style={{ color: color.textFaint, fontSize: '10px', marginTop: '1px' }}>
-                                    AI Coding Manager
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* WORKSPACE nav */}
-                <div style={{ padding: '10px 16px 4px' }}>
-                    <span style={{ color: color.textFaint, fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                        Workspace
-                    </span>
-                </div>
-                <div style={{ padding: '0 8px 8px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
-                    {PROJECT_NAV.map(item => {
-                        const active = item.id === projectView
-                        const count = item.id === 'tasks' ? taskCount : item.id === 'messages' ? newMessageCount : 0
-                        return (
-                            <button
-                                key={item.id}
-                                onClick={() => onChangeView(item.id)}
-                                style={{
-                                    display: 'flex', alignItems: 'center', gap: '8px',
-                                    padding: '7px 10px',
-                                    background: active ? color.accentSubtle : 'transparent',
-                                    border: `1px solid ${active ? color.accentEmphasis : 'transparent'}`,
-                                    borderRadius: '6px',
-                                    color: active ? color.accentMuted : color.textMuted,
-                                    fontSize: '12px', fontWeight: active ? 600 : 400,
-                                    cursor: 'pointer', textAlign: 'left', width: '100%',
-                                    transition: 'all 0.1s',
-                                }}
-                                onMouseEnter={e => { if (!active) { e.currentTarget.style.background = color.bgSurface; e.currentTarget.style.color = color.textSecondary } }}
-                                onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = color.textMuted } }}
-                            >
-                                {item.icon}
-                                <span style={{ flex: 1 }}>{item.label}</span>
-                                {count > 0 && (
-                                    <span style={{
-                                        fontSize: '10px', fontWeight: 700,
-                                        padding: '1px 6px', borderRadius: '10px',
-                                        background: color.accentSubtle, color: color.accent,
-                                    }}>
-                                        {count}
-                                    </span>
-                                )}
-                            </button>
-                        )
-                    })}
-                </div>
-            </div>
-
-            {/* New Agent button */}
-            {activeProject && (
-                <div style={{ padding: '8px 10px 12px', borderTop: `1px solid ${color.border}` }}>
-                    <button
-                        onClick={onAddAgent}
-                        style={{
-                            width: '100%', padding: '8px 12px',
-                            background: color.accentEmphasis, border: 'none', borderRadius: '7px',
-                            color: '#fff', fontSize: '13px', fontWeight: 600,
-                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                            transition: 'opacity 0.1s',
-                        }}
-                        onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
-                        onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
-                    >
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
-                        </svg>
-                        New Agent
-                    </button>
-                </div>
-            )}
-        </aside>
-    )
-}
 
 // ─── Create Task Modal ────────────────────────────────────────────────────────
 
@@ -2809,47 +1991,6 @@ function AddAgentModal({ projectId, onClose, onCreated, templates }: {
 }
 
 // ─── Project sidebar ─────────────────────────────────────────────────────────
-
-type ProjectView = 'agents' | 'commands' | 'tasks' | 'messages'
-
-const PROJECT_NAV: { id: ProjectView; label: string; icon: React.ReactNode }[] = [
-    {
-        id: 'agents',
-        label: 'Agents',
-        icon: (
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M0 8a8 8 0 1116 0A8 8 0 010 8zm8-6.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM6.5 7.75A.75.75 0 017.25 7h1a.75.75 0 01.75.75v2.75h.25a.75.75 0 010 1.5h-2a.75.75 0 010-1.5h.25v-2h-.25a.75.75 0 01-.75-.75zM8 6a1 1 0 110-2 1 1 0 010 2z"/>
-            </svg>
-        ),
-    },
-    {
-        id: 'commands',
-        label: 'Commands',
-        icon: (
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25V2.75zm1.75-.25a.25.25 0 00-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V2.75a.25.25 0 00-.25-.25H1.75zM3.5 6.25a.75.75 0 000 1.5h.268l-.01.034L2.76 10.5a.75.75 0 001.44.42l.04-.138H6.76l.04.138a.75.75 0 001.44-.42L7.242 7.784l-.01-.034H7.5a.75.75 0 000-1.5h-4zm.751 1.5H6.25l-.609 2.099H4.86L4.251 7.75zm5.5-1.5a.75.75 0 000 1.5h3.5a.75.75 0 000-1.5h-3.5zm0 3a.75.75 0 000 1.5h3.5a.75.75 0 000-1.5h-3.5z"/>
-            </svg>
-        ),
-    },
-    {
-        id: 'tasks',
-        label: 'Tasks',
-        icon: (
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M2.5 1.75v11.5c0 .138.112.25.25.25h10.5a.25.25 0 00.25-.25V1.75a.25.25 0 00-.25-.25H2.75a.25.25 0 00-.25.25zM2.75 0h10.5c.966 0 1.75.784 1.75 1.75v11.5A1.75 1.75 0 0113.25 15H2.75A1.75 1.75 0 011 13.25V1.75C1 .784 1.784 0 2.75 0zM11.78 6.28a.75.75 0 00-1.06-1.06L7.25 8.69 5.28 6.72a.75.75 0 00-1.06 1.06l2.5 2.5a.75.75 0 001.06 0l4-4z"/>
-            </svg>
-        ),
-    },
-    {
-        id: 'messages',
-        label: 'Messages',
-        icon: (
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0114.25 14H1.75A1.75 1.75 0 010 12.25v-8.5C0 2.784.784 2 1.75 2zM1.5 12.251c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V5.06l-5.563 3.516a1.75 1.75 0 01-1.874 0L1.5 5.06v7.19zm13-8.181L8.312 7.512a.25.25 0 01-.264 0L1.5 4.07v-.32a.25.25 0 01.25-.25h12.5a.25.25 0 01.25.25v.32z"/>
-            </svg>
-        ),
-    },
-]
 
 function ProjectSidebar({ view, projectName, onChange, taskCount, newMessageCount }: {
     view: ProjectView
@@ -4025,7 +3166,7 @@ const XTERM_THEME = {
 function makeTerminal() {
     return new Terminal({
         theme: XTERM_THEME,
-        fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", monospace',
+        fontFamily: '"Dank Mono", "Fira Code", "Cascadia Code", monospace',
         fontSize: 14, lineHeight: 1.2, cursorBlink: true, scrollback: 5000,
     })
 }
@@ -4147,6 +3288,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const [systemPromptProject, setSystemPromptProject] = useState<Project | null>(null)
     const [permissionsProject, setPermissionsProject] = useState<Project | null>(null)
     const [showGlobalSettings, setShowGlobalSettings] = useState(false)
+    const [showDefaultPermissions, setShowDefaultPermissions] = useState(false)
     const [deletingProject, setDeletingProject] = useState<Project | null>(null)
     const [deletingWorkspace, setDeletingWorkspace] = useState<Workspace | null>(null)
     const [tasks, setTasks] = useState<Task[]>(props.tasks ?? [])
@@ -4595,10 +3737,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
 
     return (
-        <div className="flex w-full h-screen overflow-hidden bg-ui-page">
+        <div className="flex w-full h-screen overflow-hidden bg-slate-100">
             <Sidebar
                 workspaces={workspaces}
-                unassignedProjects={unassignedProjects}
                 allProjects={allProjects}
                 activeProject={activeProject}
                 projectView={activeView}
@@ -4624,7 +3765,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
                 {/* Top nav bar */}
-                <div className="h-11 bg-ui-white border-b border-ui-border flex items-center shrink-0 justify-between">
+                <div className="h-11 bg-white border-b border-gray-200 flex items-center shrink-0 justify-between">
                     {/* Tabs */}
                     <div className="flex items-stretch h-full pl-1">
                         {([
@@ -4645,8 +3786,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                     className={[
                                         'bg-transparent border-none border-b-2 cursor-pointer px-4 h-full text-[13px] transition-colors duration-100',
                                         isActive
-                                            ? 'border-ui-blue text-ui-text font-semibold'
-                                            : 'border-transparent text-ui-muted font-normal hover:text-ui-body',
+                                            ? 'border-blue-500 text-gray-900 font-semibold'
+                                            : 'border-transparent text-gray-500 font-normal hover:text-gray-700',
                                     ].join(' ')}
                                     style={{ marginBottom: '-1px' }}
                                 >
@@ -4656,7 +3797,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         })}
                         {activeProject && (
                             <>
-                                <div className="w-px bg-ui-border my-2.5 mx-1" />
+                                <div className="w-px bg-gray-200 my-2.5 mx-1" />
                                 <div className="flex items-center gap-1.5 px-2">
                                     <ClaudeStatusBadge status={claudeStatus[activeProject.id]} />
                                 </div>
@@ -4667,13 +3808,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     {/* Right: search + icons */}
                     <div className="flex items-center gap-1 pr-3">
                         {/* Search */}
-                        <div className="flex items-center gap-1.5 bg-ui-surface border border-ui-border rounded-md px-2.5 py-1 mr-1">
-                            <svg width="12" height="12" viewBox="0 0 16 16" className="text-ui-faint fill-current shrink-0">
+                        <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-md px-2.5 py-1 mr-1">
+                            <svg width="12" height="12" viewBox="0 0 16 16" className="text-gray-400 fill-current shrink-0">
                                 <path d="M10.68 11.74a6 6 0 01-7.922-8.982 6 6 0 018.982 7.922l3.04 3.04a.749.749 0 11-1.06 1.06l-3.04-3.04zM11.5 7a4.499 4.499 0 11-8.997 0A4.499 4.499 0 0111.5 7z"/>
                             </svg>
                             <input
                                 placeholder="Search agents..."
-                                className="bg-transparent border-none outline-none text-ui-body text-[12px] w-32"
+                                className="bg-transparent border-none outline-none text-gray-700 text-[12px] w-32"
                             />
                         </div>
                         {/* Attach image (agents view) */}
@@ -4681,7 +3822,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                             <button
                                 onClick={() => fileInputRef.current?.click()}
                                 title="Attach image"
-                                className="bg-transparent border-none cursor-pointer text-ui-faint p-1.5 flex items-center rounded hover:text-ui-blue transition-colors"
+                                className="bg-transparent border-none cursor-pointer text-gray-400 p-1.5 flex items-center rounded hover:text-blue-500 transition-colors"
                             >
                                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                                     <path d="M4.5 3a2.5 2.5 0 015 0v9a1.5 1.5 0 01-3 0V5a.5.5 0 011 0v7a.5.5 0 001 0V3a1.5 1.5 0 10-3 0v9a2.5 2.5 0 005 0V5a.5.5 0 011 0v7a3.5 3.5 0 11-7 0V3z"/>
@@ -4689,7 +3830,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                             </button>
                         )}
                         {/* Bell */}
-                        <button className="bg-transparent border-none cursor-pointer text-ui-faint p-1.5 flex items-center rounded hover:text-ui-body transition-colors">
+                        <button className="bg-transparent border-none cursor-pointer text-gray-400 p-1.5 flex items-center rounded hover:text-gray-700 transition-colors">
                             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                                 <path d="M8 16a2 2 0 001.985-1.75c.017-.137-.097-.25-.235-.25h-3.5c-.138 0-.252.113-.235.25A2 2 0 008 16zm.25-14.25A5.25 5.25 0 003 7v2.047c0 .334-.102.656-.29.932L1.55 11.698A1.5 1.5 0 002.8 13.5h10.4a1.5 1.5 0 001.258-2.302l-1.16-1.719A1.625 1.625 0 0113 8.047V7A5.25 5.25 0 008.25 1.75z"/>
                             </svg>
@@ -4698,7 +3839,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         <button
                             onClick={() => setShowDefaultPermissions(true)}
                             title="Settings"
-                            className="bg-transparent border-none cursor-pointer text-ui-faint p-1.5 flex items-center rounded hover:text-ui-body transition-colors"
+                            className="bg-transparent border-none cursor-pointer text-gray-400 p-1.5 flex items-center rounded hover:text-gray-700 transition-colors"
                         >
                             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                                 <path d="M8 0a8.2 8.2 0 01.701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.103-.303c.644-.176 1.392.021 1.82.63.27.385.506.792.704 1.218.315.675.111 1.422-.364 1.891l-.814.806c-.049.048-.098.147-.088.294.016.257.016.515 0 .772-.01.147.038.246.087.294l.814.806c.475.469.679 1.216.364 1.891a7.977 7.977 0 01-.704 1.217c-.428.61-1.176.807-1.82.63l-1.103-.303c-.066-.019-.176-.011-.299.071a5.909 5.909 0 01-.668.386c-.133.066-.194.158-.211.224l-.29 1.106c-.168.646-.715 1.196-1.458 1.26a8.006 8.006 0 01-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106c-.018-.066-.079-.158-.212-.224a5.738 5.738 0 01-.668-.386c-.123-.082-.233-.09-.299-.071l-1.103.303c-.644.176-1.392-.021-1.82-.63a8.12 8.12 0 01-.704-1.218c-.315-.675-.111-1.422.363-1.891l.815-.806c.05-.048.098-.147.088-.294a6.214 6.214 0 010-.772c.01-.147-.038-.246-.088-.294l-.815-.806C.635 6.045.431 5.298.746 4.623a7.92 7.92 0 01.704-1.217c.428-.61 1.176-.807 1.82-.63l1.102.302c.067.019.177.011.3-.071a5.659 5.659 0 01.668-.386c.133-.066.194-.158.211-.224l.29-1.106C6.156.421 6.703-.129 7.445.031 7.645.015 7.825 0 8 0zm1.5 8a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/>
@@ -4712,18 +3853,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </div>
 
                 {/* Body: content */}
-                <div className="flex-1 flex overflow-hidden bg-ui-white">
+                <div className="flex-1 flex overflow-hidden bg-white">
 
                     {/* Agents view: agent card list (left) + terminal (right) — always rendered to keep sessions alive */}
                     <div style={{ flex: 1, overflow: 'hidden', display: activeView === 'agents' ? 'flex' : 'none' }}>
 
                         {/* Agent cards list */}
-                        <div className="w-[230px] shrink-0 overflow-y-auto bg-ui-white border-r border-ui-border flex flex-col">
+                        <div className="w-[230px] shrink-0 overflow-y-auto bg-white border-r border-gray-200 flex flex-col">
                             {/* Per-project agents */}
                             {activeProject && (
                                 <>
                                     <div className="px-3.5 pt-2.5 pb-1 flex items-center gap-1.5">
-                                        <span className="text-ui-faint text-[10px] uppercase tracking-widest flex-1">
+                                        <span className="text-gray-400 text-[10px] uppercase tracking-widest flex-1">
                                             Team Agents
                                         </span>
                                         {projectAgents.length >= 2 && (
@@ -4753,13 +3894,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                         <button
                                             onClick={() => setShowAddAgent(true)}
                                             title="Add agent"
-                                            className="border border-ui-border rounded text-ui-muted text-sm leading-none px-1.5 py-0.5 cursor-pointer bg-transparent hover:border-ui-blue hover:text-ui-blue transition-colors"
+                                            className="border border-gray-200 rounded text-gray-500 text-sm leading-none px-1.5 py-0.5 cursor-pointer bg-transparent hover:border-blue-500 hover:text-blue-500 transition-colors"
                                         >
                                             +
                                         </button>
                                     </div>
                                     {projectAgents.length === 0 ? (
-                                        <div className="px-3.5 py-2 text-ui-faint text-[11px]">
+                                        <div className="px-3.5 py-2 text-gray-400 text-[11px]">
                                             No agents yet
                                         </div>
                                     ) : projectAgents.map(agent => {
@@ -4772,26 +3913,26 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                             className={[
                                                 'px-3 py-2 cursor-pointer flex items-center gap-2.5 mx-2 my-0.5 rounded-lg border transition-colors',
                                                 isSelected
-                                                    ? 'bg-ui-blue-bg border-ui-border-focus'
-                                                    : 'bg-transparent border-transparent hover:bg-ui-surface',
+                                                    ? 'bg-blue-50 border-blue-200'
+                                                    : 'bg-transparent border-transparent hover:bg-gray-50',
                                             ].join(' ')}
                                         >
                                             <div className="relative shrink-0">
                                                 <div
                                                     className="w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold text-white"
-                                                    style={{ background: AGENT_TYPE_COLORS[agent.agent_type] ?? 'var(--color-ui-blue)' }}
+                                                    style={{ background: AGENT_TYPE_COLORS[agent.agent_type] ?? 'var(--color-blue-500)' }}
                                                 >
                                                     {agent.name.slice(0, 2).toUpperCase()}
                                                 </div>
                                                 {isRunning && (
-                                                    <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-ui-green border-2 border-ui-white" />
+                                                    <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-green-500 border-2 border-white" />
                                                 )}
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <div className="text-[13px] font-medium text-ui-text truncate">
+                                                <div className="text-[13px] font-medium text-gray-900 truncate">
                                                     {agent.name}
                                                 </div>
-                                                <div className="text-[11px] text-ui-faint mt-0.5 truncate">
+                                                <div className="text-[11px] text-gray-400 mt-0.5 truncate">
                                                     {AGENT_TYPE_LABELS[agent.agent_type] ?? agent.agent_type}
                                                 </div>
                                             </div>
@@ -4799,7 +3940,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                                 <button
                                                     onClick={e => { e.stopPropagation(); setActiveAgentId(agent.id) }}
                                                     title="Run"
-                                                    className="bg-transparent border-none text-ui-ghost cursor-pointer p-1 rounded shrink-0 flex items-center hover:text-ui-green transition-colors"
+                                                    className="bg-transparent border-none text-gray-300 cursor-pointer p-1 rounded shrink-0 flex items-center hover:text-green-500 transition-colors"
                                                 >
                                                     <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
                                                         <path d="M3 2l11 6-11 6V2z"/>
@@ -4828,7 +3969,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                                     setProjectAgents(prev => prev.filter(a => a.id !== agent.id))
                                                 }}
                                                 title="Remove"
-                                                className="bg-transparent border-none text-ui-ghost cursor-pointer text-sm p-1 rounded shrink-0 hover:text-ui-red transition-colors"
+                                                className="bg-transparent border-none text-gray-300 cursor-pointer text-sm p-1 rounded shrink-0 hover:text-red-500 transition-colors"
                                             >
                                                 ×
                                             </button>

@@ -1,0 +1,274 @@
+import { useState } from 'react'
+import type React from 'react'
+import { color } from '@/tokens'
+import type { Workspace, Project } from '@/types/type'
+import { ProjectItem } from './Project'
+import { WorkspacePicker } from './WorkSpace'
+
+export type ProjectView = 'agents' | 'commands' | 'tasks' | 'messages'
+
+export const PROJECT_NAV: { id: ProjectView; label: string; icon: React.ReactNode }[] = [
+    {
+        id: 'agents',
+        label: 'Agents',
+        icon: (
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M0 8a8 8 0 1116 0A8 8 0 010 8zm8-6.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM6.5 7.75A.75.75 0 017.25 7h1a.75.75 0 01.75.75v2.75h.25a.75.75 0 010 1.5h-2a.75.75 0 010-1.5h.25v-2h-.25a.75.75 0 01-.75-.75zM8 6a1 1 0 110-2 1 1 0 010 2z"/>
+            </svg>
+        ),
+    },
+    {
+        id: 'commands',
+        label: 'Commands',
+        icon: (
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25V2.75zm1.75-.25a.25.25 0 00-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V2.75a.25.25 0 00-.25-.25H1.75zM3.5 6.25a.75.75 0 000 1.5h.268l-.01.034L2.76 10.5a.75.75 0 001.44.42l.04-.138H6.76l.04.138a.75.75 0 001.44-.42L7.242 7.784l-.01-.034H7.5a.75.75 0 000-1.5h-4zm.751 1.5H6.25l-.609 2.099H4.86L4.251 7.75zm5.5-1.5a.75.75 0 000 1.5h3.5a.75.75 0 000-1.5h-3.5zm0 3a.75.75 0 000 1.5h3.5a.75.75 0 000-1.5h-3.5z"/>
+            </svg>
+        ),
+    },
+    {
+        id: 'tasks',
+        label: 'Tasks',
+        icon: (
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M2.5 1.75v11.5c0 .138.112.25.25.25h10.5a.25.25 0 00.25-.25V1.75a.25.25 0 00-.25-.25H2.75a.25.25 0 00-.25.25zM2.75 0h10.5c.966 0 1.75.784 1.75 1.75v11.5A1.75 1.75 0 0113.25 15H2.75A1.75 1.75 0 011 13.25V1.75C1 .784 1.784 0 2.75 0zM11.78 6.28a.75.75 0 00-1.06-1.06L7.25 8.69 5.28 6.72a.75.75 0 00-1.06 1.06l2.5 2.5a.75.75 0 001.06 0l4-4z"/>
+            </svg>
+        ),
+    },
+    {
+        id: 'messages',
+        label: 'Messages',
+        icon: (
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0114.25 14H1.75A1.75 1.75 0 010 12.25v-8.5C0 2.784.784 2 1.75 2zM1.5 12.251c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V5.06l-5.563 3.516a1.75 1.75 0 01-1.874 0L1.5 5.06v7.19zm13-8.181L8.312 7.512a.25.25 0 01-.264 0L1.5 4.07v-.32a.25.25 0 01.25-.25h12.5a.25.25 0 01.25.25v.32z"/>
+            </svg>
+        ),
+    },
+]
+
+export default function Sidebar({
+    workspaces,
+    allProjects,
+    activeProject,
+    projectView,
+    onChangeView,
+    taskCount,
+    newMessageCount,
+    onAddAgent,
+    activeId,
+    onAddWorkspace,
+    onAddProject,
+    onMoveProject,
+    onEditProject,
+    onSystemPromptProject,
+    onPermissionsProject,
+    onDeleteProject,
+    onDeleteWorkspace,
+    claudeStatus,
+}: {
+    workspaces: Workspace[]
+    allProjects: Project[]
+    activeProject: Project | null
+    projectView: ProjectView
+    onChangeView: (v: ProjectView) => void
+    taskCount: number
+    newMessageCount: number
+    onAddAgent: () => void
+    activeId: number | null
+    onAddWorkspace: () => void
+    onAddProject: (workspaceId: number | null) => void
+    onMoveProject: (project: Project) => void
+    onEditProject: (project: Project) => void
+    onSystemPromptProject: (project: Project) => void
+    onPermissionsProject: (project: Project) => void
+    onDeleteProject: (project: Project) => void
+    onDeleteWorkspace: (workspace: Workspace) => void
+    claudeStatus: Record<number, 'running' | 'done'>
+}) {
+    const [filterWorkspaceId, setFilterWorkspaceId] = useState<number | null>(null)
+
+    const filteredProjects = filterWorkspaceId !== null
+        ? allProjects.filter(p => p.workspace_id === filterWorkspaceId)
+        : allProjects
+
+    const initials = (name: string) =>
+        name.split(/\s+/).map(w => w[0] ?? '').join('').toUpperCase().slice(0, 2) || '??'
+
+    return (
+        <aside style={{
+            width: '220px', flexShrink: 0, background: color.bgCanvas,
+            borderRight: '1px solid #21262d', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        }}>
+            {/* Header */}
+            <div style={{ padding: '14px 14px 10px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ color: color.accent, fontSize: '17px', fontWeight: 700, letterSpacing: '-0.01em', flex: 1 }}>
+                    Keera Agent
+                </span>
+            </div>
+
+            <WorkspacePicker
+                workspaces={workspaces}
+                selected={filterWorkspaceId}
+                onSelect={setFilterWorkspaceId}
+                onAddWorkspace={onAddWorkspace}
+                onDeleteWorkspace={onDeleteWorkspace}
+            />
+
+            {/* Scrollable middle */}
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+
+                {/* PROJECTS */}
+                <div style={{ padding: '2px 10px 4px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ color: color.textFaint, fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                        Projects
+                    </span>
+                    <button
+                        onClick={() => onAddProject(filterWorkspaceId)}
+                        title="Add project"
+                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: color.textFaint, padding: '0 2px', display: 'flex', alignItems: 'center' }}
+                        onMouseEnter={e => (e.currentTarget.style.color = color.textMuted)}
+                        onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
+                    >
+                        <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                    {filteredProjects.length === 0 && (
+                        <li style={{ padding: '4px 16px', color: color.textFaint, fontSize: '11px', fontStyle: 'italic' }}>
+                            No projects
+                        </li>
+                    )}
+                    {filteredProjects.map(project => (
+                        <li key={project.id}>
+                            <ProjectItem
+                                project={project}
+                                active={project.id === activeId}
+                                status={claudeStatus[project.id]}
+                                onMove={onMoveProject}
+                                onEdit={onEditProject}
+                                onSystemPrompt={onSystemPromptProject}
+                                onPermissions={onPermissionsProject}
+                                onDelete={onDeleteProject}
+                            />
+                        </li>
+                    ))}
+                    {filteredProjects.length === 0 && (
+                        <li>
+                            <button
+                                onClick={() => onAddProject(filterWorkspaceId)}
+                                style={{
+                                    margin: '2px 10px 6px', width: 'calc(100% - 20px)',
+                                    background: 'transparent', border: `1px dashed ${color.borderMuted}`,
+                                    borderRadius: '6px', color: color.textFaint, fontSize: '11px', padding: '6px',
+                                    cursor: 'pointer', textAlign: 'center', display: 'block',
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.color = color.textMuted; e.currentTarget.style.borderColor = color.textMuted }}
+                                onMouseLeave={e => { e.currentTarget.style.color = color.textFaint; e.currentTarget.style.borderColor = color.borderMuted }}
+                            >
+                                + Add project
+                            </button>
+                        </li>
+                    )}
+                </ul>
+
+                {/* Active project card */}
+                {activeProject && (
+                    <div style={{ padding: '8px 10px 4px' }}>
+                        <div style={{
+                            display: 'flex', alignItems: 'center', gap: '10px',
+                            padding: '9px 12px', borderRadius: '8px',
+                            background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
+                        }}>
+                            <div style={{
+                                width: '30px', height: '30px', borderRadius: '7px',
+                                background: color.accentEmphasis,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: '11px', fontWeight: 700, color: '#fff', flexShrink: 0, letterSpacing: '-0.02em',
+                            }}>
+                                {initials(activeProject.name)}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ color: color.textPrimary, fontSize: '12px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {activeProject.name}
+                                </div>
+                                <div style={{ color: color.textFaint, fontSize: '10px', marginTop: '1px' }}>
+                                    AI Coding Manager
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* WORKSPACE nav */}
+                <div style={{ padding: '10px 16px 4px' }}>
+                    <span style={{ color: color.textFaint, fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                        Workspace
+                    </span>
+                </div>
+                <div style={{ padding: '0 8px 8px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                    {PROJECT_NAV.map(item => {
+                        const active = item.id === projectView
+                        const count = item.id === 'tasks' ? taskCount : item.id === 'messages' ? newMessageCount : 0
+                        return (
+                            <button
+                                key={item.id}
+                                onClick={() => onChangeView(item.id)}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: '8px',
+                                    padding: '7px 10px',
+                                    background: active ? color.accentSubtle : 'transparent',
+                                    border: `1px solid ${active ? color.accentEmphasis : 'transparent'}`,
+                                    borderRadius: '6px',
+                                    color: active ? color.accentMuted : color.textMuted,
+                                    fontSize: '12px', fontWeight: active ? 600 : 400,
+                                    cursor: 'pointer', textAlign: 'left', width: '100%',
+                                    transition: 'all 0.1s',
+                                }}
+                                onMouseEnter={e => { if (!active) { e.currentTarget.style.background = color.bgSurface; e.currentTarget.style.color = color.textSecondary } }}
+                                onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = color.textMuted } }}
+                            >
+                                {item.icon}
+                                <span style={{ flex: 1 }}>{item.label}</span>
+                                {count > 0 && (
+                                    <span style={{
+                                        fontSize: '10px', fontWeight: 700,
+                                        padding: '1px 6px', borderRadius: '10px',
+                                        background: color.accentSubtle, color: color.accent,
+                                    }}>
+                                        {count}
+                                    </span>
+                                )}
+                            </button>
+                        )
+                    })}
+                </div>
+            </div>
+
+            {/* New Agent button */}
+            {activeProject && (
+                <div style={{ padding: '8px 10px 12px', borderTop: `1px solid ${color.border}` }}>
+                    <button
+                        onClick={onAddAgent}
+                        style={{
+                            width: '100%', padding: '8px 12px',
+                            background: color.accentEmphasis, border: 'none', borderRadius: '7px',
+                            color: '#fff', fontSize: '13px', fontWeight: 600,
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                            transition: 'opacity 0.1s',
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
+                        onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+                    >
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
+                        </svg>
+                        New Agent
+                    </button>
+                </div>
+            )}
+        </aside>
+    )
+}

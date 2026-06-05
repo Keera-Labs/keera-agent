@@ -1,71 +1,60 @@
-/**
- * Design token references for use in React inline styles.
- *
- * Values are defined ONCE in resources/css/app.css (@theme block).
- * This file maps human-readable names to var(--color-*) strings so
- * inline styles get IDE autocomplete and compile-time typo checking.
- *
- * Usage:
- *   import { color } from '../tokens'
- *   style={{ background: color.bgCanvas, color: color.textPrimary }}
- */
-
 const v = (name: string) => `var(${name})`
 
 export const color = {
-    // ── Backgrounds ───────────────────────────────────────
-    bgCanvas:  v('--color-bg-canvas'),   // #010409 — deepest: sidebar, topbar
-    bgBase:    v('--color-bg-base'),     // #0d1117 — page background, input fills
-    bgSurface: v('--color-bg-surface'),  // #161b22 — cards, modals, active rows
-    overlay:   'rgba(0,0,0,0.6)',        // modal backdrop (not a CSS var — always opaque black)
+    // ── Custom tokens ─────────────────────────────────────
+    canvas:  v('--color-canvas'),
+    surface: v('--color-surface'),
+    stroke:  v('--color-stroke'),
+    accent:  v('--color-accent'),
+    success: v('--color-success'),
+    danger:  v('--color-danger'),
+    overlay: 'rgba(0,0,0,0.6)',
 
-    // ── Borders ───────────────────────────────────────────
-    border:      v('--color-border'),        // #21262d — dividers
-    borderMuted: v('--color-border-muted'),  // #30363d — input / card borders
+    // ── Aliases (AppLayout inline-style compat) ────────────
+    bgCanvas:       v('--color-canvas'),
+    bgBase:         v('--color-canvas'),
+    bgSurface:      v('--color-surface'),
+    border:         v('--color-stroke'),
+    borderMuted:    v('--color-stroke'),
 
-    // ── Text ──────────────────────────────────────────────
-    textPrimary:   v('--color-text-primary'),    // #e6edf3
-    textSecondary: v('--color-text-secondary'),  // #c9d1d9
-    textTertiary:  v('--color-text-tertiary'),   // #8b949e
-    textMuted:     v('--color-text-muted'),      // #7d8590
-    textGhost:     v('--color-text-ghost'),      // #6e7681
-    textFaint:     v('--color-text-faint'),      // #484f58 — disabled, placeholders
+    // Text — Tailwind zinc scale
+    textPrimary:   v('--color-zinc-200'),
+    textSecondary: v('--color-zinc-300'),
+    textTertiary:  v('--color-zinc-400'),
+    textMuted:     v('--color-zinc-400'),
+    textGhost:     v('--color-zinc-500'),
+    textFaint:     v('--color-zinc-500'),
 
-    // ── Accent (blue) ─────────────────────────────────────
-    accent:         v('--color-accent'),          // #58a6ff
-    accentMuted:    v('--color-accent-muted'),    // #79c0ff
-    accentEmphasis: v('--color-accent-emphasis'), // #1f6feb — selected state
-    accentSubtle:   v('--color-accent-subtle'),   // #0d419d — tag backgrounds
+    // Accent shades — Tailwind blue scale
+    accentMuted:    v('--color-blue-300'),
+    accentEmphasis: v('--color-blue-700'),
+    accentSubtle:   v('--color-blue-900'),
+    accentGlow:     'rgba(88,166,255,0.07)',
 
-    // ── Success (green) ───────────────────────────────────
-    success:         v('--color-success'),          // #3fb950
-    successEmphasis: v('--color-success-emphasis'), // #238636 — create / submit buttons
-    successBorder:   v('--color-success-border'),   // #2ea043
+    // Success shades
+    successEmphasis: v('--color-success'),
+    successBorder:   v('--color-success'),
 
-    // ── Warning (yellow) ──────────────────────────────────
-    warning:       v('--color-warning'),        // #d29922
-    warningBright: v('--color-warning-bright'), // #f0b429 — animated running indicator
-    warningSubtle: v('--color-warning-subtle'), // #4a3800 — badge background
+    // Warning — Tailwind amber scale
+    warning:       v('--color-amber-500'),
+    warningBright: v('--color-amber-400'),
+    warningSubtle: v('--color-amber-950'),
+    warningGlow:   'rgba(240,180,41,0.7)',
 
-    // ── Danger (red) ──────────────────────────────────────
-    danger:       v('--color-danger'),        // #ff7b72
-    dangerLight:  v('--color-danger-light'),  // #ffa198
-    dangerSubtle: v('--color-danger-subtle'), // #67060c — high-priority border
-    dangerCanvas: v('--color-danger-canvas'), // #1c1012 — high-priority background
+    // Danger shades — Tailwind red scale
+    dangerLight:   v('--color-red-300'),
+    dangerSubtle:  v('--color-red-950'),
+    dangerCanvas:  v('--color-red-950'),
 
-    // ── Priority ──────────────────────────────────────────
-    priorityMediumBg: v('--color-priority-medium-bg'), // #1c2128
+    // Priority / misc — Tailwind zinc
+    priorityMediumBg: v('--color-zinc-800'),
 
-    // ── Language dot colours ──────────────────────────────
-    langPython:     v('--color-lang-python'),     // #3572a5
-    langTypeScript: v('--color-lang-typescript'), // #3178c6
-    langGo:         v('--color-lang-go'),         // #00add8
-    langRust:       v('--color-lang-rust'),        // #dea584
-    langJavaScript: v('--color-lang-javascript'), // #f1e05a
-
-    // ── Special effects ───────────────────────────────────
-    accentGlow:  'rgba(88, 166, 255, 0.07)', // drag-over overlay tint
-    warningGlow: 'rgba(240,180,41,0.7)',     // running indicator glow
+    // Language dot colours — inline, not worth custom tokens
+    langPython:     '#3572a5',
+    langTypeScript: '#3178c6',
+    langGo:         '#00add8',
+    langRust:       '#dea584',
+    langJavaScript: '#f1e05a',
 } as const
 
 export type ColorToken = keyof typeof color

@@ -4,9 +4,9 @@ import type { Workspace, Project } from '@/types/type'
 
 const LANGUAGES = ['Python', 'TypeScript', 'JavaScript', 'Go', 'Rust', 'Other']
 
-const inputCls = 'bg-bg-base border border-border-muted rounded-md text-text-primary text-[13px] px-2.5 py-1.5 font-mono outline-none w-full'
-const labelSpanCls = 'text-text-muted text-[11px] uppercase tracking-[0.05em]'
-const cancelCls = 'bg-transparent border border-border-muted rounded-md text-text-muted text-xs px-3.5 py-1.5 cursor-pointer disabled:opacity-50'
+const inputCls = 'bg-canvas border border-stroke rounded-md text-zinc-200 text-[13px] px-2.5 py-1.5 font-mono outline-none w-full'
+const labelSpanCls = 'text-zinc-400 text-[11px] uppercase tracking-[0.05em]'
+const cancelCls = 'bg-transparent border border-stroke rounded-md text-zinc-400 text-xs px-3.5 py-1.5 cursor-pointer disabled:opacity-50'
 const submitCls = 'bg-success-emphasis border border-success-border rounded-md text-white text-xs px-3.5 py-1.5 cursor-pointer disabled:opacity-50'
 
 export default function ProjectCreateModal({
@@ -51,12 +51,12 @@ export default function ProjectCreateModal({
 
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100]">
-            <div className="bg-bg-surface border border-border-muted rounded-lg p-6 w-[340px] flex flex-col gap-3.5">
+            <div className="bg-surface border border-stroke rounded-lg p-6 w-[340px] flex flex-col gap-3.5">
                 {confirmCreate ? (
                     <>
-                        <h2 className="m-0 text-text-primary text-[15px] font-semibold">Directory not found</h2>
-                        <p className="m-0 text-text-muted text-[13px] leading-relaxed">
-                            <span className="text-text-secondary font-mono text-xs">{confirmCreate.expanded}</span>
+                        <h2 className="m-0 text-zinc-200 text-[15px] font-semibold">Directory not found</h2>
+                        <p className="m-0 text-zinc-400 text-[13px] leading-relaxed">
+                            <span className="text-zinc-300 font-mono text-xs">{confirmCreate.expanded}</span>
                             {' '}does not exist. Create it?
                         </p>
                         {error && <span className="text-danger text-xs">{error}</span>}
@@ -69,7 +69,7 @@ export default function ProjectCreateModal({
                     </>
                 ) : (
                     <form onSubmit={e => { e.preventDefault(); submit() }} className="flex flex-col gap-3.5">
-                        <h2 className="m-0 text-text-primary text-[15px] font-semibold">New Project</h2>
+                        <h2 className="m-0 text-zinc-200 text-[15px] font-semibold">New Project</h2>
                         {error && <span className="text-danger text-xs">{error}</span>}
                         <label className="flex flex-col gap-1">
                             <span className={labelSpanCls}>Workspace</span>
