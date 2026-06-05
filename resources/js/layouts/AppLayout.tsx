@@ -3304,6 +3304,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const [showAddAgent, setShowAddAgent] = useState(false)
     const [activeAgentId, setActiveAgentId] = useState<number | null>(null)
     const [showProjectSearch, setShowProjectSearch] = useState(false)
+    const [renamingAgentId, setRenamingAgentId] = useState<number | null>(null)
+    const [renameValue, setRenameValue] = useState('')
 
     const sessions = useRef<Map<number, Session>>(new Map())
     const containerRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
@@ -3881,6 +3883,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                         <div
                                             key={agent.id}
                                             onClick={() => {
+                                                if (renamingAgentId === agent.id) return
                                                 if (activeProject) {
                                                     router.visit(`/${activeProject.slug}/agents/${agent.id}`)
                                                 } else {
@@ -3890,7 +3893,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                             style={{
                                                 display: 'flex', alignItems: 'center', gap: '10px',
                                                 padding: '9px 12px', margin: '0 8px 2px', borderRadius: '8px',
-                                                cursor: 'pointer', transition: 'background 0.1s',
+                                                cursor: renamingAgentId === agent.id ? 'default' : 'pointer',
+                                                transition: 'background 0.1s',
                                                 background: isSelected ? color.accentSubtle : 'transparent',
                                                 border: `1px solid ${isSelected ? '#b6d0f7' : 'transparent'}`,
                                             }}
@@ -3920,20 +3924,87 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
                                             {/* Name + status */}
                                             <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={{
-                                                    fontSize: '13px', fontWeight: isSelected ? 600 : 500,
-                                                    color: isSelected ? color.accent : color.textPrimary,
-                                                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                                }}>
-                                                    {agent.name}
-                                                </div>
+                                                {renamingAgentId === agent.id ? (
+                                                    <input
+                                                        autoFocus
+                                                        value={renameValue}
+                                                        onChange={e => setRenameValue(e.target.value)}
+                                                        onKeyDown={async e => {
+                                                            if (e.key === 'Enter') {
+                                                                e.preventDefault()
+                                                                const trimmed = renameValue.trim()
+                                                                if (trimmed && trimmed !== agent.name) {
+                                                                    await agentHook.rename.mutateAsync({ agentId: agent.id, name: trimmed })
+                                                                }
+                                                                setRenamingAgentId(null)
+                                                            } else if (e.key === 'Escape') {
+                                                                e.preventDefault()
+                                                                setRenamingAgentId(null)
+                                                            }
+                                                        }}
+                                                        onBlur={() => setRenamingAgentId(null)}
+                                                        onClick={e => e.stopPropagation()}
+                                                        style={{
+                                                            background: color.bgBase,
+                                                            border: `1px solid ${color.accent}`,
+                                                            borderRadius: '4px',
+                                                            color: color.textPrimary,
+                                                            fontSize: '12px',
+                                                            fontWeight: 500,
+                                                            padding: '2px 6px',
+                                                            outline: 'none',
+                                                            width: '100%',
+                                                            boxSizing: 'border-box' as const,
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <div
+                                                        onDoubleClick={e => {
+                                                            e.stopPropagation()
+                                                            setRenameValue(agent.name)
+                                                            setRenamingAgentId(agent.id)
+                                                        }}
+                                                        style={{
+                                                            fontSize: '13px', fontWeight: isSelected ? 600 : 500,
+                                                            color: isSelected ? color.accent : color.textPrimary,
+                                                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                                        }}
+                                                    >
+                                                        {agent.name}
+                                                    </div>
+                                                )}
                                                 <div style={{ fontSize: '11px', color: isRunning ? '#16a34a' : color.textFaint, marginTop: '1px' }}>
                                                     {isRunning ? '● Active' : AGENT_TYPE_LABELS[agent.agent_type] ?? agent.agent_type}
                                                 </div>
                                             </div>
 
+                                            {/* Rename button */}
+                                            {renamingAgentId !== agent.id && (
+                                                <button
+                                                    onClick={e => {
+                                                        e.stopPropagation()
+                                                        setRenameValue(agent.name)
+                                                        setRenamingAgentId(agent.id)
+                                                    }}
+                                                    title="Rename"
+                                                    style={{
+                                                        background: 'transparent', border: 'none',
+                                                        color: color.textFaint, cursor: 'pointer',
+                                                        padding: '3px', borderRadius: '4px',
+                                                        display: 'flex', alignItems: 'center',
+                                                        flexShrink: 0,
+                                                    }}
+                                                    onMouseEnter={e => (e.currentTarget.style.color = color.textPrimary)}
+                                                    onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
+                                                >
+                                                    <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+                                                        <path d="M11.013 1.427a1.75 1.75 0 012.474 0l1.086 1.086a1.75 1.75 0 010 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 01-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61zm1.414 1.06a.25.25 0 00-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 000-.354l-1.086-1.086zM11.189 6.25L9.75 4.81l-6.286 6.287a.25.25 0 00-.064.108l-.558 1.953 1.953-.558a.249.249 0 00.108-.064l6.286-6.286z"/>
+                                                    </svg>
+                                                </button>
+                                            )}
+
                                             {/* Run button (when idle) */}
-                                            {!isRunning && (
+                                            {!isRunning && renamingAgentId !== agent.id && (
                                                 <button
                                                     onClick={e => { e.stopPropagation(); setActiveAgentId(agent.id) }}
                                                     title="Run"
@@ -3952,6 +4023,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                                     </svg>
                                                 </button>
                                             )}
+                                            {renamingAgentId !== agent.id && (
                                             <button
                                                 onClick={async (e) => {
                                                     e.stopPropagation()
@@ -3983,6 +4055,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                             >
                                                 ×
                                             </button>
+                                            )}
                                         </div>
                                     )})}
                                 </>

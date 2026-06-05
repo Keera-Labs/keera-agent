@@ -66,6 +66,23 @@ export function useAgents(projectId: number | null) {
         },
     })
 
+    const rename = useMutation({
+        mutationFn: async ({ agentId, name }: { agentId: number; name: string }) => {
+            const res = await fetch(`/api/agents/${agentId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name }),
+            })
+            if (!res.ok) throw new Error('Failed to rename agent')
+            return res.json() as Promise<ProjectAgent>
+        },
+        onSuccess: (updated) => {
+            queryClient.setQueryData<ProjectAgent[]>(key, prev =>
+                (prev ?? []).map(a => a.id === updated.id ? { ...a, name: updated.name } : a)
+            )
+        },
+    })
+
     const setDefault = async (agentId: number): Promise<boolean> => {
         const res = await fetch(`/api/projects/${projectId}/default-agent`, {
             method: 'POST',
@@ -116,6 +133,7 @@ export function useAgents(projectId: number | null) {
         addAgent,
         create,
         remove,
+        rename,
         setDefault,
         spawnViaMCP,
     }
