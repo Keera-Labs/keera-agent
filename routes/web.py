@@ -54,6 +54,8 @@ router.patch("/api/messages/{message_id}/read", agent_message_controller.mark_re
 router.get("/api/projects/{project_id}/agents", agent_controller.index)
 router.post("/api/projects/{project_id}/agents", agent_controller.store)
 router.post("/api/projects/{project_id}/agents/spawn", agent_controller.spawn)
+router.get("/api/projects/{project_id}/default-agent", agent_controller.get_default)
+router.post("/api/projects/{project_id}/default-agent", agent_controller.set_default)
 router.patch("/api/agents/{agent_id}", agent_controller.update)
 router.delete("/api/agents/{agent_id}", agent_controller.destroy)
 router.get("/api/agents/{agent_id}/output", agent_controller.output)
@@ -85,7 +87,8 @@ router.get("/mcp", mcp_controller.handle_get)
 # Wildcard page routes — must come last
 router.get("/", home_controller.home)
 router.get("/{project}/tasks", tasks_page_controller.tasks_page)
-router.get("/{project}", home_controller.home)
+router.get("/{project}/{agent}", home_controller.agent_page)
+router.get("/{project}", home_controller.project_home)
 
 router.router.add_api_websocket_route("/{project}/ws", terminal_controller.terminal_ws)
 router.router.add_api_websocket_route("/{project}/command-ws/{command_id}", command_controller.command_ws)

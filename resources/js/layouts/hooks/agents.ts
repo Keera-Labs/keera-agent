@@ -4,6 +4,7 @@ export interface ProjectAgent {
     id: number
     project_id: number
     name: string
+    slug: string
     description: string | null
     model: string
     system_prompt: string | null
@@ -65,6 +66,15 @@ export function useAgents(projectId: number | null) {
         },
     })
 
+    const setDefault = async (agentId: number): Promise<boolean> => {
+        const res = await fetch(`/api/projects/${projectId}/default-agent`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agent_id: agentId }),
+        })
+        return res.ok
+    }
+
     const spawnViaMCP = async (
         projectPath: string,
         name: string,
@@ -106,6 +116,7 @@ export function useAgents(projectId: number | null) {
         addAgent,
         create,
         remove,
+        setDefault,
         spawnViaMCP,
     }
 }
