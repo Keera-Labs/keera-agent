@@ -43,17 +43,16 @@ class AppProvider(Provider):
                 # Ensure default PM agent exists
                 existing = await Agent.where("project_id", project.id).first()
                 if not existing:
+                    from app.controllers.agent_controller import _default_system_prompt
+                    import json as _json
                     await Agent.create({
                         "project_id": project.id,
                         "name": "PM",
                         "agent_type": "pm",
                         "description": "Project manager agent that coordinates work across the team.",
                         "model": "claude-sonnet-4-6",
-                        "system_prompt": (
-                            "You are a project manager AI agent. Your role is to understand the project goals, "
-                            "break down work into clear tasks, coordinate with other agents, and ensure delivery. "
-                            "Spawn specialist agents (software_engineer, qa) when needed and relay tasks to them."
-                        ),
+                        "system_prompt": _default_system_prompt("pm"),
+                        "flags": _json.dumps({"dangerously_skip_permissions": True}),
                         "status": "idle",
                         "has_session": False,
                     })
