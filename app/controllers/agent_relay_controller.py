@@ -59,7 +59,7 @@ async def relay(request: Request):
         cwd = os.path.expanduser(project.path)
         bridge = conn_manager.get(to_agent.session_id) if to_agent.session_id else None
         if bridge:
-            bridge.write(f"[Message from Agent '{from_agent.name}']: {content}\r")
+            await bridge.write(f"[Message from Agent '{from_agent.name}']: {content}\r")
             await AgentRelayMessage.where("id", msg.id).update({"status": "delivered"})
             delivered = True
 

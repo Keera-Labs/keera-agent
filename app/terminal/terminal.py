@@ -1,7 +1,7 @@
+import asyncio
 import fcntl
 import os
 import pty as _pty
-import tty
 import struct
 import subprocess
 import termios
@@ -62,6 +62,16 @@ class Terminal:
         if self.master_fd is None or not data:
             return
         os.write(self.master_fd, data)
+
+    async def write_input(self, data: bytes) -> None:
+        if self.master_fd is None or not data:
+            return
+        if len(data) <= 1:
+            os.write(self.master_fd, data)
+            return
+        for byte in data:
+            os.write(self.master_fd, bytes([byte]))
+            await asyncio.sleep(0.002)
 
     def resize(self, cols: int, rows: int) -> None:
         self._cols = cols

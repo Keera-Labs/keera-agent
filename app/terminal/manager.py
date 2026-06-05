@@ -36,6 +36,11 @@ class TerminalManager:
             data = data.encode()
         self._sessions[session_id].write(data)
 
+    async def write_input(self, session_id: str, data: bytes | str) -> None:
+        if isinstance(data, str):
+            data = data.encode()
+        await self._sessions[session_id].write_input(data)
+
     def resize(self, session_id: str, cols: int, rows: int):
         self._sessions[session_id].resize(cols, rows)
 

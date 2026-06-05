@@ -65,10 +65,10 @@ class WebsocketTerminal:
         try:
             while not self._stopped.is_set():
                 try:
-                    item = await asyncio.wait_for(queue.get(), timeout=0.1)
-                    await self._ws.send_bytes(b'\x01' + len(item).to_bytes(4, 'big') + item)
+                    data = await asyncio.wait_for(queue.get(), timeout=0.1)
+                    await self._ws.send_bytes(data)
                     if self._on_output:
-                        await self._on_output(item)
+                        await self._on_output(data)
                 except asyncio.TimeoutError:
                     continue
         finally:
@@ -84,23 +84,23 @@ class WebsocketTerminal:
                 if msg.get('type') == 'websocket.disconnect':
                     break
                 if msg.get('bytes'):
-                    data: bytes = msg['bytes']
-                    if len(data) >= 5:
-                        frame_type = data[0]
-                        length = int.from_bytes(data[1:5], 'big')
-                        payload = data[5:5 + length]
-                        if frame_type == 0x01:
-                            self._terminal.write(payload)
+                    await self._write_input(msg['bytes'])
                 elif msg.get('text'):
+                    text: str = msg['text']
                     try:
-                        data = json.loads(msg['text'])
-                        if data.get('type') == 'resize':
-                            self._terminal.resize(int(data['cols']), int(data['rows']))
-                    except (json.JSONDecodeError, KeyError, ValueError):
-                        pass
+                        parsed = json.loads(text)
+                        if isinstance(parsed, dict) and parsed.get('type') == 'resize':
+                            self._terminal.resize(int(parsed['cols']), int(parsed['rows']))
+                        else:
+                            await self._write_input(text.encode())
+                    except (json.JSONDecodeError, ValueError):
+                        await self._write_input(text.encode())
             except (WebSocketDisconnect, Exception):
                 break
         self._stopped.set()
+
+    async def _write_input(self, data: bytes) -> None:
+        await self._terminal.write_input(data)
 
     async def _watch_process(self, loop: asyncio.AbstractEventLoop) -> None:
         while self._terminal.is_alive() and not self._stopped.is_set():
@@ -111,8 +111,8 @@ class WebsocketTerminal:
     def websocket(self) -> WebSocket | None:
         return self._ws
 
-    def write(self, data: bytes | str) -> None:
-        self._terminal.write(data if isinstance(data, bytes) else data.encode())
+    async def write(self, data: bytes | str) -> None:
+        await self._terminal.write_input(data if isinstance(data, bytes) else data.encode())
 
     async def send_text(self, data: str) -> None:
         if self._ws:
@@ -124,4 +124,4 @@ class WebsocketTerminal:
 
     async def _auto_send(self, data: bytes) -> None:
         await asyncio.sleep(0.5)
-        self._terminal.write(data)
+        await self._terminal.write_input(data)

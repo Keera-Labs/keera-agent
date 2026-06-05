@@ -3,19 +3,6 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 
-function frameEncode(data: string | Uint8Array, type = 0x01): Uint8Array {
-    const payload = typeof data === 'string' ? new TextEncoder().encode(data) : data
-    const frame = new Uint8Array(5 + payload.length)
-    frame[0] = type
-    new DataView(frame.buffer).setUint32(1, payload.length, false)
-    frame.set(payload, 5)
-    return frame
-}
-
-function frameDecode(data: ArrayBuffer): Uint8Array {
-    const length = new DataView(data).getUint32(1, false)
-    return new Uint8Array(data, 5, length)
-}
 
 export default function Poc() {
     const termRef = useRef<HTMLDivElement>(null)
@@ -43,14 +30,14 @@ export default function Poc() {
 
         ws.onmessage = (e) => {
             if (e.data instanceof ArrayBuffer) {
-                term.write(frameDecode(e.data))
+                term.write(new Uint8Array(e.data as ArrayBuffer))
             }
         }
 
         // Keyboard input → PTY
         term.onData((data) => {
             if (ws.readyState === WebSocket.OPEN) {
-                ws.send(frameEncode(data))
+                ws.send(data)
             }
         })
 
@@ -67,8 +54,15 @@ export default function Poc() {
     function sendMessage() {
         const ws = wsRef.current
         if (!message.trim() || !ws || ws.readyState !== WebSocket.OPEN) return
-        ws.send(frameEncode(message + '\r'))
+        ws.send(message.replace(/\n/g, '\r') + '\r')
         setMessage('')
+    }
+
+    function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault()
+            sendMessage()
+        }
     }
 
     return (
@@ -86,16 +80,18 @@ export default function Poc() {
 
             <div ref={termRef} style={{ flex: 1, minHeight: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid #2a2a2a' }} />
 
-            <div style={{ display: 'flex', gap: 8 }}>
-                <input
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                <textarea
                     value={message}
                     onChange={e => setMessage(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && sendMessage()}
-                    placeholder="Send a message to Claude…"
+                    onKeyDown={handleKeyDown}
+                    placeholder="Send a message to Claude… (Shift+Enter for newline)"
+                    rows={3}
                     style={{
                         flex: 1, padding: '8px 12px', borderRadius: 6,
                         border: '1px solid #333', background: '#1a1a1a',
                         color: '#fff', fontSize: 14, fontFamily: 'monospace', outline: 'none',
+                        resize: 'none',
                     }}
                 />
                 <button
