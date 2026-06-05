@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type React from 'react'
 import { color } from '@/tokens'
-import type { Workspace, Project } from '@/types/type'
+import type { Project } from '@/types/type'
 import { ProjectItem } from './Project'
 import { WorkspacePicker } from './WorkSpace'
 
@@ -47,7 +47,6 @@ export const PROJECT_NAV: { id: ProjectView; label: string; icon: React.ReactNod
 ]
 
 export default function Sidebar({
-    workspaces,
     allProjects,
     activeProject,
     projectView,
@@ -56,17 +55,14 @@ export default function Sidebar({
     newMessageCount,
     onAddAgent,
     activeId,
-    onAddWorkspace,
     onAddProject,
     onMoveProject,
     onEditProject,
     onSystemPromptProject,
     onPermissionsProject,
     onDeleteProject,
-    onDeleteWorkspace,
     claudeStatus,
 }: {
-    workspaces: Workspace[]
     allProjects: Project[]
     activeProject: Project | null
     projectView: ProjectView
@@ -75,14 +71,12 @@ export default function Sidebar({
     newMessageCount: number
     onAddAgent: () => void
     activeId: number | null
-    onAddWorkspace: () => void
     onAddProject: (workspaceId: number | null) => void
     onMoveProject: (project: Project) => void
     onEditProject: (project: Project) => void
     onSystemPromptProject: (project: Project) => void
     onPermissionsProject: (project: Project) => void
     onDeleteProject: (project: Project) => void
-    onDeleteWorkspace: (workspace: Workspace) => void
     claudeStatus: Record<number, 'running' | 'done'>
 }) {
     const [filterWorkspaceId, setFilterWorkspaceId] = useState<number | null>(null)
@@ -107,11 +101,8 @@ export default function Sidebar({
             </div>
 
             <WorkspacePicker
-                workspaces={workspaces}
                 selected={filterWorkspaceId}
                 onSelect={setFilterWorkspaceId}
-                onAddWorkspace={onAddWorkspace}
-                onDeleteWorkspace={onDeleteWorkspace}
             />
 
             {/* Scrollable middle */}

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { router, usePage } from '@inertiajs/react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
-import '@xterm/xterm/css/xterm.css'
+import '@xterm/xterm/css/xterm.css' 
 import { color } from "@/tokens"
 import type { Task, Workspace, Project } from "@/types/type"
 import ProjectCreateModal from '@/components/project/ProjectCreateModal'
@@ -3739,7 +3739,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return (
         <div className="flex w-full h-screen overflow-hidden bg-slate-100">
             <Sidebar
-                workspaces={workspaces}
                 allProjects={allProjects}
                 activeProject={activeProject}
                 projectView={activeView}
@@ -3752,14 +3751,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 newMessageCount={newMessageIds.length}
                 onAddAgent={() => setShowAddAgent(true)}
                 activeId={activeProject?.id ?? null}
-                onAddWorkspace={() => setShowWorkspaceModal(true)}
                 onAddProject={openAddProject}
                 onMoveProject={setMovingProject}
                 onEditProject={setEditingProject}
                 onSystemPromptProject={setSystemPromptProject}
                 onPermissionsProject={setPermissionsProject}
                 onDeleteProject={setDeletingProject}
-                onDeleteWorkspace={setDeletingWorkspace}
                 claudeStatus={claudeStatus}
             />
 
