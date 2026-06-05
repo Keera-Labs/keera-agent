@@ -363,7 +363,8 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
 
     async def watch_process():
         """Signal stopped when the shell process exits."""
-        await loop.run_in_executor(None, proc.wait)
+        while proc.poll() is None and not stopped.is_set():
+            await asyncio.sleep(0.1)
         stopped.set()
 
     tasks = [

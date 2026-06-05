@@ -13,6 +13,7 @@ from config.fastapi import FastAPIConfig
 from config.storage import StorageConfig
 from config.vite import ViteConfig
 from providers.app_provider import AppProvider
+from providers.terminal_provider import TerminalProvider
 
 app = Application(
     base_path=Path(__file__).parent.parent,
@@ -22,6 +23,7 @@ app = Application(
         (FastAPIProvider, FastAPIConfig),
         (StorageProvider, StorageConfig),
         AppProvider,
+        TerminalProvider,
         (ViteProvider, ViteConfig),
         InertiaProvider,
     ],

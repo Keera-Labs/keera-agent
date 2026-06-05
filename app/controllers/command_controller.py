@@ -307,7 +307,8 @@ async def command_ws(websocket: WebSocket, project: str, command_id: int):
         stopped.set()
 
     async def watch_process():
-        await loop.run_in_executor(None, proc.wait)
+        while proc.poll() is None and not stopped.is_set():
+            await asyncio.sleep(0.1)
         stopped.set()
 
     tasks = [
