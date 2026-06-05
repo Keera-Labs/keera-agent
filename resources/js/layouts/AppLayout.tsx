@@ -924,7 +924,7 @@ function ProjectSearchModal({ projects, onClose, onSelect }: {
             onClick={onClose}
         >
             <div
-                style={{ background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '10px', width: '480px', maxWidth: '92vw', boxShadow: '0 16px 48px rgba(0,0,0,0.6)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+                style={{ background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '10px', width: '480px', maxWidth: '92vw', boxShadow: '0 16px 48px rgba(0,0,0,0.14)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
                 onClick={e => e.stopPropagation()}
             >
                 {/* Search input */}
@@ -1988,13 +1988,13 @@ function ProjectSidebar({ view, projectName, onChange, taskCount, newMessageCoun
     return (
         <div style={{
             width: '200px', flexShrink: 0, background: color.bgCanvas,
-            borderRight: '1px solid #21262d', display: 'flex', flexDirection: 'column',
+            borderRight: `1px solid ${color.border}`, display: 'flex', flexDirection: 'column',
         }}>
             {/* Project name header */}
             {projectName && (
                 <div style={{
                     padding: '10px 14px 9px',
-                    borderBottom: '1px solid #21262d',
+                    borderBottom: `1px solid ${color.border}`,
                 }}>
                     <span style={{ color: color.textPrimary, fontSize: '13px', fontWeight: 700, letterSpacing: '0.01em' }}>
                         {projectName}
@@ -2683,7 +2683,7 @@ function CommandsView({ project, projectId }: { project: Project; projectId: num
                                     textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px',
                                 }}>Shell</div>
                                 <div style={{
-                                    background: '#010409', borderRadius: '6px', padding: '8px 12px',
+                                    background: color.bgCanvas, borderRadius: '6px', padding: '8px 12px',
                                     border: `1px solid ${color.border}`,
                                     fontFamily: '"JetBrains Mono", monospace', fontSize: '12px',
                                     color: color.textSecondary,
@@ -2796,7 +2796,7 @@ function TasksView({
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {/* Header */}
             <div style={{
-                padding: '12px 20px', borderBottom: '1px solid #21262d',
+                padding: '12px 20px', borderBottom: `1px solid ${color.border}`,
                 display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0,
             }}>
                 <span style={{ color: color.textPrimary, fontSize: '13px', fontWeight: 600, flex: 1 }}>Tasks</span>
@@ -3199,10 +3199,10 @@ function AgentCard({
             style={{
                 display: 'flex', alignItems: 'flex-start', gap: '10px',
                 padding: '12px 14px', cursor: 'pointer', transition: 'background 0.1s',
-                background: active ? '#161b22' : 'transparent',
-                borderLeft: `2px solid ${active ? '#58a6ff' : 'transparent'}`,
+                background: active ? color.accentSubtle : 'transparent',
+                borderLeft: `2px solid ${active ? color.accent : 'transparent'}`,
             }}
-            onMouseEnter={e => { if (!active) e.currentTarget.style.background = '#0d1117' }}
+            onMouseEnter={e => { if (!active) e.currentTarget.style.background = color.bgCanvas }}
             onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}
         >
             <div style={{
@@ -3661,132 +3661,168 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
 
     return (
-        <div className="flex w-full h-screen overflow-hidden bg-slate-100">
-            <Sidebar
-                allProjects={allProjects}
-                activeProject={activeProject}
-                projectView={activeView}
-                onChangeView={(view) => {
-                    if (view === 'tasks' && activeProject) { router.visit(`/${activeProject.slug}/tasks`); return }
-                    setProjectView(view)
-                    if (isTasksPage) router.visit(`/${activeProject?.slug}`)
-                }}
-                taskCount={tasks.length}
-                newMessageCount={newMessageIds.length}
-                onAddAgent={() => setShowAddAgent(true)}
-                activeId={activeProject?.id ?? null}
-                onAddProject={openAddProject}
-                onMoveProject={setMovingProject}
-                onEditProject={setEditingProject}
-                onSystemPromptProject={setSystemPromptProject}
-                onPermissionsProject={setPermissionsProject}
-                onDeleteProject={setDeletingProject}
-                claudeStatus={claudeStatus}
-            />
+        <div className="flex flex-col w-full h-screen overflow-hidden" style={{ background: color.bgCanvas }}>
 
-            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                {/* Top nav bar */}
-                <div className="h-11 bg-white border-b border-gray-200 flex items-center shrink-0 justify-between">
-                    {/* Tabs */}
-                    <div className="flex items-stretch h-full pl-1">
-                        {([
-                            { id: 'agents' as ProjectView, label: 'Dashboard' },
-                            { id: 'commands' as ProjectView, label: 'Configurations' },
-                            { id: 'tasks' as ProjectView, label: 'Tasks' },
-                            { id: 'messages' as ProjectView, label: 'History' },
-                        ] as const).map(tab => {
-                            const isActive = activeView === tab.id
-                            return (
-                                <button
-                                    key={tab.id}
-                                    onClick={() => {
-                                        if (tab.id === 'tasks' && activeProject) { router.visit(`/${activeProject.slug}/tasks`); return }
-                                        setProjectView(tab.id)
-                                        if (isTasksPage) router.visit(`/${activeProject?.slug}`)
-                                    }}
-                                    className={[
-                                        'bg-transparent border-none border-b-2 cursor-pointer px-4 h-full text-[13px] transition-colors duration-100',
-                                        isActive
-                                            ? 'border-blue-500 text-gray-900 font-semibold'
-                                            : 'border-transparent text-gray-500 font-normal hover:text-gray-700',
-                                    ].join(' ')}
-                                    style={{ marginBottom: '-1px' }}
-                                >
-                                    {tab.label}
-                                </button>
-                            )
-                        })}
-                        {activeProject && (
-                            <>
-                                <div className="w-px bg-gray-200 my-2.5 mx-1" />
-                                <div className="flex items-center gap-1.5 px-2">
-                                    <ClaudeStatusBadge status={claudeStatus[activeProject.id]} />
-                                </div>
-                            </>
-                        )}
-                    </div>
+            {/* ═══════════════════════════════════════════════════════════
+                FULL-WIDTH TOP BAR
+                Logo (220px) | Nav tabs (flex-1) | Search + icons
+            ════════════════════════════════════════════════════════════ */}
+            <header className="shrink-0 bg-white flex items-stretch" style={{ height: '48px', borderBottom: `1px solid ${color.stroke}`, zIndex: 20 }}>
 
-                    {/* Right: search + icons */}
-                    <div className="flex items-center gap-1 pr-3">
-                        {/* Search */}
-                        <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-md px-2.5 py-1 mr-1">
-                            <svg width="12" height="12" viewBox="0 0 16 16" className="text-gray-400 fill-current shrink-0">
-                                <path d="M10.68 11.74a6 6 0 01-7.922-8.982 6 6 0 018.982 7.922l3.04 3.04a.749.749 0 11-1.06 1.06l-3.04-3.04zM11.5 7a4.499 4.499 0 11-8.997 0A4.499 4.499 0 0111.5 7z"/>
-                            </svg>
-                            <input
-                                placeholder="Search agents..."
-                                className="bg-transparent border-none outline-none text-gray-700 text-[12px] w-32"
-                            />
-                        </div>
-                        {/* Attach image (agents view) */}
-                        {activeView === 'agents' && activeProject && (
-                            <button
-                                onClick={() => fileInputRef.current?.click()}
-                                title="Attach image"
-                                className="bg-transparent border-none cursor-pointer text-gray-400 p-1.5 flex items-center rounded hover:text-blue-500 transition-colors"
-                            >
-                                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                                    <path d="M4.5 3a2.5 2.5 0 015 0v9a1.5 1.5 0 01-3 0V5a.5.5 0 011 0v7a.5.5 0 001 0V3a1.5 1.5 0 10-3 0v9a2.5 2.5 0 005 0V5a.5.5 0 011 0v7a3.5 3.5 0 11-7 0V3z"/>
-                                </svg>
-                            </button>
-                        )}
-                        {/* Bell */}
-                        <button className="bg-transparent border-none cursor-pointer text-gray-400 p-1.5 flex items-center rounded hover:text-gray-700 transition-colors">
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                                <path d="M8 16a2 2 0 001.985-1.75c.017-.137-.097-.25-.235-.25h-3.5c-.138 0-.252.113-.235.25A2 2 0 008 16zm.25-14.25A5.25 5.25 0 003 7v2.047c0 .334-.102.656-.29.932L1.55 11.698A1.5 1.5 0 002.8 13.5h10.4a1.5 1.5 0 001.258-2.302l-1.16-1.719A1.625 1.625 0 0113 8.047V7A5.25 5.25 0 008.25 1.75z"/>
-                            </svg>
-                        </button>
-                        {/* Settings */}
-                        <button
-                            onClick={() => setShowDefaultPermissions(true)}
-                            title="Settings"
-                            className="bg-transparent border-none cursor-pointer text-gray-400 p-1.5 flex items-center rounded hover:text-gray-700 transition-colors"
-                        >
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                                <path d="M8 0a8.2 8.2 0 01.701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.103-.303c.644-.176 1.392.021 1.82.63.27.385.506.792.704 1.218.315.675.111 1.422-.364 1.891l-.814.806c-.049.048-.098.147-.088.294.016.257.016.515 0 .772-.01.147.038.246.087.294l.814.806c.475.469.679 1.216.364 1.891a7.977 7.977 0 01-.704 1.217c-.428.61-1.176.807-1.82.63l-1.103-.303c-.066-.019-.176-.011-.299.071a5.909 5.909 0 01-.668.386c-.133.066-.194.158-.211.224l-.29 1.106c-.168.646-.715 1.196-1.458 1.26a8.006 8.006 0 01-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106c-.018-.066-.079-.158-.212-.224a5.738 5.738 0 01-.668-.386c-.123-.082-.233-.09-.299-.071l-1.103.303c-.644.176-1.392-.021-1.82-.63a8.12 8.12 0 01-.704-1.218c-.315-.675-.111-1.422.363-1.891l.815-.806c.05-.048.098-.147.088-.294a6.214 6.214 0 010-.772c.01-.147-.038-.246-.088-.294l-.815-.806C.635 6.045.431 5.298.746 4.623a7.92 7.92 0 01.704-1.217c.428-.61 1.176-.807 1.82-.63l1.102.302c.067.019.177.011.3-.071a5.659 5.659 0 01.668-.386c.133-.066.194-.158.211-.224l.29-1.106C6.156.421 6.703-.129 7.445.031 7.645.015 7.825 0 8 0zm1.5 8a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/>
-                            </svg>
-                        </button>
-                        {/* Avatar */}
-                        <div className="w-7 h-7 rounded-full bg-[#7c6af7] flex items-center justify-center text-[11px] font-bold text-white cursor-pointer ml-1 shrink-0">
-                            B
-                        </div>
+                {/* Logo zone — same width as sidebar */}
+                <div className="shrink-0 flex items-center gap-2.5 px-4" style={{ width: '220px', borderRight: `1px solid ${color.stroke}` }}>
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: color.accent }}>
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="white">
+                            <path d="M0 8a8 8 0 1116 0A8 8 0 010 8zm8-6.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM6.5 7.75A.75.75 0 017.25 7h1a.75.75 0 01.75.75v2.75h.25a.75.75 0 010 1.5h-2a.75.75 0 010-1.5h.25v-2h-.25a.75.75 0 01-.75-.75zM8 6a1 1 0 110-2 1 1 0 010 2z"/>
+                        </svg>
                     </div>
+                    <span style={{ fontWeight: 700, fontSize: '14px', color: color.textPrimary, letterSpacing: '-0.01em' }}>
+                        Keera Agent
+                    </span>
                 </div>
 
-                {/* Body: content */}
+                {/* Nav tabs — centered */}
+                <div className="flex items-stretch flex-1 px-2">
+                    {([
+                        { id: 'agents' as ProjectView, label: 'Dashboard' },
+                        { id: 'commands' as ProjectView, label: 'Configurations' },
+                        { id: 'tasks' as ProjectView, label: 'Tasks' },
+                        { id: 'messages' as ProjectView, label: 'History' },
+                    ] as const).map(tab => {
+                        const isActive = activeView === tab.id
+                        return (
+                            <button
+                                key={tab.id}
+                                onClick={() => {
+                                    if (tab.id === 'tasks' && activeProject) { router.visit(`/${activeProject.slug}/tasks`); return }
+                                    setProjectView(tab.id)
+                                    if (isTasksPage) router.visit(`/${activeProject?.slug}`)
+                                }}
+                                className="bg-transparent border-none cursor-pointer px-4 h-full text-[13px] transition-colors duration-100 relative"
+                                style={{
+                                    color: isActive ? color.textPrimary : color.textMuted,
+                                    fontWeight: isActive ? 600 : 400,
+                                    borderBottom: isActive ? `2px solid ${color.accent}` : '2px solid transparent',
+                                    marginBottom: '-1px',
+                                }}
+                            >
+                                {tab.label}
+                            </button>
+                        )
+                    })}
+                    {activeProject && (
+                        <>
+                            <div className="my-3 mx-1" style={{ width: '1px', background: color.stroke }} />
+                            <div className="flex items-center gap-1.5 px-2">
+                                <ClaudeStatusBadge status={claudeStatus[activeProject.id]} />
+                            </div>
+                        </>
+                    )}
+                </div>
+
+                {/* Right: search + icons */}
+                <div className="flex items-center gap-1 pr-3">
+                    {/* Search bar */}
+                    <div className="flex items-center gap-1.5 rounded-md px-2.5 py-1 mr-1" style={{ background: color.bgCanvas, border: `1px solid ${color.stroke}` }}>
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill={color.textFaint} className="shrink-0">
+                            <path d="M10.68 11.74a6 6 0 01-7.922-8.982 6 6 0 018.982 7.922l3.04 3.04a.749.749 0 11-1.06 1.06l-3.04-3.04zM11.5 7a4.499 4.499 0 11-8.997 0A4.499 4.499 0 0111.5 7z"/>
+                        </svg>
+                        <input
+                            placeholder="Search..."
+                            className="bg-transparent border-none outline-none text-[12px] w-28"
+                            style={{ color: color.textPrimary }}
+                        />
+                    </div>
+                    {/* Attach image (agents view) */}
+                    {activeView === 'agents' && activeProject && (
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            title="Attach image"
+                            className="bg-transparent border-none cursor-pointer p-1.5 flex items-center rounded transition-colors"
+                            style={{ color: color.textFaint }}
+                            onMouseEnter={e => (e.currentTarget.style.color = color.accent)}
+                            onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
+                        >
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M4.5 3a2.5 2.5 0 015 0v9a1.5 1.5 0 01-3 0V5a.5.5 0 011 0v7a.5.5 0 001 0V3a1.5 1.5 0 10-3 0v9a2.5 2.5 0 005 0V5a.5.5 0 011 0v7a3.5 3.5 0 11-7 0V3z"/>
+                            </svg>
+                        </button>
+                    )}
+                    {/* Bell */}
+                    <button
+                        className="bg-transparent border-none cursor-pointer p-1.5 flex items-center rounded transition-colors"
+                        style={{ color: color.textFaint }}
+                        onMouseEnter={e => (e.currentTarget.style.color = color.textPrimary)}
+                        onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
+                    >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M8 16a2 2 0 001.985-1.75c.017-.137-.097-.25-.235-.25h-3.5c-.138 0-.252.113-.235.25A2 2 0 008 16zm.25-14.25A5.25 5.25 0 003 7v2.047c0 .334-.102.656-.29.932L1.55 11.698A1.5 1.5 0 002.8 13.5h10.4a1.5 1.5 0 001.258-2.302l-1.16-1.719A1.625 1.625 0 0113 8.047V7A5.25 5.25 0 008.25 1.75z"/>
+                        </svg>
+                    </button>
+                    {/* Settings */}
+                    <button
+                        onClick={() => setShowDefaultPermissions(true)}
+                        title="Settings"
+                        className="bg-transparent border-none cursor-pointer p-1.5 flex items-center rounded transition-colors"
+                        style={{ color: color.textFaint }}
+                        onMouseEnter={e => (e.currentTarget.style.color = color.textPrimary)}
+                        onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
+                    >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M8 0a8.2 8.2 0 01.701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.103-.303c.644-.176 1.392.021 1.82.63.27.385.506.792.704 1.218.315.675.111 1.422-.364 1.891l-.814.806c-.049.048-.098.147-.088.294.016.257.016.515 0 .772-.01.147.038.246.087.294l.814.806c.475.469.679 1.216.364 1.891a7.977 7.977 0 01-.704 1.217c-.428.61-1.176.807-1.82.63l-1.103-.303c-.066-.019-.176-.011-.299.071a5.909 5.909 0 01-.668.386c-.133.066-.194.158-.211.224l-.29 1.106c-.168.646-.715 1.196-1.458 1.26a8.006 8.006 0 01-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106c-.018-.066-.079-.158-.212-.224a5.738 5.738 0 01-.668-.386c-.123-.082-.233-.09-.299-.071l-1.103.303c-.644.176-1.392-.021-1.82-.63a8.12 8.12 0 01-.704-1.218c-.315-.675-.111-1.422.363-1.891l.815-.806c.05-.048.098-.147.088-.294a6.214 6.214 0 010-.772c.01-.147-.038-.246-.088-.294l-.815-.806C.635 6.045.431 5.298.746 4.623a7.92 7.92 0 01.704-1.217c.428-.61 1.176-.807 1.82-.63l1.102.302c.067.019.177.011.3-.071a5.659 5.659 0 01.668-.386c.133-.066.194-.158.211-.224l.29-1.106C6.156.421 6.703-.129 7.445.031 7.645.015 7.825 0 8 0zm1.5 8a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/>
+                        </svg>
+                    </button>
+                    {/* Avatar */}
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white cursor-pointer ml-1 shrink-0" style={{ background: '#7c6af7' }}>
+                        B
+                    </div>
+                </div>
+            </header>
+
+            {/* ═══════════════════════════════════════════════════════════
+                BODY: Sidebar + Content
+            ════════════════════════════════════════════════════════════ */}
+            <div className="flex flex-1 overflow-hidden">
+                <Sidebar
+                    allProjects={allProjects}
+                    activeProject={activeProject}
+                    projectView={activeView}
+                    onChangeView={(view) => {
+                        if (view === 'tasks' && activeProject) { router.visit(`/${activeProject.slug}/tasks`); return }
+                        setProjectView(view)
+                        if (isTasksPage) router.visit(`/${activeProject?.slug}`)
+                    }}
+                    taskCount={tasks.length}
+                    newMessageCount={newMessageIds.length}
+                    onAddAgent={() => setShowAddAgent(true)}
+                    activeId={activeProject?.id ?? null}
+                    onAddProject={openAddProject}
+                    onMoveProject={setMovingProject}
+                    onEditProject={setEditingProject}
+                    onSystemPromptProject={setSystemPromptProject}
+                    onPermissionsProject={setPermissionsProject}
+                    onDeleteProject={setDeletingProject}
+                    claudeStatus={claudeStatus}
+                />
+
+                {/* Main content area */}
                 <div className="flex-1 flex overflow-hidden bg-white">
 
                     {/* Agents view: agent card list (left) + terminal (right) — always rendered to keep sessions alive */}
                     <div style={{ flex: 1, overflow: 'hidden', display: activeView === 'agents' ? 'flex' : 'none' }}>
 
-                        {/* Agent cards list */}
-                        <div className="w-57.5 shrink-0 overflow-y-auto bg-white border-r border-gray-200 flex flex-col">
+                        {/* Agent cards list — left panel */}
+                        <div style={{ width: '230px', flexShrink: 0, background: '#fff', borderRight: `1px solid ${color.stroke}`, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
                             {/* Per-project agents */}
                             {activeProject && (
                                 <>
-                                    <div className="px-3.5 pt-2.5 pb-1 flex items-center gap-1.5">
-                                        <span className="text-gray-400 text-[10px] uppercase tracking-widest flex-1">
-                                            Team Agents
+                                    {/* Section header */}
+                                    <div style={{ padding: '12px 14px 6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <span style={{
+                                            fontSize: '10px', fontWeight: 700, textTransform: 'uppercase',
+                                            letterSpacing: '0.08em', color: color.textFaint, flex: 1,
+                                        }}>
+                                            Agents
                                         </span>
                                         {projectAgents.length >= 2 && (
                                             <button
@@ -3798,13 +3834,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                                 }}
                                                 title="Start all agents"
                                                 style={{
-                                                    background: 'transparent', border: `1px solid ${color.borderMuted}`,
-                                                    borderRadius: '4px', color: color.textMuted,
+                                                    background: 'transparent', border: `1px solid ${color.stroke}`,
+                                                    borderRadius: '4px', color: color.textFaint,
                                                     fontSize: '10px', lineHeight: 1, padding: '2px 6px',
                                                     cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px',
                                                 }}
-                                                onMouseEnter={e => { e.currentTarget.style.borderColor = color.success; e.currentTarget.style.color = color.success }}
-                                                onMouseLeave={e => { e.currentTarget.style.borderColor = color.borderMuted; e.currentTarget.style.color = color.textMuted }}
+                                                onMouseEnter={e => { e.currentTarget.style.borderColor = '#16a34a'; e.currentTarget.style.color = '#16a34a' }}
+                                                onMouseLeave={e => { e.currentTarget.style.borderColor = color.stroke; e.currentTarget.style.color = color.textFaint }}
                                             >
                                                 <svg width="8" height="8" viewBox="0 0 10 10" fill="currentColor">
                                                     <path d="M2 1.5l7 3.5-7 3.5V1.5z"/>
@@ -3815,18 +3851,28 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                         <button
                                             onClick={() => setShowAddAgent(true)}
                                             title="Add agent"
-                                            className="border border-gray-200 rounded text-gray-500 text-sm leading-none px-1.5 py-0.5 cursor-pointer bg-transparent hover:border-blue-500 hover:text-blue-500 transition-colors"
+                                            style={{
+                                                background: 'transparent', border: `1px solid ${color.stroke}`,
+                                                borderRadius: '4px', color: color.textFaint,
+                                                fontSize: '13px', lineHeight: 1, padding: '1px 6px',
+                                                cursor: 'pointer',
+                                            }}
+                                            onMouseEnter={e => { e.currentTarget.style.borderColor = color.accent; e.currentTarget.style.color = color.accent }}
+                                            onMouseLeave={e => { e.currentTarget.style.borderColor = color.stroke; e.currentTarget.style.color = color.textFaint }}
                                         >
                                             +
                                         </button>
                                     </div>
                                     {projectAgents.length === 0 ? (
-                                        <div className="px-3.5 py-2 text-gray-400 text-[11px]">
-                                            No agents yet
+                                        <div style={{ padding: '16px 14px' }}>
+                                            <p style={{ fontSize: '12px', color: color.textFaint, margin: 0, lineHeight: 1.5 }}>
+                                                No agents yet. Create one to get started.
+                                            </p>
                                         </div>
                                     ) : projectAgents.map(agent => {
                                         const isRunning = agentSessions.current.has(agent.id)
                                         const isSelected = agent.id === activeAgentId
+                                        const agentBg = AGENT_TYPE_COLORS[agent.agent_type] ?? color.accent
                                         return (
                                         <div
                                             key={agent.id}
@@ -3837,37 +3883,65 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                                     setActiveAgentId(agent.id)
                                                 }
                                             }}
-                                            className={[
-                                                'px-3 py-2 cursor-pointer flex items-center gap-2.5 mx-2 my-0.5 rounded-lg border transition-colors',
-                                                isSelected
-                                                    ? 'bg-blue-50 border-blue-200'
-                                                    : 'bg-transparent border-transparent hover:bg-gray-50',
-                                            ].join(' ')}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: '10px',
+                                                padding: '9px 12px', margin: '0 8px 2px', borderRadius: '8px',
+                                                cursor: 'pointer', transition: 'background 0.1s',
+                                                background: isSelected ? color.accentSubtle : 'transparent',
+                                                border: `1px solid ${isSelected ? '#b6d0f7' : 'transparent'}`,
+                                            }}
+                                            onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = color.bgCanvas }}
+                                            onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
                                         >
-                                            <div className="relative shrink-0">
-                                                <div
-                                                    className="w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold text-white"
-                                                    style={{ background: AGENT_TYPE_COLORS[agent.agent_type] ?? 'var(--color-blue-500)' }}
-                                                >
+                                            {/* Avatar with online indicator */}
+                                            <div style={{ position: 'relative', flexShrink: 0 }}>
+                                                <div style={{
+                                                    width: '32px', height: '32px', borderRadius: '8px',
+                                                    background: agentBg, display: 'flex',
+                                                    alignItems: 'center', justifyContent: 'center',
+                                                    fontSize: '11px', fontWeight: 700, color: '#fff',
+                                                    boxShadow: isSelected ? `0 0 0 2px ${'#fff'}, 0 0 0 3px ${agentBg}` : 'none',
+                                                }}>
                                                     {agent.name.slice(0, 2).toUpperCase()}
                                                 </div>
                                                 {isRunning && (
-                                                    <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-green-500 border-2 border-white" />
+                                                    <span style={{
+                                                        position: 'absolute', bottom: '-2px', right: '-2px',
+                                                        width: '10px', height: '10px', borderRadius: '50%',
+                                                        background: '#22c55e', border: '2px solid #fff',
+                                                        display: 'block',
+                                                    }} />
                                                 )}
                                             </div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="text-[13px] font-medium text-gray-900 truncate">
+
+                                            {/* Name + status */}
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{
+                                                    fontSize: '13px', fontWeight: isSelected ? 600 : 500,
+                                                    color: isSelected ? color.accent : color.textPrimary,
+                                                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                                }}>
                                                     {agent.name}
                                                 </div>
-                                                <div className="text-[11px] text-gray-400 mt-0.5 truncate">
-                                                    {AGENT_TYPE_LABELS[agent.agent_type] ?? agent.agent_type}
+                                                <div style={{ fontSize: '11px', color: isRunning ? '#16a34a' : color.textFaint, marginTop: '1px' }}>
+                                                    {isRunning ? '● Active' : AGENT_TYPE_LABELS[agent.agent_type] ?? agent.agent_type}
                                                 </div>
                                             </div>
+
+                                            {/* Run button (when idle) */}
                                             {!isRunning && (
                                                 <button
                                                     onClick={e => { e.stopPropagation(); setActiveAgentId(agent.id) }}
                                                     title="Run"
-                                                    className="bg-transparent border-none text-gray-300 cursor-pointer p-1 rounded shrink-0 flex items-center hover:text-green-500 transition-colors"
+                                                    style={{
+                                                        background: 'transparent', border: 'none',
+                                                        color: color.textFaint, cursor: 'pointer',
+                                                        padding: '3px', borderRadius: '4px',
+                                                        display: 'flex', alignItems: 'center',
+                                                        flexShrink: 0,
+                                                    }}
+                                                    onMouseEnter={e => (e.currentTarget.style.color = '#16a34a')}
+                                                    onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
                                                 >
                                                     <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
                                                         <path d="M3 2l11 6-11 6V2z"/>
@@ -3879,7 +3953,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                                     e.stopPropagation()
                                                     const res = await fetch(`/api/agents/${agent.id}`, { method: 'DELETE' })
                                                     if (!res.ok) return
-                                                    // Clean up terminal session
                                                     const session = agentSessions.current.get(agent.id)
                                                     if (session) {
                                                         session.observer.disconnect()
@@ -3888,7 +3961,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                                         agentSessions.current.delete(agent.id)
                                                     }
                                                     agentContainerRefs.current.delete(agent.id)
-                                                    // Reset active selection if we deleted the active agent
                                                     if (activeAgentId === agent.id) {
                                                         const remaining = projectAgents.filter(a => a.id !== agent.id)
                                                         setActiveAgentId(remaining.length > 0 ? remaining[0].id : null)
@@ -3896,7 +3968,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                                     agentHook.remove.mutate(agent.id)
                                                 }}
                                                 title="Remove"
-                                                className="bg-transparent border-none text-gray-300 cursor-pointer text-sm p-1 rounded shrink-0 hover:text-red-500 transition-colors"
+                                                style={{
+                                                    background: 'transparent', border: 'none',
+                                                    color: color.textFaint, cursor: 'pointer',
+                                                    padding: '3px 5px', borderRadius: '4px',
+                                                    fontSize: '15px', lineHeight: 1, flexShrink: 0,
+                                                }}
+                                                onMouseEnter={e => (e.currentTarget.style.color = color.danger)}
+                                                onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
                                             >
                                                 ×
                                             </button>
@@ -3906,9 +3985,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                             )}
                         </div>
 
-                        {/* Terminal area */}
+                        {/* ─── Chat / Terminal Panel ─────────────────────────────────── */}
                         <div
-                            style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}
+                            style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', background: '#fff' }}
                             onDragOver={e => { e.preventDefault(); setIsDraggingOver(true) }}
                             onDragEnter={e => { e.preventDefault(); setIsDraggingOver(true) }}
                             onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDraggingOver(false) }}
@@ -3919,83 +3998,90 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                 if (file) uploadImage(file)
                             }}
                         >
-                            {/* Terminal header: avatar + name + role + Restart (or agent header) */}
+                            {/* ── Chat panel header ── */}
                             {activeProject && (() => {
                                 const activeAgent = activeAgentId !== null ? projectAgents.find(a => a.id === activeAgentId) ?? null : null
+                                const agentBg = activeAgent ? (AGENT_TYPE_COLORS[activeAgent.agent_type] ?? color.accent) : agentColor(activeProject.name)
+                                const displayName = activeAgent ? activeAgent.name : activeProject.name
+                                const displayRole = activeAgent
+                                    ? (AGENT_TYPE_LABELS[activeAgent.agent_type] ?? activeAgent.agent_type)
+                                    : activeProject.language
                                 return (
                                     <div style={{
-                                        height: '40px', flexShrink: 0, display: 'flex', alignItems: 'center',
-                                        paddingLeft: '14px', paddingRight: '12px', gap: '10px',
-                                        borderBottom: `1px solid ${color.borderMuted}`, background: color.bgCanvas,
+                                        height: '48px', flexShrink: 0, display: 'flex', alignItems: 'center',
+                                        paddingLeft: '16px', paddingRight: '14px', gap: '10px',
+                                        borderBottom: `1px solid ${color.stroke}`, background: '#fff',
                                     }}>
-                                        {activeAgent ? (
-                                            <>
-                                                <button
-                                                    onClick={() => setActiveAgentId(null)}
-                                                    title="Back to project terminal"
-                                                    style={{
-                                                        background: 'transparent', border: 'none',
-                                                        color: color.textFaint, cursor: 'pointer',
-                                                        padding: '2px 4px', display: 'flex', alignItems: 'center',
-                                                    }}
-                                                    onMouseEnter={e => { e.currentTarget.style.color = color.textSecondary }}
-                                                    onMouseLeave={e => { e.currentTarget.style.color = color.textFaint }}
-                                                >
-                                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                                                        <path d="M7.78 12.53a.75.75 0 01-1.06 0L2.47 8.28a.75.75 0 010-1.06l4.25-4.25a.75.75 0 011.06 1.06L4.81 7h7.44a.75.75 0 010 1.5H4.81l2.97 2.97a.75.75 0 010 1.06z"/>
-                                                    </svg>
-                                                </button>
-                                                <div style={{
-                                                    width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0,
-                                                    background: AGENT_TYPE_COLORS[activeAgent.agent_type] ?? color.accent,
-                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                    fontSize: '11px', fontWeight: 700, color: '#fff',
-                                                }}>
-                                                    {activeAgent.name.charAt(0).toUpperCase()}
-                                                </div>
-                                                <span style={{ color: color.textPrimary, fontSize: '13px', fontWeight: 600 }}>
-                                                    {activeAgent.name}
-                                                </span>
-                                                <span style={{ color: color.textFaint, fontSize: '12px' }}>
-                                                    {AGENT_TYPE_LABELS[activeAgent.agent_type] ?? activeAgent.agent_type}
-                                                </span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <div style={{
-                                                    width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0,
-                                                    background: agentColor(activeProject.name), display: 'flex',
-                                                    alignItems: 'center', justifyContent: 'center',
-                                                    fontSize: '11px', fontWeight: 700, color: '#fff',
-                                                }}>
-                                                    {activeProject.name.charAt(0).toUpperCase()}
-                                                </div>
-                                                <span style={{ color: color.textPrimary, fontSize: '13px', fontWeight: 600 }}>
-                                                    {activeProject.name}
-                                                </span>
-                                                <span style={{ color: color.textFaint, fontSize: '12px' }}>
-                                                    / {activeProject.language}
-                                                </span>
-                                            </>
-                                        )}
-                                        <div style={{ flex: 1 }} />
-                                        {!activeAgent && (
+                                        {/* Back button (agent view) */}
+                                        {activeAgent && (
                                             <button
-                                                onClick={restartClaude}
+                                                onClick={() => setActiveAgentId(null)}
+                                                title="Back"
                                                 style={{
-                                                    background: 'transparent', border: `1px solid ${color.borderMuted}`,
-                                                    borderRadius: '5px', color: color.textMuted, fontSize: '11px',
-                                                    padding: '4px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
+                                                    background: 'transparent', border: 'none',
+                                                    color: color.textFaint, cursor: 'pointer',
+                                                    padding: '4px', display: 'flex', alignItems: 'center', borderRadius: '4px',
                                                 }}
-                                                onMouseEnter={e => { e.currentTarget.style.borderColor = color.textMuted; e.currentTarget.style.color = color.textSecondary }}
-                                                onMouseLeave={e => { e.currentTarget.style.borderColor = color.borderMuted; e.currentTarget.style.color = color.textMuted }}
+                                                onMouseEnter={e => { e.currentTarget.style.color = color.textPrimary; e.currentTarget.style.background = color.bgCanvas }}
+                                                onMouseLeave={e => { e.currentTarget.style.color = color.textFaint; e.currentTarget.style.background = 'transparent' }}
                                             >
-                                                <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
-                                                    <path d="M8 2.5a5.487 5.487 0 00-4.131 1.869l1.204 1.204A.25.25 0 014.896 6H1.25A.25.25 0 011 5.75V2.104a.25.25 0 01.427-.177l1.38 1.38A7.001 7.001 0 0114.95 7.16a.75.75 0 11-1.49.178A5.501 5.501 0 008 2.5zM1.705 8.005a.75.75 0 01.834.656 5.501 5.501 0 009.592 2.97l-1.204-1.204a.25.25 0 01.177-.427h3.646a.25.25 0 01.25.25v3.646a.25.25 0 01-.427.177l-1.38-1.38A7.001 7.001 0 011.05 8.84a.75.75 0 01.656-.834z"/>
+                                                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                                    <path d="M7.78 12.53a.75.75 0 01-1.06 0L2.47 8.28a.75.75 0 010-1.06l4.25-4.25a.75.75 0 011.06 1.06L4.81 7h7.44a.75.75 0 010 1.5H4.81l2.97 2.97a.75.75 0 010 1.06z"/>
                                                 </svg>
-                                                Restart
                                             </button>
                                         )}
+
+                                        {/* Avatar */}
+                                        <div style={{
+                                            width: '28px', height: '28px',
+                                            borderRadius: activeAgent ? '8px' : '50%',
+                                            flexShrink: 0, background: agentBg,
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            fontSize: '11px', fontWeight: 700, color: '#fff',
+                                        }}>
+                                            {displayName.charAt(0).toUpperCase()}
+                                        </div>
+
+                                        {/* Name + badge */}
+                                        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <span style={{ color: color.textPrimary, fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {displayName}
+                                            </span>
+                                            {/* AGENT_EXECUTION badge */}
+                                            <span style={{
+                                                fontSize: '10px', fontWeight: 600, padding: '2px 7px',
+                                                borderRadius: '10px', letterSpacing: '0.04em',
+                                                background: activeAgent ? `${agentBg}18` : color.bgCanvas,
+                                                border: `1px solid ${activeAgent ? agentBg + '40' : color.stroke}`,
+                                                color: activeAgent ? agentBg : color.textMuted,
+                                                flexShrink: 0,
+                                            }}>
+                                                {activeAgent ? 'AGENT_EXECUTION' : displayRole.toUpperCase()}
+                                            </span>
+                                        </div>
+
+                                        {/* Status + Restart */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                                            <ClaudeStatusBadge status={claudeStatus[activeProject.id]} />
+                                            {!activeAgent && (
+                                                <button
+                                                    onClick={restartClaude}
+                                                    style={{
+                                                        background: 'transparent', border: `1px solid ${color.stroke}`,
+                                                        borderRadius: '6px', color: color.textMuted, fontSize: '11px',
+                                                        padding: '4px 10px', cursor: 'pointer',
+                                                        display: 'flex', alignItems: 'center', gap: '5px',
+                                                    }}
+                                                    onMouseEnter={e => { e.currentTarget.style.borderColor = color.textMuted; e.currentTarget.style.color = color.textPrimary }}
+                                                    onMouseLeave={e => { e.currentTarget.style.borderColor = color.stroke; e.currentTarget.style.color = color.textMuted }}
+                                                >
+                                                    <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+                                                        <path d="M8 2.5a5.487 5.487 0 00-4.131 1.869l1.204 1.204A.25.25 0 014.896 6H1.25A.25.25 0 011 5.75V2.104a.25.25 0 01.427-.177l1.38 1.38A7.001 7.001 0 0114.95 7.16a.75.75 0 11-1.49.178A5.501 5.501 0 008 2.5zM1.705 8.005a.75.75 0 01.834.656 5.501 5.501 0 009.592 2.97l-1.204-1.204a.25.25 0 01.177-.427h3.646a.25.25 0 01.25.25v3.646a.25.25 0 01-.427.177l-1.38-1.38A7.001 7.001 0 011.05 8.84a.75.75 0 01.656-.834z"/>
+                                                    </svg>
+                                                    Restart
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 )
                             })()}
@@ -4032,8 +4118,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                 }}
                             />
 
-                            {/* Terminal containers */}
-                            <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+                            {/* Terminal body — xterm containers */}
+                            <div style={{ flex: 1, position: 'relative', overflow: 'hidden', background: '#0d1117' }}>
                                 {allProjects.map(project => (
                                     <div
                                         key={project.id}
@@ -4053,8 +4139,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                             ref={el => { agentContainerRefs.current.set(agent.id, el) }}
                                             style={{
                                                 position: 'absolute', inset: 0, padding: '8px', boxSizing: 'border-box',
-                                                // Active agent is fully visible; background agents with sessions
-                                                // are rendered off-screen so xterm stays alive
                                                 ...(isActive
                                                     ? { display: 'block' }
                                                     : hasSession
@@ -4065,6 +4149,77 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                     )
                                 })}
                             </div>
+
+                            {/* ── Message input footer ── */}
+                            {activeProject && (
+                                <div style={{
+                                    flexShrink: 0, background: '#fff',
+                                    borderTop: `1px solid ${color.stroke}`,
+                                    padding: '10px 14px',
+                                    display: 'flex', flexDirection: 'column', gap: '8px',
+                                }}>
+                                    {/* Input area */}
+                                    <div style={{
+                                        display: 'flex', alignItems: 'center', gap: '8px',
+                                        border: `1px solid ${color.stroke}`, borderRadius: '8px',
+                                        padding: '8px 12px', background: color.bgCanvas,
+                                    }}>
+                                        <input
+                                            placeholder={`Message ${activeAgentId !== null ? (projectAgents.find(a => a.id === activeAgentId)?.name ?? 'agent') : activeProject.name}…`}
+                                            style={{
+                                                flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                                                fontSize: '13px', color: color.textPrimary,
+                                            }}
+                                            onKeyDown={e => {
+                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                    e.preventDefault()
+                                                    const val = (e.target as HTMLInputElement).value.trim()
+                                                    if (!val) return
+                                                    const projectId = activeAgentId !== null ? activeAgentId : activeProject.id
+                                                    const session = activeAgentId !== null
+                                                        ? agentSessions.current.get(activeAgentId)
+                                                        : sessions.current.get(activeProject.id)
+                                                    if (session && session.ws.readyState === WebSocket.OPEN) {
+                                                        session.ws.send(new TextEncoder().encode(val + '\n'))
+                                                    }
+                                                    ;(e.target as HTMLInputElement).value = ''
+                                                }
+                                            }}
+                                        />
+                                        <button
+                                            style={{
+                                                flexShrink: 0, background: color.accent, border: 'none',
+                                                borderRadius: '6px', padding: '5px 10px', cursor: 'pointer',
+                                                display: 'flex', alignItems: 'center',
+                                            }}
+                                        >
+                                            <svg width="12" height="12" viewBox="0 0 16 16" fill="white">
+                                                <path d="M1.958.686a1.5 1.5 0 012.075.43L14.75 9a1.5 1.5 0 010 2L4.033 18.884a1.5 1.5 0 01-2.505-1.11V2.226a1.5 1.5 0 01.43-1.54z"/>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    {/* Meta row: model + context */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <span style={{
+                                            fontSize: '10px', color: color.textFaint,
+                                            display: 'flex', alignItems: 'center', gap: '4px',
+                                        }}>
+                                            <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
+                                                <path d="M0 8a8 8 0 1116 0A8 8 0 010 8zm8-6.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13z"/>
+                                            </svg>
+                                            claude-sonnet-4-6
+                                        </span>
+                                        <span style={{ color: color.stroke }}>·</span>
+                                        <span style={{ fontSize: '10px', color: color.textFaint }}>
+                                            {activeProject.path.split('/').pop() ?? activeProject.name}
+                                        </span>
+                                        <div style={{ flex: 1 }} />
+                                        <span style={{ fontSize: '10px', color: color.textFaint }}>
+                                            Press Enter to send · Ctrl+C to interrupt
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                     </div>

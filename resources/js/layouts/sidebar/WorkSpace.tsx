@@ -37,7 +37,10 @@ export function WorkspacePicker({
     }
 
     return (
-        <div style={{ padding: "0 10px 10px", position: "relative" }} ref={ref}>
+        <div style={{ padding: "8px 10px 6px", position: "relative" }} ref={ref}>
+            <div style={{ padding: "0 4px 4px", fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: color.textFaint }}>
+                Workspace
+            </div>
             <button
                 onClick={() => setOpen(o => !o)}
                 style={{
@@ -45,6 +48,7 @@ export function WorkspacePicker({
                     width: "100%", padding: "7px 10px", borderRadius: "8px",
                     background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
                     cursor: "pointer", textAlign: "left",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
                 }}
             >
                 <div style={{
@@ -53,10 +57,10 @@ export function WorkspacePicker({
                     display: "flex", alignItems: "center", justifyContent: "center",
                     fontSize: "11px", fontWeight: 700, color: "#fff", flexShrink: 0,
                 }}>
-                    {(current?.name[0] ?? "A").toUpperCase()}
+                    {(current?.name[0] ?? "P").toUpperCase()}
                 </div>
-                <span style={{ color: color.textSecondary, fontSize: "12px", fontWeight: 500, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {current?.name ?? "All Workspaces"}
+                <span style={{ color: color.textPrimary, fontSize: "12px", fontWeight: 500, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {current?.name ?? "Personal Workspace"}
                 </span>
                 <svg width="10" height="10" viewBox="0 0 16 16" fill={color.textFaint} style={{ flexShrink: 0 }}>
                     <path d="M4.427 7.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 7H4.604a.25.25 0 00-.177.427z"/>
@@ -67,7 +71,7 @@ export function WorkspacePicker({
                 <div style={{
                     position: "absolute", top: "calc(100% - 2px)", left: "10px", right: "10px", zIndex: 200,
                     background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
-                    borderRadius: "8px", boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+                    borderRadius: "8px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
                     padding: "4px 0", overflow: "hidden",
                 }}>
                     <button

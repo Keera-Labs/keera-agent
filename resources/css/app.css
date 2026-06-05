@@ -2,10 +2,20 @@
 @config "../../tailwind.config.js";
 
 @theme {
-    --color-canvas:  #0d1117;
-    --color-surface: #161b22;
-    --color-stroke:  #30363d;
-    --color-accent:  #58a6ff;
-    --color-success: #238636;
-    --color-danger:  #ff7b72;
+    --color-canvas:  #f6f8fa;
+    --color-surface: #ffffff;
+    --color-stroke:  #d0d7de;
+    --color-accent:  #0969da;
+    --color-success: #1a7f37;
+    --color-danger:  #cf222e;
 }
+
+/* Scrollbar styling for light theme */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #d0d7de transparent;
+}
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: #d0d7de; border-radius: 3px; }
+*::-webkit-scrollbar-thumb:hover { background: #afb8c1; }
