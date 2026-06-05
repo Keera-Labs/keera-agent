@@ -25,12 +25,13 @@ class Agent(Model):
 
         if getattr(self, 'has_session', False):
             cmd.continue_session()
-        else:
-            system_prompt = self.system_prompt or ''
-            if flags.get('plan_mode'):
-                system_prompt = PLAN_MODE_PREFIX + system_prompt
-            if system_prompt_suffix:
-                system_prompt = system_prompt + system_prompt_suffix
+
+        system_prompt = self.system_prompt or ''
+        if flags.get('plan_mode'):
+            system_prompt = PLAN_MODE_PREFIX + system_prompt
+        if system_prompt_suffix:
+            system_prompt = system_prompt + system_prompt_suffix
+        if system_prompt.strip():
             prompt_file = f'/tmp/keera-agent-{self.id}.txt'
             with open(prompt_file, 'w') as f:
                 f.write(system_prompt.strip())
