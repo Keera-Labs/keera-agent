@@ -3835,6 +3835,29 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                                 ✕ idle
                                             </button>
                                         )}
+                                        {projectAgents.length > 0 && (
+                                            <button
+                                                onClick={async () => {
+                                                    for (const agent of projectAgents) {
+                                                        const session = agentSessions.current.get(agent.id)
+                                                        if (session) {
+                                                            session.observer.disconnect()
+                                                            session.term.dispose()
+                                                            session.ws.close()
+                                                            agentSessions.current.delete(agent.id)
+                                                        }
+                                                        agentContainerRefs.current.delete(agent.id)
+                                                        const res = await fetch(`/api/agents/${agent.id}`, { method: 'DELETE' })
+                                                        if (res.ok) agentHook.remove.mutate(agent.id)
+                                                    }
+                                                    setActiveAgentId(null)
+                                                }}
+                                                title="Delete all agents"
+                                                className="border border-gray-200 rounded text-gray-500 text-[10px] leading-none px-1.5 py-0.5 cursor-pointer bg-transparent hover:border-red-500 hover:text-red-500 transition-colors"
+                                            >
+                                                ✕ all
+                                            </button>
+                                        )}
                                         <button
                                             onClick={() => setShowAddAgent(true)}
                                             title="Add agent"
