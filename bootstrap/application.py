@@ -5,6 +5,7 @@ from fastapi_startkit.fastapi import FastAPIProvider
 from fastapi_startkit.inertia import InertiaProvider
 from fastapi_startkit.logging import LogProvider
 from fastapi_startkit.masoniteorm import DatabaseProvider
+from fastapi_startkit.mcp import McpProvider
 from fastapi_startkit.storage import StorageProvider
 from fastapi_startkit.vite import ViteProvider
 
@@ -21,6 +22,7 @@ app = Application(
         LogProvider,
         (DatabaseProvider, DatabaseConfig),
         (FastAPIProvider, FastAPIConfig),
+        McpProvider,
         (StorageProvider, StorageConfig),
         AppProvider,
         TerminalProvider,

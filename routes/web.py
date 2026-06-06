@@ -16,9 +16,12 @@ from app.controllers import agent_trigger_controller
 from app.controllers import agent_template_controller
 from app.controllers import poc_controller
 from app.controllers import settings_controller
-from app.mcp import controller as mcp_controller
+from app.mcp.server import KeeraServer
 
 router = Router()
+
+_mcp_server = KeeraServer()
+router.router.include_router(_mcp_server.router(prefix="/mcp"))
 
 # API endpoints — must be registered before the /{project} wildcard
 router.get("/api/workspaces", workspace_controller.index)
@@ -81,10 +84,6 @@ router.get("/api/agents/{agent_id}/permissions", permission_controller.get_agent
 router.patch("/api/agents/{agent_id}/permissions", permission_controller.update_agent_permissions)
 router.get("/api/default-permissions", permission_controller.get_default_permissions)
 router.patch("/api/default-permissions", permission_controller.update_default_permissions)
-
-# MCP — JSON-RPC 2.0 endpoint (same server, no extra process)
-router.post("/mcp", mcp_controller.handle)
-router.get("/mcp", mcp_controller.handle_get)
 
 # Settings page — before wildcard
 router.get("/settings", settings_controller.settings)
