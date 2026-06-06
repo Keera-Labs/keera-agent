@@ -8,12 +8,13 @@ export const color = {
     accent:  v('--color-accent'),   // #0969da
     success: v('--color-success'),  // #1a7f37
     danger:  v('--color-danger'),   // #cf222e
-    overlay: 'rgba(1,4,9,0.4)',
+    overlay: 'rgba(0,0,0,0.5)',
 
     // ── Aliases (AppLayout inline-style compat) ────────────────────
     bgCanvas:       v('--color-canvas'),
     bgBase:         v('--color-canvas'),
     bgSurface:      v('--color-surface'),
+    bgModal:        v('--color-modal'),
     border:         v('--color-stroke'),
     borderMuted:    v('--color-stroke'),
 

@@ -4,6 +4,7 @@
 @theme {
     --color-canvas:  #f6f8fa;
     --color-surface: #ffffff;
+    --color-modal:   #ffffff;
     --color-stroke:  #d0d7de;
     --color-accent:  #0969da;
     --color-success: #1a7f37;

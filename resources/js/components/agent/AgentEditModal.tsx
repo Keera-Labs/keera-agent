@@ -117,7 +117,7 @@ export default function AgentEditModal({
             onClick={e => { if (e.target === e.currentTarget) onClose() }}
         >
             <div style={{
-                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '10px',
+                background: color.bgModal, border: `1px solid ${color.borderMuted}`, borderRadius: '10px',
                 width: '480px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto',
                 display: 'flex', flexDirection: 'column',
             }}>
