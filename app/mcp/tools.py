@@ -489,7 +489,7 @@ SPAWN_AGENT_SCHEMA = {
             },
             "agent_type": {
                 "type": "string",
-                "enum": ["pm", "software_engineer", "qa", "custom"],
+                "enum": ["pm", "software_engineer", "qa", "qa_browser", "custom"],
                 "description": "Role type for the agent.",
             },
             "system_prompt": {
@@ -633,6 +633,8 @@ async def handle_get_orchestrated_agents(args: dict) -> str:
 
 # ── registry ──────────────────────────────────────────────────────────────────
 
+from app.mcp.browser_tools import BROWSER_TOOLS, BROWSER_HANDLERS
+
 TOOLS: list[dict] = [
     CREATE_TASK_SCHEMA,
     LIST_TASKS_SCHEMA,
@@ -645,6 +647,7 @@ TOOLS: list[dict] = [
     LIST_AGENTS_SCHEMA,
     SPAWN_AGENT_SCHEMA,
     GET_ORCHESTRATED_AGENTS_SCHEMA,
+    *BROWSER_TOOLS,
 ]
 
 HANDLERS: dict = {
@@ -659,4 +662,5 @@ HANDLERS: dict = {
     "list_agents": handle_list_agents,
     "spawn_agent": handle_spawn_agent,
     "get_orchestrated_agents": handle_get_orchestrated_agents,
+    **BROWSER_HANDLERS,
 }
