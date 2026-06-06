@@ -87,7 +87,7 @@ export default function Sidebar({
     const isSettingsPage = component === 'Settings'
 
     const filteredProjects = filterWorkspaceId !== null
-        ? allProjects.filter(p => p.workspace_id === filterWorkspaceId)
+        ? allProjects.filter(p => Number(p.workspace_id) === filterWorkspaceId)
         : allProjects
 
     return (

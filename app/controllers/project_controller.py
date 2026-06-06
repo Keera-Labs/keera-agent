@@ -25,7 +25,7 @@ async def index(request: Request):
             "slug": p.slug,
             "path": p.path,
             "language": p.language,
-            "workspace_id": p.workspace_id,
+            "workspace_id": int(p.workspace_id) if p.workspace_id is not None else None,
             "claude_status": p.claude_status,
             "system_prompt": p.system_prompt,
         }
@@ -79,7 +79,7 @@ async def update(request: Request, project_id: int):
         "slug": project.slug,
         "path": project.path,
         "language": project.language,
-        "workspace_id": project.workspace_id,
+        "workspace_id": int(project.workspace_id) if project.workspace_id is not None else None,
         "claude_status": project.claude_status,
         "system_prompt": project.system_prompt,
     }
@@ -227,7 +227,7 @@ async def store(request: Request):
         "slug": project.slug,
         "path": project.path,
         "language": project.language,
-        "workspace_id": project.workspace_id,
+        "workspace_id": int(project.workspace_id) if project.workspace_id is not None else None,
         "system_prompt": project.system_prompt,
     }
 
