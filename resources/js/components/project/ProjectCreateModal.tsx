@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useForm } from '@inertiajs/react'
 import type { Workspace, Project } from '@/types/type'
 
 const LANGUAGES = ['Python', 'TypeScript', 'JavaScript', 'Go', 'Rust', 'Other']
@@ -8,6 +7,14 @@ const inputCls = 'bg-canvas border border-stroke rounded-md text-zinc-200 text-[
 const labelSpanCls = 'text-zinc-400 text-[11px] uppercase tracking-[0.05em]'
 const cancelCls = 'bg-transparent border border-stroke rounded-md text-zinc-400 text-xs px-3.5 py-1.5 cursor-pointer disabled:opacity-50'
 const submitCls = 'bg-success-emphasis border border-success-border rounded-md text-white text-xs px-3.5 py-1.5 cursor-pointer disabled:opacity-50'
+
+const ERROR_MAP: Record<string, string> = {
+    path_not_found: 'Path does not exist on disk.',
+}
+
+function friendlyError(code: string): string {
+    return ERROR_MAP[code] ?? code ?? 'Something went wrong.'
+}
 
 export default function ProjectCreateModal({
     workspaces,
@@ -20,33 +27,49 @@ export default function ProjectCreateModal({
     onClose: () => void
     onCreated: (p: Project) => void
 }) {
-    const form = useForm({
-        name: '',
-        path: '',
-        language: 'Python',
-        workspace_id: (defaultWorkspaceId ?? workspaces[0]?.id ?? null) as number | null,
-        create_dir: false,
-    })
+    const [name, setName] = useState('')
+    const [path, setPath] = useState('')
+    const [language, setLanguage] = useState('Python')
+    const [workspaceId, setWorkspaceId] = useState<number | null>(
+        defaultWorkspaceId ?? workspaces[0]?.id ?? null,
+    )
+    const [processing, setProcessing] = useState(false)
     const [error, setError] = useState('')
     const [confirmCreate, setConfirmCreate] = useState<{ expanded: string } | null>(null)
 
-    function submit(createDir = false) {
+    async function submit(createDir = false) {
         setError('')
-        form.transform(data => ({ ...data, create_dir: createDir }))
-        form.post('/api/projects', {
-            onSuccess: (page: { props: Record<string, unknown> }) => {
-                onCreated(page.props.new_project as Project)
+        setProcessing(true)
+        try {
+            const res = await fetch('/api/projects', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name,
+                    path,
+                    language,
+                    workspace_id: workspaceId,
+                    create_dir: createDir,
+                }),
+            })
+            const json = await res.json() as Record<string, unknown>
+            if (res.ok) {
+                onCreated(json as unknown as Project)
                 onClose()
-            },
-            onError: (errors: Record<string, string>) => {
-                if (errors.path_not_found) {
-                    setConfirmCreate({ expanded: errors.path_not_found })
-                    return
-                }
-                setConfirmCreate(null)
-                setError(errors._ ?? 'Something went wrong')
-            },
-        })
+                return
+            }
+            const code = (json.error ?? json.detail ?? '') as string
+            if (code === 'path_not_found' && !createDir) {
+                setConfirmCreate({ expanded: (json.expanded as string | undefined) ?? path })
+                return
+            }
+            setConfirmCreate(null)
+            setError(friendlyError(code))
+        } catch (_e) {
+            setError('Network error. Please try again.')
+        } finally {
+            setProcessing(false)
+        }
     }
 
     return (
@@ -62,20 +85,20 @@ export default function ProjectCreateModal({
                         {error && <span className="text-danger text-xs">{error}</span>}
                         <div className="flex gap-2 justify-end">
                             <button type="button" onClick={() => setConfirmCreate(null)} className={cancelCls}>Back</button>
-                            <button type="button" disabled={form.processing} onClick={() => submit(true)} className={submitCls}>
-                                {form.processing ? 'Creating…' : 'Create & Add'}
+                            <button type="button" disabled={processing} onClick={() => submit(true)} className={submitCls}>
+                                {processing ? 'Creating…' : 'Create & Add'}
                             </button>
                         </div>
                     </>
                 ) : (
-                    <form onSubmit={e => { e.preventDefault(); submit() }} className="flex flex-col gap-3.5">
+                    <form onSubmit={e => { e.preventDefault(); void submit() }} className="flex flex-col gap-3.5">
                         <h2 className="m-0 text-zinc-200 text-[15px] font-semibold">New Project</h2>
                         {error && <span className="text-danger text-xs">{error}</span>}
                         <label className="flex flex-col gap-1">
                             <span className={labelSpanCls}>Workspace</span>
                             <select
-                                value={form.data.workspace_id ?? ''}
-                                onChange={e => form.setData('workspace_id', e.target.value ? Number(e.target.value) : null)}
+                                value={workspaceId ?? ''}
+                                onChange={e => setWorkspaceId(e.target.value ? Number(e.target.value) : null)}
                                 className={inputCls}
                             >
                                 <option value="">— No workspace —</option>
@@ -84,22 +107,34 @@ export default function ProjectCreateModal({
                         </label>
                         <label className="flex flex-col gap-1">
                             <span className={labelSpanCls}>Name</span>
-                            <input value={form.data.name} onChange={e => form.setData('name', e.target.value)} placeholder="my-project" required className={inputCls} />
+                            <input
+                                value={name}
+                                onChange={e => setName(e.target.value)}
+                                placeholder="my-project"
+                                required
+                                className={inputCls}
+                            />
                         </label>
                         <label className="flex flex-col gap-1">
                             <span className={labelSpanCls}>Path</span>
-                            <input value={form.data.path} onChange={e => form.setData('path', e.target.value)} placeholder="~/code/my-project" required className={inputCls} />
+                            <input
+                                value={path}
+                                onChange={e => setPath(e.target.value)}
+                                placeholder="~/code/my-project"
+                                required
+                                className={inputCls}
+                            />
                         </label>
                         <label className="flex flex-col gap-1">
                             <span className={labelSpanCls}>Language</span>
-                            <select value={form.data.language} onChange={e => form.setData('language', e.target.value)} className={inputCls}>
+                            <select value={language} onChange={e => setLanguage(e.target.value)} className={inputCls}>
                                 {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
                             </select>
                         </label>
                         <div className="flex gap-2 justify-end">
                             <button type="button" onClick={onClose} className={cancelCls}>Cancel</button>
-                            <button type="submit" disabled={form.processing} className={submitCls}>
-                                {form.processing ? 'Checking…' : 'Add Project'}
+                            <button type="submit" disabled={processing} className={submitCls}>
+                                {processing ? 'Checking…' : 'Add Project'}
                             </button>
                         </div>
                     </form>
