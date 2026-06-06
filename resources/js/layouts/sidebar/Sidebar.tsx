@@ -90,9 +90,6 @@ export default function Sidebar({
         ? allProjects.filter(p => p.workspace_id === filterWorkspaceId)
         : allProjects
 
-    const initials = (name: string) =>
-        name.split(/\s+/).map(w => w[0] ?? '').join('').toUpperCase().slice(0, 2) || '??'
-
     return (
         <aside style={{
             width: '220px', flexShrink: 0, background: color.bgCanvas,
@@ -108,8 +105,8 @@ export default function Sidebar({
             <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
 
                 {/* PROJECTS */}
-                <div style={{ padding: '2px 10px 4px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ color: color.textFaint, fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                <div style={{ padding: '10px 10px 4px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ color: color.textFaint, fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em' }}>
                         Projects
                     </span>
                     <button
@@ -125,7 +122,7 @@ export default function Sidebar({
                     </button>
                 </div>
 
-                <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                <ul style={{ listStyle: 'none', margin: 0, padding: '0 2px' }}>
                     {filteredProjects.length === 0 && (
                         <li style={{ padding: '4px 16px', color: color.textFaint, fontSize: '11px', fontStyle: 'italic' }}>
                             No projects
@@ -166,25 +163,29 @@ export default function Sidebar({
 
                 {/* Active project card */}
                 {activeProject && (
-                    <div style={{ padding: '8px 10px 4px' }}>
+                    <div style={{ padding: '8px 8px 4px' }}>
                         <div style={{
                             display: 'flex', alignItems: 'center', gap: '10px',
                             padding: '9px 12px', borderRadius: '8px',
                             background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
                         }}>
+                            {/* Terminal/arrow icon in blue square */}
                             <div style={{
-                                width: '30px', height: '30px', borderRadius: '7px',
-                                background: color.accentEmphasis,
+                                width: '32px', height: '32px', borderRadius: '8px',
+                                background: '#EEF2FF',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: '11px', fontWeight: 700, color: '#fff', flexShrink: 0, letterSpacing: '-0.02em',
+                                flexShrink: 0,
                             }}>
-                                {initials(activeProject.name)}
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M2 4.5L6 8L2 11.5" stroke="#4F46E5" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+                                    <path d="M8 12H14" stroke="#4F46E5" strokeWidth="1.75" strokeLinecap="round"/>
+                                </svg>
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ color: color.textPrimary, fontSize: '12px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <div style={{ color: color.textPrimary, fontSize: '13px', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {activeProject.name}
                                 </div>
-                                <div style={{ color: color.textFaint, fontSize: '10px', marginTop: '1px' }}>
+                                <div style={{ color: color.textMuted, fontSize: '11px', marginTop: '1px' }}>
                                     AI Coding Manager
                                 </div>
                             </div>

@@ -66,7 +66,7 @@ export function ProjectItem({ project, active, status, onMove, onEdit, onSystemP
         <div
             onMouseEnter={() => setHovered(true)}
             onMouseLeave={() => { setHovered(false) }}
-            style={{ position: 'relative', display: 'flex' }}
+            style={{ position: 'relative', display: 'flex', padding: '1px 6px' }}
         >
             <div
                 role="button"
@@ -74,25 +74,32 @@ export function ProjectItem({ project, active, status, onMove, onEdit, onSystemP
                 onClick={() => router.visit(`/${project.slug}`)}
                 onKeyDown={e => e.key === 'Enter' && router.visit(`/${project.slug}`)}
                 style={{
-                    flex: 1, display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '6px',
-                    padding: '7px 32px 7px 12px', background: active ? color.bgSurface : 'transparent',
-                    borderLeft: `2px solid ${active ? color.accent : 'transparent'}`,
+                    flex: 1, display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '7px',
+                    padding: '6px 28px 6px 8px',
+                    background: active ? '#EEF2FF' : hovered ? '#F5F7FF' : 'transparent',
+                    borderRadius: '6px',
                     cursor: 'pointer', textAlign: 'left',
+                    transition: 'background 0.1s',
                 }}
             >
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                    <span style={{
-                        color: active ? color.textPrimary : color.textSecondary, fontSize: '13px',
-                        fontWeight: active ? 600 : 400, fontFamily: '"JetBrains Mono", monospace',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                        {project.name}
-                    </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span style={{ color: color.textMuted, fontSize: '11px' }}>•</span>
-                        <span style={{ color: color.textMuted, fontSize: '11px', fontStyle: 'italic' }}>{project.language}</span>
-                    </span>
-                </div>
+                {/* Folder icon */}
+                <svg
+                    width="14" height="14" viewBox="0 0 16 16"
+                    fill={active ? '#4F46E5' : color.textMuted}
+                    style={{ flexShrink: 0 }}
+                >
+                    <path d="M1.75 1A1.75 1.75 0 000 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0016 13.25v-8.5A1.75 1.75 0 0014.25 3H7.5L6.066 1.566A.25.25 0 005.89 1.5H1.75zm0 1.5h3.89l1.433 1.434a.25.25 0 00.177.066H14.25a.25.25 0 01.25.25v8.5a.25.25 0 01-.25.25H1.75a.25.25 0 01-.25-.25V2.75a.25.25 0 01.25-.25z"/>
+                </svg>
+
+                <span style={{
+                    color: active ? '#4338CA' : color.textSecondary, fontSize: '13px',
+                    fontWeight: active ? 600 : 400,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    flex: 1,
+                }}>
+                    {project.name}
+                </span>
+
                 <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
                     {status === 'running' && <DotsIndicator />}
                     {status === 'done' && (

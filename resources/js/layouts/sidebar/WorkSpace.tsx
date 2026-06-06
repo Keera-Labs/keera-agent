@@ -44,18 +44,20 @@ export function WorkspacePicker({
                 }}
             >
                 <div style={{
-                    width: "22px", height: "22px", borderRadius: "5px",
+                    width: "30px", height: "30px", borderRadius: "7px",
                     background: color.accentEmphasis,
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: "11px", fontWeight: 700, color: "#fff", flexShrink: 0,
+                    fontSize: "13px", fontWeight: 700, color: "#fff", flexShrink: 0,
+                    letterSpacing: "-0.01em",
                 }}>
                     {(current?.name[0] ?? "P").toUpperCase()}
                 </div>
-                <span style={{ color: color.textPrimary, fontSize: "12px", fontWeight: 500, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <span style={{ color: color.textPrimary, fontSize: "13px", fontWeight: 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {current?.name ?? "Personal Workspace"}
                 </span>
-                <svg width="10" height="10" viewBox="0 0 16 16" fill={color.textFaint} style={{ flexShrink: 0 }}>
-                    <path d="M4.427 7.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 7H4.604a.25.25 0 00-.177.427z"/>
+                {/* Up/down chevrons */}
+                <svg width="12" height="12" viewBox="0 0 16 16" fill={color.textFaint} style={{ flexShrink: 0 }}>
+                    <path d="M5 7l3-3 3 3M5 9l3 3 3-3" stroke={color.textFaint} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
                 </svg>
             </button>
 
