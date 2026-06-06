@@ -50,8 +50,8 @@ export default function ProjectCreateModal({
     }
 
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100]">
-            <div className="bg-surface border border-stroke rounded-lg p-6 w-[340px] flex flex-col gap-3.5">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
+            <div className="bg-modal border border-stroke rounded-lg p-6 w-[340px] flex flex-col gap-3.5">
                 {confirmCreate ? (
                     <>
                         <h2 className="m-0 text-zinc-200 text-[15px] font-semibold">Directory not found</h2>

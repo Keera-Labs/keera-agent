@@ -4,10 +4,12 @@
 @theme {
     --color-canvas:  #f6f8fa;
     --color-surface: #ffffff;
+    --color-modal:   #eaecef;
     --color-stroke:  #d0d7de;
     --color-accent:  #0969da;
     --color-success: #1a7f37;
     --color-danger:  #cf222e;
+    --color-overlay: rgba(0,0,0,0.5);
 }
 
 /* Scrollbar styling for light theme */

@@ -177,7 +177,7 @@ function SystemPromptModal({
             display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
         }}>
             <div style={{
-                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
+                background: color.bgModal, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
                 padding: '24px', width: '480px', display: 'flex', flexDirection: 'column', gap: '14px',
             }}>
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -345,7 +345,7 @@ function PermissionsEditor({
             display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
         }}>
             <div style={{
-                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
+                background: color.bgModal, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
                 padding: '24px', width: '480px', display: 'flex', flexDirection: 'column', gap: '14px',
             }}>
                 <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -637,7 +637,7 @@ function GlobalSettingsModal({
             onClick={e => { if (e.target === e.currentTarget) onClose() }}
         >
             <div style={{
-                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '10px',
+                background: color.bgModal, border: `1px solid ${color.borderMuted}`, borderRadius: '10px',
                 width: '880px', height: '620px', display: 'flex', flexDirection: 'column', overflow: 'hidden',
             }}>
                 {/* Header */}
@@ -873,7 +873,7 @@ function ProjectSearchModal({ projects, onClose, onSelect }: {
             onClick={onClose}
         >
             <div
-                style={{ background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '10px', width: '480px', maxWidth: '92vw', boxShadow: '0 16px 48px rgba(0,0,0,0.14)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+                style={{ background: color.bgModal, border: `1px solid ${color.borderMuted}`, borderRadius: '10px', width: '480px', maxWidth: '92vw', boxShadow: '0 16px 48px rgba(0,0,0,0.14)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
                 onClick={e => e.stopPropagation()}
             >
                 {/* Search input */}
@@ -984,7 +984,7 @@ function ConfirmDeleteProjectModal({
             display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
         }}>
             <div style={{
-                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
+                background: color.bgModal, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
                 padding: '24px', width: '320px', display: 'flex', flexDirection: 'column', gap: '14px',
             }}>
                 <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>Delete Project</h2>
@@ -1052,7 +1052,7 @@ function ConfirmDeleteWorkspaceModal({
             display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
         }}>
             <div style={{
-                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
+                background: color.bgModal, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
                 padding: '24px', width: '340px', display: 'flex', flexDirection: 'column', gap: '14px',
             }}>
                 <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>Delete Workspace</h2>
@@ -1116,7 +1116,7 @@ function MoveProjectModal({
             display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
         }}>
             <div style={{
-                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
+                background: color.bgModal, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
                 padding: '20px', width: '300px', display: 'flex', flexDirection: 'column', gap: '12px',
             }}>
                 <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '14px', fontWeight: 600 }}>
@@ -1270,7 +1270,7 @@ function CreateTaskModal({
             display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
         }}>
             <div style={{
-                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
+                background: color.bgModal, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
                 padding: '24px', width: '420px', display: 'flex', flexDirection: 'column', gap: '16px',
             }}>
                 <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>New Task</h2>
@@ -1420,7 +1420,7 @@ function TaskDetailModal({ task, onClose }: { task: Task; onClose: () => void })
         >
             <div
                 style={{
-                    background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
+                    background: color.bgModal, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
                     width: '540px', maxHeight: '80vh', display: 'flex', flexDirection: 'column',
                     overflow: 'hidden',
                 }}
@@ -1744,7 +1744,7 @@ function AddAgentModal({ projectId, onClose, onCreated, templates }: {
             display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
         }}>
             <div style={{
-                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
+                background: color.bgModal, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
                 padding: '24px', width: '520px', display: 'flex', flexDirection: 'column', gap: '14px',
                 maxHeight: '90vh', overflowY: 'auto',
             }}>
