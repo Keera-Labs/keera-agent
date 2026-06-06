@@ -363,10 +363,32 @@ async def update(request: Request, agent_id: int):
 
 async def destroy(request: Request, agent_id: int):
     from app.models.Project import Project
+    from fastapi_startkit.application import app
+    from app.terminal.connection_manager import ConnectionManager
+    from app.terminal.manager import TerminalManager
 
     agent = await Agent.find(agent_id)
     if not agent:
         return JSONResponse({"error": "Agent not found"}, status_code=404)
+
+    # Clean up WebSocket, PTY, and ConnectionManager entry before deleting the DB record
+    session_id = agent.session_id
+    if session_id:
+        try:
+            conn_manager: ConnectionManager = app().make('connections')
+            terminal_manager: TerminalManager = app().make('terminal')
+
+            bridge = conn_manager.get(session_id)
+            if bridge:
+                try:
+                    await bridge.websocket.close()
+                except Exception:
+                    pass
+
+            conn_manager.remove(session_id)
+            terminal_manager.close(session_id)
+        except Exception:
+            pass
 
     project_id = agent.project_id
     await Agent.where("id", agent_id).delete()
