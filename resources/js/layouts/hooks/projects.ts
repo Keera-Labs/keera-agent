@@ -88,7 +88,7 @@ export function useProjects() {
     }
 
     const allProjects = query.data ?? []
-    const unassigned = allProjects.filter(p => p.workspace_id === null || p.workspace_id === undefined || p.workspace_id === 0)
+    const unassigned = allProjects.filter(p => p.workspace_id == null)
 
     return {
         allProjects,
