@@ -1,16 +1,16 @@
-"""
-MCP tool definitions and handlers.
-
-Each tool has:
-  - schema()  → dict   JSON Schema fragment sent in tools/list
-  - handle()  → str    called when Claude invokes the tool; returns plain text
-"""
+"""MCP tool definitions — Tool subclasses for all 11 Keera tools."""
 
 import json
 import os
 
+from pydantic import BaseModel, Field
+from typing import Optional
+
+from fastapi_startkit.mcp import Tool, Response
+
 from app.models.Project import Project
 from app.models.Task import Task
+
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -39,7 +39,7 @@ def _serialize_task(t: Task) -> dict:
     }
 
 
-async def _project_by_path(path: str) -> Project | None:
+async def _project_by_path(path: str) -> Optional[Project]:
     projects = await Project.all()
     expanded = os.path.expanduser(path).rstrip("/")
     for p in projects:
@@ -48,619 +48,468 @@ async def _project_by_path(path: str) -> Project | None:
     return None
 
 
-# ── tool: create_task ─────────────────────────────────────────────────────────
+# ── create_task ───────────────────────────────────────────────────────────────
 
-CREATE_TASK_SCHEMA = {
-    "name": "create_task",
-    "description": (
+class CreateTaskInput(BaseModel):
+    project_path: str = Field(description="Absolute path of the project (use the current working directory).")
+    title: str = Field(description="Short, imperative title. e.g. 'Add CSV export for tasks'.")
+    description: str = Field(description="One-paragraph summary of what needs to be built and why.")
+    acceptance_criteria: list[str] = Field(min_length=1, description="Concrete, checkable statements that define when the task is done.")
+    testing_methods: list[str] = Field(min_length=1, description="How the feature will be tested (unit, integration, manual, e2e).")
+    validation_steps: list[str] = Field(min_length=1, description="QA / edge-case checks to perform before marking done.")
+    priority: str = Field(default="medium", pattern="^(low|medium|high)$", description="Task priority. Default: medium.")
+    assignees: list[str] = Field(default_factory=list, description="Names of people assigned to this task (can be empty).")
+
+
+class CreateTaskTool(Tool):
+    name = "create_task"
+    description = (
         "Create a well-planned task in the current Keera project. "
         "Before calling this tool, think through the full implementation plan: "
         "what 'done' looks like (acceptance_criteria), how it will be tested "
         "(testing_methods), and what edge cases / QA steps are needed "
         "(validation_steps). All three are required."
-    ),
-    "inputSchema": {
-        "type": "object",
-        "properties": {
-            "project_path": {
-                "type": "string",
-                "description": "Absolute path of the project (use the current working directory).",
-            },
-            "title": {
-                "type": "string",
-                "description": "Short, imperative title. e.g. 'Add CSV export for tasks'.",
-            },
-            "description": {
-                "type": "string",
-                "description": "One-paragraph summary of what needs to be built and why.",
-            },
-            "acceptance_criteria": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Concrete, checkable statements that define when the task is done.",
-                "minItems": 1,
-            },
-            "testing_methods": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "How the feature will be tested (unit, integration, manual, e2e).",
-                "minItems": 1,
-            },
-            "validation_steps": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "QA / edge-case checks to perform before marking done.",
-                "minItems": 1,
-            },
-            "priority": {
-                "type": "string",
-                "enum": ["low", "medium", "high"],
-                "description": "Task priority. Default: medium.",
-            },
-            "assignees": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Names of people assigned to this task (can be empty).",
-            },
-        },
-        "required": [
-            "project_path",
-            "title",
-            "description",
-            "acceptance_criteria",
-            "testing_methods",
-            "validation_steps",
-        ],
-    },
-}
+    )
+
+    def schema(self):
+        return CreateTaskInput
+
+    async def handle(self, arguments: dict) -> Response:
+        project = await _project_by_path(arguments["project_path"])
+        if not project:
+            return Response.text(f"Error: no Keera project found at path '{arguments['project_path']}'")
+
+        title = arguments["title"].strip()
+        if not title:
+            return Response.text("Error: title is required")
+
+        task = await Task.create({
+            "project_id": project.id,
+            "title": title,
+            "description": arguments.get("description", "").strip() or title,
+            "body": arguments.get("description", "").strip() or None,
+            "priority": arguments.get("priority", "medium"),
+            "assignees": json.dumps(arguments.get("assignees") or []),
+            "acceptance_criteria": json.dumps(arguments.get("acceptance_criteria") or []),
+            "testing_methods": json.dumps(arguments.get("testing_methods") or []),
+            "validation_steps": json.dumps(arguments.get("validation_steps") or []),
+            "status": "pending",
+        })
+
+        ac = arguments.get("acceptance_criteria") or []
+        lines = [f"✓ Task #{task.id} created: {title}", ""]
+        if ac:
+            lines.append("Acceptance criteria:")
+            for c in ac:
+                lines.append(f"  • {c}")
+        return Response.text("\n".join(lines))
 
 
-async def handle_create_task(args: dict) -> str:
-    project = await _project_by_path(args["project_path"])
-    if not project:
-        return f"Error: no Keera project found at path '{args['project_path']}'"
+# ── list_tasks ────────────────────────────────────────────────────────────────
 
-    title = args["title"].strip()
-    if not title:
-        return "Error: title is required"
-
-    task = await Task.create({
-        "project_id": project.id,
-        "title": title,
-        "description": args.get("description", "").strip() or title,
-        "body": args.get("description", "").strip() or None,
-        "priority": args.get("priority", "medium"),
-        "assignees": json.dumps(args.get("assignees") or []),
-        "acceptance_criteria": json.dumps(args.get("acceptance_criteria") or []),
-        "testing_methods": json.dumps(args.get("testing_methods") or []),
-        "validation_steps": json.dumps(args.get("validation_steps") or []),
-        "status": "pending",
-    })
-
-    ac = args.get("acceptance_criteria") or []
-    lines = [f"✓ Task #{task.id} created: {title}", ""]
-    if ac:
-        lines.append("Acceptance criteria:")
-        for c in ac:
-            lines.append(f"  • {c}")
-    return "\n".join(lines)
+class ListTasksInput(BaseModel):
+    project_path: str = Field(description="Absolute path of the project (use the current working directory).")
+    status: Optional[str] = Field(default=None, pattern="^(pending|in_progress|completed|cancelled)$", description="Filter by status. Omit to return all tasks.")
 
 
-# ── tool: list_tasks ──────────────────────────────────────────────────────────
+class ListTasksTool(Tool):
+    name = "list_tasks"
+    description = "List tasks for the current Keera project, optionally filtered by status."
 
-LIST_TASKS_SCHEMA = {
-    "name": "list_tasks",
-    "description": "List tasks for the current Keera project, optionally filtered by status.",
-    "inputSchema": {
-        "type": "object",
-        "properties": {
-            "project_path": {
-                "type": "string",
-                "description": "Absolute path of the project (use the current working directory).",
-            },
-            "status": {
-                "type": "string",
-                "enum": ["pending", "in_progress", "completed", "cancelled"],
-                "description": "Filter by status. Omit to return all tasks.",
-            },
-        },
-        "required": ["project_path"],
-    },
-}
+    def schema(self):
+        return ListTasksInput
 
+    async def handle(self, arguments: dict) -> Response:
+        project = await _project_by_path(arguments["project_path"])
+        if not project:
+            return Response.text(f"Error: no Keera project found at path '{arguments['project_path']}'")
 
-async def handle_list_tasks(args: dict) -> str:
-    project = await _project_by_path(args["project_path"])
-    if not project:
-        return f"Error: no Keera project found at path '{args['project_path']}'"
+        q = Task.where("project_id", project.id)
+        if arguments.get("status"):
+            q = q.where("status", arguments["status"])
+        tasks = await q.get()
 
-    q = Task.where("project_id", project.id)
-    if args.get("status"):
-        q = q.where("status", args["status"])
-    tasks = await q.get()
+        if not tasks:
+            return Response.text("No tasks found.")
 
-    if not tasks:
-        return "No tasks found."
-
-    lines = []
-    for t in tasks:
-        priority = t.priority or "medium"
-        lines.append(f"[{t.status}] #{t.id} {t.title or t.description}  ({priority})")
-    return "\n".join(lines)
+        lines = []
+        for t in tasks:
+            priority = t.priority or "medium"
+            lines.append(f"[{t.status}] #{t.id} {t.title or t.description}  ({priority})")
+        return Response.text("\n".join(lines))
 
 
-# ── tool: get_task ────────────────────────────────────────────────────────────
+# ── get_task ──────────────────────────────────────────────────────────────────
 
-GET_TASK_SCHEMA = {
-    "name": "get_task",
-    "description": "Get full details of a single task by ID.",
-    "inputSchema": {
-        "type": "object",
-        "properties": {
-            "task_id": {
-                "type": "integer",
-                "description": "The numeric task ID.",
-            },
-        },
-        "required": ["task_id"],
-    },
-}
+class GetTaskInput(BaseModel):
+    task_id: int = Field(description="The numeric task ID.")
 
 
-async def handle_get_task(args: dict) -> str:
-    task = await Task.find(args["task_id"])
-    if not task:
-        return f"Error: task #{args['task_id']} not found"
+class GetTaskTool(Tool):
+    name = "get_task"
+    description = "Get full details of a single task by ID."
 
-    t = _serialize_task(task)
-    lines = [
-        f"#{t['id']} {t['title']}",
-        f"Status:   {t['status']}",
-        f"Priority: {t['priority']}",
-        f"Assignees: {', '.join(t['assignees']) if t['assignees'] else 'none'}",
-        f"Created:  {t['created_at']}",
-        "",
-        "Description:",
-        t["description"] or "(none)",
-    ]
-    if t["acceptance_criteria"]:
-        lines += ["", "Acceptance criteria:"] + [f"  • {c}" for c in t["acceptance_criteria"]]
-    if t["testing_methods"]:
-        lines += ["", "Testing methods:"] + [f"  • {m}" for m in t["testing_methods"]]
-    if t["validation_steps"]:
-        lines += ["", "Validation steps:"] + [f"  • {s}" for s in t["validation_steps"]]
-    return "\n".join(lines)
+    def schema(self):
+        return GetTaskInput
 
+    async def handle(self, arguments: dict) -> Response:
+        task = await Task.find(arguments["task_id"])
+        if not task:
+            return Response.text(f"Error: task #{arguments['task_id']} not found")
 
-# ── tool: update_task ────────────────────────────────────────────────────────
-
-UPDATE_TASK_SCHEMA = {
-    "name": "update_task",
-    "description": "Update any fields of a task (title, description, body, acceptance_criteria, testing_methods, validation_steps, priority, assignees).",
-    "inputSchema": {
-        "type": "object",
-        "properties": {
-            "task_id": {"type": "integer", "description": "The numeric task ID."},
-            "title": {"type": "string"},
-            "description": {"type": "string"},
-            "body": {"type": "string"},
-            "priority": {"type": "string", "enum": ["low", "medium", "high"]},
-            "assignees": {"type": "array", "items": {"type": "string"}},
-            "acceptance_criteria": {"type": "array", "items": {"type": "string"}},
-            "testing_methods": {"type": "array", "items": {"type": "string"}},
-            "validation_steps": {"type": "array", "items": {"type": "string"}},
-        },
-        "required": ["task_id"],
-    },
-}
+        t = _serialize_task(task)
+        lines = [
+            f"#{t['id']} {t['title']}",
+            f"Status:   {t['status']}",
+            f"Priority: {t['priority']}",
+            f"Assignees: {', '.join(t['assignees']) if t['assignees'] else 'none'}",
+            f"Created:  {t['created_at']}",
+            "",
+            "Description:",
+            t["description"] or "(none)",
+        ]
+        if t["acceptance_criteria"]:
+            lines += ["", "Acceptance criteria:"] + [f"  • {c}" for c in t["acceptance_criteria"]]
+        if t["testing_methods"]:
+            lines += ["", "Testing methods:"] + [f"  • {m}" for m in t["testing_methods"]]
+        if t["validation_steps"]:
+            lines += ["", "Validation steps:"] + [f"  • {s}" for s in t["validation_steps"]]
+        return Response.text("\n".join(lines))
 
 
-async def handle_update_task(args: dict) -> str:
-    task = await Task.find(args["task_id"])
-    if not task:
-        return f"Error: task #{args['task_id']} not found"
+# ── update_task ───────────────────────────────────────────────────────────────
 
-    updatable = ["title", "description", "body", "priority"]
-    json_fields = ["assignees", "acceptance_criteria", "testing_methods", "validation_steps"]
-
-    for field in updatable:
-        if field in args:
-            setattr(task, field, args[field])
-    for field in json_fields:
-        if field in args:
-            setattr(task, field, json.dumps(args[field]))
-
-    await task.save()
-    return f"Task #{task.id} '{task.title or task.description}' updated."
+class UpdateTaskInput(BaseModel):
+    task_id: int = Field(description="The numeric task ID.")
+    title: Optional[str] = None
+    description: Optional[str] = None
+    body: Optional[str] = None
+    priority: Optional[str] = Field(default=None, pattern="^(low|medium|high)$")
+    assignees: Optional[list[str]] = None
+    acceptance_criteria: Optional[list[str]] = None
+    testing_methods: Optional[list[str]] = None
+    validation_steps: Optional[list[str]] = None
 
 
-# ── tool: delete_task ─────────────────────────────────────────────────────────
+class UpdateTaskTool(Tool):
+    name = "update_task"
+    description = "Update any fields of a task (title, description, body, acceptance_criteria, testing_methods, validation_steps, priority, assignees)."
 
-DELETE_TASK_SCHEMA = {
-    "name": "delete_task",
-    "description": "Permanently delete a task by ID.",
-    "inputSchema": {
-        "type": "object",
-        "properties": {
-            "task_id": {
-                "type": "integer",
-                "description": "The numeric task ID to delete.",
-            },
-        },
-        "required": ["task_id"],
-    },
-}
+    def schema(self):
+        return UpdateTaskInput
 
+    async def handle(self, arguments: dict) -> Response:
+        task = await Task.find(arguments["task_id"])
+        if not task:
+            return Response.text(f"Error: task #{arguments['task_id']} not found")
 
-async def handle_delete_task(args: dict) -> str:
-    task = await Task.find(args["task_id"])
-    if not task:
-        return f"Error: task #{args['task_id']} not found"
-    title = task.title or task.description or f"#{task.id}"
-    await Task.where("id", task.id).delete()
-    return f"Task '{title}' deleted."
+        for field in ["title", "description", "body", "priority"]:
+            if field in arguments and arguments[field] is not None:
+                setattr(task, field, arguments[field])
+        for field in ["assignees", "acceptance_criteria", "testing_methods", "validation_steps"]:
+            if field in arguments and arguments[field] is not None:
+                setattr(task, field, json.dumps(arguments[field]))
+
+        await task.save()
+        return Response.text(f"Task #{task.id} '{task.title or task.description}' updated.")
 
 
-# ── tool: update_task_status ──────────────────────────────────────────────────
+# ── update_task_status ────────────────────────────────────────────────────────
 
-UPDATE_STATUS_SCHEMA = {
-    "name": "update_task_status",
-    "description": "Change the status of a task.",
-    "inputSchema": {
-        "type": "object",
-        "properties": {
-            "task_id": {
-                "type": "integer",
-                "description": "The numeric task ID.",
-            },
-            "status": {
-                "type": "string",
-                "enum": ["pending", "in_progress", "completed", "cancelled"],
-            },
-        },
-        "required": ["task_id", "status"],
-    },
-}
+class UpdateTaskStatusInput(BaseModel):
+    task_id: int = Field(description="The numeric task ID.")
+    status: str = Field(pattern="^(pending|in_progress|completed|cancelled)$")
 
 
-async def handle_update_task_status(args: dict) -> str:
-    task = await Task.find(args["task_id"])
-    if not task:
-        return f"Error: task #{args['task_id']} not found"
-    task.status = args["status"]
-    await task.save()
-    return f"Task #{task.id} '{task.title or task.description}' → {task.status}"
+class UpdateTaskStatusTool(Tool):
+    name = "update_task_status"
+    description = "Change the status of a task."
+
+    def schema(self):
+        return UpdateTaskStatusInput
+
+    async def handle(self, arguments: dict) -> Response:
+        task = await Task.find(arguments["task_id"])
+        if not task:
+            return Response.text(f"Error: task #{arguments['task_id']} not found")
+        task.status = arguments["status"]
+        await task.save()
+        return Response.text(f"Task #{task.id} '{task.title or task.description}' → {task.status}")
 
 
-# ── tool: send_message_to_agent ───────────────────────────────────────────────
+# ── delete_task ───────────────────────────────────────────────────────────────
 
-SEND_MESSAGE_SCHEMA = {
-    "name": "send_message_to_agent",
-    "description": (
+class DeleteTaskInput(BaseModel):
+    task_id: int = Field(description="The numeric task ID to delete.")
+
+
+class DeleteTaskTool(Tool):
+    name = "delete_task"
+    description = "Permanently delete a task by ID."
+
+    def schema(self):
+        return DeleteTaskInput
+
+    async def handle(self, arguments: dict) -> Response:
+        task = await Task.find(arguments["task_id"])
+        if not task:
+            return Response.text(f"Error: task #{arguments['task_id']} not found")
+        title = task.title or task.description or f"#{task.id}"
+        await Task.where("id", task.id).delete()
+        return Response.text(f"Task '{title}' deleted.")
+
+
+# ── send_message_to_agent ─────────────────────────────────────────────────────
+
+class SendMessageInput(BaseModel):
+    sender_agent_id: int = Field(description="Your own agent ID.")
+    receiver_agent_id: int = Field(description="The ID of the agent to send the message to.")
+    message: str = Field(description="The message content to send.")
+
+
+class SendMessageTool(Tool):
+    name = "send_message_to_agent"
+    description = (
         "Send a message from this agent to another agent. "
         "If the target agent is active, the message is delivered immediately to its terminal. "
         "Otherwise it is queued and delivered when it next connects."
-    ),
-    "inputSchema": {
-        "type": "object",
-        "properties": {
-            "sender_agent_id": {
-                "type": "integer",
-                "description": "Your own agent ID.",
-            },
-            "receiver_agent_id": {
-                "type": "integer",
-                "description": "The ID of the agent to send the message to.",
-            },
-            "message": {
-                "type": "string",
-                "description": "The message content to send.",
-            },
-        },
-        "required": ["sender_agent_id", "receiver_agent_id", "message"],
-    },
-}
+    )
+
+    def schema(self):
+        return SendMessageInput
+
+    async def handle(self, arguments: dict) -> Response:
+        from app.models.Agent import Agent
+        from app.actions.agent_message_send_action import AgentMessageSendAction
+
+        sender = await Agent.find(arguments["sender_agent_id"])
+        if not sender:
+            return Response.text(f"Error: agent #{arguments['sender_agent_id']} not found")
+
+        receiver = await Agent.find(arguments["receiver_agent_id"])
+        if not receiver:
+            return Response.text(f"Error: agent #{arguments['receiver_agent_id']} not found")
+
+        content = arguments["message"].strip()
+        if not content:
+            return Response.text("Error: message cannot be empty")
+
+        msg_id, delivered = await AgentMessageSendAction.prepare(sender, receiver, content).execute()
+
+        if delivered:
+            return Response.text(f"Message delivered to agent '{receiver.name}' (#{msg_id})")
+        return Response.text(f"Message queued for agent '{receiver.name}' (#{msg_id}) — will be delivered when Claude is ready")
 
 
-async def handle_send_message(args: dict) -> str:
-    from app.models.Agent import Agent
-    from app.actions.agent_message_send_action import AgentMessageSendAction
+# ── get_agent_messages ────────────────────────────────────────────────────────
 
-    sender = await Agent.find(args["sender_agent_id"])
-    if not sender:
-        return f"Error: agent #{args['sender_agent_id']} not found"
-
-    receiver = await Agent.find(args["receiver_agent_id"])
-    if not receiver:
-        return f"Error: agent #{args['receiver_agent_id']} not found"
-
-    content = args["message"].strip()
-    if not content:
-        return "Error: message cannot be empty"
-
-    msg_id, delivered = await AgentMessageSendAction.prepare(sender, receiver, content).execute()
-
-    if delivered:
-        return f"Message delivered to agent '{receiver.name}' (#{msg_id})"
-    return f"Message queued for agent '{receiver.name}' (#{msg_id}) — will be delivered when Claude is ready"
+class GetAgentMessagesInput(BaseModel):
+    project_path: str = Field(description="Absolute path of the project (use current working directory).")
+    unread_only: bool = Field(default=False, description="If true, return only unread/pending messages.")
 
 
-# ── tool: get_agent_messages ──────────────────────────────────────────────────
+class GetAgentMessagesTool(Tool):
+    name = "get_agent_messages"
+    description = "Get messages in the inbox for this agent (sent from other agents)."
 
-GET_MESSAGES_SCHEMA = {
-    "name": "get_agent_messages",
-    "description": "Get messages in the inbox for this agent (sent from other agents).",
-    "inputSchema": {
-        "type": "object",
-        "properties": {
-            "project_path": {
-                "type": "string",
-                "description": "Absolute path of the project (use current working directory).",
-            },
-            "unread_only": {
-                "type": "boolean",
-                "description": "If true, return only unread/pending messages. Default: false.",
-            },
-        },
-        "required": ["project_path"],
-    },
-}
+    def schema(self):
+        return GetAgentMessagesInput
 
+    async def handle(self, arguments: dict) -> Response:
+        from app.models.AgentMessage import AgentMessage
 
-async def handle_get_messages(args: dict) -> str:
-    from app.models.AgentMessage import AgentMessage
+        project = await _project_by_path(arguments["project_path"])
+        if not project:
+            return Response.text(f"Error: no Keera project found at path '{arguments['project_path']}'")
 
-    project = await _project_by_path(args["project_path"])
-    if not project:
-        return f"Error: no Keera project found at path '{args['project_path']}'"
+        q = AgentMessage.where("receiver_project_id", project.id)
+        if arguments.get("unread_only"):
+            q = q.where("status", "pending")
+        messages = await q.order_by("id", "asc").get()
 
-    q = AgentMessage.where("receiver_project_id", project.id)
-    if args.get("unread_only"):
-        q = q.where("status", "pending")
-    messages = await q.order_by("id", "asc").get()
+        if not messages:
+            return Response.text("No messages.")
 
-    if not messages:
-        return "No messages."
+        projects = await Project.all()
+        proj_map = {p.id: p for p in projects}
 
-    projects = await Project.all()
-    proj_map = {p.id: p for p in projects}
-
-    lines = []
-    for m in messages:
-        sender_name = proj_map[m.sender_project_id].name if m.sender_project_id in proj_map else str(m.sender_project_id)
-        lines.append(f"[#{m.id}] [{m.status}] From {sender_name}: {m.content}")
-    return "\n".join(lines)
+        lines = []
+        for m in messages:
+            sender_name = proj_map[m.sender_project_id].name if m.sender_project_id in proj_map else str(m.sender_project_id)
+            lines.append(f"[#{m.id}] [{m.status}] From {sender_name}: {m.content}")
+        return Response.text("\n".join(lines))
 
 
-# ── tool: list_agents ─────────────────────────────────────────────────────────
+# ── list_agents ───────────────────────────────────────────────────────────────
 
-LIST_AGENTS_SCHEMA = {
-    "name": "list_agents",
-    "description": "List all agents registered in the current project.",
-    "inputSchema": {
-        "type": "object",
-        "properties": {
-            "project_path": {
-                "type": "string",
-                "description": "Absolute path of the project (use the current working directory).",
-            },
-        },
-        "required": ["project_path"],
-    },
-}
+class ListAgentsInput(BaseModel):
+    project_path: str = Field(description="Absolute path of the project (use the current working directory).")
 
 
-async def handle_list_agents(args: dict) -> str:
-    from app.models.Agent import Agent
+class ListAgentsTool(Tool):
+    name = "list_agents"
+    description = "List all agents registered in the current project."
 
-    project = await _project_by_path(args["project_path"])
-    if not project:
-        return f"Error: no Keera project found at path '{args['project_path']}'"
+    def schema(self):
+        return ListAgentsInput
 
-    agents = await Agent.where("project_id", project.id).get()
-    if not agents:
-        return "No agents registered in this project."
+    async def handle(self, arguments: dict) -> Response:
+        from app.models.Agent import Agent
 
-    lines = [f"Agents in '{project.name}' (project_id={project.id}):"]
-    for a in agents:
-        lines.append(f"  - {a.name} (ID: {a.id}, type: {a.agent_type}, status: {a.status})")
-    return "\n".join(lines)
+        project = await _project_by_path(arguments["project_path"])
+        if not project:
+            return Response.text(f"Error: no Keera project found at path '{arguments['project_path']}'")
+
+        agents = await Agent.where("project_id", project.id).get()
+        if not agents:
+            return Response.text("No agents registered in this project.")
+
+        lines = [f"Agents in '{project.name}' (project_id={project.id}):"]
+        for a in agents:
+            lines.append(f"  - {a.name} (ID: {a.id}, type: {a.agent_type}, status: {a.status})")
+        return Response.text("\n".join(lines))
 
 
-# ── tool: spawn_agent ─────────────────────────────────────────────────────────
+# ── spawn_agent ───────────────────────────────────────────────────────────────
 
-SPAWN_AGENT_SCHEMA = {
-    "name": "spawn_agent",
-    "description": (
+class SpawnAgentInput(BaseModel):
+    project_path: str = Field(description="Absolute path of the project (use the current working directory).")
+    name: str = Field(description="Short display name for the agent (e.g. 'Backend Engineer', 'QA Bot').")
+    agent_type: str = Field(pattern="^(pm|software_engineer|qa|qa_browser|custom)$", description="Role type for the agent.")
+    system_prompt: Optional[str] = Field(default=None, description="System prompt defining the agent's role and behavior.")
+    message: Optional[str] = Field(default=None, description="Initial task or instruction to send to the agent after it starts. Omit to create an idle agent.")
+    model: Optional[str] = Field(default=None, description="Claude model to use. Defaults to claude-sonnet-4-6.")
+    task_id: Optional[int] = Field(default=None, description="ID of the task this agent is working on.")
+    from_agent_id: Optional[int] = Field(default=None, description="ID of the agent spawning this one. Sets orchestrator_id on the new agent.")
+
+
+class SpawnAgentTool(Tool):
+    name = "spawn_agent"
+    description = (
         "Create a new agent in the current project and optionally start it with an initial task. "
         "The new agent will appear in the sidebar immediately. "
         "Use this to delegate work to specialist agents (software_engineer, qa, custom)."
-    ),
-    "inputSchema": {
-        "type": "object",
-        "properties": {
-            "project_path": {
-                "type": "string",
-                "description": "Absolute path of the project (use the current working directory).",
-            },
-            "name": {
-                "type": "string",
-                "description": "Short display name for the agent (e.g. 'Backend Engineer', 'QA Bot').",
-            },
-            "agent_type": {
-                "type": "string",
-                "enum": ["pm", "software_engineer", "qa", "qa_browser", "custom"],
-                "description": "Role type for the agent.",
-            },
-            "system_prompt": {
-                "type": "string",
-                "description": "System prompt defining the agent's role and behavior.",
-            },
-            "message": {
-                "type": "string",
-                "description": "Initial task or instruction to send to the agent after it starts. Omit to create an idle agent.",
-            },
-            "model": {
-                "type": "string",
-                "description": "Claude model to use. Defaults to claude-sonnet-4-6.",
-            },
-            "task_id": {
-                "type": "integer",
-                "description": "ID of the task this agent is working on. Required for non-PM agents. Used to name the agent's worktree.",
-            },
-            "from_agent_id": {
-                "type": "integer",
-                "description": "ID of the agent spawning this one. Sets orchestrator_id on the new agent.",
-            },
-        },
-        "required": ["project_path", "name", "agent_type"],
-    },
-}
+    )
 
+    def schema(self):
+        return SpawnAgentInput
 
-async def handle_spawn_agent(args: dict) -> str:
-    import asyncio
-    import json as _json
-    from app.models.Agent import Agent
-    from app.terminal.connection_manager import ConnectionManager
-    from fastapi_startkit.application import app as _app
+    async def handle(self, arguments: dict) -> Response:
+        import asyncio
+        from app.models.Agent import Agent
+        from app.terminal.connection_manager import ConnectionManager
+        from fastapi_startkit.application import app as _app
 
-    project = await _project_by_path(args["project_path"])
-    if not project:
-        return f"Error: no Keera project found at path '{args['project_path']}'"
+        project = await _project_by_path(arguments["project_path"])
+        if not project:
+            return Response.text(f"Error: no Keera project found at path '{arguments['project_path']}'")
 
-    name = args["name"].strip()
-    if not name:
-        return "Error: name is required"
+        name = arguments["name"].strip()
+        if not name:
+            return Response.text("Error: name is required")
 
-    agent = await Agent.create({
-        "project_id": project.id,
-        "name": name,
-        "agent_type": args.get("agent_type", "custom"),
-        "description": f"{name} agent",
-        "model": args.get("model", "claude-sonnet-4-6"),
-        "system_prompt": args.get("system_prompt", "").strip() or None,
-        "task_id": args.get("task_id"),
-        "orchestrator_id": args.get("from_agent_id"),
-        "status": "idle",
-        "has_session": False,
-    })
-
-    cwd = os.path.expanduser(project.path)
-
-    # Broadcast agent_created to all project connections so sidebar updates
-    payload = _json.dumps({
-        "type": "agent_created",
-        "agent": {
-            "id": agent.id,
-            "project_id": agent.project_id,
-            "name": agent.name,
-            "description": agent.description,
-            "model": agent.model,
-            "system_prompt": agent.system_prompt,
-            "agent_type": agent.agent_type,
-            "status": agent.status,
-            "task_id": getattr(agent, "task_id", None),
-            "created_at": str(agent.created_at) if agent.created_at else None,
-        },
-    })
-    conn_manager: ConnectionManager = _app().make('connections')
-    for bridge in conn_manager.all_for_cwd(cwd):
-        try:
-            await bridge.send_text(payload)
-        except Exception:
-            pass
-
-    # Optionally trigger the agent with an initial message
-    message = (args.get("message") or "").strip()
-    if message:
-        from app.controllers.agent_trigger_controller import _spawn_headless_agent
-        asyncio.create_task(_spawn_headless_agent(agent, project, cwd, message))
-        return f"Agent '{name}' created (ID: {agent.id}) and starting with task: {message}"
-
-    return f"Agent '{name}' created (ID: {agent.id}). Use send_message_to_agent to send it a task."
-
-
-# ── tool: get_orchestrated_agents ─────────────────────────────────────────────
-
-GET_ORCHESTRATED_AGENTS_SCHEMA = {
-    "name": "get_orchestrated_agents",
-    "description": (
-        "Return all agents that you have orchestrated (spawned). "
-        "Shows their current status so you can track progress across your sub-agents."
-    ),
-    "inputSchema": {
-        "type": "object",
-        "properties": {
-            "agent_id": {
-                "type": "integer",
-                "description": "Your own agent ID.",
-            },
-        },
-        "required": ["agent_id"],
-    },
-}
-
-
-async def handle_get_orchestrated_agents(args: dict) -> str:
-    import json as _json
-    from app.models.Agent import Agent
-
-    orchestrator_id = args.get("agent_id")
-    if not orchestrator_id:
-        return "Error: agent_id is required"
-
-    agents = await Agent.where("orchestrator_id", orchestrator_id).order_by("id", "asc").get()
-
-    if not agents:
-        return "You have not orchestrated any agents yet."
-
-    rows = []
-    for a in agents:
-        rows.append({
-            "id": a.id,
-            "name": a.name,
-            "agent_type": a.agent_type,
-            "status": getattr(a, "status", "unknown"),
-            "active": bool(getattr(a, "session_id", None)),
+        agent = await Agent.create({
+            "project_id": project.id,
+            "name": name,
+            "agent_type": arguments.get("agent_type", "custom"),
+            "description": f"{name} agent",
+            "model": arguments.get("model") or "claude-sonnet-4-6",
+            "system_prompt": (arguments.get("system_prompt") or "").strip() or None,
+            "task_id": arguments.get("task_id"),
+            "orchestrator_id": arguments.get("from_agent_id"),
+            "status": "idle",
+            "has_session": False,
         })
 
-    total = len(rows)
-    active = sum(1 for r in rows if r["active"])
-    summary = f"Orchestrated agents: {total} total, {active} active\n\n"
-    return summary + _json.dumps(rows, indent=2)
+        cwd = os.path.expanduser(project.path)
+
+        payload = json.dumps({
+            "type": "agent_created",
+            "agent": {
+                "id": agent.id,
+                "project_id": agent.project_id,
+                "name": agent.name,
+                "description": agent.description,
+                "model": agent.model,
+                "system_prompt": agent.system_prompt,
+                "agent_type": agent.agent_type,
+                "status": agent.status,
+                "task_id": getattr(agent, "task_id", None),
+                "created_at": str(agent.created_at) if agent.created_at else None,
+            },
+        })
+        conn_manager: ConnectionManager = _app().make('connections')
+        for bridge in conn_manager.all_for_cwd(cwd):
+            try:
+                await bridge.send_text(payload)
+            except Exception:
+                pass
+
+        message = (arguments.get("message") or "").strip()
+        if message:
+            from app.controllers.agent_trigger_controller import _spawn_headless_agent
+            asyncio.create_task(_spawn_headless_agent(agent, project, cwd, message))
+            return Response.text(f"Agent '{name}' created (ID: {agent.id}) and starting with task: {message}")
+
+        return Response.text(f"Agent '{name}' created (ID: {agent.id}). Use send_message_to_agent to send it a task.")
 
 
-# ── registry ──────────────────────────────────────────────────────────────────
+# ── get_orchestrated_agents ───────────────────────────────────────────────────
 
-from app.mcp.browser_tools import BROWSER_TOOLS, BROWSER_HANDLERS
+class GetOrchestratedAgentsInput(BaseModel):
+    agent_id: int = Field(description="Your own agent ID.")
 
-TOOLS: list[dict] = [
-    CREATE_TASK_SCHEMA,
-    LIST_TASKS_SCHEMA,
-    GET_TASK_SCHEMA,
-    UPDATE_TASK_SCHEMA,
-    UPDATE_STATUS_SCHEMA,
-    DELETE_TASK_SCHEMA,
-    SEND_MESSAGE_SCHEMA,
-    GET_MESSAGES_SCHEMA,
-    LIST_AGENTS_SCHEMA,
-    SPAWN_AGENT_SCHEMA,
-    GET_ORCHESTRATED_AGENTS_SCHEMA,
-    *BROWSER_TOOLS,
+
+class GetOrchestratedAgentsTool(Tool):
+    name = "get_orchestrated_agents"
+    description = (
+        "Return all agents that you have orchestrated (spawned). "
+        "Shows their current status so you can track progress across your sub-agents."
+    )
+
+    def schema(self):
+        return GetOrchestratedAgentsInput
+
+    async def handle(self, arguments: dict) -> Response:
+        from app.models.Agent import Agent
+
+        orchestrator_id = arguments.get("agent_id")
+        if not orchestrator_id:
+            return Response.text("Error: agent_id is required")
+
+        agents = await Agent.where("orchestrator_id", orchestrator_id).order_by("id", "asc").get()
+
+        if not agents:
+            return Response.text("You have not orchestrated any agents yet.")
+
+        rows = []
+        for a in agents:
+            rows.append({
+                "id": a.id,
+                "name": a.name,
+                "agent_type": a.agent_type,
+                "status": getattr(a, "status", "unknown"),
+                "active": bool(getattr(a, "session_id", None)),
+            })
+
+        total = len(rows)
+        active = sum(1 for r in rows if r["active"])
+        summary = f"Orchestrated agents: {total} total, {active} active\n\n"
+        return Response.text(summary + json.dumps(rows, indent=2))
+
+
+# ── tool list ─────────────────────────────────────────────────────────────────
+
+KEERA_TOOLS = [
+    CreateTaskTool,
+    ListTasksTool,
+    GetTaskTool,
+    UpdateTaskTool,
+    UpdateTaskStatusTool,
+    DeleteTaskTool,
+    SendMessageTool,
+    GetAgentMessagesTool,
+    ListAgentsTool,
+    SpawnAgentTool,
+    GetOrchestratedAgentsTool,
 ]
-
-HANDLERS: dict = {
-    "create_task": handle_create_task,
-    "list_tasks": handle_list_tasks,
-    "get_task": handle_get_task,
-    "update_task": handle_update_task,
-    "update_task_status": handle_update_task_status,
-    "delete_task": handle_delete_task,
-    "send_message_to_agent": handle_send_message,
-    "get_agent_messages": handle_get_messages,
-    "list_agents": handle_list_agents,
-    "spawn_agent": handle_spawn_agent,
-    "get_orchestrated_agents": handle_get_orchestrated_agents,
-    **BROWSER_HANDLERS,
-}
