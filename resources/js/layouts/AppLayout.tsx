@@ -81,7 +81,7 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
 
     const { component } = usePage()
     const isTasksPage = component === 'Tasks'
-    const pageHasContent = new Set(['Settings']).has(component)
+    const pageHasContent = new Set(['settings/Index']).has(component)
     const activeView: ProjectView = isTasksPage ? 'tasks' : projectView
 
     return (
