@@ -9,7 +9,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from app.models.Agent import Agent
-from app.requests.agent_requests import AgentStoreRequest, AgentUpdateRequest
+from app.requests.agent_requests import AgentCreateInput, AgentStoreRequest, AgentUpdateRequest
 
 
 def _slugify(name: str) -> str:
@@ -92,7 +92,6 @@ _SYSTEM_PROMPTS_FALLBACK: dict[str, str] = {
     "qa": "You are a QA (Quality Assurance) agent. This is your permanent role — never abandon it.",
     "software_engineer_frontend": "You are a Frontend Software Engineer. Work only on the frontend.",
     "reviewer": "You are a Code Reviewer. Review PRs for correctness, security, performance.",
-    "qa_browser": "You are a Browser QA agent. Automate browser-based testing using Playwright tools.",
 }
 
 
@@ -128,16 +127,17 @@ async def index(request: Request, project_id: int):
     agents = await Agent.where("project_id", project_id).where_null("deleted_at").get()
     if not agents:
         # Auto-create a default PM agent for projects that don't have one yet
-        action = AgentCreateAction.prepare(
+        agent = await AgentCreateAction(
+            request,
             project_id=project_id,
-            name="PM",
-            agent_type="pm",
-            model="claude-sonnet-4-6",
-            description="Project manager agent that coordinates work across the team.",
-            dangerously_skip_permissions=True,
-            plan_mode=True,
-        )
-        agent = await action.execute()
+            input=AgentCreateInput(
+                name="PM",
+                agent_type="pm",
+                description="Project manager agent that coordinates work across the team.",
+                dangerously_skip_permissions=True,
+                plan_mode=True,
+            ),
+        ).execute()
 
         # Set a friendly slug for the auto-created PM
         slug = await _unique_slug(project_id, "pm")
@@ -150,51 +150,21 @@ async def index(request: Request, project_id: int):
     return JSONResponse([_serialize(a) for a in agents])
 
 
-ALLOWED_TYPES = {"pm", "software_engineer", "software_engineer_frontend", "reviewer", "qa", "custom", "qa_browser"}
+ALLOWED_TYPES = {"pm", "software_engineer", "software_engineer_frontend", "reviewer", "qa", "custom"}
 
 
-async def store(body: AgentStoreRequest, project_id: int):
+async def store(request: Request, body: AgentStoreRequest, project_id: int):
     from app.actions.agent_create_action import AgentCreateAction
 
-    name = body.name.strip()
-    agent_type = body.agent_type.strip()
-
-    if agent_type not in ALLOWED_TYPES:
+    if body.agent_type not in ALLOWED_TYPES:
         return JSONResponse({"error": f"Invalid agent_type. Allowed: {sorted(ALLOWED_TYPES)}"}, status_code=422)
-
-    if not name:
+    if not body.name.strip():
         return JSONResponse({"error": "name is required"}, status_code=422)
 
-    # Flags dict may carry dangerously_skip_permissions / plan_mode from the form;
-    # AgentCreateAction handles extraction and deduplication.
-    flags_raw = dict(body.flags or {})
+    agent = await AgentCreateAction(request, project_id=project_id, input=body).execute()
 
-    # Top-level fields win if they differ from default; otherwise the flags dict may
-    # have been used as the carrier (older frontend behaviour).
-    dangerously_skip_permissions = body.dangerously_skip_permissions
-    if "dangerously_skip_permissions" in flags_raw:
-        dangerously_skip_permissions = bool(flags_raw.get("dangerously_skip_permissions"))
-
-    plan_mode = body.plan_mode
-    if plan_mode is None and "plan_mode" in flags_raw:
-        plan_mode = bool(flags_raw.get("plan_mode"))
-
-    action = AgentCreateAction.prepare(
-        project_id=project_id,
-        name=name,
-        agent_type=agent_type,
-        model=(body.model or "").strip() or "claude-sonnet-4-6",
-        description=(body.description or "").strip() or None,
-        # Use caller-supplied system_prompt if provided; action falls back to type default
-        system_prompt=body.system_prompt,
-        flags=flags_raw,
-        dangerously_skip_permissions=dangerously_skip_permissions,
-        plan_mode=plan_mode,
-    )
-    agent = await action.execute()
-
-    # Store requires a unique slug (spawn does not persist slug)
-    slug = await _unique_slug(project_id, _slugify(name))
+    # Store requires a unique slug (spawn does not persist one)
+    slug = await _unique_slug(project_id, _slugify(agent.name))
     agent.slug = slug
     await agent.save()
 
@@ -312,43 +282,16 @@ async def spawn(request: Request, project_id: int):
     from app.models.Project import Project
     from app.terminal.connection_manager import ConnectionManager
 
-    body = await request.json()
+    action = await AgentCreateAction.from_request(request, project_id=project_id)
+    inp = action.input
 
-    name = (body.get("name") or "").strip()
-    agent_type = (body.get("agent_type") or "").strip()
-    message = (body.get("message") or "").strip() or None
-
-    if agent_type not in ALLOWED_TYPES:
+    if inp.agent_type not in ALLOWED_TYPES:
         return JSONResponse({"error": f"Invalid agent_type. Allowed: {sorted(ALLOWED_TYPES)}"}, status_code=422)
-
-    if not name:
+    if not inp.name.strip():
         return JSONResponse({"error": "name is required"}, status_code=422)
 
-    flags_raw = dict(body.get("flags") or {})
-
-    # Top-level keys win; flags dict is the older carrier for these two fields.
-    dangerously_skip_permissions = bool(body.get("dangerously_skip_permissions", True))
-    if "dangerously_skip_permissions" in flags_raw:
-        dangerously_skip_permissions = bool(flags_raw.get("dangerously_skip_permissions"))
-
-    plan_mode_raw = body.get("plan_mode")
-    plan_mode = bool(plan_mode_raw) if plan_mode_raw is not None else None
-    if plan_mode is None and "plan_mode" in flags_raw:
-        plan_mode = bool(flags_raw.get("plan_mode"))
-
-    action = AgentCreateAction.prepare(
-        project_id=project_id,
-        name=name,
-        agent_type=agent_type,
-        model=(body.get("model") or "claude-sonnet-4-6").strip(),
-        description=(body.get("description") or "").strip() or None,
-        system_prompt=(body.get("system_prompt") or "").strip() or None,
-        task_id=body.get("task_id"),
-        flags=flags_raw,
-        dangerously_skip_permissions=dangerously_skip_permissions,
-        plan_mode=plan_mode,
-    )
     agent = await action.execute()
+    message = (inp.message or "").strip() or None
 
 
     # Push agent_created to ALL active connections for this project

@@ -397,6 +397,7 @@ class SpawnAgentTool(Tool):
     async def handle(self, arguments: dict) -> Response:
         import asyncio
         from app.actions.agent_create_action import AgentCreateAction
+        from app.requests.agent_requests import AgentCreateInput
         from app.terminal.connection_manager import ConnectionManager
         from fastapi_startkit.application import app as _app
 
@@ -404,24 +405,23 @@ class SpawnAgentTool(Tool):
         if not project:
             return Response.text(f"Error: no Keera project found at path '{arguments['project_path']}'")
 
-        name = arguments["name"].strip()
+        name = (arguments.get("name") or "").strip()
         if not name:
             return Response.text("Error: name is required")
 
-        agent_type = arguments.get("agent_type", "custom")
-
-        action = AgentCreateAction.prepare(
+        agent = await AgentCreateAction(
+            None,  # no HTTP request in MCP context
             project_id=project.id,
-            name=name,
-            agent_type=agent_type,
-            model=arguments.get("model") or "claude-sonnet-4-6",
-            description=f"{name} agent",
-            # If caller passes a system_prompt use it; otherwise action resolves the type default
-            system_prompt=(arguments.get("system_prompt") or "").strip() or None,
-            task_id=arguments.get("task_id"),
-            orchestrator_id=arguments.get("from_agent_id"),
-        )
-        agent = await action.execute()
+            input=AgentCreateInput(
+                name=name,
+                agent_type=arguments.get("agent_type", "custom"),
+                model=arguments.get("model") or "claude-sonnet-4-6",
+                description=f"{name} agent",
+                system_prompt=(arguments.get("system_prompt") or "").strip() or None,
+                task_id=arguments.get("task_id"),
+                orchestrator_id=arguments.get("from_agent_id"),
+            ),
+        ).execute()
 
         cwd = os.path.expanduser(project.path)
 

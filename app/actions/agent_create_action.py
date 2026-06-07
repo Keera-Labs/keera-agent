@@ -1,111 +1,70 @@
 import json as _json
 from typing import Optional
 
+from fastapi import Request
+
 from app.models.Agent import Agent
+from app.requests.agent_requests import AgentCreateInput
 
 
 class AgentCreateAction:
-    """Centralised agent-creation logic.
-
-    Resolves the default system prompt, normalises flags, sets default
-    permissions and plan_mode, then creates and returns the Agent DB record.
-    """
-
-    def __init__(
-        self,
-        *,
-        project_id: int,
-        name: str,
-        agent_type: str,
-        model: str = "claude-sonnet-4-6",
-        description: Optional[str] = None,
-        system_prompt: Optional[str] = None,
-        task_id: Optional[int] = None,
-        flags: Optional[dict] = None,
-        dangerously_skip_permissions: bool = True,
-        plan_mode: Optional[bool] = None,
-        orchestrator_id: Optional[int] = None,
-    ):
+    def __init__(self, request: Optional[Request], *, project_id: int, input: AgentCreateInput):  # noqa: A002
+        self.request = request
         self.project_id = project_id
-        self.name = name.strip()
-        self.agent_type = agent_type.strip()
-        self.model = model.strip() or "claude-sonnet-4-6"
-        self.description = (description or "").strip() or None
-        self.task_id = task_id
-        self.orchestrator_id = orchestrator_id
-
-        # Resolve system prompt: caller-supplied value wins; fall back to type default
-        self.system_prompt = (system_prompt or "").strip() or None
-        if not self.system_prompt:
-            from app.controllers.agent_controller import _default_system_prompt
-            self.system_prompt = _default_system_prompt(self.agent_type)
-
-        # Normalise flags: strip out the two fields that have dedicated columns
-        raw_flags = dict(flags or {})
-        if "dangerously_skip_permissions" in raw_flags:
-            dangerously_skip_permissions = bool(raw_flags.pop("dangerously_skip_permissions"))
-        if "plan_mode" in raw_flags:
-            _pm = raw_flags.pop("plan_mode")
-            if plan_mode is None:
-                plan_mode = bool(_pm)
-        self.flags = raw_flags
-
-        self.dangerously_skip_permissions = dangerously_skip_permissions
-        # Default plan_mode: True for PM agents, False for everything else
-        self.plan_mode = plan_mode if plan_mode is not None else (self.agent_type == "pm")
+        self.input = input
 
     @staticmethod
-    def prepare(
-        *,
-        project_id: int,
-        name: str,
-        agent_type: str,
-        model: str = "claude-sonnet-4-6",
-        description: Optional[str] = None,
-        system_prompt: Optional[str] = None,
-        task_id: Optional[int] = None,
-        flags: Optional[dict] = None,
-        dangerously_skip_permissions: bool = True,
-        plan_mode: Optional[bool] = None,
-        orchestrator_id: Optional[int] = None,
-    ) -> "AgentCreateAction":
+    async def from_request(request: Request, *, project_id: int) -> "AgentCreateAction":
+        """Parse the request body into AgentCreateInput and return an action."""
+        body = await request.json()
         return AgentCreateAction(
+            request,
             project_id=project_id,
-            name=name,
-            agent_type=agent_type,
-            model=model,
-            description=description,
-            system_prompt=system_prompt,
-            task_id=task_id,
-            flags=flags,
-            dangerously_skip_permissions=dangerously_skip_permissions,
-            plan_mode=plan_mode,
-            orchestrator_id=orchestrator_id,
+            input=AgentCreateInput.model_validate(body),
         )
 
     async def execute(self) -> Agent:
-        """Create and return the new Agent DB record."""
-        from app.controllers.agent_controller import _default_permissions
+        from app.controllers.agent_controller import _default_permissions, _default_system_prompt
 
-        _perms_allow, _perms_deny = _default_permissions()
+        inp = self.input
+
+        # Resolve system prompt: caller value wins, fall back to type default
+        system_prompt = (inp.system_prompt or "").strip() or _default_system_prompt(inp.agent_type)
+
+        # Extract plan_mode / dangerously_skip_permissions from flags dict if
+        # not set at the top level (older frontend sends them inside flags)
+        flags = dict(inp.flags or {})
+        dsp = inp.dangerously_skip_permissions
+        if dsp is None:
+            dsp = bool(flags.pop("dangerously_skip_permissions", True))
+        else:
+            flags.pop("dangerously_skip_permissions", None)
+
+        plan_mode = inp.plan_mode
+        if plan_mode is None:
+            plan_mode = bool(flags.pop("plan_mode")) if "plan_mode" in flags else (inp.agent_type == "pm")
+        else:
+            flags.pop("plan_mode", None)
+
+        perms_allow, perms_deny = _default_permissions()
 
         record = {
             "project_id": self.project_id,
-            "name": self.name,
-            "agent_type": self.agent_type,
-            "description": self.description,
-            "model": self.model,
-            "system_prompt": self.system_prompt,
-            "task_id": self.task_id,
-            "permissions_allow": _perms_allow,
-            "permissions_deny": _perms_deny,
-            "flags": _json.dumps(self.flags),
-            "dangerously_skip_permissions": self.dangerously_skip_permissions,
-            "plan_mode": self.plan_mode,
+            "name": inp.name.strip(),
+            "agent_type": inp.agent_type,
+            "description": inp.description,
+            "model": inp.model,
+            "system_prompt": system_prompt,
+            "task_id": inp.task_id,
+            "permissions_allow": perms_allow,
+            "permissions_deny": perms_deny,
+            "flags": _json.dumps(flags),
+            "dangerously_skip_permissions": bool(dsp),
+            "plan_mode": bool(plan_mode),
             "status": "idle",
             "has_session": False,
         }
-        if self.orchestrator_id is not None:
-            record["orchestrator_id"] = self.orchestrator_id
+        if inp.orchestrator_id is not None:
+            record["orchestrator_id"] = inp.orchestrator_id
 
         return await Agent.create(record)
