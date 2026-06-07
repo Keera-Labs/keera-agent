@@ -52,7 +52,7 @@ class AppProvider(Provider):
                         "description": "Project manager agent that coordinates work across the team.",
                         "model": "claude-sonnet-4-6",
                         "system_prompt": _default_system_prompt("pm"),
-                        "flags": _json.dumps({"dangerously_skip_permissions": True}),
+                        "flags": _json.dumps({}),
                         "status": "idle",
                         "has_session": False,
                     })

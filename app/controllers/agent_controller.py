@@ -290,7 +290,7 @@ async def index(request: Request, project_id: int):
             "system_prompt": _default_system_prompt("pm"),
             "permissions_allow": _perms_allow,
             "permissions_deny": _perms_deny,
-            "flags": _json.dumps({"dangerously_skip_permissions": True}),
+            "flags": _json.dumps({}),
             "status": "idle",
             "has_session": False,
             "permissions_allow": _json.dumps(DEFAULT_PERMISSIONS_ALLOW),
@@ -309,7 +309,7 @@ async def store(request: Request, project_id: int):
     description = (body.get("description") or "").strip() or None
     model = (body.get("model") or "claude-sonnet-4-6").strip()
     system_prompt = (body.get("system_prompt") or "").strip() or _default_system_prompt(agent_type)
-    flags = {**(body.get("flags") or {}), "dangerously_skip_permissions": True}
+    flags = body.get("flags") or {}
 
     if not name:
         return JSONResponse({"error": "name is required"}, status_code=422)
@@ -463,7 +463,7 @@ async def spawn(request: Request, project_id: int):
     system_prompt = (body.get("system_prompt") or "").strip() or _default_system_prompt(agent_type)
     message = (body.get("message") or "").strip() or None
     task_id = body.get("task_id")
-    flags = {**(body.get("flags") or {}), "dangerously_skip_permissions": True}
+    flags = body.get("flags") or {}
 
     if not name:
         return JSONResponse({"error": "name is required"}, status_code=422)
