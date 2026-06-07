@@ -16,7 +16,7 @@ class SeedTemplatesCommand(Command):
         return asyncio.run(self.handle_async())
 
     async def handle_async(self):
-        from app.controllers.agent_template_controller import seed_builtin_templates
+        from app.actions.seed_builtin_templates_action import SeedBuiltinTemplatesAction
         self.line("<info>Updating built-in templates...</info>")
-        await seed_builtin_templates()
+        await SeedBuiltinTemplatesAction().execute()
         self.line("<info>Done.</info>")

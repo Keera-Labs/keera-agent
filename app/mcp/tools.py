@@ -397,7 +397,7 @@ class SpawnAgentTool(Tool):
     async def handle(self, arguments: dict) -> Response:
         import asyncio
         from app.actions.agent_create_action import AgentCreateAction
-        from app.requests.agent_requests import AgentCreateInput
+        from app.requests.agent_requests import AgentStoreRequest
         from app.terminal.connection_manager import ConnectionManager
         from fastapi_startkit.application import app as _app
 
@@ -410,9 +410,8 @@ class SpawnAgentTool(Tool):
             return Response.text("Error: name is required")
 
         agent = await AgentCreateAction(
-            None,  # no HTTP request in MCP context
             project_id=project.id,
-            input=AgentCreateInput(
+            request=AgentStoreRequest(
                 name=name,
                 agent_type=arguments.get("agent_type", "custom"),
                 model=arguments.get("model") or "claude-sonnet-4-6",

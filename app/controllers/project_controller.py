@@ -206,7 +206,7 @@ async def store(request: Request):
     import json as _json
     from app.models.Agent import Agent
     from app.controllers.permission_controller import read_default_permissions
-    from app.controllers.agent_controller import _default_system_prompt
+    from app.utils.system_prompts import default_system_prompt
     _dp = read_default_permissions()
     await Agent.create({
         "project_id": project.id,
@@ -214,7 +214,7 @@ async def store(request: Request):
         "agent_type": "pm",
         "description": "Project manager agent that coordinates work across the team.",
         "model": "claude-sonnet-4-6",
-        "system_prompt": _default_system_prompt("pm"),
+        "system_prompt": default_system_prompt("pm"),
         "permissions_allow": _json.dumps(_dp.get("allow", [])),
         "permissions_deny": _json.dumps(_dp.get("deny", [])),
         "status": "idle",

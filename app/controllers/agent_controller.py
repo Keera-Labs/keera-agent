@@ -2,14 +2,14 @@ import asyncio
 import datetime
 import json as _json
 import os
-import pathlib as _pathlib
 import re
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 
 from app.models.Agent import Agent
-from app.requests.agent_requests import AgentCreateInput, AgentStoreRequest, AgentUpdateRequest
+from app.requests.agent_requests import AgentStoreRequest, AgentUpdateRequest
 
 
 def _slugify(name: str) -> str:
@@ -82,44 +82,6 @@ def _default_permissions() -> tuple[str, str]:
     return _json.dumps(perms.get("allow", [])), _json.dumps(perms.get("deny", []))
 
 
-_PROMPTS_DIR = _pathlib.Path(__file__).parent.parent / "prompts"
-
-# Keep the dict as a hard-coded fallback for environments where the prompts
-# directory cannot be found (e.g. during testing without assets).
-_SYSTEM_PROMPTS_FALLBACK: dict[str, str] = {
-    "pm": "You are the Project Manager (PM). Delegate all work to agents via spawn_agent and relay_to_agent.",
-    "software_engineer": "You are a Software Engineer agent. This is your permanent role — never abandon it.",
-    "qa": "You are a QA (Quality Assurance) agent. This is your permanent role — never abandon it.",
-    "software_engineer_frontend": "You are a Frontend Software Engineer. Work only on the frontend.",
-    "reviewer": "You are a Code Reviewer. Review PRs for correctness, security, performance.",
-}
-
-
-def _default_system_prompt(agent_type: str) -> str | None:
-    """Return the default system prompt for a given agent type, or None for custom.
-
-    Loads from ``app/prompts/<agent_type>.html`` via Jinja2.  Falls back to
-    the in-process ``_SYSTEM_PROMPTS_FALLBACK`` dict if the file is missing.
-    Returns ``None`` for the ``custom`` type (no default prompt).
-    """
-    if agent_type == "custom":
-        return None
-
-    template_path = _PROMPTS_DIR / f"{agent_type}.html"
-    if template_path.exists():
-        try:
-            from jinja2 import Environment, FileSystemLoader, select_autoescape
-            env = Environment(
-                loader=FileSystemLoader(str(_PROMPTS_DIR)),
-                autoescape=select_autoescape([]),  # plain text — no HTML escaping
-                keep_trailing_newline=True,
-            )
-            return env.get_template(f"{agent_type}.html").render()
-        except Exception:
-            pass  # fall through to hard-coded fallback
-
-    return _SYSTEM_PROMPTS_FALLBACK.get(agent_type)
-
 
 async def index(request: Request, project_id: int):
     from app.actions.agent_create_action import AgentCreateAction
@@ -128,9 +90,8 @@ async def index(request: Request, project_id: int):
     if not agents:
         # Auto-create a default PM agent for projects that don't have one yet
         agent = await AgentCreateAction(
-            request,
             project_id=project_id,
-            input=AgentCreateInput(
+            request=AgentStoreRequest(
                 name="PM",
                 agent_type="pm",
                 description="Project manager agent that coordinates work across the team.",
@@ -150,18 +111,10 @@ async def index(request: Request, project_id: int):
     return JSONResponse([_serialize(a) for a in agents])
 
 
-ALLOWED_TYPES = {"pm", "software_engineer", "software_engineer_frontend", "reviewer", "qa", "custom"}
-
-
 async def store(request: Request, body: AgentStoreRequest, project_id: int):
     from app.actions.agent_create_action import AgentCreateAction
 
-    if body.agent_type not in ALLOWED_TYPES:
-        return JSONResponse({"error": f"Invalid agent_type. Allowed: {sorted(ALLOWED_TYPES)}"}, status_code=422)
-    if not body.name.strip():
-        return JSONResponse({"error": "name is required"}, status_code=422)
-
-    agent = await AgentCreateAction(request, project_id=project_id, input=body).execute()
+    agent = await AgentCreateAction(project_id=project_id, request=body).execute()
 
     # Store requires a unique slug (spawn does not persist one)
     slug = await _unique_slug(project_id, _slugify(agent.name))
@@ -282,15 +235,12 @@ async def spawn(request: Request, project_id: int):
     from app.models.Project import Project
     from app.terminal.connection_manager import ConnectionManager
 
-    action = await AgentCreateAction.from_request(request, project_id=project_id)
-    inp = action.input
+    try:
+        inp = AgentStoreRequest(**(await request.json()))
+    except ValidationError as e:
+        return JSONResponse({"error": e.errors()}, status_code=422)
 
-    if inp.agent_type not in ALLOWED_TYPES:
-        return JSONResponse({"error": f"Invalid agent_type. Allowed: {sorted(ALLOWED_TYPES)}"}, status_code=422)
-    if not inp.name.strip():
-        return JSONResponse({"error": "name is required"}, status_code=422)
-
-    agent = await action.execute()
+    agent = await AgentCreateAction(project_id=project_id, request=inp).execute()
     message = (inp.message or "").strip() or None
 
 
