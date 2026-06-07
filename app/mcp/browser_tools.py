@@ -19,7 +19,7 @@ async def _get_page():
         if _browser is None:
             from playwright.async_api import async_playwright
             _pw = await async_playwright().start()
-            _browser = await _pw.chromium.launch(headless=True)
+            _browser = await _pw.chromium.launch(headless=False)
             _page = await _browser.new_page()
         elif _page is None or _page.is_closed():
             _page = await _browser.new_page()

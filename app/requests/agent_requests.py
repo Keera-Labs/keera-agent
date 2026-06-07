@@ -3,7 +3,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 
-class AgentCreateInput(BaseModel):
+class AgentStoreRequest(BaseModel):
     """Input model for AgentCreateAction — covers all agent-creation paths."""
     name: str
     agent_type: str = "software_engineer"
@@ -17,10 +17,6 @@ class AgentCreateInput(BaseModel):
     orchestrator_id: Optional[int] = None
     # Transient field: initial message to send after agent creation (not stored)
     message: Optional[str] = None
-
-
-# AgentStoreRequest is an alias kept for backwards-compat with existing route wiring
-AgentStoreRequest = AgentCreateInput
 
 
 class AgentUpdateRequest(BaseModel):

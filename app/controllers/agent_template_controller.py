@@ -4,57 +4,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from app.models.AgentTemplate import AgentTemplate
-
-# ── Built-in template definitions ────────────────────────────────────────────
-# Imported lazily to avoid circular imports (system prompts live in agent_controller)
-
-_BUILTIN_TEMPLATES = [
-    {
-        "name": "PM",
-        "description": "Project Manager — coordinates work, delegates tasks, never touches code.",
-        "agent_type": "pm",
-        "model": "claude-sonnet-4-6",
-        "dangerously_skip_permissions": True,
-        "plan_mode": True,
-        "flags": {},
-    },
-    {
-        "name": "Software Engineer",
-        "description": "Creates worktrees, implements features, opens PRs, reports back to PM.",
-        "agent_type": "software_engineer",
-        "model": "claude-sonnet-4-6",
-        "dangerously_skip_permissions": True,
-        "plan_mode": False,
-        "flags": {},
-    },
-    {
-        "name": "QA",
-        "description": "Checks out branches, runs tests, browser tests, reports pass/fail and bugs to PM.",
-        "agent_type": "qa",
-        "model": "claude-sonnet-4-6",
-        "dangerously_skip_permissions": True,
-        "plan_mode": False,
-        "flags": {},
-    },
-    {
-        "name": "Full Auto",
-        "description": "Software Engineer with --dangerously-skip-permissions — no permission prompts.",
-        "agent_type": "software_engineer",
-        "model": "claude-sonnet-4-6",
-        "dangerously_skip_permissions": True,
-        "plan_mode": False,
-        "flags": {},
-    },
-    {
-        "name": "Planner",
-        "description": "Read-only planning mode — analyses and proposes but never modifies files.",
-        "agent_type": "custom",
-        "model": "claude-sonnet-4-6",
-        "dangerously_skip_permissions": False,
-        "plan_mode": True,
-        "flags": {},
-    },
-]
+from app.constant.templates import AGENT_TEMPLATES
 
 
 def _serialize(t: AgentTemplate) -> dict:
@@ -76,16 +26,9 @@ def _serialize(t: AgentTemplate) -> dict:
 
 
 async def seed_builtin_templates() -> None:
-    """Upsert the built-in templates on app startup.
-
-    New built-ins are created.  Existing built-ins have their ``system_prompt``,
-    ``flags``, ``dangerously_skip_permissions``, and ``plan_mode`` refreshed if
-    the canonical values have changed (e.g. after a code update), but other
-    fields are left alone so manual DB edits survive.
-    """
     from app.controllers.agent_controller import _default_system_prompt
 
-    for tpl in _BUILTIN_TEMPLATES:
+    for tpl in AGENT_TEMPLATES:
         # Resolve the canonical system prompt via the Jinja2 loader
         system_prompt = _default_system_prompt(tpl["agent_type"])
         canonical_flags = _json.dumps(tpl["flags"])
