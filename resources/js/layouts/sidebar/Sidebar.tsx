@@ -200,6 +200,7 @@ export default function Sidebar({
                         return (
                             <button
                                 key={item.id}
+                                data-tab={item.id}
                                 onClick={() => onChangeView(item.id)}
                                 style={{
                                     display: 'flex', alignItems: 'center', gap: '8px',
