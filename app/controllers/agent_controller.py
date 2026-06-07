@@ -3,11 +3,24 @@ import datetime
 import json as _json
 import os
 import re
+from typing import Optional
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from app.models.Agent import Agent
+
+
+class AgentStoreRequest(BaseModel):
+    name: str
+    agent_type: str = "custom"
+    description: Optional[str] = None
+    model: str = "claude-sonnet-4-6"
+    system_prompt: Optional[str] = None
+    flags: dict = {}
+    dangerously_skip_permissions: bool = True
+    plan_mode: Optional[bool] = None  # resolved at runtime: True if agent_type=="pm", else False
 
 
 def _slugify(name: str) -> str:
@@ -305,18 +318,16 @@ async def index(request: Request, project_id: int):
     return JSONResponse([_serialize(a) for a in agents])
 
 
-async def store(request: Request, project_id: int):
-    body = await request.json()
-
-    name = (body.get("name") or "").strip()
-    agent_type = (body.get("agent_type") or "custom").strip()
-    description = (body.get("description") or "").strip() or None
-    model = (body.get("model") or "claude-sonnet-4-6").strip()
-    system_prompt = (body.get("system_prompt") or "").strip() or _default_system_prompt(agent_type)
-    flags = {k: v for k, v in (body.get("flags") or {}).items()
+async def store(body: AgentStoreRequest, project_id: int):
+    name = body.name.strip()
+    agent_type = body.agent_type.strip() or "custom"
+    description = (body.description or "").strip() or None
+    model = body.model.strip() or "claude-sonnet-4-6"
+    system_prompt = (body.system_prompt or "").strip() or _default_system_prompt(agent_type)
+    flags = {k: v for k, v in body.flags.items()
              if k not in ("dangerously_skip_permissions", "plan_mode")}
-    dangerously_skip_permissions = bool(body.get("dangerously_skip_permissions", True))
-    plan_mode = bool(body.get("plan_mode", agent_type == "pm"))
+    dangerously_skip_permissions = body.dangerously_skip_permissions
+    plan_mode = body.plan_mode if body.plan_mode is not None else (agent_type == "pm")
 
     if not name:
         return JSONResponse({"error": "name is required"}, status_code=422)
