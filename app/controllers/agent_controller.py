@@ -12,6 +12,17 @@ from pydantic import BaseModel
 from app.models.Agent import Agent
 
 
+class AgentUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    model: Optional[str] = None
+    system_prompt: Optional[str] = None
+    agent_type: Optional[str] = None
+    flags: Optional[dict] = None
+    dangerously_skip_permissions: Optional[bool] = None
+    plan_mode: Optional[bool] = None
+
+
 class AgentStoreRequest(BaseModel):
     name: str
     agent_type: str = "custom"
@@ -358,28 +369,28 @@ async def store(body: AgentStoreRequest, project_id: int):
     return JSONResponse(_serialize(agent), status_code=201)
 
 
-async def update(request: Request, agent_id: int):
-    body = await request.json()
+async def update(body: AgentUpdateRequest, agent_id: int):
     agent = await Agent.find(agent_id)
     if not agent:
         return JSONResponse({"error": "Agent not found"}, status_code=404)
 
-    if "name" in body:
-        agent.name = (body["name"] or "").strip()
-    if "description" in body:
-        agent.description = (body["description"] or "").strip() or None
-    if "model" in body:
-        agent.model = (body["model"] or "claude-sonnet-4-6").strip()
-    if "system_prompt" in body:
-        agent.system_prompt = (body["system_prompt"] or "").strip() or None
-    if "agent_type" in body:
-        agent.agent_type = (body["agent_type"] or "custom").strip()
-    if "flags" in body:
-        agent.flags = _json.dumps(body["flags"] or {})
-    if "dangerously_skip_permissions" in body:
-        agent.dangerously_skip_permissions = bool(body["dangerously_skip_permissions"])
-    if "plan_mode" in body:
-        agent.plan_mode = bool(body["plan_mode"])
+    sent = body.model_fields_set
+    if "name" in sent:
+        agent.name = (body.name or "").strip()
+    if "description" in sent:
+        agent.description = (body.description or "").strip() or None
+    if "model" in sent:
+        agent.model = (body.model or "claude-sonnet-4-6").strip()
+    if "system_prompt" in sent:
+        agent.system_prompt = (body.system_prompt or "").strip() or None
+    if "agent_type" in sent:
+        agent.agent_type = (body.agent_type or "custom").strip()
+    if "flags" in sent:
+        agent.flags = _json.dumps(body.flags or {})
+    if "dangerously_skip_permissions" in sent:
+        agent.dangerously_skip_permissions = bool(body.dangerously_skip_permissions)
+    if "plan_mode" in sent:
+        agent.plan_mode = bool(body.plan_mode)
 
     await agent.save()
     return JSONResponse(_serialize(agent))
