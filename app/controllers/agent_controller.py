@@ -8,6 +8,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from app.models.Agent import Agent
+from app.requests.agent_requests import AgentStoreRequest, AgentUpdateRequest
 
 
 def _slugify(name: str) -> str:
@@ -66,7 +67,7 @@ def _serialize(a: Agent) -> dict:
         "status": a.status,
         "permissions_allow": _json.loads(a.permissions_allow) if getattr(a, "permissions_allow", None) else [],
         "permissions_deny": _json.loads(a.permissions_deny) if getattr(a, "permissions_deny", None) else [],
-        "flags": _json.loads(a.flags) if getattr(a, "flags", None) else {},
+        "flags": a.flags or {},
         "dangerously_skip_permissions": bool(getattr(a, "dangerously_skip_permissions", True)),
         "plan_mode": bool(getattr(a, "plan_mode", False)),
         "created_at": str(a.created_at) if a.created_at else None,
@@ -305,18 +306,16 @@ async def index(request: Request, project_id: int):
     return JSONResponse([_serialize(a) for a in agents])
 
 
-async def store(request: Request, project_id: int):
-    body = await request.json()
-
-    name = (body.get("name") or "").strip()
-    agent_type = (body.get("agent_type") or "custom").strip()
-    description = (body.get("description") or "").strip() or None
-    model = (body.get("model") or "claude-sonnet-4-6").strip()
-    system_prompt = (body.get("system_prompt") or "").strip() or _default_system_prompt(agent_type)
-    flags = {k: v for k, v in (body.get("flags") or {}).items()
+async def store(body: AgentStoreRequest, project_id: int):
+    name = body.name.strip()
+    agent_type = body.agent_type.strip() or "custom"
+    description = (body.description or "").strip() or None
+    model = body.model.strip() or "claude-sonnet-4-6"
+    system_prompt = (body.system_prompt or "").strip() or _default_system_prompt(agent_type)
+    flags = {k: v for k, v in body.flags.items()
              if k not in ("dangerously_skip_permissions", "plan_mode")}
-    dangerously_skip_permissions = bool(body.get("dangerously_skip_permissions", True))
-    plan_mode = bool(body.get("plan_mode", agent_type == "pm"))
+    dangerously_skip_permissions = body.dangerously_skip_permissions
+    plan_mode = body.plan_mode if body.plan_mode is not None else (agent_type == "pm")
 
     if not name:
         return JSONResponse({"error": "name is required"}, status_code=422)
@@ -347,30 +346,13 @@ async def store(request: Request, project_id: int):
     return JSONResponse(_serialize(agent), status_code=201)
 
 
-async def update(request: Request, agent_id: int):
-    body = await request.json()
+async def update(body: AgentUpdateRequest, agent_id: int):
     agent = await Agent.find(agent_id)
     if not agent:
         return JSONResponse({"error": "Agent not found"}, status_code=404)
 
-    if "name" in body:
-        agent.name = (body["name"] or "").strip()
-    if "description" in body:
-        agent.description = (body["description"] or "").strip() or None
-    if "model" in body:
-        agent.model = (body["model"] or "claude-sonnet-4-6").strip()
-    if "system_prompt" in body:
-        agent.system_prompt = (body["system_prompt"] or "").strip() or None
-    if "agent_type" in body:
-        agent.agent_type = (body["agent_type"] or "custom").strip()
-    if "flags" in body:
-        agent.flags = _json.dumps(body["flags"] or {})
-    if "dangerously_skip_permissions" in body:
-        agent.dangerously_skip_permissions = bool(body["dangerously_skip_permissions"])
-    if "plan_mode" in body:
-        agent.plan_mode = bool(body["plan_mode"])
-
-    await agent.save()
+    await Agent.where("id", agent_id).update(body.model_dump(exclude_unset=True))
+    agent = await Agent.find(agent_id)
     return JSONResponse(_serialize(agent))
 
 
