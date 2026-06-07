@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { color } from '@/tokens'
 import type { Project } from '@/types/type'
 import { labelStyle, inputStyle, cancelBtnStyle, submitBtnStyle } from '@/components/ui/styles'
@@ -15,6 +15,12 @@ export function SystemPromptModal({
     const [prompt, setPrompt] = useState(project.system_prompt ?? '')
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
+
+    // Sync the textarea when the parent passes updated project data (e.g. after
+    // the React Query cache refreshes stale data after the modal opens).
+    useEffect(() => {
+        setPrompt(project.system_prompt ?? '')
+    }, [project.system_prompt])
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()

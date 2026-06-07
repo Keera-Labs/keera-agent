@@ -244,6 +244,16 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         setClaudeStatus(prev => ({ ...initial, ...prev }))
     }, [allProjects.length])
 
+    // Keep systemPromptProject in sync with the React Query cache so the modal
+    // always receives the freshest project data (including system_prompt) even
+    // when stale data was used at the moment the user clicked "System Instructions".
+    useEffect(() => {
+        if (systemPromptProject != null) {
+            const latest = allProjects.find(p => p.id === systemPromptProject.id)
+            if (latest) setSystemPromptProject(latest)
+        }
+    }, [allProjects])
+
     // When agents load and URL has an agent_id, set the active agent
     useEffect(() => {
         if (activeAgentFromUrl) {
