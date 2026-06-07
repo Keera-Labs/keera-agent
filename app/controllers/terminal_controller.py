@@ -106,7 +106,9 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
 
     try:
         await asyncio.wait_for(
-            bridge.run(auto_send=agent_record.to_command().encode() + b'\n'),
+            bridge.run(auto_send=agent_record.to_command(
+                system_prompt_suffix=f"\n\n## Your identity\nYour agent ID is {agent_record.id}. When other agents ask you to report back, always use this ID as `from_agent_id` in relay calls."
+            ).encode() + b'\n'),
             timeout=300.0,
         )
     except asyncio.TimeoutError:
