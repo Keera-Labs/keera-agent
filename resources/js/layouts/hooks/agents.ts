@@ -36,7 +36,8 @@ export function useAgents(projectId: number | null) {
         queryKey: key,
         queryFn: () => fetchAgents(projectId!),
         enabled: projectId !== null,
-        staleTime: 1000 * 30,
+        staleTime: 1000 * 10,
+        refetchInterval: 1000 * 10,
     })
 
     const invalidate = () => queryClient.invalidateQueries({ queryKey: key })
