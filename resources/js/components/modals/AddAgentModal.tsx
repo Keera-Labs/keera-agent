@@ -1,9 +1,20 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { color } from '@/tokens'
 import type { ProjectAgent, AgentFlags } from '@/layouts/hooks/agents'
 import type { AgentTemplate } from '@/types/agent'
-import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, AGENT_TYPE_DEFAULTS } from '@/types/agent'
+import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS } from '@/types/agent'
 import { labelStyle, inputStyle, cancelBtnStyle, submitBtnStyle, flagRowStyle, toggleStyle } from '@/components/ui/styles'
+
+/**
+ * Find the "plain" builtin template for an agent type — prefers one without
+ * special flags (full-auto / plan-mode) so we get the natural defaults.
+ */
+function findBuiltinForType(templates: AgentTemplate[], agentType: string): AgentTemplate | undefined {
+    return (
+        templates.find(t => t.is_builtin && t.agent_type === agentType && !t.flags?.dangerously_skip_permissions && !t.flags?.plan_mode)
+        ?? templates.find(t => t.is_builtin && t.agent_type === agentType)
+    )
+}
 
 export function AddAgentModal({ projectId, onClose, onCreated, templates }: {
     projectId: number
@@ -13,22 +24,33 @@ export function AddAgentModal({ projectId, onClose, onCreated, templates }: {
 }) {
     const [name, setName] = useState('')
     const [agentType, setAgentType] = useState<string>('software_engineer')
-    const [description, setDescription] = useState(AGENT_TYPE_DEFAULTS.software_engineer.description)
-    const [systemPrompt, setSystemPrompt] = useState(AGENT_TYPE_DEFAULTS.software_engineer.system_prompt)
+    const [description, setDescription] = useState(() => findBuiltinForType(templates, 'software_engineer')?.description ?? '')
+    const [systemPrompt, setSystemPrompt] = useState(() => findBuiltinForType(templates, 'software_engineer')?.system_prompt ?? '')
     const [model, setModel] = useState('claude-sonnet-4-6')
     const [flags, setFlags] = useState<AgentFlags>({})
     const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null)
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
 
+    // If templates weren't in cache at mount time, populate defaults once they arrive
+    const templateInitialized = useRef(templates.length > 0)
+    useEffect(() => {
+        if (!templateInitialized.current && templates.length > 0) {
+            templateInitialized.current = true
+            const tpl = findBuiltinForType(templates, agentType)
+            if (tpl) {
+                setDescription(prev => prev || (tpl.description ?? ''))
+                setSystemPrompt(prev => prev || (tpl.system_prompt ?? ''))
+            }
+        }
+    }, [templates]) // eslint-disable-line react-hooks/exhaustive-deps
+
     function handleTypeChange(type: string) {
         setAgentType(type)
         setSelectedTemplateId(null)
-        const defaults = AGENT_TYPE_DEFAULTS[type]
-        if (defaults) {
-            setDescription(defaults.description)
-            setSystemPrompt(defaults.system_prompt)
-        }
+        const tpl = findBuiltinForType(templates, type)
+        setDescription(tpl?.description ?? '')
+        setSystemPrompt(tpl?.system_prompt ?? '')
     }
 
     function applyTemplate(tpl: AgentTemplate | null) {
@@ -45,12 +67,8 @@ export function AddAgentModal({ projectId, onClose, onCreated, templates }: {
         setAgentType(tpl.agent_type)
         setModel(tpl.model)
         setFlags(tpl.flags ?? {})
-        if (tpl.description) setDescription(tpl.description)
-        if (tpl.system_prompt) setSystemPrompt(tpl.system_prompt)
-        else {
-            const defaults = AGENT_TYPE_DEFAULTS[tpl.agent_type]
-            if (defaults) setSystemPrompt(defaults.system_prompt)
-        }
+        setDescription(tpl.description ?? '')
+        setSystemPrompt(tpl.system_prompt ?? '')
     }
 
     function setFlag(key: keyof AgentFlags, value: boolean | number | null) {
