@@ -396,7 +396,7 @@ class SpawnAgentTool(Tool):
 
     async def handle(self, arguments: dict) -> Response:
         import asyncio
-        from app.models.Agent import Agent
+        from app.actions.agent_create_action import AgentCreateAction
         from app.terminal.connection_manager import ConnectionManager
         from fastapi_startkit.application import app as _app
 
@@ -408,18 +408,20 @@ class SpawnAgentTool(Tool):
         if not name:
             return Response.text("Error: name is required")
 
-        agent = await Agent.create({
-            "project_id": project.id,
-            "name": name,
-            "agent_type": arguments.get("agent_type", "custom"),
-            "description": f"{name} agent",
-            "model": arguments.get("model") or "claude-sonnet-4-6",
-            "system_prompt": (arguments.get("system_prompt") or "").strip() or None,
-            "task_id": arguments.get("task_id"),
-            "orchestrator_id": arguments.get("from_agent_id"),
-            "status": "idle",
-            "has_session": False,
-        })
+        agent_type = arguments.get("agent_type", "custom")
+
+        action = AgentCreateAction.prepare(
+            project_id=project.id,
+            name=name,
+            agent_type=agent_type,
+            model=arguments.get("model") or "claude-sonnet-4-6",
+            description=f"{name} agent",
+            # If caller passes a system_prompt use it; otherwise action resolves the type default
+            system_prompt=(arguments.get("system_prompt") or "").strip() or None,
+            task_id=arguments.get("task_id"),
+            orchestrator_id=arguments.get("from_agent_id"),
+        )
+        agent = await action.execute()
 
         cwd = os.path.expanduser(project.path)
 

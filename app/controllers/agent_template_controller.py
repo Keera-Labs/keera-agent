@@ -38,7 +38,7 @@ _BUILTIN_TEMPLATES = [
         "description": "Software Engineer with --dangerously-skip-permissions — no permission prompts.",
         "agent_type": "software_engineer",
         "model": "claude-sonnet-4-6",
-        "flags": {},
+        "flags": {"dangerously_skip_permissions": True},
         "is_builtin": True,
     },
     {
@@ -69,16 +69,32 @@ def _serialize(t: AgentTemplate) -> dict:
 
 
 async def seed_builtin_templates() -> None:
-    """Upsert the built-in templates on app startup. Existing built-ins are NOT overwritten."""
-    from app.controllers.agent_controller import _SYSTEM_PROMPTS
+    """Upsert the built-in templates on app startup.
+
+    New built-ins are created.  Existing built-ins have their ``system_prompt``
+    and ``flags`` refreshed if the canonical value has changed (e.g. after a
+    code update), but other fields are left alone so manual DB edits survive.
+    """
+    from app.controllers.agent_controller import _default_system_prompt
 
     for tpl in _BUILTIN_TEMPLATES:
+        # Resolve the canonical system prompt via the Jinja2 loader
+        system_prompt = _default_system_prompt(tpl["agent_type"])
+
         existing = await AgentTemplate.where("name", tpl["name"]).where("is_builtin", True).first()
         if existing:
-            continue  # Never overwrite — preserves manual edits
-
-        # Resolve system prompt from agent_controller if not explicitly set
-        system_prompt = _SYSTEM_PROMPTS.get(tpl["agent_type"])
+            # Refresh system_prompt and flags so code-side changes propagate
+            needs_update = False
+            if existing.system_prompt != system_prompt:
+                existing.system_prompt = system_prompt
+                needs_update = True
+            canonical_flags = _json.dumps(tpl["flags"])
+            if getattr(existing, "flags", None) != canonical_flags:
+                existing.flags = canonical_flags
+                needs_update = True
+            if needs_update:
+                await existing.save()
+            continue
 
         await AgentTemplate.create({
             "name": tpl["name"],

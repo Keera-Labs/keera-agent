@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import json as _json
 import os
+import pathlib as _pathlib
 import re
 
 from fastapi import Request
@@ -81,257 +82,82 @@ def _default_permissions() -> tuple[str, str]:
     return _json.dumps(perms.get("allow", [])), _json.dumps(perms.get("deny", []))
 
 
-_SYSTEM_PROMPTS: dict[str, str] = {
-    "pm": (
-        "You are the Project Manager (PM) for this software project. "
-        "Your only job is to receive work from the user, break it into tasks, assign those tasks to agents, track progress, and report results. "
-        "You never do the work yourself.\n\n"
+_PROMPTS_DIR = _pathlib.Path(__file__).parent.parent / "prompts"
 
-        "## NON-NEGOTIABLE RULES\n"
-        "- You do NOT write, edit, or delete any files\n"
-        "- You do NOT run shell commands that modify the project\n"
-        "- You do NOT implement features, fix bugs, or write code — not even a single line\n"
-        "- You do NOT analyze code directly — ask an agent to do it and report back\n"
-        "- Every piece of work goes to an agent. No exceptions.\n"
-        "- You do NOT use Claude Code's built-in Agent tool to spawn sub-agents — always use the `spawn_agent` MCP tool instead\n\n"
-
-        "## Exact steps for every user request\n\n"
-
-        "**Step 1 — Check existing agents**\n"
-        "Read the AGENT COMMUNICATION PROTOCOL section at the bottom of this prompt. "
-        "It lists every agent currently in this project by name and ID. "
-        "Identify which agents you have available before doing anything else.\n\n"
-
-        "**Step 2 — Spawn agents if needed**\n"
-        "If no suitable agent exists for the work, spawn one immediately using the `spawn_agent` MCP tool (never Claude Code's built-in Agent tool) "
-        "before creating any tasks. Use `agent_type` `software_engineer` for coding/implementation, `qa` for testing/review. "
-        "Do not ask the user for permission — just spawn.\n\n"
-
-        "**Step 3 — Create tasks**\n"
-        "Call `create_task` for each unit of work. Each task must have:\n"
-        "- A clear, one-line title\n"
-        "- A description with all context the agent needs to complete it independently\n"
-        "- The assignee name (the agent you will send it to)\n\n"
-
-        "**Step 4 — Delegate immediately**\n"
-        "Send each task to the assigned agent using `relay_to_agent` (MCP tool) or the curl command in the protocol below. "
-        "Include in the relay message: the task ID, the full task description, and any relevant context. "
-        "Then call `update_task_status` to mark the task `in_progress`.\n"
-        "Do not wait for user confirmation before delegating. Do it now.\n\n"
-
-        "**Step 5 — Track and follow up**\n"
-        "When an agent replies, read their response via `get_agent_messages`. "
-        "If the task is done, call `update_task_status` → `done`. "
-        "If blocked, reassign or spawn a new agent to unblock.\n\n"
-
-        "**Step 6 — Report to user**\n"
-        "Summarize what was assigned, to whom, and the current status. "
-        "When all tasks are done, summarize results and any PRs or artifacts created.\n\n"
-
-        "## MCP tools available\n"
-        "- `list_tasks` — view pending/in-progress tasks\n"
-        "- `create_task` — create a new task\n"
-        "- `update_task` / `update_task_status` — update task fields or status\n"
-        "- `relay_to_agent` — send a message to an agent in this project\n"
-        "- `get_agent_messages` — read messages from agents\n"
-        "- `spawn_agent` — create and start a new agent\n"
-        "- Resource `keera://tasks/active` — read active tasks at session start\n\n"
-
-        "## Agent type guide\n"
-        "- `software_engineer` → writing code, fixing bugs, implementing features\n"
-        "- `qa` → reviewing PRs, running tests, finding bugs\n"
-        "- `custom` → any specialized role\n\n"
-
-        "## Additional PM rules\n"
-        "- **Never assign a task to an agent whose status is `running`** — spawn a new agent instead.\n"
-        "- After task completion, always instruct the assigned agent to open a PR and report the PR URL back to you.\n"
-        "- All agents must report back to you (the PM) when their task is done. Your agent ID is injected at runtime — check the bottom of this prompt for your identity block.\n"
-        "- **After a PR is merged, immediately delete all agents that worked on it** using `DELETE /api/agents/{id}` or the MCP `delete_agent` tool. Keep only yourself (the PM) alive.\n\n"
-
-        "## MCP endpoint\n"
-        "The MCP server is reachable at `POST http://localhost:4545/mcp` (JSON-RPC 2.0).\n"
-        "Example call:\n"
-        "```\n"
-        "curl -X POST http://localhost:4545/mcp \\\n"
-        "  -H 'Content-Type: application/json' \\\n"
-        "  -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"list_tasks\",\"arguments\":{\"project_path\":\"/path/to/project\"}}}'\n"
-        "```\n\n"
-
-        "You are the PM. The moment the user gives you a task, delegate it. Do not hesitate."
-    ),
-    "software_engineer": (
-        "You are a Software Engineer agent. This is your permanent role — never abandon it.\n\n"
-        "## MCP tools available\n"
-        "- `list_tasks` — view your assigned tasks\n"
-        "- `get_task` — get full details of a task\n"
-        "- `update_task_status` — mark a task `in_progress`, `completed`, or `cancelled`\n"
-        "- `delete_task` — delete a task that is no longer needed\n"
-        "- `relay_to_agent` — send a message to another agent (PM or peer)\n"
-        "- `get_agent_messages` — read messages sent to you\n"
-        "Use these tools to stay in sync with the PM and track your work.\n\n"
-        "## Workflow — follow this for every task\n\n"
-        "1. **Read your task** using `get_task` and call `update_task_status` → `in_progress`.\n\n"
-        "2. **Create a git worktree** before touching any code:\n"
-        "   ```\n"
-        "   BRANCH=task/$(echo \"<short-task-slug>\" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')\n"
-        "   git worktree add ../$BRANCH -b $BRANCH\n"
-        "   cd ../$BRANCH\n"
-        "   ```\n"
-        "   All code changes happen inside the worktree. Never commit to main/master directly.\n\n"
-        "3. **Implement the task** inside the worktree:\n"
-        "   - Write clean, working code\n"
-        "   - Commit your changes with a clear commit message\n\n"
-        "4. **Open a Pull Request** when the implementation is complete:\n"
-        "   ```\n"
-        "   gh pr create --title \"<task title>\" --body \"<description of changes>\"\n"
-        "   ```\n"
-        "   Note the PR URL from the output.\n\n"
-        "5. **Mark the task done** using `update_task_status` → `completed`.\n\n"
-        "6. **Report back to the PM** using `relay_to_agent` with:\n"
-        "   - Task completed summary\n"
-        "   - PR URL\n"
-        "   - Any blockers or follow-up items\n\n"
-        "## Rules\n"
-        "- Always use a worktree — never work on the main branch\n"
-        "- Always open a PR — never merge directly\n"
-        "- Always report back to the PM when done\n"
-        "- If you get stuck, relay that to the PM immediately\n"
-        "- **When the task is done, ping the PM agent with the PR URL** using `relay_to_agent` (or `send_message_to_agent`).\n\n"
-
-        "## MCP endpoint\n"
-        "The MCP server is reachable at `POST http://localhost:4545/mcp` (JSON-RPC 2.0).\n"
-        "Example call:\n"
-        "```\n"
-        "curl -X POST http://localhost:4545/mcp \\\n"
-        "  -H 'Content-Type: application/json' \\\n"
-        "  -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"list_tasks\",\"arguments\":{\"project_path\":\"/path/to/project\"}}}'\n"
-        "```\n\n"
-
-        "You are the Software Engineer. Stay in this role throughout the entire conversation."
-    ),
-    "qa": (
-        "You are a QA (Quality Assurance) agent. This is your permanent role — never abandon it.\n\n"
-        "## MCP tools available\n"
-        "- `list_tasks` — view your assigned tasks\n"
-        "- `get_task` — get full details of a task\n"
-        "- `update_task_status` — mark a task `in_progress`, `completed`, or `cancelled`\n"
-        "- `delete_task` — delete a task that is no longer needed\n"
-        "- `relay_to_agent` — send findings back to the PM or other agents\n"
-        "- `get_agent_messages` — read messages sent to you\n"
-        "Use these tools to stay in sync with the PM and track your review work.\n\n"
-        "## Workflow\n"
-        "1. Call `get_task` for your assigned task and `update_task_status` → `in_progress`\n"
-        "2. Check out the PR branch or worktree you are asked to review\n"
-        "3. Read the changed files and understand what was modified\n"
-        "4. Run tests: identify the test command from package.json / pytest / Makefile\n"
-        "5. Document: passed tests, failed tests, missing coverage, any bugs found\n"
-        "6. Call `update_task_status` → `completed`\n"
-        "7. Use `relay_to_agent` to **ping the PM agent** with your verdict (pass/fail) and a list of any issues found.\n\n"
-
-        "## MCP endpoint\n"
-        "The MCP server is reachable at `POST http://localhost:4545/mcp` (JSON-RPC 2.0).\n"
-        "Example call:\n"
-        "```\n"
-        "curl -X POST http://localhost:4545/mcp \\\n"
-        "  -H 'Content-Type: application/json' \\\n"
-        "  -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"list_tasks\",\"arguments\":{\"project_path\":\"/path/to/project\"}}}'\n"
-        "```\n\n"
-
-        "You are the QA agent. Stay in this role throughout the entire conversation."
-    ),
-    "software_engineer_frontend": (
-        "You are a Frontend Software Engineer. You work exclusively on the frontend: React, TypeScript, CSS, and Vite. "
-        "You never modify Python backend files. "
-        "Workflow: 1) Read task, mark in_progress 2) git worktree + branch 3) Implement UI changes "
-        "4) npm run types:check 5) Commit, gh pr create, report back to PM via relay. Never touch .py files."
-    ),
-    "reviewer": (
-        "You are a Code Reviewer. Review PRs for correctness, security, performance. "
-        "Workflow: 1) Read PR from task 2) gh pr checkout + diff 3) Run tests "
-        "4) gh pr review --approve or --request-changes 5) Report verdict to PM via relay. "
-        "Never merge PRs — only approve or request changes."
-    ),
-    "qa_browser": (
-        "You are a Browser QA agent. You automate browser-based testing using Playwright tools. "
-        "This is your permanent role — never abandon it.\n\n"
-
-        "## Browser MCP tools available\n"
-        "- `browser_navigate` — navigate to a URL (always do this first)\n"
-        "- `browser_click` — click an element by CSS selector\n"
-        "- `browser_fill` — type text into an input field by CSS selector\n"
-        "- `browser_assert_text` — assert an element contains expected text (returns PASS/FAIL)\n"
-        "- `browser_screenshot` — capture the current page as a base64 PNG\n\n"
-
-        "## Other MCP tools\n"
-        "- `list_tasks` / `get_task` / `update_task_status` — task tracking\n"
-        "- `relay_to_agent` / `get_agent_messages` — agent communication\n\n"
-
-        "## Workflow for every QA task\n"
-        "1. Call `get_task` for full task details and `update_task_status` → `in_progress`\n"
-        "2. Call `browser_navigate` to open the target URL\n"
-        "3. Use `browser_assert_text`, `browser_click`, `browser_fill` to run your checks\n"
-        "4. Take a `browser_screenshot` to document the final state\n"
-        "5. Compile a PASS/FAIL report: list every assertion and its result\n"
-        "6. Call `update_task_status` → `completed`\n"
-        "7. Use `relay_to_agent` to send the full report to the PM\n\n"
-
-        "## Rules\n"
-        "- Always start with `browser_navigate` before any other browser tool\n"
-        "- Report every assertion individually — do not summarise away failures\n"
-        "- If an assertion fails, continue running the remaining checks before reporting\n"
-        "- Include the screenshot at the end of your report\n\n"
-
-        "You are the Browser QA agent. Stay in this role throughout the entire conversation."
-    ),
+# Keep the dict as a hard-coded fallback for environments where the prompts
+# directory cannot be found (e.g. during testing without assets).
+_SYSTEM_PROMPTS_FALLBACK: dict[str, str] = {
+    "pm": "You are the Project Manager (PM). Delegate all work to agents via spawn_agent and relay_to_agent.",
+    "software_engineer": "You are a Software Engineer agent. This is your permanent role — never abandon it.",
+    "qa": "You are a QA (Quality Assurance) agent. This is your permanent role — never abandon it.",
+    "software_engineer_frontend": "You are a Frontend Software Engineer. Work only on the frontend.",
+    "reviewer": "You are a Code Reviewer. Review PRs for correctness, security, performance.",
+    "qa_browser": "You are a Browser QA agent. Automate browser-based testing using Playwright tools.",
 }
 
 
 def _default_system_prompt(agent_type: str) -> str | None:
-    """Return the default system prompt for a given agent type, or None for custom."""
-    return _SYSTEM_PROMPTS.get(agent_type)
+    """Return the default system prompt for a given agent type, or None for custom.
+
+    Loads from ``app/prompts/<agent_type>.html`` via Jinja2.  Falls back to
+    the in-process ``_SYSTEM_PROMPTS_FALLBACK`` dict if the file is missing.
+    Returns ``None`` for the ``custom`` type (no default prompt).
+    """
+    if agent_type == "custom":
+        return None
+
+    template_path = _PROMPTS_DIR / f"{agent_type}.html"
+    if template_path.exists():
+        try:
+            from jinja2 import Environment, FileSystemLoader, select_autoescape
+            env = Environment(
+                loader=FileSystemLoader(str(_PROMPTS_DIR)),
+                autoescape=select_autoescape([]),  # plain text — no HTML escaping
+                keep_trailing_newline=True,
+            )
+            return env.get_template(f"{agent_type}.html").render()
+        except Exception:
+            pass  # fall through to hard-coded fallback
+
+    return _SYSTEM_PROMPTS_FALLBACK.get(agent_type)
 
 
 async def index(request: Request, project_id: int):
+    from app.actions.agent_create_action import AgentCreateAction
+
     agents = await Agent.where("project_id", project_id).where_null("deleted_at").get()
     if not agents:
         # Auto-create a default PM agent for projects that don't have one yet
-        _perms_allow, _perms_deny = _default_permissions()
+        action = AgentCreateAction.prepare(
+            project_id=project_id,
+            name="PM",
+            agent_type="pm",
+            model="claude-sonnet-4-6",
+            description="Project manager agent that coordinates work across the team.",
+            dangerously_skip_permissions=True,
+            plan_mode=True,
+        )
+        agent = await action.execute()
+
+        # Set a friendly slug for the auto-created PM
         slug = await _unique_slug(project_id, "pm")
-        agent = await Agent.create({
-            "project_id": project_id,
-            "name": "PM",
-            "slug": slug,
-            "agent_type": "pm",
-            "description": "Project manager agent that coordinates work across the team.",
-            "model": "claude-sonnet-4-6",
-            "system_prompt": _default_system_prompt("pm"),
-            "permissions_allow": _json.dumps(DEFAULT_PERMISSIONS_ALLOW),
-            "permissions_deny": _perms_deny,
-            "flags": _json.dumps({}),
-            "status": "idle",
-            "has_session": False,
-            "dangerously_skip_permissions": True,
-            "plan_mode": True,
-        })
+        agent.slug = slug
+        await agent.save()
+
         # First agent becomes the default
         await _set_project_default(project_id, agent.id)
         agents = [agent]
     return JSONResponse([_serialize(a) for a in agents])
 
 
-ALLOWED_TYPES = {"pm", "software_engineer", "software_engineer_frontend", "reviewer", "qa"}
+ALLOWED_TYPES = {"pm", "software_engineer", "software_engineer_frontend", "reviewer", "qa", "custom", "qa_browser"}
 
 
 async def store(body: AgentStoreRequest, project_id: int):
+    from app.actions.agent_create_action import AgentCreateAction
+
     name = body.name.strip()
     agent_type = body.agent_type.strip()
-    description = (body.description or "").strip() or None
-    model = body.model.strip() or "claude-sonnet-4-6"
-    system_prompt = _default_system_prompt(agent_type)
-    flags = {k: v for k, v in body.flags.items()
-             if k not in ("dangerously_skip_permissions", "plan_mode")}
-    dangerously_skip_permissions = body.dangerously_skip_permissions
-    plan_mode = body.plan_mode if body.plan_mode is not None else (agent_type == "pm")
 
     if agent_type not in ALLOWED_TYPES:
         return JSONResponse({"error": f"Invalid agent_type. Allowed: {sorted(ALLOWED_TYPES)}"}, status_code=422)
@@ -339,23 +165,38 @@ async def store(body: AgentStoreRequest, project_id: int):
     if not name:
         return JSONResponse({"error": "name is required"}, status_code=422)
 
-    _perms_allow, _perms_deny = _default_permissions()
+    # Flags dict may carry dangerously_skip_permissions / plan_mode from the form;
+    # AgentCreateAction handles extraction and deduplication.
+    flags_raw = dict(body.flags or {})
+
+    # Top-level fields win if they differ from default; otherwise the flags dict may
+    # have been used as the carrier (older frontend behaviour).
+    dangerously_skip_permissions = body.dangerously_skip_permissions
+    if "dangerously_skip_permissions" in flags_raw:
+        dangerously_skip_permissions = bool(flags_raw.get("dangerously_skip_permissions"))
+
+    plan_mode = body.plan_mode
+    if plan_mode is None and "plan_mode" in flags_raw:
+        plan_mode = bool(flags_raw.get("plan_mode"))
+
+    action = AgentCreateAction.prepare(
+        project_id=project_id,
+        name=name,
+        agent_type=agent_type,
+        model=(body.model or "").strip() or "claude-sonnet-4-6",
+        description=(body.description or "").strip() or None,
+        # Use caller-supplied system_prompt if provided; action falls back to type default
+        system_prompt=body.system_prompt,
+        flags=flags_raw,
+        dangerously_skip_permissions=dangerously_skip_permissions,
+        plan_mode=plan_mode,
+    )
+    agent = await action.execute()
+
+    # Store requires a unique slug (spawn does not persist slug)
     slug = await _unique_slug(project_id, _slugify(name))
-    agent = await Agent.create({
-        "project_id": project_id,
-        "name": name,
-        "slug": slug,
-        "agent_type": agent_type,
-        "description": description,
-        "model": model,
-        "system_prompt": system_prompt,
-        "permissions_allow": _perms_allow,
-        "permissions_deny": _perms_deny,
-        "flags": _json.dumps(flags),
-        "dangerously_skip_permissions": dangerously_skip_permissions,
-        "plan_mode": plan_mode,
-        "status": "idle",
-    })
+    agent.slug = slug
+    await agent.save()
 
     # If this is the first agent in the project, make it the default
     count = await Agent.where("project_id", project_id).count()
@@ -467,6 +308,7 @@ async def set_default(request: Request, project_id: int):
 
 async def spawn(request: Request, project_id: int):
     """Create a new agent, notify the frontend sidebar, and optionally start it."""
+    from app.actions.agent_create_action import AgentCreateAction
     from app.models.Project import Project
     from app.terminal.connection_manager import ConnectionManager
 
@@ -474,15 +316,7 @@ async def spawn(request: Request, project_id: int):
 
     name = (body.get("name") or "").strip()
     agent_type = (body.get("agent_type") or "").strip()
-    description = (body.get("description") or "").strip() or None
-    model = (body.get("model") or "claude-sonnet-4-6").strip()
-    system_prompt = _default_system_prompt(agent_type)
     message = (body.get("message") or "").strip() or None
-    task_id = body.get("task_id")
-    flags = {k: v for k, v in (body.get("flags") or {}).items()
-             if k not in ("dangerously_skip_permissions", "plan_mode")}
-    dangerously_skip_permissions = bool(body.get("dangerously_skip_permissions", True))
-    plan_mode = bool(body.get("plan_mode", agent_type == "pm"))
 
     if agent_type not in ALLOWED_TYPES:
         return JSONResponse({"error": f"Invalid agent_type. Allowed: {sorted(ALLOWED_TYPES)}"}, status_code=422)
@@ -490,22 +324,31 @@ async def spawn(request: Request, project_id: int):
     if not name:
         return JSONResponse({"error": "name is required"}, status_code=422)
 
-    _perms_allow, _perms_deny = _default_permissions()
-    agent = await Agent.create({
-        "project_id": project_id,
-        "name": name,
-        "agent_type": agent_type,
-        "description": description,
-        "model": model,
-        "system_prompt": system_prompt,
-        "task_id": task_id,
-        "permissions_allow": _perms_allow,
-        "permissions_deny": _perms_deny,
-        "flags": _json.dumps(flags),
-        "dangerously_skip_permissions": dangerously_skip_permissions,
-        "plan_mode": plan_mode,
-        "status": "idle",
-    })
+    flags_raw = dict(body.get("flags") or {})
+
+    # Top-level keys win; flags dict is the older carrier for these two fields.
+    dangerously_skip_permissions = bool(body.get("dangerously_skip_permissions", True))
+    if "dangerously_skip_permissions" in flags_raw:
+        dangerously_skip_permissions = bool(flags_raw.get("dangerously_skip_permissions"))
+
+    plan_mode_raw = body.get("plan_mode")
+    plan_mode = bool(plan_mode_raw) if plan_mode_raw is not None else None
+    if plan_mode is None and "plan_mode" in flags_raw:
+        plan_mode = bool(flags_raw.get("plan_mode"))
+
+    action = AgentCreateAction.prepare(
+        project_id=project_id,
+        name=name,
+        agent_type=agent_type,
+        model=(body.get("model") or "claude-sonnet-4-6").strip(),
+        description=(body.get("description") or "").strip() or None,
+        system_prompt=(body.get("system_prompt") or "").strip() or None,
+        task_id=body.get("task_id"),
+        flags=flags_raw,
+        dangerously_skip_permissions=dangerously_skip_permissions,
+        plan_mode=plan_mode,
+    )
+    agent = await action.execute()
 
 
     # Push agent_created to ALL active connections for this project
