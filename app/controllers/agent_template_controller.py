@@ -14,40 +14,45 @@ _BUILTIN_TEMPLATES = [
         "description": "Project Manager — coordinates work, delegates tasks, never touches code.",
         "agent_type": "pm",
         "model": "claude-sonnet-4-6",
+        "dangerously_skip_permissions": True,
+        "plan_mode": True,
         "flags": {},
-        "is_builtin": True,
     },
     {
         "name": "Software Engineer",
         "description": "Creates worktrees, implements features, opens PRs, reports back to PM.",
         "agent_type": "software_engineer",
         "model": "claude-sonnet-4-6",
+        "dangerously_skip_permissions": True,
+        "plan_mode": False,
         "flags": {},
-        "is_builtin": True,
     },
     {
         "name": "QA",
-        "description": "Checks out branches, runs tests, reports pass/fail and bugs to PM.",
+        "description": "Checks out branches, runs tests, browser tests, reports pass/fail and bugs to PM.",
         "agent_type": "qa",
         "model": "claude-sonnet-4-6",
+        "dangerously_skip_permissions": True,
+        "plan_mode": False,
         "flags": {},
-        "is_builtin": True,
     },
     {
         "name": "Full Auto",
         "description": "Software Engineer with --dangerously-skip-permissions — no permission prompts.",
         "agent_type": "software_engineer",
         "model": "claude-sonnet-4-6",
+        "dangerously_skip_permissions": True,
+        "plan_mode": False,
         "flags": {},
-        "is_builtin": True,
     },
     {
         "name": "Planner",
         "description": "Read-only planning mode — analyses and proposes but never modifies files.",
         "agent_type": "custom",
         "model": "claude-sonnet-4-6",
-        "flags": {"plan_mode": True},
-        "is_builtin": True,
+        "dangerously_skip_permissions": False,
+        "plan_mode": True,
+        "flags": {},
     },
 ]
 
@@ -63,22 +68,47 @@ def _serialize(t: AgentTemplate) -> dict:
         "permissions_allow": _json.loads(t.permissions_allow) if getattr(t, "permissions_allow", None) else [],
         "permissions_deny": _json.loads(t.permissions_deny) if getattr(t, "permissions_deny", None) else [],
         "flags": _json.loads(t.flags) if getattr(t, "flags", None) else {},
+        "dangerously_skip_permissions": bool(getattr(t, "dangerously_skip_permissions", True)),
+        "plan_mode": bool(getattr(t, "plan_mode", False)),
         "is_builtin": bool(getattr(t, "is_builtin", False)),
         "created_at": str(t.created_at) if t.created_at else None,
     }
 
 
 async def seed_builtin_templates() -> None:
-    """Upsert the built-in templates on app startup. Existing built-ins are NOT overwritten."""
-    from app.controllers.agent_controller import _SYSTEM_PROMPTS
+    """Upsert the built-in templates on app startup.
+
+    New built-ins are created.  Existing built-ins have their ``system_prompt``,
+    ``flags``, ``dangerously_skip_permissions``, and ``plan_mode`` refreshed if
+    the canonical values have changed (e.g. after a code update), but other
+    fields are left alone so manual DB edits survive.
+    """
+    from app.controllers.agent_controller import _default_system_prompt
 
     for tpl in _BUILTIN_TEMPLATES:
+        # Resolve the canonical system prompt via the Jinja2 loader
+        system_prompt = _default_system_prompt(tpl["agent_type"])
+        canonical_flags = _json.dumps(tpl["flags"])
+
         existing = await AgentTemplate.where("name", tpl["name"]).where("is_builtin", True).first()
         if existing:
-            continue  # Never overwrite — preserves manual edits
-
-        # Resolve system prompt from agent_controller if not explicitly set
-        system_prompt = _SYSTEM_PROMPTS.get(tpl["agent_type"])
+            # Refresh auto-managed fields so code-side changes propagate
+            needs_update = False
+            if existing.system_prompt != system_prompt:
+                existing.system_prompt = system_prompt
+                needs_update = True
+            if getattr(existing, "flags", None) != canonical_flags:
+                existing.flags = canonical_flags
+                needs_update = True
+            if bool(getattr(existing, "dangerously_skip_permissions", True)) != tpl["dangerously_skip_permissions"]:
+                existing.dangerously_skip_permissions = tpl["dangerously_skip_permissions"]
+                needs_update = True
+            if bool(getattr(existing, "plan_mode", False)) != tpl["plan_mode"]:
+                existing.plan_mode = tpl["plan_mode"]
+                needs_update = True
+            if needs_update:
+                await existing.save()
+            continue
 
         await AgentTemplate.create({
             "name": tpl["name"],
@@ -86,7 +116,9 @@ async def seed_builtin_templates() -> None:
             "agent_type": tpl["agent_type"],
             "system_prompt": system_prompt,
             "model": tpl["model"],
-            "flags": _json.dumps(tpl["flags"]),
+            "flags": canonical_flags,
+            "dangerously_skip_permissions": tpl["dangerously_skip_permissions"],
+            "plan_mode": tpl["plan_mode"],
             "is_builtin": True,
         })
 
@@ -114,6 +146,8 @@ async def store(request: Request):
     flags = body.get("flags") or {}
     permissions_allow = body.get("permissions_allow") or []
     permissions_deny = body.get("permissions_deny") or []
+    dangerously_skip_permissions = bool(body.get("dangerously_skip_permissions", True))
+    plan_mode = bool(body.get("plan_mode", agent_type == "pm"))
 
     template = await AgentTemplate.create({
         "name": name,
@@ -124,6 +158,8 @@ async def store(request: Request):
         "flags": _json.dumps(flags),
         "permissions_allow": _json.dumps(permissions_allow),
         "permissions_deny": _json.dumps(permissions_deny),
+        "dangerously_skip_permissions": dangerously_skip_permissions,
+        "plan_mode": plan_mode,
         "is_builtin": False,
     })
 
@@ -155,6 +191,10 @@ async def update(request: Request, template_id: int):
         template.permissions_allow = _json.dumps(body["permissions_allow"] or [])
     if "permissions_deny" in body:
         template.permissions_deny = _json.dumps(body["permissions_deny"] or [])
+    if "dangerously_skip_permissions" in body:
+        template.dangerously_skip_permissions = bool(body["dangerously_skip_permissions"])
+    if "plan_mode" in body:
+        template.plan_mode = bool(body["plan_mode"])
 
     await template.save()
     return JSONResponse(_serialize(template))
