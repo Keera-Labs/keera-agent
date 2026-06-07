@@ -1,5 +1,7 @@
+import json as _json
+
 from app.models.Agent import Agent
-from requests.agent_requests import AgentStoreRequest
+from app.requests.agent_requests import AgentStoreRequest
 
 
 class AgentCreateAction:
@@ -12,11 +14,45 @@ class AgentCreateAction:
         return AgentCreateAction(project_id=project_id, request=request)
 
     async def execute(self) -> Agent:
-        attributes = self.request.model_dump()
-        attributes.update({
+        from app.controllers.agent_controller import _default_permissions
+        from app.utils.system_prompts import default_system_prompt
+
+        req = self.request
+
+        # Resolve system prompt: caller value wins, fall back to type default
+        system_prompt = (req.system_prompt or "").strip() or default_system_prompt(req.agent_type)
+
+        # Promote dangerously_skip_permissions / plan_mode out of the flags dict
+        # (older frontend nests them) so they live in their own columns instead.
+        flags = dict(req.flags or {})
+        flags.pop("dangerously_skip_permissions", None)
+        dsp = bool(req.dangerously_skip_permissions)
+
+        plan_mode = req.plan_mode
+        if plan_mode is None:
+            plan_mode = bool(flags.pop("plan_mode")) if "plan_mode" in flags else (req.agent_type == "pm")
+        else:
+            flags.pop("plan_mode", None)
+
+        perms_allow, perms_deny = _default_permissions()
+
+        record = {
             "project_id": self.project_id,
+            "name": req.name.strip(),
+            "agent_type": req.agent_type,
+            "description": req.description,
+            "model": req.model,
+            "system_prompt": system_prompt,
+            "task_id": req.task_id,
+            "permissions_allow": perms_allow,
+            "permissions_deny": perms_deny,
+            "flags": _json.dumps(flags),
+            "dangerously_skip_permissions": dsp,
+            "plan_mode": bool(plan_mode),
             "status": "idle",
             "has_session": False,
-        })
+        }
+        if req.orchestrator_id is not None:
+            record["orchestrator_id"] = req.orchestrator_id
 
-        return await Agent.create(attributes)
+        return await Agent.create(record)

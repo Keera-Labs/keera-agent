@@ -1,6 +1,8 @@
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from app.constant.agent_types import ALLOWED_AGENT_TYPES
 
 
 class AgentStoreRequest(BaseModel):
@@ -18,6 +20,21 @@ class AgentStoreRequest(BaseModel):
     # Transient field: initial message to send after agent creation (not stored)
     message: Optional[str] = None
 
+    @field_validator("name", "model")
+    @classmethod
+    def _not_blank(cls, v: str, info) -> str:
+        v = (v or "").strip()
+        if not v:
+            raise ValueError(f"{info.field_name} must not be empty")
+        return v
+
+    @field_validator("agent_type")
+    @classmethod
+    def _known_agent_type(cls, v: str) -> str:
+        if v not in ALLOWED_AGENT_TYPES:
+            raise ValueError(f"invalid agent_type; allowed: {sorted(ALLOWED_AGENT_TYPES)}")
+        return v
+
 
 class AgentUpdateRequest(BaseModel):
     name: Optional[str] = None
@@ -28,3 +45,20 @@ class AgentUpdateRequest(BaseModel):
     flags: Optional[dict] = None
     dangerously_skip_permissions: Optional[bool] = None
     plan_mode: Optional[bool] = None
+
+    @field_validator("name", "model")
+    @classmethod
+    def _not_blank_if_set(cls, v: Optional[str], info) -> Optional[str]:
+        if v is None:
+            return v
+        v = v.strip()
+        if not v:
+            raise ValueError(f"{info.field_name} must not be empty")
+        return v
+
+    @field_validator("agent_type")
+    @classmethod
+    def _known_agent_type_if_set(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in ALLOWED_AGENT_TYPES:
+            raise ValueError(f"invalid agent_type; allowed: {sorted(ALLOWED_AGENT_TYPES)}")
+        return v

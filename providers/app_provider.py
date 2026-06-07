@@ -24,8 +24,8 @@ class AppProvider(Provider):
             from app.models.Project import Project
             from app.models.Agent import Agent
             from app.utils.hook_setup import ensure_claude_settings, BASE_URL
-            from app.controllers.agent_template_controller import seed_builtin_templates
-            await seed_builtin_templates()
+            from app.actions.seed_builtin_templates_action import SeedBuiltinTemplatesAction
+            await SeedBuiltinTemplatesAction().execute()
 
             projects = await Project.all()
             for project in projects:
@@ -44,7 +44,7 @@ class AppProvider(Provider):
                 # Ensure default PM agent exists
                 existing = await Agent.where("project_id", project.id).first()
                 if not existing:
-                    from app.controllers.agent_controller import _default_system_prompt
+                    from app.utils.system_prompts import default_system_prompt
                     import json as _json
                     await Agent.create({
                         "project_id": project.id,
@@ -52,7 +52,7 @@ class AppProvider(Provider):
                         "agent_type": "pm",
                         "description": "Project manager agent that coordinates work across the team.",
                         "model": "claude-sonnet-4-6",
-                        "system_prompt": _default_system_prompt("pm"),
+                        "system_prompt": default_system_prompt("pm"),
                         "flags": _json.dumps({}),
                         "status": "idle",
                         "has_session": False,
