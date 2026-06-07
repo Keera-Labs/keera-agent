@@ -71,7 +71,7 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
         allProjects, activeProject, tasks,
         claudeStatus, newMessageIds,
         projectView, setProjectView,
-        fileInputRef, uploadImage,
+
         setShowCreateTask, setSelectedTask,
         openAddProject, setMovingProject, setEditingProject,
         setDeletingProject, setShowWorkspaceModal,
@@ -157,45 +157,6 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
                             style={{ color: color.textPrimary }}
                         />
                     </div>
-                    {/* Attach image (agents view) */}
-                    {activeView === 'agents' && activeProject && (
-                        <button
-                            onClick={() => fileInputRef.current?.click()}
-                            title="Attach image"
-                            className="bg-transparent border-none cursor-pointer p-1.5 flex items-center rounded transition-colors"
-                            style={{ color: color.textFaint }}
-                            onMouseEnter={e => (e.currentTarget.style.color = color.accent)}
-                            onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
-                        >
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                                <path d="M4.5 3a2.5 2.5 0 015 0v9a1.5 1.5 0 01-3 0V5a.5.5 0 011 0v7a.5.5 0 001 0V3a1.5 1.5 0 10-3 0v9a2.5 2.5 0 005 0V5a.5.5 0 011 0v7a3.5 3.5 0 11-7 0V3z"/>
-                            </svg>
-                        </button>
-                    )}
-                    {/* Bell */}
-                    <button
-                        className="bg-transparent border-none cursor-pointer p-1.5 flex items-center rounded transition-colors"
-                        style={{ color: color.textFaint }}
-                        onMouseEnter={e => (e.currentTarget.style.color = color.textPrimary)}
-                        onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
-                    >
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M8 16a2 2 0 001.985-1.75c.017-.137-.097-.25-.235-.25h-3.5c-.138 0-.252.113-.235.25A2 2 0 008 16zm.25-14.25A5.25 5.25 0 003 7v2.047c0 .334-.102.656-.29.932L1.55 11.698A1.5 1.5 0 002.8 13.5h10.4a1.5 1.5 0 001.258-2.302l-1.16-1.719A1.625 1.625 0 0113 8.047V7A5.25 5.25 0 008.25 1.75z"/>
-                        </svg>
-                    </button>
-                    {/* Settings */}
-                    <button
-                        onClick={() => router.visit('/settings')}
-                        title="Settings"
-                        className="bg-transparent border-none cursor-pointer p-1.5 flex items-center rounded transition-colors"
-                        style={{ color: pageHasContent ? color.accent : color.textFaint }}
-                        onMouseEnter={e => { if (!pageHasContent) e.currentTarget.style.color = color.textPrimary }}
-                        onMouseLeave={e => { if (!pageHasContent) e.currentTarget.style.color = color.textFaint }}
-                    >
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M8 0a8.2 8.2 0 01.701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.103-.303c.644-.176 1.392.021 1.82.63.27.385.506.792.704 1.218.315.675.111 1.422-.364 1.891l-.814.806c-.049.048-.098.147-.088.294.016.257.016.515 0 .772-.01.147.038.246.087.294l.814.806c.475.469.679 1.216.364 1.891a7.977 7.977 0 01-.704 1.217c-.428.61-1.176.807-1.82.63l-1.103-.303c-.066-.019-.176-.011-.299.071a5.909 5.909 0 01-.668.386c-.133.066-.194.158-.211.224l-.29 1.106c-.168.646-.715 1.196-1.458 1.26a8.006 8.006 0 01-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106c-.018-.066-.079-.158-.212-.224a5.738 5.738 0 01-.668-.386c-.123-.082-.233-.09-.299-.071l-1.103.303c-.644.176-1.392-.021-1.82-.63a8.12 8.12 0 01-.704-1.218c-.315-.675-.111-1.422.363-1.891l.815-.806c.05-.048.098-.147.088-.294a6.214 6.214 0 010-.772c.01-.147-.038-.246-.088-.294l-.815-.806C.635 6.045.431 5.298.746 4.623a7.92 7.92 0 01.704-1.217c.428-.61 1.176-.807 1.82-.63l1.102.302c.067.019.177.011.3-.071a5.659 5.659 0 01.668-.386c.133-.066.194-.158.211-.224l.29-1.106C6.156.421 6.703-.129 7.445.031 7.645.015 7.825 0 8 0zm1.5 8a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/>
-                        </svg>
-                    </button>
                     {/* Avatar */}
                     <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white cursor-pointer ml-1 shrink-0" style={{ background: '#7c6af7' }}>
                         B
