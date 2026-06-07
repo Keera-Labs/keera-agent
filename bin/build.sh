@@ -106,6 +106,9 @@ uv sync --frozen
 echo "==> Running migrations..."
 uv run python artisan db:migrate
 
+echo "==> Updating built-in agent templates..."
+uv run python artisan templates:update
+
 echo "==> Committing build..."
 git -C "$DIST" init -q
 git -C "$DIST" add -A
