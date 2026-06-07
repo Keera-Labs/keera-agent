@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import json as _json
 import os
 import re
@@ -275,7 +276,7 @@ def _default_system_prompt(agent_type: str) -> str | None:
 
 
 async def index(request: Request, project_id: int):
-    agents = await Agent.where("project_id", project_id).get()
+    agents = await Agent.where("project_id", project_id).where_null("deleted_at").get()
     if not agents:
         # Auto-create a default PM agent for projects that don't have one yet
         _perms_allow, _perms_deny = _default_permissions()
@@ -391,12 +392,14 @@ async def destroy(request: Request, agent_id: int):
             pass
 
     project_id = agent.project_id
-    await Agent.where("id", agent_id).delete()
+    # Soft-delete: stamp deleted_at instead of removing the row
+    agent.deleted_at = datetime.datetime.utcnow()
+    await agent.save()
 
-    # If this was the default, pick the next available agent
+    # If this was the default, pick the next available (non-deleted) agent
     project = await Project.find(project_id)
     if project and getattr(project, "default_agent_id", None) == agent_id:
-        remaining = await Agent.where("project_id", project_id).order_by("id", "asc").get()
+        remaining = await Agent.where("project_id", project_id).where_null("deleted_at").order_by("id", "asc").get()
         new_default = remaining[0].id if remaining else None
         await _set_project_default(project_id, new_default)
 

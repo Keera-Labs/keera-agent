@@ -360,7 +360,7 @@ class ListAgentsTool(Tool):
         if not project:
             return Response.text(f"Error: no Keera project found at path '{arguments['project_path']}'")
 
-        agents = await Agent.where("project_id", project.id).get()
+        agents = await Agent.where("project_id", project.id).where_null("deleted_at").get()
         if not agents:
             return Response.text("No agents registered in this project.")
 
