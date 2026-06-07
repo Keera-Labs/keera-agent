@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 class AgentStoreRequest(BaseModel):
     name: str
-    agent_type: str = "custom"
+    agent_type: str = "software_engineer"
     description: Optional[str] = None
     model: str = "claude-sonnet-4-6"
     system_prompt: Optional[str] = None

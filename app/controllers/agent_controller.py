@@ -239,6 +239,18 @@ _SYSTEM_PROMPTS: dict[str, str] = {
 
         "You are the QA agent. Stay in this role throughout the entire conversation."
     ),
+    "software_engineer_frontend": (
+        "You are a Frontend Software Engineer. You work exclusively on the frontend: React, TypeScript, CSS, and Vite. "
+        "You never modify Python backend files. "
+        "Workflow: 1) Read task, mark in_progress 2) git worktree + branch 3) Implement UI changes "
+        "4) npm run types:check 5) Commit, gh pr create, report back to PM via relay. Never touch .py files."
+    ),
+    "reviewer": (
+        "You are a Code Reviewer. Review PRs for correctness, security, performance. "
+        "Workflow: 1) Read PR from task 2) gh pr checkout + diff 3) Run tests "
+        "4) gh pr review --approve or --request-changes 5) Report verdict to PM via relay. "
+        "Never merge PRs — only approve or request changes."
+    ),
     "qa_browser": (
         "You are a Browser QA agent. You automate browser-based testing using Playwright tools. "
         "This is your permanent role — never abandon it.\n\n"
@@ -307,16 +319,22 @@ async def index(request: Request, project_id: int):
     return JSONResponse([_serialize(a) for a in agents])
 
 
+ALLOWED_TYPES = {"pm", "software_engineer", "software_engineer_frontend", "reviewer", "qa"}
+
+
 async def store(body: AgentStoreRequest, project_id: int):
     name = body.name.strip()
-    agent_type = body.agent_type.strip() or "custom"
+    agent_type = body.agent_type.strip()
     description = (body.description or "").strip() or None
     model = body.model.strip() or "claude-sonnet-4-6"
-    system_prompt = (body.system_prompt or "").strip() or _default_system_prompt(agent_type)
+    system_prompt = _default_system_prompt(agent_type)
     flags = {k: v for k, v in body.flags.items()
              if k not in ("dangerously_skip_permissions", "plan_mode")}
     dangerously_skip_permissions = body.dangerously_skip_permissions
     plan_mode = body.plan_mode if body.plan_mode is not None else (agent_type == "pm")
+
+    if agent_type not in ALLOWED_TYPES:
+        return JSONResponse({"error": f"Invalid agent_type. Allowed: {sorted(ALLOWED_TYPES)}"}, status_code=422)
 
     if not name:
         return JSONResponse({"error": "name is required"}, status_code=422)
@@ -455,16 +473,19 @@ async def spawn(request: Request, project_id: int):
     body = await request.json()
 
     name = (body.get("name") or "").strip()
-    agent_type = (body.get("agent_type") or "custom").strip()
+    agent_type = (body.get("agent_type") or "").strip()
     description = (body.get("description") or "").strip() or None
     model = (body.get("model") or "claude-sonnet-4-6").strip()
-    system_prompt = (body.get("system_prompt") or "").strip() or _default_system_prompt(agent_type)
+    system_prompt = _default_system_prompt(agent_type)
     message = (body.get("message") or "").strip() or None
     task_id = body.get("task_id")
     flags = {k: v for k, v in (body.get("flags") or {}).items()
              if k not in ("dangerously_skip_permissions", "plan_mode")}
     dangerously_skip_permissions = bool(body.get("dangerously_skip_permissions", True))
     plan_mode = bool(body.get("plan_mode", agent_type == "pm"))
+
+    if agent_type not in ALLOWED_TYPES:
+        return JSONResponse({"error": f"Invalid agent_type. Allowed: {sorted(ALLOWED_TYPES)}"}, status_code=422)
 
     if not name:
         return JSONResponse({"error": "name is required"}, status_code=422)

@@ -16,6 +16,8 @@ export interface AgentTemplate {
 export const AGENT_TYPE_LABELS: Record<string, string> = {
     pm: 'PM',
     software_engineer: 'Software Engineer',
+    software_engineer_frontend: 'Frontend Engineer',
+    reviewer: 'Reviewer',
     qa: 'QA',
     custom: 'Custom',
 }
