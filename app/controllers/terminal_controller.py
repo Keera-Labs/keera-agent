@@ -56,14 +56,9 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
         await websocket.close(code=1008, reason="Project not found")
         return
 
-    agent_record = await Agent.find(agent_id)
+    agent_record = await Agent.where("id", agent_id).where_null("deleted_at").first()
     if not agent_record:
         await websocket.close(code=1008, reason="Agent not found")
-        return
-
-    # Guard against soft-deleted agents
-    if getattr(agent_record, 'deleted_at', None):
-        await websocket.close(code=4004, reason="Agent deleted")
         return
 
     cwd = os.path.expanduser(project_record.path)
