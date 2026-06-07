@@ -59,13 +59,6 @@ class AppProvider(Provider):
 
         self.app.fastapi.add_event_handler("startup", on_startup)
 
-        async def on_heartbeat_startup():
-            import asyncio
-            from app.heartbeat import heartbeat_loop
-            asyncio.create_task(heartbeat_loop(interval_seconds=60))
-
-        self.app.fastapi.add_event_handler("startup", on_heartbeat_startup)
-
         async def on_shutdown():
             import os
             import signal

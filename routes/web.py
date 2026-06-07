@@ -16,6 +16,7 @@ from app.controllers import agent_trigger_controller
 from app.controllers import agent_template_controller
 from app.controllers import poc_controller
 from app.controllers import settings_controller
+from app.controllers import heartbeat_controller
 from app.mcp.server import KeeraServer
 
 router = Router()
@@ -84,6 +85,11 @@ router.get("/api/agents/{agent_id}/permissions", permission_controller.get_agent
 router.patch("/api/agents/{agent_id}/permissions", permission_controller.update_agent_permissions)
 router.get("/api/default-permissions", permission_controller.get_default_permissions)
 router.patch("/api/default-permissions", permission_controller.update_default_permissions)
+
+# Heartbeat management — before wildcard
+router.get("/api/heartbeat/status", heartbeat_controller.status)
+router.post("/api/heartbeat/start", heartbeat_controller.start)
+router.post("/api/heartbeat/stop", heartbeat_controller.stop)
 
 # Settings page — before wildcard
 router.get("/settings", settings_controller.settings)
