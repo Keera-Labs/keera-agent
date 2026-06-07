@@ -61,6 +61,11 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
         await websocket.close(code=1008, reason="Agent not found")
         return
 
+    # Guard against soft-deleted agents
+    if getattr(agent_record, 'deleted_at', None):
+        await websocket.close(code=4004, reason="Agent deleted")
+        return
+
     cwd = os.path.expanduser(project_record.path)
     os.makedirs(cwd, exist_ok=True)
 
@@ -105,7 +110,15 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
     conn_manager.set(session_id, bridge, cwd=cwd)
 
     try:
-        await bridge.run(auto_send=agent_record.to_command().encode() + b'\n')
+        await asyncio.wait_for(
+            bridge.run(auto_send=agent_record.to_command().encode() + b'\n'),
+            timeout=300.0,
+        )
+    except asyncio.TimeoutError:
+        try:
+            await websocket.close(code=1011, reason="Terminal timeout")
+        except Exception:
+            pass
     finally:
         conn_manager.remove(session_id)
         claude_ready.pop(session_id, None)
