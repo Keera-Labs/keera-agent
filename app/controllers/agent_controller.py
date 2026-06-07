@@ -67,6 +67,8 @@ def _serialize(a: Agent) -> dict:
         "permissions_allow": _json.loads(a.permissions_allow) if getattr(a, "permissions_allow", None) else [],
         "permissions_deny": _json.loads(a.permissions_deny) if getattr(a, "permissions_deny", None) else [],
         "flags": _json.loads(a.flags) if getattr(a, "flags", None) else {},
+        "dangerously_skip_permissions": bool(getattr(a, "dangerously_skip_permissions", True)),
+        "plan_mode": bool(getattr(a, "plan_mode", False)),
         "created_at": str(a.created_at) if a.created_at else None,
     }
 
@@ -289,12 +291,13 @@ async def index(request: Request, project_id: int):
             "description": "Project manager agent that coordinates work across the team.",
             "model": "claude-sonnet-4-6",
             "system_prompt": _default_system_prompt("pm"),
-            "permissions_allow": _perms_allow,
+            "permissions_allow": _json.dumps(DEFAULT_PERMISSIONS_ALLOW),
             "permissions_deny": _perms_deny,
             "flags": _json.dumps({}),
             "status": "idle",
             "has_session": False,
-            "permissions_allow": _json.dumps(DEFAULT_PERMISSIONS_ALLOW),
+            "dangerously_skip_permissions": True,
+            "plan_mode": True,
         })
         # First agent becomes the default
         await _set_project_default(project_id, agent.id)
@@ -310,7 +313,10 @@ async def store(request: Request, project_id: int):
     description = (body.get("description") or "").strip() or None
     model = (body.get("model") or "claude-sonnet-4-6").strip()
     system_prompt = (body.get("system_prompt") or "").strip() or _default_system_prompt(agent_type)
-    flags = body.get("flags") or {}
+    flags = {k: v for k, v in (body.get("flags") or {}).items()
+             if k not in ("dangerously_skip_permissions", "plan_mode")}
+    dangerously_skip_permissions = bool(body.get("dangerously_skip_permissions", True))
+    plan_mode = bool(body.get("plan_mode", agent_type == "pm"))
 
     if not name:
         return JSONResponse({"error": "name is required"}, status_code=422)
@@ -328,6 +334,8 @@ async def store(request: Request, project_id: int):
         "permissions_allow": _perms_allow,
         "permissions_deny": _perms_deny,
         "flags": _json.dumps(flags),
+        "dangerously_skip_permissions": dangerously_skip_permissions,
+        "plan_mode": plan_mode,
         "status": "idle",
     })
 
@@ -357,6 +365,10 @@ async def update(request: Request, agent_id: int):
         agent.agent_type = (body["agent_type"] or "custom").strip()
     if "flags" in body:
         agent.flags = _json.dumps(body["flags"] or {})
+    if "dangerously_skip_permissions" in body:
+        agent.dangerously_skip_permissions = bool(body["dangerously_skip_permissions"])
+    if "plan_mode" in body:
+        agent.plan_mode = bool(body["plan_mode"])
 
     await agent.save()
     return JSONResponse(_serialize(agent))
@@ -466,7 +478,10 @@ async def spawn(request: Request, project_id: int):
     system_prompt = (body.get("system_prompt") or "").strip() or _default_system_prompt(agent_type)
     message = (body.get("message") or "").strip() or None
     task_id = body.get("task_id")
-    flags = body.get("flags") or {}
+    flags = {k: v for k, v in (body.get("flags") or {}).items()
+             if k not in ("dangerously_skip_permissions", "plan_mode")}
+    dangerously_skip_permissions = bool(body.get("dangerously_skip_permissions", True))
+    plan_mode = bool(body.get("plan_mode", agent_type == "pm"))
 
     if not name:
         return JSONResponse({"error": "name is required"}, status_code=422)
@@ -483,6 +498,8 @@ async def spawn(request: Request, project_id: int):
         "permissions_allow": _perms_allow,
         "permissions_deny": _perms_deny,
         "flags": _json.dumps(flags),
+        "dangerously_skip_permissions": dangerously_skip_permissions,
+        "plan_mode": plan_mode,
         "status": "idle",
     })
 
