@@ -21,9 +21,12 @@ Use these tools to stay in sync with the PM and track your work.
 2. **Create a git worktree** before touching any code:
    ```
    BRANCH=task/$(echo "<short-task-slug>" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')
+   git worktree prune
    git worktree add ../$BRANCH -b $BRANCH
    cd ../$BRANCH
    ```
+   `git worktree prune` removes stale registrations for any deleted worktrees before
+   creating a new one — prevents "branch already checked out" errors.
    All code changes happen inside the worktree. Never commit to main/master directly.
 
 3. **Implement the task** inside the worktree:

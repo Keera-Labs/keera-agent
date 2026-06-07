@@ -64,9 +64,19 @@ def _cleanup_stale_worktree(agent, cwd: str) -> None:
 
     Claude creates worktrees under .claude/worktrees/<name> with a matching branch
     worktree-<name>.  If a previous session exited without cleaning up, the next
-    spawn attempt fails with "branch already checked out".  This function detects
-    and removes both the worktree directory and the stale branch before Claude runs.
+    spawn attempt fails with "branch already checked out".  This function first runs
+    `git worktree prune` to sweep ALL orphaned registrations (entries whose directories
+    no longer exist on disk), then detects and removes the specific worktree directory
+    and stale branch for this agent before Claude runs.
     """
+    # Sweep ALL stale registrations first — covers any agent whose directory was deleted
+    # without a proper `git worktree remove`.  This is the fix for the 50+ prunable
+    # entries that accumulated when prior sessions exited without cleanup (task #52).
+    subprocess.run(
+        ["git", "worktree", "prune"],
+        capture_output=True, cwd=cwd,
+    )
+
     worktree_name = f'agent-{agent.id}'
     worktree_path = os.path.join(cwd, '.claude', 'worktrees', worktree_name)
     branch_name = f'worktree-{worktree_name}'
