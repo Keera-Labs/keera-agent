@@ -38,7 +38,7 @@ _BUILTIN_TEMPLATES = [
         "description": "Software Engineer with --dangerously-skip-permissions — no permission prompts.",
         "agent_type": "software_engineer",
         "model": "claude-sonnet-4-6",
-        "flags": {"dangerously_skip_permissions": True},
+        "flags": {},
         "is_builtin": True,
     },
     {
