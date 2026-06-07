@@ -245,13 +245,10 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         }
     }, [activeAgentFromUrl?.id])
 
-    // Reset active agent when switching projects
+    // Reset active agent when switching projects — but do NOT close running sessions.
+    // Agent PTYs should stay alive in the background when switching projects.
     useEffect(() => {
         setActiveAgentId(null)
-        agentSessions.current.forEach(({ term, ws, observer }) => {
-            observer.disconnect(); term.dispose(); ws.close()
-        })
-        agentSessions.current.clear()
     }, [activeProject?.id])
 
     // Cmd+P → project search
@@ -537,6 +534,17 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
 
     function handleProjectDeleted(projectId: number) {
         const project = allProjects.find(p => p.id === projectId)
+        // Clean up agent sessions for the deleted project
+        for (const agent of agentHook.agents) {
+            const session = agentSessions.current.get(agent.id)
+            if (session) {
+                session.observer.disconnect()
+                session.term.dispose()
+                session.ws.close()
+                agentSessions.current.delete(agent.id)
+            }
+            agentContainerRefs.current.delete(agent.id)
+        }
         removeProject.mutate(projectId)
         if (project && projectName === project.slug) router.visit('/')
     }
