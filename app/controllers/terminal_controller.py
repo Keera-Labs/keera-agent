@@ -8,8 +8,6 @@ from fastapi_startkit.application import app
 
 from app.models.Agent import Agent
 from app.models.Project import Project
-from app.models.TerminalOutput import TerminalOutput
-from app.models.TerminalSession import TerminalSession
 from app.terminal.connection_manager import ConnectionManager
 from app.terminal.manager import TerminalManager
 from app.terminal.websocket_terminal import WebsocketTerminal
@@ -82,11 +80,6 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
     session_id = str(uuid.uuid4())
     await Agent.where("id", agent_record.id).update({"session_id": session_id})
 
-    db_session = await TerminalSession.create({
-        'project_name': os.path.basename(cwd),
-        'project_path': cwd,
-    })
-
     if not agent_record.has_session:
         await Agent.where("id", agent_record.id).update({"has_session": True})
 
@@ -96,12 +89,7 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
     ready_event = claude_ready.setdefault(session_id, asyncio.Event())
     asyncio.create_task(_signal_ready_and_relay(ready_event, agent_record.id))
 
-    async def save_output(data: bytes) -> None:
-        text = _strip_ansi(data).strip()
-        if text and '(thinking)' not in text:
-            await TerminalOutput.create({'session_id': db_session.id, 'data': text})
-
-    bridge = WebsocketTerminal(websocket, terminal, on_output=save_output)
+    bridge = WebsocketTerminal(websocket, terminal)
     conn_manager.set(session_id, bridge, cwd=cwd)
 
     try:
