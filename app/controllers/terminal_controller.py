@@ -105,17 +105,9 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
     conn_manager.set(session_id, bridge, cwd=cwd)
 
     try:
-        await asyncio.wait_for(
-            bridge.run(auto_send=agent_record.to_command(
-                system_prompt_suffix=f"\n\n## Your identity\nYour agent ID is {agent_record.id}. When other agents ask you to report back, always use this ID as `from_agent_id` in relay calls."
-            ).encode() + b'\n'),
-            timeout=300.0,
-        )
-    except asyncio.TimeoutError:
-        try:
-            await websocket.close(code=1011, reason="Terminal timeout")
-        except Exception:
-            pass
+        await bridge.run(auto_send=agent_record.to_command(
+            system_prompt_suffix=f"\n\n## Your identity\nYour agent ID is {agent_record.id}. When other agents ask you to report back, always use this ID as `from_agent_id` in relay calls."
+        ).encode() + b'\n')
     finally:
         conn_manager.remove(session_id)
         claude_ready.pop(session_id, None)
