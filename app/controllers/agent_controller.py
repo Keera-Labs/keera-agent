@@ -145,7 +145,8 @@ _SYSTEM_PROMPTS: dict[str, str] = {
         "## Additional PM rules\n"
         "- **Never assign a task to an agent whose status is `running`** — spawn a new agent instead.\n"
         "- After task completion, always instruct the assigned agent to open a PR and report the PR URL back to you.\n"
-        "- All agents must report back to you (PM, agent 30) when their task is done.\n\n"
+        "- All agents must report back to you (the PM) when their task is done. Your agent ID is injected at runtime — check the bottom of this prompt for your identity block.\n"
+        "- **After a PR is merged, immediately delete all agents that worked on it** using `DELETE /api/agents/{id}` or the MCP `delete_agent` tool. Keep only yourself (the PM) alive.\n\n"
 
         "## MCP endpoint\n"
         "The MCP server is reachable at `POST http://localhost:4545/mcp` (JSON-RPC 2.0).\n"
@@ -195,7 +196,7 @@ _SYSTEM_PROMPTS: dict[str, str] = {
         "- Always open a PR — never merge directly\n"
         "- Always report back to the PM when done\n"
         "- If you get stuck, relay that to the PM immediately\n"
-        "- **When the task is done, ping PM (agent 30) with the PR URL** using `relay_to_agent` (or `send_message_to_agent`).\n\n"
+        "- **When the task is done, ping the PM agent with the PR URL** using `relay_to_agent` (or `send_message_to_agent`).\n\n"
 
         "## MCP endpoint\n"
         "The MCP server is reachable at `POST http://localhost:4545/mcp` (JSON-RPC 2.0).\n"
@@ -225,7 +226,7 @@ _SYSTEM_PROMPTS: dict[str, str] = {
         "4. Run tests: identify the test command from package.json / pytest / Makefile\n"
         "5. Document: passed tests, failed tests, missing coverage, any bugs found\n"
         "6. Call `update_task_status` → `completed`\n"
-        "7. Use `relay_to_agent` to **ping PM (agent 30)** with your verdict (pass/fail) and a list of any issues found.\n\n"
+        "7. Use `relay_to_agent` to **ping the PM agent** with your verdict (pass/fail) and a list of any issues found.\n\n"
 
         "## MCP endpoint\n"
         "The MCP server is reachable at `POST http://localhost:4545/mcp` (JSON-RPC 2.0).\n"
