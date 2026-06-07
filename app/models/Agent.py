@@ -8,6 +8,8 @@ from app.terminal.command import ClaudeCommand, PLAN_MODE_PREFIX
 class Agent(Model):
     __table__ = "agents"
     id: int
+    dangerously_skip_permissions: bool
+    plan_mode: bool
 
     def to_command(self, system_prompt_suffix: str = '') -> str:
         task_id = getattr(self, 'task_id', None)
@@ -27,7 +29,7 @@ class Agent(Model):
             cmd.continue_session()
 
         system_prompt = self.system_prompt or ''
-        if getattr(self, 'plan_mode', False):
+        if self.plan_mode:
             system_prompt = PLAN_MODE_PREFIX + system_prompt
         if system_prompt_suffix:
             system_prompt = system_prompt + system_prompt_suffix
@@ -37,7 +39,7 @@ class Agent(Model):
                 f.write(system_prompt.strip())
             cmd.system_prompt_file(prompt_file)
 
-        if getattr(self, 'dangerously_skip_permissions', False):
+        if self.dangerously_skip_permissions:
             cmd.skip_permissions()
         if flags.get('verbose'):
             cmd.verbose()
