@@ -90,7 +90,7 @@ def _serialize(a: Agent) -> dict:
         "status": a.status,
         "permissions_allow": _json.loads(a.permissions_allow) if getattr(a, "permissions_allow", None) else [],
         "permissions_deny": _json.loads(a.permissions_deny) if getattr(a, "permissions_deny", None) else [],
-        "flags": _json.loads(a.flags) if getattr(a, "flags", None) else {},
+        "flags": a.flags or {},
         "dangerously_skip_permissions": bool(getattr(a, "dangerously_skip_permissions", True)),
         "plan_mode": bool(getattr(a, "plan_mode", False)),
         "created_at": str(a.created_at) if a.created_at else None,
@@ -374,25 +374,8 @@ async def update(body: AgentUpdateRequest, agent_id: int):
     if not agent:
         return JSONResponse({"error": "Agent not found"}, status_code=404)
 
-    sent = body.model_fields_set
-    if "name" in sent:
-        agent.name = (body.name or "").strip()
-    if "description" in sent:
-        agent.description = (body.description or "").strip() or None
-    if "model" in sent:
-        agent.model = (body.model or "claude-sonnet-4-6").strip()
-    if "system_prompt" in sent:
-        agent.system_prompt = (body.system_prompt or "").strip() or None
-    if "agent_type" in sent:
-        agent.agent_type = (body.agent_type or "custom").strip()
-    if "flags" in sent:
-        agent.flags = _json.dumps(body.flags or {})
-    if "dangerously_skip_permissions" in sent:
-        agent.dangerously_skip_permissions = bool(body.dangerously_skip_permissions)
-    if "plan_mode" in sent:
-        agent.plan_mode = bool(body.plan_mode)
-
-    await agent.save()
+    await Agent.where("id", agent_id).update(body.model_dump(exclude_unset=True))
+    agent = await Agent.find(agent_id)
     return JSONResponse(_serialize(agent))
 
 

@@ -8,6 +8,7 @@ from app.terminal.command import ClaudeCommand, PLAN_MODE_PREFIX
 class Agent(Model):
     __table__ = "agents"
     id: int
+    flags: dict
     dangerously_skip_permissions: bool
     plan_mode: bool
 
