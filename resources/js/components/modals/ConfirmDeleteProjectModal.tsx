@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { color } from '@/tokens'
 import type { Project } from '@/types/type'
-import { cancelBtnStyle } from '@/components/ui/styles'
+
+// Dark modal palette
+const M = { bg: '#1c1f26', border: '#2a2f3a', heading: '#f0f6fc', body: '#8b949e' }
 
 export function ConfirmDeleteProjectModal({
     project,
@@ -40,18 +42,22 @@ export function ConfirmDeleteProjectModal({
             display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
         }}>
             <div style={{
-                background: color.bgModal, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
+                background: M.bg, border: `1px solid ${M.border}`, borderRadius: '8px',
                 padding: '24px', width: '320px', display: 'flex', flexDirection: 'column', gap: '14px',
+                boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
             }}>
-                <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>Delete Project</h2>
-                <p style={{ margin: 0, color: color.textMuted, fontSize: '13px', lineHeight: 1.5 }}>
+                <h2 style={{ margin: 0, color: M.heading, fontSize: '15px', fontWeight: 600 }}>Delete Project</h2>
+                <p style={{ margin: 0, color: M.body, fontSize: '13px', lineHeight: 1.5 }}>
                     Remove{' '}
-                    <span style={{ color: color.textSecondary, fontFamily: '"JetBrains Mono", monospace', fontSize: '12px' }}>{project.name}</span>
+                    <span style={{ color: '#e2e6ed', fontFamily: '"JetBrains Mono", monospace', fontSize: '12px' }}>{project.name}</span>
                     {' '}from Keera? This only removes it from the app — files on disk are not deleted.
                 </p>
                 {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
                 <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                    <button type="button" onClick={onClose} disabled={loading} style={cancelBtnStyle}>Cancel</button>
+                    <button
+                        type="button" onClick={onClose} disabled={loading}
+                        style={{ background: 'transparent', border: `1px solid ${M.border}`, borderRadius: '6px', color: M.body, fontSize: '12px', padding: '6px 14px', cursor: 'pointer' }}
+                    >Cancel</button>
                     <button
                         type="button"
                         disabled={loading}

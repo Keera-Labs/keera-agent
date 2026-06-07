@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { color } from '@/tokens'
 import type { Project, Workspace } from '@/types/type'
-import { cancelBtnStyle } from '@/components/ui/styles'
+
+// Dark modal palette
+const M = { bg: '#1c1f26', border: '#2a2f3a', heading: '#f0f6fc', body: '#8b949e', faint: '#6e7681' }
 
 export function MoveProjectModal({
     project,
@@ -36,10 +38,11 @@ export function MoveProjectModal({
             display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
         }}>
             <div style={{
-                background: color.bgModal, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
+                background: M.bg, border: `1px solid ${M.border}`, borderRadius: '8px',
                 padding: '20px', width: '300px', display: 'flex', flexDirection: 'column', gap: '12px',
+                boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
             }}>
-                <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '14px', fontWeight: 600 }}>
+                <h2 style={{ margin: 0, color: M.heading, fontSize: '14px', fontWeight: 600 }}>
                     Move{' '}
                     <span style={{ fontFamily: '"JetBrains Mono", monospace', color: color.accent }}>
                         {project.name}
@@ -53,15 +56,15 @@ export function MoveProjectModal({
                         style={{
                             textAlign: 'left', padding: '8px 12px', borderRadius: '6px',
                             background: 'transparent',
-                            border: `1px solid ${project.workspace_id === null ? color.accent : color.borderMuted}`,
-                            color: project.workspace_id === null ? color.accent : color.textSecondary,
+                            border: `1px solid ${project.workspace_id === null ? color.accent : M.border}`,
+                            color: project.workspace_id === null ? color.accent : M.body,
                             fontSize: '13px', cursor: loading ? 'default' : 'pointer',
                             display: 'flex', alignItems: 'center', gap: '8px',
                         }}
                     >
-                        <span style={{ color: color.textFaint }}>—</span> Unassigned
+                        <span style={{ color: M.faint }}>—</span> Unassigned
                         {project.workspace_id === null && (
-                            <span style={{ marginLeft: 'auto', color: color.textFaint, fontSize: '11px' }}>current</span>
+                            <span style={{ marginLeft: 'auto', color: M.faint, fontSize: '11px' }}>current</span>
                         )}
                     </button>
                     {workspaces.map(w => (
@@ -72,21 +75,24 @@ export function MoveProjectModal({
                             style={{
                                 textAlign: 'left', padding: '8px 12px', borderRadius: '6px',
                                 background: 'transparent',
-                                border: `1px solid ${w.id === project.workspace_id ? color.accent : color.borderMuted}`,
-                                color: w.id === project.workspace_id ? color.accent : color.textSecondary,
+                                border: `1px solid ${w.id === project.workspace_id ? color.accent : M.border}`,
+                                color: w.id === project.workspace_id ? color.accent : M.body,
                                 fontSize: '13px', cursor: loading ? 'default' : 'pointer',
                                 display: 'flex', alignItems: 'center',
                             }}
                         >
                             {w.name}
                             {w.id === project.workspace_id && (
-                                <span style={{ marginLeft: 'auto', color: color.textFaint, fontSize: '11px' }}>current</span>
+                                <span style={{ marginLeft: 'auto', color: M.faint, fontSize: '11px' }}>current</span>
                             )}
                         </button>
                     ))}
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <button onClick={onClose} disabled={loading} style={cancelBtnStyle}>Cancel</button>
+                    <button
+                        onClick={onClose} disabled={loading}
+                        style={{ background: 'transparent', border: `1px solid ${M.border}`, borderRadius: '6px', color: M.body, fontSize: '12px', padding: '6px 14px', cursor: 'pointer' }}
+                    >Cancel</button>
                 </div>
             </div>
         </div>

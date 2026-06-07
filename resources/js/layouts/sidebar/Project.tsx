@@ -33,12 +33,10 @@ export function DotsIndicator() {
     )
 }
 
-export function ProjectItem({ project, active, status, onMove, onEdit, onSystemPrompt, onPermissions, onDelete }: {
+export function ProjectItem({ project, active, status, onMove, onEdit, onDelete }: {
     project: Project; active: boolean; status?: 'running' | 'done';
     onMove: (p: Project) => void;
     onEdit: (p: Project) => void;
-    onSystemPrompt: (p: Project) => void;
-    onPermissions: (p: Project) => void;
     onDelete: (p: Project) => void;
 }) {
     const [hovered, setHovered] = useState(false)
@@ -142,31 +140,9 @@ export function ProjectItem({ project, active, status, onMove, onEdit, onSystemP
                         onClick={e => { e.stopPropagation(); setMenuOpen(false); onEdit(project) }}
                     >
                         <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0 }}>
-                            <path d="M11.013 1.427a1.75 1.75 0 012.474 0l1.086 1.086a1.75 1.75 0 010 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 01-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61zm1.414 1.06a.25.25 0 00-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 000-.354l-1.086-1.086zM11.189 6.25L9.75 4.81l-6.286 6.287a.25.25 0 00-.064.108l-.558 1.953 1.953-.558a.249.249 0 00.108-.064l6.286-6.286z"/>
+                            <path d="M8 0a8.2 8.2 0 01.701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.103-.303c.644-.176 1.392.021 1.82.63.27.385.506.792.704 1.218.315.675.111 1.422-.364 1.891l-.814.806c-.049.048-.098.147-.088.294.016.257.016.515 0 .772-.01.147.038.246.087.294l.814.806c.475.469.679 1.216.364 1.891a7.977 7.977 0 01-.704 1.217c-.428.61-1.176.807-1.82.63l-1.103-.303c-.066-.019-.176-.011-.299.071a5.909 5.909 0 01-.668.386c-.133.066-.194.158-.211.224l-.29 1.106c-.168.646-.715 1.196-1.458 1.26a8.006 8.006 0 01-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106c-.018-.066-.079-.158-.212-.224a5.738 5.738 0 01-.668-.386c-.123-.082-.233-.09-.299-.071l-1.103.303c-.644.176-1.392-.021-1.82-.63a8.12 8.12 0 01-.704-1.218c-.315-.675-.111-1.422.363-1.891l.815-.806c.05-.048.098-.147.088-.294a6.214 6.214 0 010-.772c.01-.147-.038-.246-.088-.294l-.815-.806C.635 6.045.431 5.298.746 4.623a7.92 7.92 0 01.704-1.217c.428-.61 1.176-.807 1.82-.63l1.102.302c.067.019.177.011.3-.071a5.659 5.659 0 01.668-.386c.133-.066.194-.158.211-.224l.29-1.106C6.156.421 6.703-.129 7.445.031 7.645.015 7.825 0 8 0zm1.5 8a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/>
                         </svg>
-                        Change directory
-                    </button>
-                    <button
-                        style={{ ...menuItemStyle(), color: project.system_prompt ? color.accent : color.textSecondary }}
-                        onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                        onClick={e => { e.stopPropagation(); setMenuOpen(false); onSystemPrompt(project) }}
-                    >
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0 }}>
-                            <path d="M0 1.75A.75.75 0 01.75 1h9.5a.75.75 0 010 1.5H.75A.75.75 0 010 1.75zM0 8a.75.75 0 01.75-.75h9.5a.75.75 0 010 1.5H.75A.75.75 0 010 8zm0 6.25a.75.75 0 01.75-.75h5.5a.75.75 0 010 1.5H.75a.75.75 0 01-.75-.75z"/>
-                        </svg>
-                        System instructions
-                    </button>
-                    <button
-                        style={menuItemStyle()}
-                        onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                        onClick={e => { e.stopPropagation(); setMenuOpen(false); onPermissions(project) }}
-                    >
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0 }}>
-                            <path d="M8.533.133a1.75 1.75 0 00-1.066 0l-5.25 1.68A1.75 1.75 0 001 3.48V8c0 3.183 1.958 5.837 4.798 7.319a.75.75 0 00.404.119.75.75 0 00.404-.119C9.042 13.837 11 11.183 11 8V3.48a1.75 1.75 0 00-1.217-1.667L8.533.133zm-.61 1.429a.25.25 0 01.153 0l5.25 1.68a.25.25 0 01.174.238V8c0 2.67-1.625 4.91-4 6.282C7.875 12.91 6.25 10.67 6.25 8V3.48a.25.25 0 01.173-.238l1.5-.48z"/>
-                        </svg>
-                        Permissions
+                        Edit project
                     </button>
                     <button
                         style={menuItemStyle()}
