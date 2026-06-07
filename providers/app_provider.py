@@ -13,9 +13,10 @@ class AppProvider(Provider):
         from routes.web import router
         from app.utils.hook_setup import ensure_hooks
         from app.console.queue_work_command import QueueWorkCommand
+        from app.console.seed_templates_command import SeedTemplatesCommand
         self.app.fastapi.include_router(router.router)
         ensure_hooks()
-        self.commands([QueueWorkCommand])
+        self.commands([QueueWorkCommand, SeedTemplatesCommand])
 
         async def on_startup():
             """Sync Claude settings for all projects and ensure each has a default PM agent."""
