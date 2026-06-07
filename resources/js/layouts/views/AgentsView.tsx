@@ -477,25 +477,37 @@ export function AgentsView() {
                             }}
                         />
                     ))}
-                    {/* Agent session containers */}
-                    {projectAgents.map(agent => {
-                        const isActive = agent.id === activeAgentId
-                        const hasSession = agentSessions.current.has(agent.id)
-                        return (
-                            <div
-                                key={`agent-${agent.id}`}
-                                ref={el => { agentContainerRefs.current.set(agent.id, el) }}
-                                style={{
-                                    position: 'absolute', inset: 0, padding: '8px', boxSizing: 'border-box',
-                                    ...(isActive
-                                        ? { display: 'block' }
-                                        : hasSession
-                                            ? { display: 'block', visibility: 'hidden' as const, pointerEvents: 'none' as const }
-                                            : { display: 'none' }),
-                                }}
-                            />
-                        )
-                    })}
+                    {/* Agent session containers — render for current project's agents + any with live sessions */}
+                    {(() => {
+                        // Include current project agents + agents from other projects that have live sessions
+                        const liveIds = Array.from(agentSessions.current.keys())
+                        const currentIds = new Set(projectAgents.map(a => a.id))
+                        const extraIds = liveIds.filter(id => !currentIds.has(id))
+
+                        const allAgentEntries = [
+                            ...projectAgents.map(a => ({ id: a.id, isCurrent: true })),
+                            ...extraIds.map(id => ({ id, isCurrent: false })),
+                        ]
+
+                        return allAgentEntries.map(({ id, isCurrent }) => {
+                            const isActive = id === activeAgentId
+                            const hasSession = agentSessions.current.has(id)
+                            return (
+                                <div
+                                    key={`agent-${id}`}
+                                    ref={el => { agentContainerRefs.current.set(id, el) }}
+                                    style={{
+                                        position: 'absolute', inset: 0, padding: '8px', boxSizing: 'border-box',
+                                        ...(isActive && isCurrent
+                                            ? { display: 'block' }
+                                            : hasSession
+                                                ? { display: 'block', visibility: 'hidden' as const, pointerEvents: 'none' as const }
+                                                : { display: 'none' }),
+                                    }}
+                                />
+                            )
+                        })
+                    })()}
                 </div>
             </div>
         </div>
