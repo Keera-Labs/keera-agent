@@ -29,7 +29,7 @@ class TestAgents(HttpTestCase):
         self.assertEqual(response.status_code, 201)
         data = response.json()
         self.assertEqual(data["name"], "My Agent")
-        self.assertEqual(data["agent_type"], "custom")
+        self.assertEqual(data["agent_type"], "software_engineer")
         self.assertTrue(data["dangerously_skip_permissions"])
         self.assertFalse(data["plan_mode"])
 
@@ -62,7 +62,7 @@ class TestAgents(HttpTestCase):
 
     async def test_store_requires_name(self):
         response = await self.post(f"/api/projects/{self.project_id}/agents", json={
-            "agent_type": "custom",
+            "agent_type": "software_engineer",
         })
         self.assertEqual(response.status_code, 422)
 
@@ -121,3 +121,69 @@ class TestAgents(HttpTestCase):
         found = next(a for a in response.json() if a["id"] == agent["id"])
         self.assertIn("dangerously_skip_permissions", found)
         self.assertIn("plan_mode", found)
+
+
+class TestAgentTypeEnforcement(HttpTestCase):
+    def get_application(self):
+        return app
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        await Agent.where("id", ">", 0).delete()
+        await Project.where("id", ">", 0).delete()
+        response = await self.post("/api/projects", json={
+            "name": "test-project",
+            "path": "~/code/test-project",
+            "language": "Python",
+            "create_dir": True,
+        })
+        self.project_id = response.json()["id"]
+
+    async def test_invalid_type_rejected(self):
+        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
+            "name": "Bad Agent",
+            "agent_type": "hacker",
+        })
+        self.assertEqual(response.status_code, 422)
+
+    async def test_se_has_system_prompt(self):
+        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
+            "name": "SE Agent",
+            "agent_type": "software_engineer",
+        })
+        self.assertEqual(response.status_code, 201)
+        system_prompt = response.json()["system_prompt"]
+        self.assertIsNotNone(system_prompt)
+        self.assertGreater(len(system_prompt), 0)
+
+    async def test_frontend_se_has_system_prompt(self):
+        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
+            "name": "Frontend Agent",
+            "agent_type": "software_engineer_frontend",
+        })
+        self.assertEqual(response.status_code, 201)
+        self.assertIn("Frontend", response.json()["system_prompt"])
+
+    async def test_reviewer_has_system_prompt(self):
+        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
+            "name": "Reviewer Agent",
+            "agent_type": "reviewer",
+        })
+        self.assertEqual(response.status_code, 201)
+        self.assertIn("Reviewer", response.json()["system_prompt"])
+
+    async def test_pm_has_plan_mode_true(self):
+        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
+            "name": "PM Agent",
+            "agent_type": "pm",
+        })
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.json()["plan_mode"])
+
+    async def test_se_has_dangerously_skip_true(self):
+        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
+            "name": "SE Agent",
+            "agent_type": "software_engineer",
+        })
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.json()["dangerously_skip_permissions"])
