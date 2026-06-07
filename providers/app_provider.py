@@ -55,6 +55,8 @@ class AppProvider(Provider):
                         "flags": _json.dumps({}),
                         "status": "idle",
                         "has_session": False,
+                        "dangerously_skip_permissions": True,
+                        "plan_mode": True,
                     })
 
         self.app.fastapi.add_event_handler("startup", on_startup)

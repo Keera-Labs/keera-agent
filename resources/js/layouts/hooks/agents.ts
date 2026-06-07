@@ -18,6 +18,8 @@ export interface ProjectAgent {
     agent_type: string
     status: 'idle' | 'running'
     flags: AgentFlags
+    dangerously_skip_permissions: boolean
+    plan_mode: boolean
     task_id?: number | null
     created_at: string | null
 }
