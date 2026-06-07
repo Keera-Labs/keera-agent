@@ -3,35 +3,12 @@ import datetime
 import json as _json
 import os
 import re
-from typing import Optional
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 
 from app.models.Agent import Agent
-
-
-class AgentUpdateRequest(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    model: Optional[str] = None
-    system_prompt: Optional[str] = None
-    agent_type: Optional[str] = None
-    flags: Optional[dict] = None
-    dangerously_skip_permissions: Optional[bool] = None
-    plan_mode: Optional[bool] = None
-
-
-class AgentStoreRequest(BaseModel):
-    name: str
-    agent_type: str = "custom"
-    description: Optional[str] = None
-    model: str = "claude-sonnet-4-6"
-    system_prompt: Optional[str] = None
-    flags: dict = {}
-    dangerously_skip_permissions: bool = True
-    plan_mode: Optional[bool] = None  # resolved at runtime: True if agent_type=="pm", else False
+from app.requests.agent_requests import AgentStoreRequest, AgentUpdateRequest
 
 
 def _slugify(name: str) -> str:
