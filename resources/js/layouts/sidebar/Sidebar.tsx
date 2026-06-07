@@ -59,8 +59,6 @@ export default function Sidebar({
     onAddProject,
     onMoveProject,
     onEditProject,
-    onSystemPromptProject,
-    onPermissionsProject,
     onDeleteProject,
     claudeStatus,
     onCreateWorkspace,
@@ -76,8 +74,6 @@ export default function Sidebar({
     onAddProject: (workspaceId: number | null) => void
     onMoveProject: (project: Project) => void
     onEditProject: (project: Project) => void
-    onSystemPromptProject: (project: Project) => void
-    onPermissionsProject: (project: Project) => void
     onDeleteProject: (project: Project) => void
     claudeStatus: Record<number, 'running' | 'done'>
     onCreateWorkspace: () => void
@@ -136,8 +132,6 @@ export default function Sidebar({
                                 status={claudeStatus[project.id]}
                                 onMove={onMoveProject}
                                 onEdit={onEditProject}
-                                onSystemPrompt={onSystemPromptProject}
-                                onPermissions={onPermissionsProject}
                                 onDelete={onDeleteProject}
                             />
                         </li>

@@ -15,7 +15,7 @@ import type { Task } from '@/types/type'
 export { agentColor } from '@/utils/agentColor'
 export { labelStyle, inputStyle, cancelBtnStyle, submitBtnStyle, flagRowStyle, toggleStyle } from '@/components/ui/styles'
 export type { AgentTemplate } from '@/types/agent'
-export { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, AGENT_TYPE_DEFAULTS } from '@/types/agent'
+export { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS } from '@/types/agent'
 export { STATUS_CYCLE, STATUS_COLORS, STATUS_LABELS } from '@/types/task'
 export { useAudio } from './hooks/useAudio'
 export { useAgentTemplates } from './hooks/useAgentTemplates'
@@ -31,6 +31,7 @@ export { ProjectSearchModal } from '@/components/modals/ProjectSearchModal'
 export { ConfirmDeleteProjectModal } from '@/components/modals/ConfirmDeleteProjectModal'
 export { ConfirmDeleteWorkspaceModal } from '@/components/modals/ConfirmDeleteWorkspaceModal'
 export { MoveProjectModal } from '@/components/modals/MoveProjectModal'
+export { EditProjectModal } from '@/components/modals/EditProjectModal'
 export { CreateTaskModal } from '@/components/modals/CreateTaskModal'
 export { TaskDetailModal } from '@/components/modals/TaskDetailModal'
 export { AddAgentModal } from '@/components/modals/AddAgentModal'
@@ -73,7 +74,6 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
         fileInputRef, uploadImage,
         setShowCreateTask, setSelectedTask,
         openAddProject, setMovingProject, setEditingProject,
-        setSystemPromptProject, setPermissionsProject,
         setDeletingProject, setShowWorkspaceModal,
         setShowAddAgent,
         handleUpdateStatus, handleDeleteTask,
@@ -223,8 +223,6 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
                     onAddProject={openAddProject}
                     onMoveProject={setMovingProject}
                     onEditProject={setEditingProject}
-                    onSystemPromptProject={setSystemPromptProject}
-                    onPermissionsProject={setPermissionsProject}
                     onDeleteProject={setDeletingProject}
                     claudeStatus={claudeStatus}
                     onCreateWorkspace={() => setShowWorkspaceModal(true)}

@@ -1,11 +1,9 @@
 import { router } from '@inertiajs/react'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import ProjectCreateModal from '@/components/project/ProjectCreateModal'
-import ProjectPathEditModal from '@/components/project/ProjectPathEditModal'
 import AddWorkspaceModal from '@/components/AddWorkspaceModal'
 import AgentEditModal from '@/components/agent/AgentEditModal'
-import { SystemPromptModal } from '@/components/modals/SystemPromptModal'
-import { ProjectPermissionsModal } from '@/components/modals/ProjectPermissionsModal'
+import { EditProjectModal } from '@/components/modals/EditProjectModal'
 import { GlobalSettingsModal } from '@/components/modals/GlobalSettingsModal'
 import { ProjectSearchModal } from '@/components/modals/ProjectSearchModal'
 import { ConfirmDeleteProjectModal } from '@/components/modals/ConfirmDeleteProjectModal'
@@ -34,16 +32,10 @@ export function ModalLayer() {
         movingProject,
         setMovingProject,
         handleMoveProject,
-        // Edit project path
+        // Edit project (combined modal)
         editingProject,
         setEditingProject,
         handleProjectUpdated,
-        // System prompt
-        systemPromptProject,
-        setSystemPromptProject,
-        // Permissions
-        permissionsProject,
-        setPermissionsProject,
         // Global settings
         showGlobalSettings,
         setShowGlobalSettings,
@@ -126,29 +118,12 @@ export function ModalLayer() {
                 />
             )}
 
-            {/* Edit project path */}
+            {/* Edit project (path + system instructions + permissions) */}
             {editingProject && (
-                <ProjectPathEditModal
+                <EditProjectModal
                     project={editingProject}
                     onClose={() => setEditingProject(null)}
-                    onUpdated={p => { handleProjectUpdated(p); setEditingProject(null) }}
-                />
-            )}
-
-            {/* System prompt */}
-            {systemPromptProject && (
-                <SystemPromptModal
-                    project={systemPromptProject}
-                    onClose={() => setSystemPromptProject(null)}
-                    onUpdated={p => { handleProjectUpdated(p); setSystemPromptProject(null) }}
-                />
-            )}
-
-            {/* Project permissions */}
-            {permissionsProject && (
-                <ProjectPermissionsModal
-                    project={permissionsProject}
-                    onClose={() => setPermissionsProject(null)}
+                    onUpdated={p => handleProjectUpdated(p)}
                 />
             )}
 

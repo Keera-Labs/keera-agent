@@ -31,10 +31,6 @@ export interface AppLayoutContextValue {
     setMovingProject: (p: Project | null) => void
     editingProject: Project | null
     setEditingProject: (p: Project | null) => void
-    systemPromptProject: Project | null
-    setSystemPromptProject: (p: Project | null) => void
-    permissionsProject: Project | null
-    setPermissionsProject: (p: Project | null) => void
     showGlobalSettings: boolean
     setShowGlobalSettings: (v: boolean) => void
     showDefaultPermissions: boolean
@@ -188,8 +184,6 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     const [addProjectWorkspaceId, setAddProjectWorkspaceId] = useState<number | null | undefined>(undefined)
     const [movingProject, setMovingProject] = useState<Project | null>(null)
     const [editingProject, setEditingProject] = useState<Project | null>(null)
-    const [systemPromptProject, setSystemPromptProject] = useState<Project | null>(null)
-    const [permissionsProject, setPermissionsProject] = useState<Project | null>(null)
     const [showGlobalSettings, setShowGlobalSettings] = useState(false)
     const [showDefaultPermissions, setShowDefaultPermissions] = useState(false)
     const [deletingProject, setDeletingProject] = useState<Project | null>(null)
@@ -243,16 +237,6 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         }
         setClaudeStatus(prev => ({ ...initial, ...prev }))
     }, [allProjects.length])
-
-    // Keep systemPromptProject in sync with the React Query cache so the modal
-    // always receives the freshest project data (including system_prompt) even
-    // when stale data was used at the moment the user clicked "System Instructions".
-    useEffect(() => {
-        if (systemPromptProject != null) {
-            const latest = allProjects.find(p => p.id === systemPromptProject.id)
-            if (latest) setSystemPromptProject(latest)
-        }
-    }, [allProjects])
 
     // When agents load and URL has an agent_id, set the active agent
     useEffect(() => {
@@ -581,8 +565,6 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         addProjectWorkspaceId, setAddProjectWorkspaceId,
         movingProject, setMovingProject,
         editingProject, setEditingProject,
-        systemPromptProject, setSystemPromptProject,
-        permissionsProject, setPermissionsProject,
         showGlobalSettings, setShowGlobalSettings,
         showDefaultPermissions, setShowDefaultPermissions,
         deletingProject, setDeletingProject,
