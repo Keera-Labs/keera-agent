@@ -1,11 +1,14 @@
+import datetime
 import json as _json
+
+from fastapi_startkit.support import Str
 
 from app.models.Agent import Agent
 from app.requests.agent_requests import AgentStoreRequest
 
 
 class AgentCreateAction:
-    def __init__(self, project_id, request: AgentStoreRequest):  # noqa: A002
+    def __init__(self, project_id, request: AgentStoreRequest):
         self.request = request
         self.project_id = project_id
 
@@ -36,9 +39,12 @@ class AgentCreateAction:
 
         perms_allow, perms_deny = _default_permissions()
 
+        now = datetime.datetime.now().isoformat(sep=" ", timespec="seconds")
+
         record = {
             "project_id": self.project_id,
             "name": req.name.strip(),
+            "slug": f"{Str.slugify(req.name)}-{int(datetime.datetime.now().timestamp())}",
             "agent_type": req.agent_type,
             "description": req.description,
             "model": req.model,
@@ -51,6 +57,8 @@ class AgentCreateAction:
             "plan_mode": bool(plan_mode),
             "status": "idle",
             "has_session": False,
+            "created_at": now,
+            "updated_at": now,
         }
         if req.orchestrator_id is not None:
             record["orchestrator_id"] = req.orchestrator_id

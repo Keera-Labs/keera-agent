@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { color } from '@/tokens'
 import type { ProjectAgent, AgentFlags } from '@/layouts/hooks/agents'
+import { normalizeAgent } from '@/layouts/hooks/agents'
 import type { AgentTemplate } from '@/types/agent'
 import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS } from '@/types/agent'
 import { labelStyle, inputStyle, cancelBtnStyle, submitBtnStyle, flagRowStyle, toggleStyle } from '@/components/ui/styles'
@@ -87,7 +88,7 @@ export function AddAgentModal({ projectId, onClose, onCreated, templates }: {
             })
             const data = await res.json()
             if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
-            onCreated(data as ProjectAgent)
+            onCreated(normalizeAgent(data.data))
             onClose()
         } catch {
             setError('Network error')
