@@ -4,7 +4,7 @@ import { router, usePage } from '@inertiajs/react'
 import { FitAddon } from '@xterm/addon-fit'
 import type { Project, Workspace, Task } from '@/types/type'
 import type { ProjectAgent } from '@/layouts/hooks/agents'
-import { useAgents } from '@/layouts/hooks/agents'
+import { useAgents, normalizeAgent } from '@/layouts/hooks/agents'
 import type { AgentTemplate } from '@/types/agent'
 import { makeTerminal } from '@/layouts/hooks/useTerminalSessions'
 import type { Session } from '@/layouts/hooks/useTerminalSessions'
@@ -363,7 +363,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
                             setNewMessageIds(prev => [...prev, msg.message_id])
                             playSound('input')
                         } else if (msg.type === 'agent_created') {
-                            agentHook.addAgent(msg.agent as ProjectAgent)
+                            agentHook.addAgent(normalizeAgent(msg.agent.data))
                         }
                     } catch { /* ignore */ }
                 } else {
@@ -461,7 +461,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
                     try {
                         const event = JSON.parse(e.data)
                         if (event.type === 'agent_created') {
-                            agentHook.addAgent(event.agent as ProjectAgent)
+                            agentHook.addAgent(normalizeAgent(event.agent.data))
                         }
                     } catch { /* not JSON, ignore */ }
                 }

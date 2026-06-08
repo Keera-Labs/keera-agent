@@ -3,6 +3,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import type { Project } from '@/types/type'
 import type { ProjectAgent } from './agents'
+import { normalizeAgent } from './agents'
 
 export interface Session {
     term: Terminal
@@ -103,7 +104,7 @@ export function useTerminalSessions({
                     try {
                         const event = JSON.parse(e.data)
                         if (event.type === 'agent_created') {
-                            onAgentCreated(event.agent as ProjectAgent)
+                            onAgentCreated(normalizeAgent(event.agent.data))
                         }
                     } catch { /* not JSON, ignore */ }
                 }
@@ -184,7 +185,7 @@ export function useTerminalSessions({
                             onAgentMessage(msg.message_id)
                             playSound('input')
                         } else if (msg.type === 'agent_created') {
-                            onAgentCreated(msg.agent as ProjectAgent)
+                            onAgentCreated(normalizeAgent(msg.agent.data))
                         }
                     } catch { /* ignore */ }
                 } else {
