@@ -13,8 +13,7 @@ class Agent(Model):
     plan_mode: bool
 
     def to_command(self, system_prompt_suffix: str = '') -> str:
-        task_id = getattr(self, 'task_id', None)
-        worktree = f'agent-{task_id}' if task_id else f'agent-{self.id}'
+        worktree = f'agent-{self.id}'
 
         try:
             flags = json.loads(self.flags) if self.flags else {}
