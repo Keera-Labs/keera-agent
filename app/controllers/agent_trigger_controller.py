@@ -67,8 +67,7 @@ def _cleanup_stale_worktree(agent, cwd: str) -> None:
     spawn attempt fails with "branch already checked out".  This function detects
     and removes both the worktree directory and the stale branch before Claude runs.
     """
-    task_id = getattr(agent, 'task_id', None)
-    worktree_name = f'agent-{task_id}' if task_id else f'agent-{agent.id}'
+    worktree_name = f'agent-{agent.id}'
     worktree_path = os.path.join(cwd, '.claude', 'worktrees', worktree_name)
     branch_name = f'worktree-{worktree_name}'
 
