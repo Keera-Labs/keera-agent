@@ -13,6 +13,7 @@ from app.terminal.manager import TerminalManager
 from app.terminal.websocket_terminal import WebsocketTerminal
 
 _ANSI_ESCAPE = re.compile(rb'\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[^[]')
+_NO_CONVERSATION_PATTERN = re.compile(r'No conversation found to continue', re.IGNORECASE)
 
 # Registry: session_id (UUID) -> Event set when Claude has finished starting up
 claude_ready: dict[str, asyncio.Event] = {}
@@ -44,6 +45,75 @@ async def _deliver_pending_relay_messages(agent_id: int) -> None:
         if bridge:
             await bridge.write(f"[Message from Agent '{sender_name}']: {msg.content}")
         await AgentRelayMessage.where("id", msg.id).update({"status": "delivered"})
+
+
+def _make_ws_output_monitor(agent_id: int, terminal, terminal_manager: TerminalManager,
+                             session_id: str, claude_cmd: str):
+    """
+    Returns an on_output callback for WebsocketTerminal that:
+      - Detects 'No conversation found to continue' (Part 1)
+      - Resets has_session=False in DB immediately on detection
+      - Restarts Claude without --continue and re-signals ready
+      - Sets has_session=True only after non-trivial output is seen (Part 3)
+    """
+    output_buffer: list[str] = []
+    no_conversation_detected = False
+    has_session_confirmed = False
+
+    async def on_output(data: bytes) -> None:
+        nonlocal no_conversation_detected, has_session_confirmed
+
+        text = _strip_ansi(data)
+        output_buffer.append(text)
+        combined = "".join(output_buffer)
+
+        # Part 1: detect sentinel and schedule fallback (only once)
+        if _NO_CONVERSATION_PATTERN.search(combined) and not no_conversation_detected:
+            no_conversation_detected = True
+            asyncio.create_task(_ws_fallback_no_continue(agent_id, terminal, terminal_manager,
+                                                         session_id, claude_cmd))
+
+        # Part 3: confirm session once we see non-trivial output with no error
+        if not no_conversation_detected and not has_session_confirmed:
+            if len(combined.strip()) > 20:
+                has_session_confirmed = True
+                await Agent.where("id", agent_id).update({"has_session": True})
+
+    return on_output
+
+
+async def _ws_fallback_no_continue(agent_id: int, terminal, terminal_manager: TerminalManager,
+                                    session_id: str, claude_cmd_with_continue: str) -> None:
+    """
+    Called when 'No conversation found to continue' is detected on the WS terminal.
+    Resets has_session, waits for the process to settle, then re-issues the command
+    without --continue so Claude starts a fresh session.
+    """
+    # Reset has_session so next to_command() call omits --continue
+    await Agent.where("id", agent_id).update({"has_session": False})
+
+    # Give the process a moment to exit / settle
+    for _ in range(10):
+        if not terminal.is_alive():
+            break
+        await asyncio.sleep(0.3)
+
+    # Only restart if the terminal is still registered (not closed by disconnect)
+    if not terminal_manager.find(session_id):
+        return
+
+    # Re-fetch agent so to_command() picks up has_session=False
+    fresh_agent = await Agent.find(agent_id)
+    if fresh_agent:
+        system_prompt_suffix = (
+            f"\n\n## Your identity\nYour agent ID is {fresh_agent.id}. "
+            f"When other agents ask you to report back, always use this ID as `from_agent_id` in relay calls."
+        )
+        fresh_cmd = fresh_agent.to_command(system_prompt_suffix=system_prompt_suffix)
+        await terminal.write_input(fresh_cmd.encode())
+        # Let the new session establish before marking it
+        await asyncio.sleep(2.0)
+        await Agent.where("id", agent_id).update({"has_session": True})
 
 
 async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query()):
@@ -80,8 +150,8 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
     session_id = str(uuid.uuid4())
     await Agent.where("id", agent_record.id).update({"session_id": session_id})
 
-    if not agent_record.has_session:
-        await Agent.where("id", agent_record.id).update({"has_session": True})
+    # Part 3 (WS path): do NOT set has_session=True yet — wait for confirmed output.
+    # The on_output callback from _make_ws_output_monitor will set it once Claude starts.
 
     terminal_manager.create(cwd=cwd, session_id=session_id)
     terminal = terminal_manager.get(session_id)
@@ -89,13 +159,26 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
     ready_event = claude_ready.setdefault(session_id, asyncio.Event())
     asyncio.create_task(_signal_ready_and_relay(ready_event, agent_record.id))
 
-    bridge = WebsocketTerminal(websocket, terminal)
+    system_prompt_suffix = (
+        f"\n\n## Your identity\nYour agent ID is {agent_record.id}. "
+        f"When other agents ask you to report back, always use this ID as `from_agent_id` in relay calls."
+    )
+    claude_cmd = agent_record.to_command(system_prompt_suffix=system_prompt_suffix)
+
+    # Build the output monitor callback (Parts 1 & 3 for WS path)
+    on_output = _make_ws_output_monitor(
+        agent_id=agent_record.id,
+        terminal=terminal,
+        terminal_manager=terminal_manager,
+        session_id=session_id,
+        claude_cmd=claude_cmd,
+    )
+
+    bridge = WebsocketTerminal(websocket, terminal, on_output=on_output)
     conn_manager.set(session_id, bridge, cwd=cwd)
 
     try:
-        await bridge.run(auto_send=agent_record.to_command(
-            system_prompt_suffix=f"\n\n## Your identity\nYour agent ID is {agent_record.id}. When other agents ask you to report back, always use this ID as `from_agent_id` in relay calls."
-        ).encode() + b'\n')
+        await bridge.run(auto_send=claude_cmd.encode() + b'\n')
     finally:
         conn_manager.remove(session_id)
         claude_ready.pop(session_id, None)
