@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { color } from '@/tokens'
-import { type ProjectAgent, type AgentFlags } from '@/layouts/hooks/agents'
+import { type ProjectAgent, type AgentFlags, normalizeAgent } from '@/layouts/hooks/agents'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -90,7 +90,7 @@ export default function AgentEditModal({
             })
             const data = await res.json()
             if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
-            onSaved(data as ProjectAgent)
+            onSaved(normalizeAgent(data.data))
             onClose()
         } catch {
             setError('Network error')

@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from app.models.Agent import Agent
 from app.requests.agent_requests import AgentStoreRequest, AgentUpdateRequest
+from app.resources.agent_resource import AgentResource
 
 
 def _slugify(name: str) -> str:
@@ -29,6 +30,7 @@ async def _unique_slug(project_id: int, base: str, exclude_id: int | None = None
         slug = f"{base}-{counter}"
         counter += 1
     return slug
+
 
 DEFAULT_PERMISSIONS_ALLOW = {
     "filesystem": {
@@ -60,7 +62,7 @@ def _serialize(a: Agent) -> dict:
         "id": a.id,
         "project_id": a.project_id,
         "name": a.name,
-        "slug": getattr(a, "slug", None) or _slugify(a.name),
+        "slug": getattr(a, "slug", None) or Str.slugify(a.name),
         "description": a.description,
         "model": a.model,
         "system_prompt": a.system_prompt,
@@ -82,13 +84,17 @@ def _default_permissions() -> tuple[str, str]:
     return _json.dumps(perms.get("allow", [])), _json.dumps(perms.get("deny", []))
 
 
-
 async def index(request: Request, project_id: int):
     from app.actions.agent_create_action import AgentCreateAction
 
-    agents = await Agent.where("project_id", project_id).where_null("deleted_at").get()
+    agents = (
+        await Agent
+        .where("project_id", project_id)
+        .where_null("deleted_at")
+        .exists()
+    )
+
     if not agents:
-        # Auto-create a default PM agent for projects that don't have one yet
         agent = await AgentCreateAction(
             project_id=project_id,
             request=AgentStoreRequest(
@@ -100,15 +106,16 @@ async def index(request: Request, project_id: int):
             ),
         ).execute()
 
-        # Set a friendly slug for the auto-created PM
-        slug = await _unique_slug(project_id, "pm")
-        agent.slug = slug
-        await agent.save()
+        await Project.where("id", project_id).update({"default_agent_id": agent.id})
 
-        # First agent becomes the default
-        await _set_project_default(project_id, agent.id)
-        agents = [agent]
-    return JSONResponse([_serialize(a) for a in agents])
+    agents = (
+        await Agent
+        .where("project_id", project_id)
+        .where_null("deleted_at")
+        .get()
+    )
+
+    return AgentResource.collection(agents)
 
 
 async def store(request: Request, body: AgentStoreRequest, project_id: int):
@@ -116,27 +123,20 @@ async def store(request: Request, body: AgentStoreRequest, project_id: int):
 
     agent = await AgentCreateAction(project_id=project_id, request=body).execute()
 
-    # Store requires a unique slug (spawn does not persist one)
-    slug = await _unique_slug(project_id, _slugify(agent.name))
-    agent.slug = slug
-    await agent.save()
-
     # If this is the first agent in the project, make it the default
     count = await Agent.where("project_id", project_id).count()
     if count == 1:
         await _set_project_default(project_id, agent.id)
 
-    return JSONResponse(_serialize(agent), status_code=201)
+    return AgentResource(agent)
 
 
 async def update(body: AgentUpdateRequest, agent_id: int):
-    agent = await Agent.find(agent_id)
-    if not agent:
-        return JSONResponse({"error": "Agent not found"}, status_code=404)
+    agent = await Agent.find_or_fail(agent_id)
+    await agent.update(body.model_dump(exclude_unset=True))
 
-    await Agent.where("id", agent_id).update(body.model_dump(exclude_unset=True))
     agent = await Agent.find(agent_id)
-    return JSONResponse(_serialize(agent))
+    return AgentResource(agent)
 
 
 async def destroy(request: Request, agent_id: int):
@@ -145,9 +145,7 @@ async def destroy(request: Request, agent_id: int):
     from app.terminal.connection_manager import ConnectionManager
     from app.terminal.manager import TerminalManager
 
-    agent = await Agent.find(agent_id)
-    if not agent:
-        return JSONResponse({"error": "Agent not found"}, status_code=404)
+    agent = await Agent.find_or_fail(agent_id)
 
     # Clean up WebSocket, PTY, and ConnectionManager entry before deleting the DB record
     session_id = agent.session_id
@@ -243,7 +241,6 @@ async def spawn(request: Request, project_id: int):
     agent = await AgentCreateAction(project_id=project_id, request=inp).execute()
     message = (inp.message or "").strip() or None
 
-
     # Push agent_created to ALL active connections for this project
     # (project terminal + every agent terminal) so the sidebar updates regardless
     # of which WebSocket the frontend is currently listening on.
@@ -253,10 +250,10 @@ async def spawn(request: Request, project_id: int):
         payload = _json.dumps({"type": "agent_created", "agent": _serialize(agent)})
         conn_manager: ConnectionManager = app().make('connections')
         for bridge in conn_manager.all_for_cwd(cwd):
-                try:
-                    await bridge.send_text(payload)
-                except Exception:
-                    pass
+            try:
+                await bridge.send_text(payload)
+            except Exception:
+                pass
 
         # Trigger the agent headlessly if an initial message was provided
         if message:
@@ -296,5 +293,3 @@ async def output(request: Request, agent_id: int):
         "status": getattr(agent, 'status', 'idle'),
         "session_id": session.id,
     })
-
-

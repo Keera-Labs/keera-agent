@@ -24,10 +24,55 @@ export interface ProjectAgent {
     created_at: string | null
 }
 
+/** A single JSON:API resource object: { type, id, attributes }. */
+export interface AgentResource {
+    type: string
+    id: string
+    attributes: Record<string, unknown>
+}
+
+/**
+ * Flatten a JSON:API agent resource into a ProjectAgent.
+ * The backend returns raw DB columns in `attributes`, so `flags` arrives as a
+ * JSON string and the boolean flags as 0/1 integers — normalize them here.
+ */
+export function normalizeAgent(resource: AgentResource): ProjectAgent {
+    const attr = resource.attributes ?? {}
+
+    let flags: AgentFlags = {}
+    if (typeof attr.flags === 'string') {
+        try {
+            flags = (JSON.parse(attr.flags) as AgentFlags) ?? {}
+        } catch {
+            flags = {}
+        }
+    } else if (attr.flags && typeof attr.flags === 'object') {
+        flags = attr.flags as AgentFlags
+    }
+
+    return {
+        id: Number(resource.id ?? attr.id),
+        project_id: attr.project_id as number,
+        name: attr.name as string,
+        slug: attr.slug as string,
+        description: (attr.description as string | null) ?? null,
+        model: attr.model as string,
+        system_prompt: (attr.system_prompt as string | null) ?? null,
+        agent_type: attr.agent_type as string,
+        status: attr.status as ProjectAgent['status'],
+        flags,
+        dangerously_skip_permissions: Boolean(attr.dangerously_skip_permissions),
+        plan_mode: Boolean(attr.plan_mode),
+        task_id: (attr.task_id as number | null) ?? null,
+        created_at: (attr.created_at as string | null) ?? null,
+    }
+}
+
 async function fetchAgents(projectId: number): Promise<ProjectAgent[]> {
     const res = await fetch(`/api/projects/${projectId}/agents`)
     if (!res.ok) throw new Error('Failed to fetch agents')
-    return res.json()
+    const json = await res.json()
+    return ((json.data ?? []) as AgentResource[]).map(normalizeAgent)
 }
 
 export function useAgents(projectId: number | null) {
@@ -59,7 +104,8 @@ export function useAgents(projectId: number | null) {
                 body: JSON.stringify(data),
             })
             if (!res.ok) throw new Error('Failed to create agent')
-            return res.json() as Promise<ProjectAgent>
+            const json = await res.json()
+            return normalizeAgent(json.data as AgentResource)
         },
         onSuccess: addAgent,
     })
@@ -88,7 +134,8 @@ export function useAgents(projectId: number | null) {
                 body: JSON.stringify(fields),
             })
             if (!res.ok) throw new Error('Failed to update agent')
-            return res.json() as Promise<ProjectAgent>
+            const json = await res.json()
+            return normalizeAgent(json.data as AgentResource)
         },
         onSuccess: (updated) => {
             queryClient.setQueryData<ProjectAgent[]>(key, prev =>
