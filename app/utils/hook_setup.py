@@ -9,29 +9,12 @@ new project is created (for the project's own directory).
 
 import json
 import os
-import shutil
-import tempfile
+
+from app.utils.json_utils import atomic_write_json
 
 # URL path fragments that identify keera-managed hooks
 _STOP_PATH  = "/api/claude-stopped"
 _START_PATH = "/api/claude-started"
-
-
-def _atomic_write_json(path: str, data: dict) -> None:
-    """Write *data* to *path* atomically using a temp file + os.replace."""
-    dir_name = os.path.dirname(path)
-    tmp_fd, tmp_path = tempfile.mkstemp(dir=dir_name)
-    try:
-        with os.fdopen(tmp_fd, "w") as f:
-            json.dump(data, f, indent=2)
-            f.write("\n")
-        os.replace(tmp_path, path)  # atomic on POSIX
-    except Exception:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
 
 
 def _upsert_hook(hook_list: list, path_fragment: str, new_url: str) -> bool:
@@ -66,7 +49,6 @@ def ensure_claude_settings(directory: str, base_url: str, apply_default_permissi
 
     settings: dict = {}
     if os.path.exists(settings_path):
-        shutil.copy2(settings_path, settings_path + ".bak")
         try:
             with open(settings_path) as f:
                 settings = json.load(f)
@@ -107,7 +89,7 @@ def ensure_claude_settings(directory: str, base_url: str, apply_default_permissi
             changed = True
 
     if changed:
-        _atomic_write_json(settings_path, settings)
+        atomic_write_json(settings_path, settings)
         print(f"[keera] Claude settings updated in {directory}/.claude/settings.json")
 
 
