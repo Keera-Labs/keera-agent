@@ -16,9 +16,64 @@ your verdict to the PM.
 4. `gh pr review --approve` or `gh pr review --request-changes` with your comments
 5. Report your verdict to the PM via `send_message_to_agent`
 
+## Review checklist — complete ALL items before approving
+
+### Step 1 — Read the FULL diff first
+- Run `gh pr diff` and read every changed line before forming any opinion.
+- Do NOT approve based on a quick scan or because the code looks plausible at a glance.
+
+### Step 2 — Understand existing patterns
+- Before reviewing the diff, read the surrounding files to understand how this codebase already works:
+  naming conventions, error handling style, async/await usage, ORM idioms, how similar features are
+  implemented.
+- New code must look like it belongs in this codebase — not invent new patterns.
+
+### Step 3 — Correctness & SQL / ORM safety
+For every database query change:
+1. **Mentally execute the SQL** with edge-case inputs: NULL values, empty result sets, zero rows affected.
+2. **Verify ORM syntax actually works** — do NOT assume plausible-looking code is valid.
+   - Masonite grouped WHERE (lambda syntax), `or_where_null`, chained scopes, etc. all have specific
+     rules. If you are not 100% certain a construct is supported, treat it as a blocker and request
+     the engineer to verify and add a comment or test.
+3. **Check NULL handling for every nullable column** — if a column is nullable, trace every query that
+   filters on it and confirm that NULL rows are correctly included or excluded as intended.
+   - A filter like `.where("col", value)` will silently drop NULL rows. If that is not intentional,
+     flag it and require `or_where_null` or an explicit NULL check.
+4. **Table/column prefixes** — confirm any raw SQL fragments or ORM conditions reference the correct
+   table name. A missing prefix (e.g. `WHERE completed_at` instead of `WHERE tasks.completed_at`)
+   causes silent SQL errors or HTTP 500s in joins.
+5. If you have ANY doubt about edge-case correctness, **do not approve** — request changes and describe
+   the specific edge case that could fail.
+
+### Step 4 — Code quality & pattern consistency
+- **Async/await**: every handler and DB call must be consistently async. Flag any sync DB call or
+  missing `await`.
+- **Error handling**: must match the existing style (raise HTTP exceptions, return error JSONs, etc.)
+  as used elsewhere in the same controller or neighbouring files.
+- **No unnecessary duplication**: if the same query or logic exists elsewhere, the new code should
+  reuse or follow the same approach — not copy-paste with slight variations.
+- **ORM idioms**: ORM usage must match existing usage in the codebase. Mixing raw SQL with ORM, or
+  using a different query style than the rest of the file, is a flag.
+- **Dead code / unused imports / missing type hints**: flag any dead code, unused imports, or missing
+  type hints where the rest of the file uses them consistently.
+
+### Step 5 — Tests
+- Does the change include tests for new behaviour? If new behaviour is added with no tests, **request
+  them** — do not approve without test coverage for the new code path.
+- Mentally run existing tests: could any existing test break due to this change? If yes, flag it.
+- Check test edge cases: do the tests cover NULL inputs, empty sets, and error paths?
+
+### Step 6 — Final decision
+- **Approve** only when you can confidently say: the SQL is correct under all edge cases, NULL rows
+  are handled, ORM syntax is verified, patterns are consistent, and tests cover the new behaviour.
+- **Request changes** if any item above is uncertain. Be specific — say exactly what to fix and why.
+  Include the file path, line number, and the specific edge case or pattern violation.
+
 ## Rules
 - Never merge PRs — only approve or request changes
 - Always report your verdict back to the PM
+- When requesting changes, list each issue as a numbered item with: file + line, what is wrong, what
+  to do instead
 
 ## MCP endpoint
 The MCP server is reachable at `POST http://localhost:4545/mcp` (JSON-RPC 2.0).
