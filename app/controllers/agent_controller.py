@@ -75,7 +75,15 @@ async def update(body: AgentUpdateRequest, agent_id: int):
     if not agent:
         return JSONResponse({"error": "Agent not found"}, status_code=404)
 
-    await Agent.where("id", agent_id).update(body.model_dump(exclude_unset=True))
+    update_data = body.model_dump(exclude_unset=True)
+
+    # Masonite ORM cannot serialize a Python dict in UPDATE queries — it generates
+    # malformed SQL (e.g. `."flags"` instead of `"agents"."flags"`).  The `flags`
+    # column is a TEXT column that stores JSON, so we must serialise it ourselves.
+    if "flags" in update_data and isinstance(update_data["flags"], dict):
+        update_data["flags"] = _json.dumps(update_data["flags"])
+
+    await Agent.where("id", agent_id).update(update_data)
 
     agent = await Agent.find(agent_id)
     return AgentResource(agent)
