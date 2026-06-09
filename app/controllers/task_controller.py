@@ -37,7 +37,23 @@ def _serialize(t: Task) -> dict:
 
 
 async def index(request: Request, project_id: int):
-    tasks = await Task.where("project_id", project_id).get()
+    cutoff = (datetime.datetime.now() - datetime.timedelta(days=7)).isoformat()
+
+    active = await (
+        Task
+        .where("project_id", project_id)
+        .where_not_in("status", ["completed", "cancelled"])
+        .get()
+    )
+    recent_terminal = await (
+        Task
+        .where("project_id", project_id)
+        .where_in("status", ["completed", "cancelled"])
+        .where("completed_at", ">=", cutoff)
+        .get()
+    )
+
+    tasks = list(active) + list(recent_terminal)
     return JSONResponse([_serialize(t) for t in tasks])
 
 

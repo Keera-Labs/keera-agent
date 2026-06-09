@@ -58,15 +58,6 @@ export function TasksView({
     const [dragTaskId, setDragTaskId] = useState<number | null>(null)
     const [dragOverStatus, setDragOverStatus] = useState<Task['status'] | null>(null)
 
-    const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
-    const visibleTasks = tasks.filter(t => {
-        if ((t.status === 'completed' || t.status === 'cancelled') && t.completed_at) {
-            return Date.now() - new Date(t.completed_at).getTime() < SEVEN_DAYS_MS
-        }
-        return true
-    })
-    const hiddenCount = tasks.length - visibleTasks.length
-
     return (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {/* Header */}
@@ -92,7 +83,7 @@ export function TasksView({
                 padding: '16px', overflowX: 'auto', overflowY: 'hidden', alignItems: 'flex-start',
             }}>
                 {STATUS_CYCLE.map(status => {
-                    const col = visibleTasks.filter(t => t.status === status)
+                    const col = tasks.filter(t => t.status === status)
                     const isOver = dragOverStatus === status
                     return (
                         <div
@@ -105,7 +96,7 @@ export function TasksView({
                                 e.preventDefault()
                                 setDragOverStatus(null)
                                 if (dragTaskId !== null) {
-                                    const task = visibleTasks.find(t => t.id === dragTaskId)
+                                    const task = tasks.find(t => t.id === dragTaskId)
                                     if (task && task.status !== status) onUpdateStatus(task, status)
                                 }
                                 setDragTaskId(null)
@@ -244,18 +235,6 @@ export function TasksView({
                                         )}
                                     </div>
                                 ))}
-
-                                {/* Hidden older tasks indicator */}
-                                {hiddenCount > 0 && (status === 'completed' || status === 'cancelled') && (
-                                    <div style={{
-                                        fontSize: '10px', color: color.textFaint, fontStyle: 'italic',
-                                        textAlign: 'center', padding: '6px 4px',
-                                        borderTop: col.length > 0 ? `1px solid ${color.border}` : 'none',
-                                        marginTop: col.length > 0 ? '2px' : '0',
-                                    }}>
-                                        {hiddenCount} older {hiddenCount === 1 ? 'task' : 'tasks'} hidden
-                                    </div>
-                                )}
 
                                 {/* Add task shortcut at bottom of column */}
                                 {status === 'pending' && (
