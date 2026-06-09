@@ -87,11 +87,11 @@ export function TaskDetailModal({ task, onClose }: { task: Task; onClose: () => 
                 {/* Scrollable body */}
                 <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     {/* Description */}
-                    {task.description ? (
+                    {task.body ? (
                         <div>
                             <div style={{ ...labelStyle, marginBottom: '6px' }}>Description</div>
                             <div style={{ fontSize: '13px', color: color.textMuted, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                                {task.description}
+                                {task.body}
                             </div>
                         </div>
                     ) : (

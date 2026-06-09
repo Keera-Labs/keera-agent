@@ -12,7 +12,8 @@ npm install      # JS deps
 
 **Run migrations:**
 ```bash
-uv run python artisan db:migrate
+uv run python artisan db:migrate                 # dev database
+uv run python artisan db:migrate --env=testing   # test database (run before pytest)
 ```
 
 **Start dev server (runs FastAPI + Vite concurrently):**
@@ -94,4 +95,16 @@ bash bin/build.sh --no-build  # skip Vite, just sync files
 5. Run `uv run python artisan db:migrate`
 
 ### Testing
-Tests use `fastapi_startkit.fastapi.testing.HttpTestCase` (async unittest). The test database is the same SQLite file — tests clean up their own data in `asyncSetUp`. There are no mocks; tests hit a real DB.
+Tests are async unittest and hit a real DB (no mocks).
+
+**Reference example:** `app/controllers/task_controller.py` + `tests/features/test_task_controller.py` are the canonical pattern to copy when adding a resource — Pydantic request models for validation (`app/requests/task_request.py`), JSON columns typed as `list` on the model so the ORM casts them, a `JsonResource` subclass for output (`app/resources/task_resource.py`), and factory-driven tests.
+
+**Conventions:**
+- Base class `tests/test_case.py::TestCase` (wraps `HttpTestCase`); feature/controller tests live in `tests/features/`.
+- Mix in `fastapi_startkit.masoniteorm.testing.DatabaseTransaction` to wrap each test in a transaction that rolls back — no manual cleanup needed for direct model writes. Note: writes made through the HTTP app commit on a separate connection and are **not** rolled back, so assert on the entities a test created (by title/id) rather than on global row counts.
+- Seed data with factories in `databases/factories/` (e.g. `ProjectFactory`, `TaskFactory`): `await TaskFactory.new().create(project_id=...)` to persist, `(await TaskFactory.new().make()).serialize()` to build a request payload.
+
+**Run the migrations on the test database before running tests the first time:**
+```bash
+uv run python artisan db:migrate --env=testing
+```
