@@ -67,6 +67,15 @@ export default function AgentEditModal({
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
 
+    // Sync fields when the agent prop changes (e.g. modal re-opened for a different agent)
+    useEffect(() => {
+        setName(agent.name)
+        setModel(agent.model ?? 'claude-sonnet-4-6')
+        setSystemPrompt(agent.system_prompt ?? '')
+        setFlags(agent.flags ?? {})
+        setError('')
+    }, [agent.id])
+
     function setFlag(key: keyof AgentFlags, value: boolean | number | null) {
         setFlags(prev => ({ ...prev, [key]: value }))
     }
@@ -117,9 +126,9 @@ export default function AgentEditModal({
             onClick={e => { if (e.target === e.currentTarget) onClose() }}
         >
             <div style={{
-                background: color.bgModal, border: `1px solid ${color.borderMuted}`, borderRadius: '10px',
+                background: color.bgSurface, border: `1px solid ${color.borderMuted}`, borderRadius: '10px',
                 width: '480px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto',
-                display: 'flex', flexDirection: 'column',
+                display: 'flex', flexDirection: 'column', color: color.textPrimary,
             }}>
                 {/* Header */}
                 <div style={{
