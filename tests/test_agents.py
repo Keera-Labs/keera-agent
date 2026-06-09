@@ -198,6 +198,22 @@ class TestAgentTypeEnforcement(HttpTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(_attrs(response)["dangerously_skip_permissions"])
 
+    async def test_pm_agent_has_use_worktree_false(self):
+        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
+            "name": "PM Agent",
+            "agent_type": "pm",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(_attrs(response)["use_worktree"])
+
+    async def test_se_agent_has_use_worktree_true(self):
+        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
+            "name": "SE Agent",
+            "agent_type": "software_engineer",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(_attrs(response)["use_worktree"])
+
 
 class TestAgentLimit(HttpTestCase):
     """Tests for max_agents_per_project enforcement."""
