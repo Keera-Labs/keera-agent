@@ -1,9 +1,12 @@
+import datetime
 import json
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from app.models.Task import Task
+
+_TERMINAL_STATUSES = {"completed", "cancelled"}
 
 
 def _load_json(value) -> list:
@@ -29,6 +32,7 @@ def _serialize(t: Task) -> dict:
         "validation_steps": _load_json(t.validation_steps),
         "status": t.status,
         "created_at": str(t.created_at),
+        "completed_at": str(t.completed_at) if t.completed_at else None,
     }
 
 
@@ -77,7 +81,12 @@ async def update(request: Request, task_id: int):
         assignees = body["assignees"] if isinstance(body["assignees"], list) else []
         task.assignees = json.dumps(assignees)
     if "status" in body:
-        task.status = body["status"]
+        new_status = body["status"]
+        task.status = new_status
+        if new_status in _TERMINAL_STATUSES:
+            task.completed_at = datetime.datetime.now().isoformat()
+        else:
+            task.completed_at = None
     if "priority" in body:
         task.priority = body["priority"]
     if "acceptance_criteria" in body:
