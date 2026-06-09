@@ -39,12 +39,14 @@ def _serialize(t: Task) -> dict:
 async def index(request: Request, project_id: int):
     cutoff = (datetime.datetime.now() - datetime.timedelta(days=7)).isoformat()
 
+    # Active tasks — never hidden
     active = await (
         Task
         .where("project_id", project_id)
         .where_not_in("status", ["completed", "cancelled"])
         .get()
     )
+    # Completed/cancelled tasks finished within the last 7 days
     recent_terminal = await (
         Task
         .where("project_id", project_id)
