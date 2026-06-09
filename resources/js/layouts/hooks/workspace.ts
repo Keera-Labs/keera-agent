@@ -1,50 +1,34 @@
 import { useForm, useHttp } from '@inertiajs/react'
-import { useQuery, useQueryClient } from "@tanstack/react-query"
-import type { Workspace } from "@/types/type"
+import { router } from '@inertiajs/react'
 
 export function useWorkspace() {
-    const queryClient = useQueryClient()
     const createForm = useForm({ name: '', description: '' })
     const updateHttp = useHttp({})
     const destroyHttp = useHttp({})
 
-    const query = useQuery<Workspace[]>({
-        queryKey: ["workspaces"],
-        queryFn: async () => {
-            const res = await fetch("/api/workspaces")
-            if (!res.ok) throw new Error("Failed to fetch workspaces")
-            return res.json()
-        },
-        staleTime: 1000 * 60 * 5,
-    })
-
-    const invalidate = () => queryClient.invalidateQueries({ queryKey: ["workspaces"] })
+    const reload = () => router.reload({ only: ['workspaces', 'projects'] })
 
     const create = (data: { name: string; description?: string }) => {
         createForm.setData(data)
-        createForm.post('/api/workspaces', { onSuccess: invalidate })
+        createForm.post('/api/workspaces', { onSuccess: reload })
     }
 
     const update = ({ id, ...data }: { id: number; name?: string; description?: string }) => {
         updateHttp.setData(data)
-        updateHttp.patch(`/api/workspaces/${id}`, { onSuccess: invalidate })
+        updateHttp.patch(`/api/workspaces/${id}`, { onSuccess: reload })
     }
 
     const destroy = (id: number) => {
-        destroyHttp.delete(`/api/workspaces/${id}`, { onSuccess: invalidate })
+        destroyHttp.delete(`/api/workspaces/${id}`, { onSuccess: reload })
     }
 
     return {
-        workspaces: query.data ?? [],
-        isLoading: query.isLoading,
         creating: createForm.processing,
         createErrors: createForm.errors,
         updating: updateHttp.processing,
         destroying: destroyHttp.processing,
-        error: query.error,
         create,
         update,
         destroy,
-        invalidate,
     }
 }

@@ -1,29 +1,10 @@
-import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { router } from '@inertiajs/react'
 import type { Project } from '@/types/type'
 
-async function fetchProjects(): Promise<Project[]> {
-    const res = await fetch('/api/projects')
-    if (!res.ok) throw new Error('Failed to fetch projects')
-    return res.json()
-}
+const reload = () => router.reload({ only: ['workspaces', 'projects'] })
 
 export function useProjects() {
-    const queryClient = useQueryClient()
-    const key = ['projects']
-    const workspacesKey = ['workspaces']
-
-    const query = useQuery<Project[]>({
-        queryKey: key,
-        queryFn: fetchProjects,
-        staleTime: 1000 * 60 * 5,
-    })
-
-    const invalidate = () => {
-        queryClient.invalidateQueries({ queryKey: key })
-        queryClient.invalidateQueries({ queryKey: workspacesKey })
-    }
-
     const create = useMutation({
         mutationFn: async (data: { name: string; path: string; language: string; workspace_id: number | null }) => {
             const res = await fetch('/api/projects', {
@@ -38,8 +19,6 @@ export function useProjects() {
             return res.json() as Promise<Project>
         },
         onSuccess: (project) => {
-            queryClient.setQueryData<Project[]>(key, prev => [...(prev ?? []), project])
-            invalidate()
             router.visit(`/${project.slug}`)
         },
     })
@@ -57,12 +36,7 @@ export function useProjects() {
             }
             return res.json() as Promise<Project>
         },
-        onSuccess: (updated) => {
-            queryClient.setQueryData<Project[]>(key, prev =>
-                (prev ?? []).map(p => p.id === updated.id ? updated : p)
-            )
-            invalidate()
-        },
+        onSuccess: reload,
     })
 
     const remove = useMutation({
@@ -74,12 +48,7 @@ export function useProjects() {
             }
             return projectId
         },
-        onSuccess: (projectId) => {
-            queryClient.setQueryData<Project[]>(key, prev =>
-                (prev ?? []).filter(p => p.id !== projectId)
-            )
-            invalidate()
-        },
+        onSuccess: reload,
     })
 
     const validatePath = async (path: string): Promise<{ exists: boolean; expanded: string }> => {
@@ -87,14 +56,8 @@ export function useProjects() {
         return res.json()
     }
 
-    const allProjects = query.data ?? []
-    const unassigned = allProjects.filter(p => p.workspace_id == null)
-
     return {
-        allProjects,
-        unassigned,
-        isLoading: query.isLoading,
-        invalidate,
+        isLoading: false,
         create,
         update,
         remove,
