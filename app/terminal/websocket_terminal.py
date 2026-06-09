@@ -29,12 +29,12 @@ class WebsocketTerminal:
         loop = asyncio.get_event_loop()
         tasks = []
 
+        tasks += [
+            asyncio.create_task(self._read_pty(loop)),
+            asyncio.create_task(self._watch_process(loop)),
+        ]
         if self._ws is not None:
-            tasks += [
-                asyncio.create_task(self._pty_to_ws(loop)),
-                asyncio.create_task(self._ws_to_pty()),
-                asyncio.create_task(self._watch_process(loop)),
-            ]
+            tasks.append(asyncio.create_task(self._ws_to_pty()))
 
         if auto_send:
             tasks.append(asyncio.create_task(self._auto_send(auto_send)))
@@ -49,7 +49,7 @@ class WebsocketTerminal:
             if stop_on_disconnect and self._ws is not None:
                 self._terminal.stop()
 
-    async def _pty_to_ws(self, loop: asyncio.AbstractEventLoop) -> None:
+    async def _read_pty(self, loop: asyncio.AbstractEventLoop) -> None:
         master_fd = self._terminal.master_fd
         queue: asyncio.Queue = asyncio.Queue()
 
@@ -66,7 +66,8 @@ class WebsocketTerminal:
             while not self._stopped.is_set():
                 try:
                     data = await asyncio.wait_for(queue.get(), timeout=0.1)
-                    await self._ws.send_bytes(data)
+                    if self._ws is not None:
+                        await self._ws.send_bytes(data)
                     if self._on_output:
                         await self._on_output(data)
                 except asyncio.TimeoutError:
