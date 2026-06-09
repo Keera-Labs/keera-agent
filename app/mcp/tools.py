@@ -412,7 +412,7 @@ class SpawnAgentTool(Tool):
             return Response.text("Error: name is required")
 
         # Enforce per-project agent limit before creating
-        settings = read_global_settings()
+        settings = await read_global_settings()
         limit = int(settings.get("max_agents_per_project", 10))
         count = await _Agent.where("project_id", project.id).where_null("deleted_at").count()
         if count >= limit:

@@ -174,7 +174,12 @@ function playSound(type: 'done' | 'input') {
 // Absorbs all state management from AppLayout so the layout itself is a thin shell.
 
 export function AppLayoutStateProvider({ children }: { children: React.ReactNode }) {
-    const { props } = usePage<{ project?: string; agent_id?: number; tasks?: Task[] }>()
+    const { props } = usePage<{
+        project?: string
+        agent_id?: number
+        tasks?: Task[]
+        global_settings?: { max_agents_per_project?: number }
+    }>()
     const projectName = props.project
     const agentIdFromUrl = props.agent_id
 
@@ -206,7 +211,9 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     const [newMessageIds, setNewMessageIds] = useState<number[]>([])
     const [agentTemplates, setAgentTemplates] = useState<AgentTemplate[]>([])
     const [showAddAgent, setShowAddAgent] = useState(false)
-    const [maxAgentsPerProject, setMaxAgentsPerProject] = useState<number>(10)
+
+    // Derived directly from Inertia props — no separate fetch needed
+    const maxAgentsPerProject = props.global_settings?.max_agents_per_project ?? 10
     const [activeAgentId, setActiveAgentId] = useState<number | null>(null)
     const [showProjectSearch, setShowProjectSearch] = useState(false)
     const [editingAgent, setEditingAgent] = useState<ProjectAgent | null>(null)
@@ -275,13 +282,6 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
             .catch(() => {})
     }, [])
 
-    // Fetch global settings once on mount
-    useEffect(() => {
-        fetch('/api/global-settings')
-            .then(r => r.json())
-            .then(d => { setMaxAgentsPerProject(d.max_agents_per_project ?? 10) })
-            .catch(() => {})
-    }, [])
 
     // When an agent is selected, start ALL agents (so they can communicate)
     useEffect(() => {

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { router, usePage } from '@inertiajs/react'
 import { color } from '@/tokens'
 import type { AgentTemplate } from '@/types/agent'
 import type { AgentFlags } from '@/layouts/hooks/agents'
@@ -19,18 +20,13 @@ export function GlobalSettingsModal({
     const [tab, setTab] = useState<SettingsTab>('general')
     const [templates, setTemplates] = useState<AgentTemplate[]>(initialTemplates)
 
-    // ── General settings ──────────────────────────────────────────────────────
-    const [maxAgents, setMaxAgents] = useState<number>(10)
+    // ── General settings — seeded from Inertia props, no extra fetch needed ───
+    const { props: pageProps } = usePage<{ global_settings?: { max_agents_per_project?: number } }>()
+    const serverMax = pageProps.global_settings?.max_agents_per_project ?? 10
+    const [maxAgents, setMaxAgents] = useState<number>(serverMax)
     const [generalSaving, setGeneralSaving] = useState(false)
     const [generalSaved, setGeneralSaved] = useState(false)
     const [generalError, setGeneralError] = useState('')
-
-    useEffect(() => {
-        fetch('/api/global-settings')
-            .then(r => r.json())
-            .then(d => { setMaxAgents(d.max_agents_per_project ?? 10) })
-            .catch(() => {})
-    }, [])
 
     async function saveGeneralSettings() {
         setGeneralSaving(true)
@@ -44,9 +40,10 @@ export function GlobalSettingsModal({
             })
             const d = await res.json()
             if (!res.ok) { setGeneralError(d.error ?? 'Save failed'); return }
-            setMaxAgents(d.max_agents_per_project ?? 10)
             setGeneralSaved(true)
             setTimeout(() => setGeneralSaved(false), 2000)
+            // Re-fetch Inertia props so the rest of the app sees the new value
+            router.reload({ only: ['global_settings'] })
         } catch { setGeneralError('Network error') }
         finally { setGeneralSaving(false) }
     }

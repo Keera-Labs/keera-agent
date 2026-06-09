@@ -22,7 +22,7 @@ class AgentCreateAction:
         from app.utils.system_prompts import default_system_prompt
 
         # Enforce per-project agent limit
-        settings = read_global_settings()
+        settings = await read_global_settings()
         limit = int(settings.get("max_agents_per_project", 10))
         count = await Agent.where("project_id", self.project_id).where_null("deleted_at").count()
         if count >= limit:

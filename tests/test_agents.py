@@ -1,15 +1,11 @@
 import json
-import os
 
 from bootstrap.application import app
 from fastapi_startkit.fastapi.testing import HttpTestCase
 from app.models.Agent import Agent
 from app.models.Project import Project
-from app.controllers.global_settings_controller import (
-    read_global_settings,
-    write_global_settings,
-    _GLOBAL_SETTINGS_PATH,
-)
+from app.models.GlobalSettings import GlobalSettings
+from app.controllers.global_settings_controller import write_global_setting
 
 
 def _attrs(response) -> dict:
@@ -213,6 +209,7 @@ class TestAgentLimit(HttpTestCase):
         await super().asyncSetUp()
         await Agent.where("id", ">", 0).delete()
         await Project.where("id", ">", 0).delete()
+        await GlobalSettings.where("id", ">", 0).delete()
         response = await self.post("/api/projects", json={
             "name": "limit-test-project",
             "path": "~/code/limit-test-project",
@@ -220,16 +217,14 @@ class TestAgentLimit(HttpTestCase):
             "create_dir": True,
         })
         self.project_id = response.json()["id"]
-        # Remove any auto-created agents (e.g. default PM agent) so tests
-        # start with a clean 0-agent state and the limit numbers are predictable.
+        # Remove auto-created agents (e.g. default PM agent) so each test
+        # starts with a clean 0-agent state and limit numbers are predictable.
         await Agent.where("project_id", self.project_id).delete()
-        # Save original settings and set a low limit for testing
-        self._orig_settings = read_global_settings()
-        write_global_settings({**self._orig_settings, "max_agents_per_project": 2})
+        # Set a low limit for testing via the DB
+        await write_global_setting("max_agents_per_project", 2)
 
     async def asyncTearDown(self):
-        # Restore original settings
-        write_global_settings(self._orig_settings)
+        await GlobalSettings.where("id", ">", 0).delete()
         await super().asyncTearDown()
 
     async def test_create_agents_up_to_limit(self):
@@ -273,16 +268,14 @@ class TestGlobalSettings(HttpTestCase):
 
     async def asyncSetUp(self):
         await super().asyncSetUp()
-        self._orig_settings = read_global_settings()
+        await GlobalSettings.where("id", ">", 0).delete()
 
     async def asyncTearDown(self):
-        write_global_settings(self._orig_settings)
+        await GlobalSettings.where("id", ">", 0).delete()
         await super().asyncTearDown()
 
-    async def test_get_global_settings_returns_defaults(self):
-        """GET /api/global-settings returns at least max_agents_per_project."""
-        # Write known defaults
-        write_global_settings({"max_agents_per_project": 10})
+    async def test_get_global_settings_returns_default_when_empty(self):
+        """GET /api/global-settings returns the default (10) when no row exists."""
         response = await self.get("/api/global-settings")
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -296,10 +289,9 @@ class TestGlobalSettings(HttpTestCase):
             json={"max_agents_per_project": 5},
         )
         self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertEqual(data["max_agents_per_project"], 5)
+        self.assertEqual(response.json()["max_agents_per_project"], 5)
 
-        # Confirm it's persisted
+        # Confirm it is persisted
         get_resp = await self.get("/api/global-settings")
         self.assertEqual(get_resp.json()["max_agents_per_project"], 5)
 
