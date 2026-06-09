@@ -274,7 +274,7 @@ wheels = [
 
 [[package]]
 name = "fastapi-startkit"
-version = "0.33.0"
+version = "0.38.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cleo" },
@@ -285,9 +285,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/39/8b/a2a9bb9b719c0fedd3e4b293734a111c812b2bbf5a57855501543c6284db/fastapi_startkit-0.33.0.tar.gz", hash = "sha256:88471ed883fd456332933bc36394b619d0c95c00b0ff295270b21923d40a0ab0", size = 188998, upload-time = "2026-06-08T07:33:47.453Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/71/cc/841ee6b3724dc4876d70bd38da871a7cc46ff527e8d674fe33296ecce306/fastapi_startkit-0.38.0.tar.gz", hash = "sha256:c474d40b1255ffadf532ba37a607e521ab58cdc1c40ad4b188fd91b4da97b10b", size = 190936, upload-time = "2026-06-09T22:49:21.526Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/16/c5/ef7b23b91951ccf0623a3ba98f7450ea17929ca2f7c5998e481ae808210f/fastapi_startkit-0.33.0-py3-none-any.whl", hash = "sha256:52a2c14988fcd1179dd802361b207698553573b29bcb279642fae61212f93ef9", size = 334546, upload-time = "2026-06-08T07:33:42.973Z" },
+    { url = "https://files.pythonhosted.org/packages/1d/c4/2c10aec34087447566c92dd375899f47e355ffe271510e53c9bc4ed1711a/fastapi_startkit-0.38.0-py3-none-any.whl", hash = "sha256:5f2d9146d72bc126ed7b6f4c8f935b3dea8bce1f3b2febad48d986cff9348dae", size = 336492, upload-time = "2026-06-09T22:49:20.108Z" },
 ]
 
 [package.optional-dependencies]
@@ -523,7 +523,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "fastapi-startkit", extras = ["database", "fastapi", "sqlite", "storage", "vite"], specifier = ">0.32.0" },
+    { name = "fastapi-startkit", extras = ["database", "fastapi", "sqlite", "storage", "vite"], specifier = ">0.37.0" },
     { name = "playwright", specifier = ">=1.60.0" },
 ]
 

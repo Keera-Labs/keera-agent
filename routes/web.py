@@ -22,8 +22,8 @@ from app.mcp.server import KeeraServer
 
 router = Router()
 
-_mcp_server = KeeraServer()
-router.router.include_router(_mcp_server.router(prefix="/mcp"))
+mcp_server = KeeraServer()
+router.router.include_router(mcp_server.router(prefix="/mcp"))
 
 # API endpoints — must be registered before the /{project} wildcard
 router.get("/api/workspaces", workspace_controller.index)
@@ -38,6 +38,8 @@ router.patch("/api/projects/{project_id}", project_controller.update)
 router.delete("/api/projects/{project_id}", project_controller.destroy)
 router.post("/api/projects/{project_id}/upload-image", project_controller.upload_image)
 router.post("/api/projects/{project_id}/open-directory", project_controller.open_directory)
+
+
 router.get("/api/projects/{project_id}/tasks", task_controller.index)
 router.post("/api/projects/{project_id}/tasks", task_controller.store)
 router.patch("/api/tasks/{task_id}", task_controller.update)

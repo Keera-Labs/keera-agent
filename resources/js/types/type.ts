@@ -20,7 +20,6 @@ export interface Task {
     id: number
     project_id: number
     title: string
-    description: string
     body: string | null
     priority: 'low' | 'medium' | 'high'
     assignees: string[]
