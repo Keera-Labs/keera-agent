@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app.models.Project import Project
 from app.models.Agent import Agent
+from app.utils.json_utils import atomic_write_json
 
 
 def _parse_json_list(value) -> list:
@@ -40,11 +41,7 @@ def _write_project_settings(project_path: str, settings: dict) -> None:
     expanded = os.path.expanduser(project_path)
     settings_path = os.path.join(expanded, ".claude", "settings.json")
     os.makedirs(os.path.dirname(settings_path), exist_ok=True)
-    if os.path.exists(settings_path):
-        shutil.copy2(settings_path, settings_path + ".bak")
-    with open(settings_path, "w") as f:
-        json.dump(settings, f, indent=2)
-        f.write("\n")
+    atomic_write_json(settings_path, settings)
 
 
 def read_default_permissions() -> dict:
@@ -59,9 +56,7 @@ def read_default_permissions() -> dict:
 
 def write_default_permissions(perms: dict) -> None:
     os.makedirs(os.path.dirname(_DEFAULT_PERMS_PATH), exist_ok=True)
-    with open(_DEFAULT_PERMS_PATH, "w") as f:
-        json.dump(perms, f, indent=2)
-        f.write("\n")
+    atomic_write_json(_DEFAULT_PERMS_PATH, perms)
 
 
 # ── Project permissions ────────────────────────────────────────────────────────

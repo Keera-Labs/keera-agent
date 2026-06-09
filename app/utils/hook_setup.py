@@ -9,7 +9,8 @@ new project is created (for the project's own directory).
 
 import json
 import os
-import shutil
+
+from app.utils.json_utils import atomic_write_json
 
 # URL path fragments that identify keera-managed hooks
 _STOP_PATH  = "/api/claude-stopped"
@@ -48,7 +49,6 @@ def ensure_claude_settings(directory: str, base_url: str, apply_default_permissi
 
     settings: dict = {}
     if os.path.exists(settings_path):
-        shutil.copy2(settings_path, settings_path + ".bak")
         try:
             with open(settings_path) as f:
                 settings = json.load(f)
@@ -89,9 +89,7 @@ def ensure_claude_settings(directory: str, base_url: str, apply_default_permissi
             changed = True
 
     if changed:
-        with open(settings_path, "w") as f:
-            json.dump(settings, f, indent=2)
-            f.write("\n")
+        atomic_write_json(settings_path, settings)
         print(f"[keera] Claude settings updated in {directory}/.claude/settings.json")
 
 
