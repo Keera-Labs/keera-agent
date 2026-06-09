@@ -13,14 +13,14 @@ class Agent(Model):
     plan_mode: bool
 
     def to_command(self, system_prompt_suffix: str = '') -> str:
-        worktree = f'agent-{self.id}'
-
         try:
             flags = json.loads(self.flags) if self.flags else {}
         except (json.JSONDecodeError, TypeError):
             flags = {}
 
-        cmd = ClaudeCommand().worktree(worktree)
+        cmd = ClaudeCommand()
+        if getattr(self, 'use_worktree', True):
+            cmd.worktree(f'agent-{self.id}')
 
         if self.model:
             cmd.model(self.model)
