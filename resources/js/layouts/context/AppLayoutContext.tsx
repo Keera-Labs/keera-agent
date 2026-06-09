@@ -9,8 +9,6 @@ import type { AgentTemplate } from '@/types/agent'
 import { makeTerminal } from '@/layouts/hooks/useTerminalSessions'
 import type { Session } from '@/layouts/hooks/useTerminalSessions'
 import type { ProjectView } from '@/layouts/sidebar/Sidebar'
-import { useWorkspace } from '@/layouts/hooks/workspace'
-import { useProjects } from '@/layouts/hooks/projects'
 import { useTasks } from '@/layouts/hooks/tasks'
 
 // ─── Context value interface ──────────────────────────────────────────────────
@@ -179,13 +177,25 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         agent_id?: number
         tasks?: Task[]
         global_settings?: { max_agents_per_project?: number }
+        workspaces?: Workspace[]
+        projects?: Project[]
     }>()
     const projectName = props.project
     const agentIdFromUrl = props.agent_id
 
-    // ── Data hooks ────────────────────────────────────────────────────────────
-    const { workspaces, invalidate: invalidateWorkspaces } = useWorkspace()
-    const { allProjects, invalidate: invalidateProjects, update: updateProject, remove: removeProject } = useProjects()
+    // ── Data — seeded from Inertia props (fast initial paint), refreshed via
+    //    targeted fetch after mutations (no router.reload, no PTY disruption)
+    const [workspaces, setWorkspaces] = useState<Workspace[]>(() => props.workspaces ?? [])
+    const [allProjects, setAllProjects] = useState<Project[]>(() => props.projects ?? [])
+
+    async function refreshData() {
+        const [wsRes, prRes] = await Promise.all([
+            fetch('/api/workspaces').then(r => r.json()),
+            fetch('/api/projects').then(r => r.json()),
+        ])
+        setWorkspaces(wsRes)
+        setAllProjects(prRes)
+    }
 
     // ── Modal / UI state ──────────────────────────────────────────────────────
     const [showWorkspaceModal, setShowWorkspaceModal] = useState(false)
@@ -522,11 +532,11 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         }
     }
 
-    function handleWorkspaceCreated() { invalidateWorkspaces() }
-    function handleWorkspaceDeleted() { invalidateWorkspaces(); invalidateProjects() }
+    async function handleWorkspaceCreated() { await refreshData() }
+    async function handleWorkspaceDeleted() { await refreshData() }
 
     function handleProjectCreated(project: Project) {
-        invalidateProjects()
+        refreshData()
         router.visit(`/${project.slug}`)
     }
 
@@ -535,13 +545,16 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     }
 
     async function handleMoveProject(project: Project, newWorkspaceId: number | null) {
-        await updateProject.mutateAsync({ id: project.id, workspace_id: newWorkspaceId })
-        invalidateWorkspaces()
+        await fetch(`/api/projects/${project.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ workspace_id: newWorkspaceId }),
+        })
+        await refreshData()
     }
 
-    function handleProjectUpdated(_updated: Project) {
-        invalidateProjects()
-        invalidateWorkspaces()
+    async function handleProjectUpdated(_updated: Project) {
+        await refreshData()
     }
 
     function handleProjectDeleted(projectId: number) {
@@ -557,7 +570,8 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
             }
             agentContainerRefs.current.delete(agent.id)
         }
-        removeProject.mutate(projectId)
+        fetch(`/api/projects/${projectId}`, { method: 'DELETE' })
+            .then(() => refreshData())
         if (project && projectName === project.slug) router.visit('/')
     }
 
