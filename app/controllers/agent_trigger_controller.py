@@ -155,12 +155,14 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     fresh_agent = await _Agent.find(agent.id)
 
     # Parts 1 & 3: monitor PTY output via WebsocketTerminal (no WS connection)
+    # after_restart re-injects the initial message so the agent has a task after recovery
     monitor = make_claude_session_monitor(
         agent_id=agent.id,
         terminal=terminal,
         terminal_manager=terminal_manager,
         session_id=session_id,
         build_cmd=lambda a: a.to_command(relay_instructions),
+        after_restart=lambda: terminal.write_input((initial_message + '\n').encode()),
     )
     bridge = WebsocketTerminal(None, terminal, on_output=monitor)
     asyncio.create_task(bridge.run(
