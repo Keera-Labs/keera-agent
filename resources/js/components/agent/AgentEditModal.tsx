@@ -1,53 +1,8 @@
 import { useEffect, useState } from 'react'
 import { color } from '@/tokens'
 import { type ProjectAgent, type AgentFlags, normalizeAgent } from '@/layouts/hooks/agents'
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const AGENT_TYPE_LABELS: Record<string, string> = {
-    pm: 'PM',
-    software_engineer: 'Software Engineer',
-    qa: 'QA',
-    custom: 'Custom',
-}
-
-const AGENT_TYPE_COLORS: Record<string, string> = {
-    pm: '#58a6ff',
-    software_engineer: '#3fb950',
-    qa: '#ffa657',
-    custom: '#bc8cff',
-}
-
-// ─── Shared styles ─────────────────────────────────────────────────────────────
-
-const labelStyle: React.CSSProperties = {
-    color: color.textMuted, fontSize: '11px',
-    textTransform: 'uppercase', letterSpacing: '0.05em',
-}
-const inputStyle: React.CSSProperties = {
-    background: color.bgBase, border: `1px solid ${color.borderMuted}`, borderRadius: '6px',
-    color: color.textPrimary, fontSize: '13px', padding: '6px 10px',
-    fontFamily: '"JetBrains Mono", monospace', outline: 'none',
-}
-const cancelBtnStyle: React.CSSProperties = {
-    background: 'transparent', border: `1px solid ${color.borderMuted}`, borderRadius: '6px',
-    color: color.textMuted, fontSize: '12px', padding: '6px 14px', cursor: 'pointer',
-}
-const submitBtnStyle: React.CSSProperties = {
-    background: color.successEmphasis, border: `1px solid ${color.successBorder}`, borderRadius: '6px',
-    color: '#fff', fontSize: '12px', padding: '6px 14px', cursor: 'pointer',
-}
-const flagRowStyle: React.CSSProperties = {
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    padding: '6px 10px', borderRadius: '6px',
-    background: color.bgCanvas, border: `1px solid ${color.borderMuted}`, cursor: 'pointer',
-}
-const toggleStyle = (on: boolean): React.CSSProperties => ({
-    width: '32px', height: '18px', borderRadius: '9px',
-    background: on ? color.accent : color.borderMuted,
-    border: 'none', cursor: 'pointer', position: 'relative',
-    flexShrink: 0, transition: 'background 0.15s',
-})
+import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS } from '@/types/agent'
+import { labelStyle, inputStyle, cancelBtnStyle, submitBtnStyle, flagRowStyle, toggleStyle } from '@/components/ui/styles'
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -61,6 +16,8 @@ export default function AgentEditModal({
     onSaved: (updated: ProjectAgent) => void
 }) {
     const [name, setName] = useState(agent.name)
+    const [agentType, setAgentType] = useState(agent.agent_type)
+    const [description, setDescription] = useState(agent.description ?? '')
     const [model, setModel] = useState(agent.model ?? 'claude-sonnet-4-6')
     const [systemPrompt, setSystemPrompt] = useState(agent.system_prompt ?? '')
     const [flags, setFlags] = useState<AgentFlags>(agent.flags ?? {})
@@ -70,6 +27,8 @@ export default function AgentEditModal({
     // Sync fields when the agent prop changes (e.g. modal re-opened for a different agent)
     useEffect(() => {
         setName(agent.name)
+        setAgentType(agent.agent_type)
+        setDescription(agent.description ?? '')
         setModel(agent.model ?? 'claude-sonnet-4-6')
         setSystemPrompt(agent.system_prompt ?? '')
         setFlags(agent.flags ?? {})
@@ -92,6 +51,8 @@ export default function AgentEditModal({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name: trimmedName,
+                    agent_type: agentType,
+                    description: description.trim() || null,
                     model,
                     system_prompt: systemPrompt.trim() || null,
                     flags,
@@ -115,8 +76,6 @@ export default function AgentEditModal({
         return () => document.removeEventListener('keydown', onKey)
     }, [onClose])
 
-    const agentBg = AGENT_TYPE_COLORS[agent.agent_type] ?? color.accent
-
     return (
         <div
             style={{
@@ -126,37 +85,42 @@ export default function AgentEditModal({
             onClick={e => { if (e.target === e.currentTarget) onClose() }}
         >
             <div style={{
-                background: color.bgModal, border: `1px solid ${color.borderMuted}`, borderRadius: '10px',
-                width: '480px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto',
-                display: 'flex', flexDirection: 'column', color: color.textPrimary,
+                background: color.bgModal, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
+                padding: '24px', width: '600px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto',
+                display: 'flex', flexDirection: 'column',
             }}>
-                {/* Header */}
-                <div style={{
-                    display: 'flex', alignItems: 'center', gap: '10px',
-                    padding: '16px 20px', borderBottom: `1px solid ${color.border}`, flexShrink: 0,
-                }}>
-                    <div style={{
-                        width: '28px', height: '28px', borderRadius: '8px', flexShrink: 0,
-                        background: agentBg, display: 'flex', alignItems: 'center',
-                        justifyContent: 'center', fontSize: '11px', fontWeight: 700, color: '#fff',
-                    }}>
-                        {agent.name.slice(0, 2).toUpperCase()}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                        <div style={{ color: color.textPrimary, fontSize: '14px', fontWeight: 600 }}>Edit Agent</div>
-                        <div style={{ color: color.textMuted, fontSize: '11px', marginTop: '1px' }}>
-                            {AGENT_TYPE_LABELS[agent.agent_type] ?? agent.agent_type}
-                        </div>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        style={{ background: 'transparent', border: 'none', color: color.textFaint, cursor: 'pointer', fontSize: '18px', lineHeight: 1, padding: '0 4px' }}
-                    >×</button>
-                </div>
+                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>Edit Agent</h2>
 
-                {/* Body */}
-                <form onSubmit={handleSubmit} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
+
+                    {/* Type selector */}
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <span style={labelStyle}>Type</span>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            {Object.entries(AGENT_TYPE_LABELS).map(([type, label]) => {
+                                const active = agentType === type
+                                return (
+                                    <button
+                                        key={type}
+                                        type="button"
+                                        onClick={() => setAgentType(type)}
+                                        style={{
+                                            padding: '5px 12px',
+                                            borderRadius: '6px',
+                                            border: `1px solid ${active ? AGENT_TYPE_COLORS[type] ?? color.accent : color.borderMuted}`,
+                                            background: active ? `${AGENT_TYPE_COLORS[type] ?? color.accent}18` : 'transparent',
+                                            color: active ? (AGENT_TYPE_COLORS[type] ?? color.accent) : color.textMuted,
+                                            fontSize: '12px', fontWeight: active ? 600 : 400,
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        {label}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </label>
 
                     {/* Name */}
                     <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -167,6 +131,17 @@ export default function AgentEditModal({
                             onChange={e => setName(e.target.value)}
                             placeholder="Agent name"
                             required
+                            style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' as const }}
+                        />
+                    </label>
+
+                    {/* Description */}
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={labelStyle}>Description</span>
+                        <input
+                            value={description}
+                            onChange={e => setDescription(e.target.value)}
+                            placeholder="Short description"
                             style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' as const }}
                         />
                     </label>
@@ -192,17 +167,16 @@ export default function AgentEditModal({
                             value={systemPrompt}
                             onChange={e => setSystemPrompt(e.target.value)}
                             placeholder="Instructions for this agent… (leave blank to use none)"
-                            rows={8}
+                            rows={6}
                             style={{
                                 ...inputStyle,
                                 width: '100%', boxSizing: 'border-box' as const,
                                 resize: 'vertical' as const, lineHeight: 1.5,
-                                fontFamily: '"JetBrains Mono", monospace', fontSize: '12px',
                             }}
                         />
                     </label>
 
-                    {/* Launch Flags */}
+                    {/* Launch Options */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         <span style={labelStyle}>Launch Options</span>
 
@@ -252,6 +226,47 @@ export default function AgentEditModal({
                                     background: '#fff', transition: 'left 0.15s',
                                 }} />
                             </button>
+                        </div>
+
+                        {/* Verbose */}
+                        <div
+                            style={flagRowStyle}
+                            onClick={() => setFlag('verbose', !flags.verbose)}
+                        >
+                            <div>
+                                <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Verbose</div>
+                                <div style={{ fontSize: '10px', color: color.textFaint }}>--verbose — detailed claude output</div>
+                            </div>
+                            <button
+                                type="button"
+                                style={toggleStyle(!!flags.verbose)}
+                                onClick={e => e.stopPropagation()}
+                                title="Toggle --verbose"
+                            >
+                                <span style={{
+                                    position: 'absolute', top: '3px',
+                                    left: flags.verbose ? '17px' : '3px',
+                                    width: '12px', height: '12px', borderRadius: '50%',
+                                    background: '#fff', transition: 'left 0.15s',
+                                }} />
+                            </button>
+                        </div>
+
+                        {/* Max Turns */}
+                        <div style={{ ...flagRowStyle, gap: '12px' }}>
+                            <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Max Turns</div>
+                                <div style={{ fontSize: '10px', color: color.textFaint }}>--max-turns N — limit conversation turns</div>
+                            </div>
+                            <input
+                                type="number"
+                                min={1}
+                                max={500}
+                                placeholder="∞"
+                                value={flags.max_turns ?? ''}
+                                onChange={e => setFlag('max_turns', e.target.value ? parseInt(e.target.value, 10) : null)}
+                                style={{ ...inputStyle, width: '72px', textAlign: 'center', padding: '4px 8px' }}
+                            />
                         </div>
                     </div>
 

@@ -127,7 +127,7 @@ export function useAgents(projectId: number | null) {
         mutationFn: async ({
             agentId,
             ...fields
-        }: { agentId: number } & Partial<Pick<ProjectAgent, 'name' | 'model' | 'system_prompt'> & { flags: AgentFlags }>) => {
+        }: { agentId: number } & Partial<Pick<ProjectAgent, 'name' | 'description' | 'agent_type' | 'model' | 'system_prompt'> & { flags: AgentFlags }>) => {
             const res = await fetch(`/api/agents/${agentId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
