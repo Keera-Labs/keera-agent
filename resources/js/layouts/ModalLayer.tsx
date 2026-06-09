@@ -57,6 +57,8 @@ export function ModalLayer() {
         setEditingAgent,
         // Agent hook for mutations
         agentHook,
+        // Global settings
+        maxAgentsPerProject,
         // Create task
         showCreateTask,
         setShowCreateTask,
@@ -159,6 +161,8 @@ export function ModalLayer() {
                 <AddAgentModal
                     projectId={activeProject.id}
                     templates={agentTemplates}
+                    agentCount={agentHook.agents.length}
+                    maxAgents={maxAgentsPerProject}
                     onClose={() => setShowAddAgent(false)}
                     onCreated={(agent: ProjectAgent) => { agentHook.addAgent(agent); setShowAddAgent(false) }}
                 />

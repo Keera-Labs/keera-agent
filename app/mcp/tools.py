@@ -397,6 +397,8 @@ class SpawnAgentTool(Tool):
     async def handle(self, arguments: dict) -> Response:
         import asyncio
         from app.actions.agent_create_action import AgentCreateAction
+        from app.controllers.global_settings_controller import read_global_settings
+        from app.models.Agent import Agent as _Agent
         from app.requests.agent_requests import AgentStoreRequest
         from app.terminal.connection_manager import ConnectionManager
         from fastapi_startkit.application import app as _app
@@ -409,18 +411,30 @@ class SpawnAgentTool(Tool):
         if not name:
             return Response.text("Error: name is required")
 
-        agent = await AgentCreateAction(
-            project_id=project.id,
-            request=AgentStoreRequest(
-                name=name,
-                agent_type=arguments.get("agent_type", "custom"),
-                model=arguments.get("model") or "claude-sonnet-4-6",
-                description=f"{name} agent",
-                system_prompt=(arguments.get("system_prompt") or "").strip() or None,
-                task_id=arguments.get("task_id"),
-                orchestrator_id=arguments.get("from_agent_id"),
-            ),
-        ).execute()
+        # Enforce per-project agent limit before creating
+        settings = read_global_settings()
+        limit = int(settings.get("max_agents_per_project", 10))
+        count = await _Agent.where("project_id", project.id).where_null("deleted_at").count()
+        if count >= limit:
+            return Response.text(
+                f"Error: agent limit ({limit}) reached for project '{project.name}'. Delete an agent first."
+            )
+
+        try:
+            agent = await AgentCreateAction(
+                project_id=project.id,
+                request=AgentStoreRequest(
+                    name=name,
+                    agent_type=arguments.get("agent_type", "custom"),
+                    model=arguments.get("model") or "claude-sonnet-4-6",
+                    description=f"{name} agent",
+                    system_prompt=(arguments.get("system_prompt") or "").strip() or None,
+                    task_id=arguments.get("task_id"),
+                    orchestrator_id=arguments.get("from_agent_id"),
+                ),
+            ).execute()
+        except ValueError as e:
+            return Response.text(f"Error: {e}")
 
         cwd = os.path.expanduser(project.path)
 

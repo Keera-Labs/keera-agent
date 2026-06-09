@@ -15,11 +15,43 @@ export function GlobalSettingsModal({
     initialTemplates: AgentTemplate[]
     onTemplatesChange: (templates: AgentTemplate[]) => void
 }) {
-    type SettingsTab = 'templates' | 'permissions'
-    const [tab, setTab] = useState<SettingsTab>('templates')
+    type SettingsTab = 'general' | 'templates' | 'permissions'
+    const [tab, setTab] = useState<SettingsTab>('general')
     const [templates, setTemplates] = useState<AgentTemplate[]>(initialTemplates)
 
-    // Template editor
+    // ── General settings ──────────────────────────────────────────────────────
+    const [maxAgents, setMaxAgents] = useState<number>(10)
+    const [generalSaving, setGeneralSaving] = useState(false)
+    const [generalSaved, setGeneralSaved] = useState(false)
+    const [generalError, setGeneralError] = useState('')
+
+    useEffect(() => {
+        fetch('/api/global-settings')
+            .then(r => r.json())
+            .then(d => { setMaxAgents(d.max_agents_per_project ?? 10) })
+            .catch(() => {})
+    }, [])
+
+    async function saveGeneralSettings() {
+        setGeneralSaving(true)
+        setGeneralError('')
+        setGeneralSaved(false)
+        try {
+            const res = await fetch('/api/global-settings', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ max_agents_per_project: maxAgents }),
+            })
+            const d = await res.json()
+            if (!res.ok) { setGeneralError(d.error ?? 'Save failed'); return }
+            setMaxAgents(d.max_agents_per_project ?? 10)
+            setGeneralSaved(true)
+            setTimeout(() => setGeneralSaved(false), 2000)
+        } catch { setGeneralError('Network error') }
+        finally { setGeneralSaving(false) }
+    }
+
+    // ── Template editor ───────────────────────────────────────────────────────
     const [selected, setSelected] = useState<AgentTemplate | null>(null)
     const [isNew, setIsNew] = useState(false)
     const [tplName, setTplName] = useState('')
@@ -31,7 +63,7 @@ export function GlobalSettingsModal({
     const [formError, setFormError] = useState('')
     const [saving, setSaving] = useState(false)
 
-    // Permissions
+    // ── Permissions ───────────────────────────────────────────────────────────
     const [permAllow, setPermAllow] = useState<string[]>([])
     const [permDeny, setPermDeny] = useState<string[]>([])
     const [permError, setPermError] = useState('')
@@ -125,11 +157,47 @@ export function GlobalSettingsModal({
                 <div style={{ display: 'flex', alignItems: 'center', padding: '14px 20px', borderBottom: `1px solid ${color.border}`, gap: '12px', flexShrink: 0 }}>
                     <span style={{ color: color.textPrimary, fontSize: '14px', fontWeight: 600 }}>Settings</span>
                     <div style={{ display: 'flex', gap: '4px', flex: 1 }}>
+                        <button style={tabBtnStyle('general')} onClick={() => setTab('general')}>General</button>
                         <button style={tabBtnStyle('templates')} onClick={() => setTab('templates')}>Templates</button>
                         <button style={tabBtnStyle('permissions')} onClick={() => setTab('permissions')}>Default Permissions</button>
                     </div>
                     <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: color.textFaint, cursor: 'pointer', fontSize: '18px', lineHeight: 1, padding: '0 4px' }}>×</button>
                 </div>
+
+                {/* ── General tab ── */}
+                {tab === 'general' && (
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', maxWidth: '400px' }}>
+                            <p style={{ margin: 0, color: color.textMuted, fontSize: '11px' }}>
+                                Global settings that apply across all projects.
+                            </p>
+                            {generalError && <span style={{ color: color.danger, fontSize: '12px' }}>{generalError}</span>}
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <span style={labelStyle}>Max agents per project</span>
+                                <input
+                                    type="number"
+                                    min={1}
+                                    max={100}
+                                    value={maxAgents}
+                                    onChange={e => setMaxAgents(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                                    style={{ ...inputStyle, width: '120px' }}
+                                />
+                                <span style={{ color: color.textFaint, fontSize: '10px', lineHeight: 1.5 }}>
+                                    Maximum number of agents (excluding deleted) allowed in a single project. Default: 10.
+                                </span>
+                            </label>
+                            <div>
+                                <button
+                                    onClick={saveGeneralSettings}
+                                    disabled={generalSaving}
+                                    style={{ ...submitBtnStyle, opacity: generalSaving ? 0.6 : 1, minWidth: '120px' }}
+                                >
+                                    {generalSaving ? 'Saving…' : generalSaved ? 'Saved ✓' : 'Save Settings'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* ── Templates tab ── */}
                 {tab === 'templates' && (

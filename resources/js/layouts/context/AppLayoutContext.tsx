@@ -95,6 +95,9 @@ export interface AppLayoutContextValue {
     // ── Agent templates ───────────────────────────────────────────────────────
     agentTemplates: AgentTemplate[]
     setAgentTemplates: (templates: AgentTemplate[]) => void
+
+    // ── Global settings ───────────────────────────────────────────────────────
+    maxAgentsPerProject: number
 }
 
 // ─── Context + dumb provider ──────────────────────────────────────────────────
@@ -203,6 +206,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     const [newMessageIds, setNewMessageIds] = useState<number[]>([])
     const [agentTemplates, setAgentTemplates] = useState<AgentTemplate[]>([])
     const [showAddAgent, setShowAddAgent] = useState(false)
+    const [maxAgentsPerProject, setMaxAgentsPerProject] = useState<number>(10)
     const [activeAgentId, setActiveAgentId] = useState<number | null>(null)
     const [showProjectSearch, setShowProjectSearch] = useState(false)
     const [editingAgent, setEditingAgent] = useState<ProjectAgent | null>(null)
@@ -268,6 +272,14 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         fetch('/api/agent-templates')
             .then(r => r.json())
             .then(setAgentTemplates)
+            .catch(() => {})
+    }, [])
+
+    // Fetch global settings once on mount
+    useEffect(() => {
+        fetch('/api/global-settings')
+            .then(r => r.json())
+            .then(d => { setMaxAgentsPerProject(d.max_agents_per_project ?? 10) })
             .catch(() => {})
     }, [])
 
@@ -601,6 +613,8 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         agentHook,
         // Agent templates
         agentTemplates, setAgentTemplates,
+        // Global settings
+        maxAgentsPerProject,
     }
 
     return (
