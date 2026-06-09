@@ -219,6 +219,7 @@ async def store(request: Request):
         "permissions_deny": _json.dumps(_dp.get("deny", [])),
         "status": "idle",
         "has_session": False,
+        "use_worktree": False,
     })
 
     project_data = {
