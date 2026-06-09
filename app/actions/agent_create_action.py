@@ -66,6 +66,7 @@ class AgentCreateAction:
             "flags": _json.dumps(flags),
             "dangerously_skip_permissions": dsp,
             "plan_mode": bool(plan_mode),
+            "use_worktree": req.agent_type != "pm",
             "status": "idle",
             "has_session": False,
             "created_at": now,
