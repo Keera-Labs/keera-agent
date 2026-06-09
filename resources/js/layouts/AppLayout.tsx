@@ -89,7 +89,7 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
 
             {/* ═══════════════════════════════════════════════════════════
                 FULL-WIDTH TOP BAR
-                Logo (220px) | Nav tabs (flex-1) | Search + icons
+                Logo (220px) | Nav tabs (flex-1)
             ════════════════════════════════════════════════════════════ */}
             <header className="shrink-0 bg-white flex items-stretch" style={{ height: '48px', borderBottom: `1px solid ${color.stroke}`, zIndex: 20 }}>
 
@@ -144,19 +144,8 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
                     )}
                 </div>
 
-                {/* Right: search + icons */}
+                {/* Right: icons */}
                 <div className="flex items-center gap-1 pr-3">
-                    {/* Search bar */}
-                    <div className="flex items-center gap-1.5 rounded-md px-2.5 py-1 mr-1" style={{ background: color.bgCanvas, border: `1px solid ${color.stroke}` }}>
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill={color.textFaint} className="shrink-0">
-                            <path d="M10.68 11.74a6 6 0 01-7.922-8.982 6 6 0 018.982 7.922l3.04 3.04a.749.749 0 11-1.06 1.06l-3.04-3.04zM11.5 7a4.499 4.499 0 11-8.997 0A4.499 4.499 0 0111.5 7z"/>
-                        </svg>
-                        <input
-                            placeholder="Search..."
-                            className="bg-transparent border-none outline-none text-[12px] w-28"
-                            style={{ color: color.textPrimary }}
-                        />
-                    </div>
                     {/* Avatar */}
                     <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white cursor-pointer ml-1 shrink-0" style={{ background: '#7c6af7' }}>
                         B
