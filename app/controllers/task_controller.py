@@ -3,8 +3,10 @@ import json
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from fastapi_startkit.jsonapi import JsonResource
 
 from app.models.Task import Task
+from requests.task_request import TaskRequest
 
 _TERMINAL_STATUSES = {"completed", "cancelled"}
 
@@ -36,19 +38,22 @@ def _serialize(t: Task) -> dict:
     }
 
 
-async def index(request: Request, project_id: int):
+async def index(project_id: int):
     cutoff = (datetime.datetime.now() - datetime.timedelta(days=7)).isoformat()
 
     tasks = await (
         Task
         .where("project_id", project_id)
-        .where(lambda q: q.where_not_in("status", ["completed", "cancelled"]).or_where("completed_at", ">=", cutoff))
-        .get()
-    )
-    return JSONResponse([_serialize(t) for t in tasks])
+        .where(lambda q: (
+            q.where_not_in("tasks.status", ["completed", "cancelled"])
+            .or_where("tasks.completed_at", ">=", cutoff)
+            .or_where_raw("tasks.completed_at IS NULL")
+        )).get())
+
+    return JsonResource.collection(tasks)
 
 
-async def store(request: Request, project_id: int):
+async def store(request: TaskRequest, project_id: int):
     body = await request.json()
     title = (body.get("title") or "").strip()
     if not title:
