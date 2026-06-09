@@ -214,6 +214,14 @@ class TestAgentTypeEnforcement(HttpTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(_attrs(response)["use_worktree"])
 
+    async def test_default_pm_agent_on_project_creation_has_use_worktree_false(self):
+        # asyncSetUp already called POST /api/projects — PM agent is in the DB
+        response = await self.get(f"/api/projects/{self.project_id}/agents")
+        self.assertEqual(response.status_code, 200)
+        agents = response.json()["data"]
+        pm_agent = next(a for a in agents if a["attributes"]["agent_type"] == "pm")
+        self.assertFalse(pm_agent["attributes"]["use_worktree"])
+
 
 class TestAgentLimit(HttpTestCase):
     """Tests for max_agents_per_project enforcement."""
