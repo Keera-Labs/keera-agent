@@ -29,4 +29,5 @@ export interface Task {
     validation_steps: string[]
     status: 'pending' | 'in_progress' | 'completed' | 'cancelled'
     created_at: string
+    completed_at: string | null
 }
