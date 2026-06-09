@@ -17,11 +17,13 @@ function findBuiltinForType(templates: AgentTemplate[], agentType: string): Agen
     )
 }
 
-export function AddAgentModal({ projectId, onClose, onCreated, templates }: {
+export function AddAgentModal({ projectId, onClose, onCreated, templates, agentCount, maxAgents }: {
     projectId: number
     onClose: () => void
     onCreated: (a: ProjectAgent) => void
     templates: AgentTemplate[]
+    agentCount?: number
+    maxAgents?: number
 }) {
     const [name, setName] = useState('')
     const [agentType, setAgentType] = useState<string>('software_engineer')
@@ -32,6 +34,8 @@ export function AddAgentModal({ projectId, onClose, onCreated, templates }: {
     const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null)
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
+
+    const isAtLimit = agentCount !== undefined && maxAgents !== undefined && agentCount >= maxAgents
 
     // If templates weren't in cache at mount time, populate defaults once they arrive
     const templateInitialized = useRef(templates.length > 0)
@@ -121,6 +125,11 @@ export function AddAgentModal({ projectId, onClose, onCreated, templates }: {
             }}>
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                     <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>Add Agent</h2>
+                    {isAtLimit && (
+                        <div style={{ color: color.danger, fontSize: '12px', padding: '8px 12px', background: `${color.danger}14`, borderRadius: '6px', border: `1px solid ${color.danger}40` }}>
+                            Agent limit reached ({agentCount}/{maxAgents}). Delete an existing agent before adding a new one.
+                        </div>
+                    )}
                     {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
 
                     {/* Template selector */}
@@ -322,7 +331,7 @@ export function AddAgentModal({ projectId, onClose, onCreated, templates }: {
 
                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                         <button type="button" onClick={onClose} style={cancelBtnStyle}>Cancel</button>
-                        <button type="submit" disabled={loading} style={submitBtnStyle}>
+                        <button type="submit" disabled={loading || isAtLimit} style={{ ...submitBtnStyle, opacity: (loading || isAtLimit) ? 0.5 : 1, cursor: isAtLimit ? 'not-allowed' : 'pointer' }}>
                             {loading ? 'Adding…' : 'Add Agent'}
                         </button>
                     </div>

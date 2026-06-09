@@ -57,10 +57,13 @@ async def index(request: Request, project_id: int):
 async def store(request: Request, body: AgentStoreRequest, project_id: int):
     from app.actions.agent_create_action import AgentCreateAction
 
-    agent = await AgentCreateAction(project_id=project_id, request=body).execute()
+    try:
+        agent = await AgentCreateAction(project_id=project_id, request=body).execute()
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=422)
 
     # If this is the first agent in the project, make it the default
-    count = await Agent.where("project_id", project_id).count()
+    count = await Agent.where("project_id", project_id).where_null("deleted_at").count()
     if count == 1:
         await _set_project_default(project_id, agent.id)
 
@@ -172,7 +175,10 @@ async def spawn(request: Request, project_id: int):
     except ValidationError as e:
         return JSONResponse({"error": e.errors()}, status_code=422)
 
-    agent = await AgentCreateAction(project_id=project_id, request=inp).execute()
+    try:
+        agent = await AgentCreateAction(project_id=project_id, request=inp).execute()
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=422)
     message = (inp.message or "").strip() or None
 
     # Push agent_created to ALL active connections for this project
