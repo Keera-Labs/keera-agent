@@ -1,5 +1,6 @@
 import json
 import os
+import tempfile
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -25,6 +26,23 @@ _DEFAULT_PERMS_PATH = os.path.join(
 )
 
 
+def _atomic_write_json(path: str, data: dict) -> None:
+    """Write *data* to *path* atomically using a temp file + os.replace."""
+    dir_name = os.path.dirname(path)
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=dir_name)
+    try:
+        with os.fdopen(tmp_fd, "w") as f:
+            json.dump(data, f, indent=2)
+            f.write("\n")
+        os.replace(tmp_path, path)  # atomic on POSIX
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
 def _read_project_settings(project_path: str) -> dict:
     settings_path = os.path.join(os.path.expanduser(project_path), ".claude", "settings.json")
     if os.path.exists(settings_path):
@@ -40,11 +58,7 @@ def _write_project_settings(project_path: str, settings: dict) -> None:
     expanded = os.path.expanduser(project_path)
     settings_path = os.path.join(expanded, ".claude", "settings.json")
     os.makedirs(os.path.dirname(settings_path), exist_ok=True)
-    if os.path.exists(settings_path):
-        shutil.copy2(settings_path, settings_path + ".bak")
-    with open(settings_path, "w") as f:
-        json.dump(settings, f, indent=2)
-        f.write("\n")
+    _atomic_write_json(settings_path, settings)
 
 
 def read_default_permissions() -> dict:
@@ -59,9 +73,7 @@ def read_default_permissions() -> dict:
 
 def write_default_permissions(perms: dict) -> None:
     os.makedirs(os.path.dirname(_DEFAULT_PERMS_PATH), exist_ok=True)
-    with open(_DEFAULT_PERMS_PATH, "w") as f:
-        json.dump(perms, f, indent=2)
-        f.write("\n")
+    _atomic_write_json(_DEFAULT_PERMS_PATH, perms)
 
 
 # ── Project permissions ────────────────────────────────────────────────────────
