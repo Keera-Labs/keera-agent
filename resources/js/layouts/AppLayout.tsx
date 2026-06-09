@@ -89,7 +89,7 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
 
             {/* ═══════════════════════════════════════════════════════════
                 FULL-WIDTH TOP BAR
-                Logo (220px) | Nav tabs (flex-1) | Search + icons
+                Logo (220px) | Nav tabs (flex-1)
             ════════════════════════════════════════════════════════════ */}
             <header className="shrink-0 bg-white flex items-stretch" style={{ height: '48px', borderBottom: `1px solid ${color.stroke}`, zIndex: 20 }}>
 
