@@ -39,8 +39,6 @@ def _serialize(t: Task) -> dict:
 async def index(request: Request, project_id: int):
     cutoff = (datetime.datetime.now() - datetime.timedelta(days=7)).isoformat()
 
-    # WHERE project_id = ?
-    #   AND (status NOT IN ('completed','cancelled') OR completed_at >= ?)
     tasks = await (
         Task
         .where("project_id", project_id)
