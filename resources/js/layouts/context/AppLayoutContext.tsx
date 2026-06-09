@@ -183,9 +183,19 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     const projectName = props.project
     const agentIdFromUrl = props.agent_id
 
-    // ── Data from Inertia server-side props ───────────────────────────────────
-    const workspaces = props.workspaces ?? []
-    const allProjects = props.projects ?? []
+    // ── Data — seeded from Inertia props (fast initial paint), refreshed via
+    //    targeted fetch after mutations (no router.reload, no PTY disruption)
+    const [workspaces, setWorkspaces] = useState<Workspace[]>(() => props.workspaces ?? [])
+    const [allProjects, setAllProjects] = useState<Project[]>(() => props.projects ?? [])
+
+    async function refreshData() {
+        const [wsRes, prRes] = await Promise.all([
+            fetch('/api/workspaces').then(r => r.json()),
+            fetch('/api/projects').then(r => r.json()),
+        ])
+        setWorkspaces(wsRes)
+        setAllProjects(prRes)
+    }
 
     // ── Modal / UI state ──────────────────────────────────────────────────────
     const [showWorkspaceModal, setShowWorkspaceModal] = useState(false)
@@ -522,10 +532,11 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         }
     }
 
-    function handleWorkspaceCreated() { router.reload({ only: ['workspaces', 'projects'] }) }
-    function handleWorkspaceDeleted() { router.reload({ only: ['workspaces', 'projects'] }) }
+    async function handleWorkspaceCreated() { await refreshData() }
+    async function handleWorkspaceDeleted() { await refreshData() }
 
     function handleProjectCreated(project: Project) {
+        refreshData()
         router.visit(`/${project.slug}`)
     }
 
@@ -539,11 +550,11 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ workspace_id: newWorkspaceId }),
         })
-        router.reload({ only: ['workspaces', 'projects'] })
+        await refreshData()
     }
 
-    function handleProjectUpdated(_updated: Project) {
-        router.reload({ only: ['workspaces', 'projects'] })
+    async function handleProjectUpdated(_updated: Project) {
+        await refreshData()
     }
 
     function handleProjectDeleted(projectId: number) {
@@ -560,7 +571,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
             agentContainerRefs.current.delete(agent.id)
         }
         fetch(`/api/projects/${projectId}`, { method: 'DELETE' })
-            .then(() => router.reload({ only: ['workspaces', 'projects'] }))
+            .then(() => refreshData())
         if (project && projectName === project.slug) router.visit('/')
     }
 

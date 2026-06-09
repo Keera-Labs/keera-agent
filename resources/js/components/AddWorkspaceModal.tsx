@@ -12,17 +12,14 @@ export default function AddWorkspaceModal({ onClose, onCreated }: { onClose: () 
     const [description, setDescription] = useState('')
     const [error, setError] = useState('')
 
-    async function handleSubmit(e: React.FormEvent) {
+    function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
         setError('')
         if (!name.trim()) { setError('Name is required'); return }
-        try {
-            await create({ name: name.trim(), description: description.trim() || undefined })
-            onCreated()
-            onClose()
-        } catch {
-            setError('Network error')
-        }
+        create(
+            { name: name.trim(), description: description.trim() || undefined },
+            () => { onCreated(); onClose() },
+        )
     }
 
     return (

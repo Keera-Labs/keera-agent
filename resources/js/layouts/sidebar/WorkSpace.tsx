@@ -12,7 +12,7 @@ export function WorkspacePicker({
     onSelect: (id: number | null) => void
     onCreateWorkspace: () => void
 }) {
-    const { workspaces } = useAppLayout()
+    const { workspaces, handleWorkspaceDeleted } = useAppLayout()
     const { destroy } = useWorkspace()
     const [open, setOpen] = useState(false)
     const ref = useRef<HTMLDivElement>(null)
@@ -118,7 +118,7 @@ export function WorkspacePicker({
                             <button
                                 onClick={e => {
                                     e.stopPropagation()
-                                    destroy(w.id)
+                                    destroy(w.id, handleWorkspaceDeleted)
                                 }}
                                 title="Delete workspace"
                                 style={{
