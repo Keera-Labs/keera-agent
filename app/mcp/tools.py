@@ -513,6 +513,44 @@ class GetOrchestratedAgentsTool(Tool):
         return Response.text(summary + json.dumps(rows, indent=2))
 
 
+# ── delete_agent ──────────────────────────────────────────────────────────────
+
+class DeleteAgentInput(BaseModel):
+    agent_id: int = Field(description="ID of the agent to delete.")
+
+
+class DeleteAgentTool(Tool):
+    name = "delete_agent"
+    description = (
+        "Soft-delete an agent by ID. "
+        "The agent is marked as deleted (deleted_at is set) and will no longer appear in agent lists. "
+        "Use this to remove agents that are no longer needed."
+    )
+
+    def schema(self):
+        return DeleteAgentInput
+
+    async def handle(self, arguments: dict) -> Response:
+        import datetime
+        from app.models.Agent import Agent
+
+        agent_id = arguments.get("agent_id")
+        if not agent_id:
+            return Response.text("Error: agent_id is required")
+
+        agent = await Agent.find(agent_id)
+        if not agent:
+            return Response.text(f"Error: no agent found with ID {agent_id}")
+
+        if getattr(agent, "deleted_at", None):
+            return Response.text(f"Error: agent {agent_id} has already been deleted")
+
+        agent.deleted_at = datetime.datetime.utcnow()
+        await agent.save()
+
+        return Response.text(f"Agent '{agent.name}' (ID: {agent_id}) has been deleted.")
+
+
 # ── tool list ─────────────────────────────────────────────────────────────────
 
 KEERA_TOOLS = [
@@ -527,4 +565,5 @@ KEERA_TOOLS = [
     ListAgentsTool,
     SpawnAgentTool,
     GetOrchestratedAgentsTool,
+    DeleteAgentTool,
 ]
