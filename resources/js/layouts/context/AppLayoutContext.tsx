@@ -210,7 +210,8 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
 
     // Derived directly from Inertia props — no separate fetch needed
     const maxAgentsPerProject = props.global_settings?.max_agents_per_project ?? 10
-    const [activeAgentId, setActiveAgentId] = useState<number | null>(null)
+    // Raw selection — may refer to an agent from a previous project after switching.
+    const [_activeAgentId, setActiveAgentId] = useState<number | null>(null)
     const [showProjectSearch, setShowProjectSearch] = useState(false)
     const [editingAgent, setEditingAgent] = useState<ProjectAgent | null>(null)
 
@@ -228,6 +229,13 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     const agentHook = useAgents(activeProject?.id ?? null)
     const tasks = taskHook.tasks
     const projectAgents = agentHook.agents
+
+    // Null out the selected agent immediately (same render) if it doesn't belong
+    // to the current project. This avoids the one-frame blank flash that the
+    // async useEffect reset caused on project switch.
+    const activeAgentId = _activeAgentId !== null && projectAgents.some(a => a.id === _activeAgentId)
+        ? _activeAgentId
+        : null
 
     const activeAgentFromUrl = agentIdFromUrl
         ? projectAgents.find(a => a.id === agentIdFromUrl) ?? null
@@ -251,12 +259,6 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
             setActiveAgentId(activeAgentFromUrl.id)
         }
     }, [activeAgentFromUrl?.id])
-
-    // Reset active agent when switching projects — but do NOT close running sessions.
-    // Agent PTYs should stay alive in the background when switching projects.
-    useEffect(() => {
-        setActiveAgentId(null)
-    }, [activeProject?.id])
 
     // Cmd+P → project search
     useEffect(() => {
@@ -328,8 +330,12 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         if (!container) return
 
         if (sessions.current.has(activeProject.id)) {
-            const { fitAddon, term } = sessions.current.get(activeProject.id)!
-            requestAnimationFrame(() => { fitAddon.fit(); term.focus() })
+            // Don't call fitAddon.fit() here — the ResizeObserver already fires
+            // when the container flips from display:none → display:block and
+            // handles the refit. Calling it here too causes a double-resize that
+            // makes xterm scroll to the top and flash blank.
+            const { term } = sessions.current.get(activeProject.id)!
+            requestAnimationFrame(() => term.focus())
             return
         }
 
