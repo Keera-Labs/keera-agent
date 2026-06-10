@@ -4,5 +4,4 @@ ALLOWED_AGENT_TYPES = {
     "software_engineer_frontend",
     "reviewer",
     "qa",
-    "custom",
 }

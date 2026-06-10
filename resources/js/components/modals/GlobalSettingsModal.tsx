@@ -53,7 +53,7 @@ export function GlobalSettingsModal({
     const [isNew, setIsNew] = useState(false)
     const [tplName, setTplName] = useState('')
     const [tplDesc, setTplDesc] = useState('')
-    const [tplType, setTplType] = useState('custom')
+    const [tplType, setTplType] = useState('software_engineer')
     const [tplModel, setTplModel] = useState('claude-sonnet-4-6')
     const [tplPrompt, setTplPrompt] = useState('')
     const [tplFlags, setTplFlags] = useState<AgentFlags>({})
@@ -86,7 +86,7 @@ export function GlobalSettingsModal({
 
     function startNew() {
         setSelected(null); setIsNew(true)
-        setTplName(''); setTplDesc(''); setTplType('custom')
+        setTplName(''); setTplDesc(''); setTplType('software_engineer')
         setTplModel('claude-sonnet-4-6'); setTplPrompt(''); setTplFlags({})
         setFormError('')
     }

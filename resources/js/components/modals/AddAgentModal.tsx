@@ -61,7 +61,7 @@ export function AddAgentModal({ projectId, onClose, onCreated, templates, agentC
     function applyTemplate(tpl: AgentTemplate | null) {
         if (!tpl) {
             setSelectedTemplateId(null)
-            setAgentType('custom')
+            setAgentType('software_engineer')
             setDescription('')
             setSystemPrompt('')
             setModel('claude-sonnet-4-6')
@@ -141,7 +141,7 @@ export function AddAgentModal({ projectId, onClose, onCreated, templates, agentC
                                     key="blank"
                                     type="button"
                                     onClick={() => applyTemplate(null)}
-                                    style={templateCardStyle(selectedTemplateId === null && agentType === 'custom' && !systemPrompt)}
+                                    style={templateCardStyle(selectedTemplateId === null && !systemPrompt)}
                                 >
                                     <div style={{ fontSize: '11px', fontWeight: 600, color: color.textSecondary }}>Blank</div>
                                     <div style={{ fontSize: '10px', color: color.textFaint, marginTop: '2px' }}>Start from scratch</div>

@@ -14,15 +14,12 @@ _SYSTEM_PROMPTS_FALLBACK: dict[str, str] = {
 
 
 def default_system_prompt(agent_type: str) -> str | None:
-    """Return the default system prompt for a given agent type, or None for custom.
+    """Return the default system prompt for a given agent type.
 
     Loads from ``app/prompts/<agent_type>.html`` via Jinja2.  Falls back to
     the in-process ``_SYSTEM_PROMPTS_FALLBACK`` dict if the file is missing.
-    Returns ``None`` for the ``custom`` type (no default prompt).
+    Returns ``None`` for unknown types that have no prompt defined.
     """
-    if agent_type == "custom":
-        return None
-
     template_path = _PROMPTS_DIR / f"{agent_type}.html"
     if template_path.exists():
         try:
