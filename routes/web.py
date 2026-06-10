@@ -19,6 +19,7 @@ from app.controllers import settings_controller
 from app.controllers import broadcast_poc_controller
 from app.controllers import heartbeat_controller
 from app.controllers import global_settings_controller
+from app.controllers import ai_controller
 from app.mcp.server import KeeraServer
 
 router = Router()
@@ -101,6 +102,9 @@ router.post("/api/heartbeat/stop", heartbeat_controller.stop)
 
 # Settings page — before wildcard
 router.get("/settings", settings_controller.settings)
+
+# AI chat route — before wildcard
+router.post('/api/ai/chat', ai_controller.chat)
 
 # Broadcasting POC route — before wildcard
 router.post('/api/broadcast/fire', broadcast_poc_controller.fire)
