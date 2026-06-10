@@ -49,4 +49,8 @@ async def tasks_page(request: Request, project: str):
     if proj:
         raw = await Task.where("project_id", proj.id).get()
         tasks = [_serialize(t) for t in raw]
-    return Inertia.render("Tasks", {"project": project, "tasks": tasks})
+    return Inertia.render("Tasks", {
+        "project": project,
+        "project_id": proj.id if proj else None,
+        "tasks": tasks,
+    })

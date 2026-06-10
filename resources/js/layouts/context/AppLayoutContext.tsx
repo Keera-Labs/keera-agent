@@ -41,12 +41,8 @@ export interface AppLayoutContextValue {
     setShowAddAgent: (v: boolean) => void
     editingAgent: ProjectAgent | null
     setEditingAgent: (a: ProjectAgent | null) => void
-    showCreateTask: boolean
-    setShowCreateTask: (v: boolean) => void
     showProjectSearch: boolean
     setShowProjectSearch: (v: boolean) => void
-    selectedTask: Task | null
-    setSelectedTask: (t: Task | null) => void
 
     // ── View state ────────────────────────────────────────────────────────────
     projectView: ProjectView
@@ -79,11 +75,6 @@ export interface AppLayoutContextValue {
     handleProjectUpdated: (updated: Project) => void
     handleWorkspaceCreated: () => void
     handleWorkspaceDeleted: () => void
-
-    // ── Task handlers ─────────────────────────────────────────────────────────
-    handleAddTask: (title: string, body: string, assignees: string[]) => Promise<Task | null>
-    handleUpdateStatus: (task: Task, status: Task['status']) => void
-    handleDeleteTask: (task: Task) => void
 
     // ── Agent hook (mutations used by ModalLayer and AgentsView) ─────────────
     agentHook: ReturnType<typeof useAgents>
@@ -213,9 +204,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
 
     // ── View state ────────────────────────────────────────────────────────────
     const [projectView, setProjectView] = useState<ProjectView>('agents')
-    const [showCreateTask, setShowCreateTask] = useState(false)
     const [isDraggingOver, setIsDraggingOver] = useState(false)
-    const [selectedTask, setSelectedTask] = useState<Task | null>(null)
     const [agentTemplates, setAgentTemplates] = useState<AgentTemplate[]>([])
     const [showAddAgent, setShowAddAgent] = useState(false)
 
@@ -571,20 +560,6 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         if (project && projectName === project.slug) router.visit('/')
     }
 
-    async function handleAddTask(title: string, body: string, assignees: string[]): Promise<Task | null> {
-        try {
-            return await taskHook.create.mutateAsync({ title, body, assignees })
-        } catch { return null }
-    }
-
-    function handleUpdateStatus(task: Task, status: Task['status']) {
-        taskHook.updateStatus.mutate({ taskId: task.id, status })
-    }
-
-    function handleDeleteTask(task: Task) {
-        taskHook.remove.mutate(task.id)
-    }
-
     // ── Context value ─────────────────────────────────────────────────────────
 
     const value: AppLayoutContextValue = {
@@ -601,9 +576,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         deletingWorkspace, setDeletingWorkspace,
         showAddAgent, setShowAddAgent,
         editingAgent, setEditingAgent,
-        showCreateTask, setShowCreateTask,
         showProjectSearch, setShowProjectSearch,
-        selectedTask, setSelectedTask,
         // View state
         projectView, setProjectView,
         activeAgentId, setActiveAgentId,
@@ -616,8 +589,6 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         openAddProject, handleMoveProject, handleProjectCreated,
         handleProjectDeleted, handleProjectUpdated,
         handleWorkspaceCreated, handleWorkspaceDeleted,
-        // Task handlers
-        handleAddTask, handleUpdateStatus, handleDeleteTask,
         // Agent hook
         agentHook,
         // Agent templates

@@ -5,4 +5,6 @@ export default function Settings() {
     return <SettingsView />
 }
 
-Settings.layout = (page: React.ReactNode) => <AppLayout>{page}</AppLayout>
+// Array form keeps AppLayout the same persistent instance as the project pages,
+// so terminal sessions in AppLayout refs survive navigation to/from settings.
+Settings.layout = [AppLayout]
