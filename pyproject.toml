@@ -5,7 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "fastapi-startkit[database,fastapi,sqlite,storage,vite]>0.37.0",
+    "fastapi-startkit[database,fastapi,sqlite,storage,vite,ai]>=0.40.0",
     "playwright>=1.60.0",
 ]
 
