@@ -27,14 +27,12 @@ const AGENT_TYPE_LABELS: Record<string, string> = {
     pm: 'PM',
     software_engineer: 'Software Engineer',
     qa: 'QA',
-    custom: 'Custom',
 }
 
 const AGENT_TYPE_COLORS: Record<string, string> = {
     pm: '#58a6ff',
     software_engineer: '#3fb950',
     qa: '#ffa657',
-    custom: '#bc8cff',
 }
 
 // ─── Shared styles ────────────────────────────────────────────────────────────
@@ -154,7 +152,7 @@ function TemplatesTab() {
     const [isNew, setIsNew] = useState(false)
     const [tplName, setTplName] = useState('')
     const [tplDesc, setTplDesc] = useState('')
-    const [tplType, setTplType] = useState('custom')
+    const [tplType, setTplType] = useState('software_engineer')
     const [tplModel, setTplModel] = useState('claude-sonnet-4-6')
     const [tplPrompt, setTplPrompt] = useState('')
     const [tplFlags, setTplFlags] = useState<AgentFlags>({})
@@ -178,7 +176,7 @@ function TemplatesTab() {
 
     function startNew() {
         setSelected(null); setIsNew(true)
-        setTplName(''); setTplDesc(''); setTplType('custom')
+        setTplName(''); setTplDesc(''); setTplType('software_engineer')
         setTplModel('claude-sonnet-4-6'); setTplPrompt(''); setTplFlags({})
         setFormError('')
     }

@@ -19,13 +19,11 @@ export const AGENT_TYPE_LABELS: Record<string, string> = {
     software_engineer_frontend: 'Frontend Engineer',
     reviewer: 'Reviewer',
     qa: 'QA',
-    custom: 'Custom',
 }
 
 export const AGENT_TYPE_COLORS: Record<string, string> = {
     pm: '#58a6ff',
     software_engineer: '#3fb950',
     qa: '#ffa657',
-    custom: '#bc8cff',
 }
 
