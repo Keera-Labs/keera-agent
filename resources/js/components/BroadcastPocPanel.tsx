@@ -3,20 +3,14 @@ import { useBroadcastChannel } from '@/hooks/useBroadcastChannel'
 
 type Mode = 'poc' | 'ai'
 
-interface AiMessage {
-    prompt: string
-    response: string
-}
-
 export function BroadcastPocPanel() {
     const [mode, setMode] = useState<Mode>('poc')
     const [input, setInput] = useState('')
     const [firing, setFiring] = useState(false)
     const [aiLoading, setAiLoading] = useState(false)
-    const [aiMessages, setAiMessages] = useState<AiMessage[]>([])
 
     const pocMessages = useBroadcastChannel('test-channel')
-    useBroadcastChannel('ai-responses') // subscribe so AI broadcasts arrive even if not displayed
+    const aiMessages = useBroadcastChannel('ai-responses')
 
     async function handlePocFire() {
         if (!input.trim()) return
@@ -34,20 +28,16 @@ export function BroadcastPocPanel() {
     }
 
     async function handleAiChat() {
-        if (!input.trim()) return
-        const userMessage = input.trim()
+        const message = input.trim()
+        if (!message) return
         setInput('')
         setAiLoading(true)
         try {
-            const res = await fetch('/api/ai/chat', {
+            await fetch('/api/ai/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: userMessage }),
+                body: JSON.stringify({ message }),
             })
-            const data = await res.json()
-            if (data.response) {
-                setAiMessages(prev => [...prev, { prompt: userMessage, response: data.response }])
-            }
         } finally {
             setAiLoading(false)
         }
@@ -202,7 +192,7 @@ export function BroadcastPocPanel() {
                                     }}
                                 >
                                     <span style={{ color: '#7c6af7', marginRight: 4 }}>you:</span>
-                                    {msg.prompt}
+                                    {typeof msg.data?.prompt === 'string' ? msg.data.prompt : JSON.stringify(msg.data)}
                                 </div>
                                 {/* AI response */}
                                 <div
@@ -218,7 +208,7 @@ export function BroadcastPocPanel() {
                                     }}
                                 >
                                     <span style={{ color: '#38bdf8', marginRight: 4 }}>keera:</span>
-                                    {msg.response}
+                                    {typeof msg.data?.response === 'string' ? msg.data.response : ''}
                                 </div>
                             </div>
                         ))}
