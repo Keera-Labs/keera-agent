@@ -1,5 +1,7 @@
 import asyncio
+import json
 import os
+import subprocess
 import uuid
 
 from fastapi import Query, WebSocket
@@ -14,6 +16,31 @@ from app.terminal.websocket_terminal import WebsocketTerminal
 
 # Registry: session_id (UUID) -> Event set when Claude has finished starting up
 claude_ready: dict[str, asyncio.Event] = {}
+
+
+def _ensure_git_repo(path: str) -> None:
+    """Ensure `path` is inside a git repository, running `git init` if not.
+
+    Raises RuntimeError if git init fails, so callers can send a clean error
+    to the client instead of letting the PTY crash unexpectedly.
+    """
+    result = subprocess.run(
+        ["git", "-C", path, "rev-parse", "--is-inside-work-tree"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return  # Already a git repo — nothing to do.
+
+    init_result = subprocess.run(
+        ["git", "-C", path, "init"],
+        capture_output=True,
+        text=True,
+    )
+    if init_result.returncode != 0:
+        raise RuntimeError(
+            f"git init failed in {path!r}: {init_result.stderr.strip()}"
+        )
 
 
 async def _deliver_pending_relay_messages(agent_id: int) -> None:
@@ -55,6 +82,17 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
 
     cwd = os.path.expanduser(project_record.path)
     os.makedirs(cwd, exist_ok=True)
+
+    # Ensure the project directory is a git repository before spawning the PTY.
+    # claude requires git; without it the process crashes in confusing ways.
+    try:
+        _ensure_git_repo(cwd)
+    except RuntimeError as exc:
+        await websocket.send_text(
+            json.dumps({"type": "error", "message": str(exc)})
+        )
+        await websocket.close(code=1011, reason="git init failed")
+        return
 
     terminal_manager: TerminalManager = app().make('terminal')
     conn_manager: ConnectionManager = app().make('connections')
