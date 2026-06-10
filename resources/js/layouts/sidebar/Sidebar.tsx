@@ -6,7 +6,7 @@ import type { Project } from '@/types/type'
 import { ProjectItem } from './Project'
 import { WorkspacePicker } from './WorkSpace'
 
-export type ProjectView = 'agents' | 'commands' | 'tasks' | 'messages'
+export type ProjectView = 'agents' | 'commands' | 'tasks'
 
 export const PROJECT_NAV: { id: ProjectView; label: string; icon: React.ReactNode }[] = [
     {
@@ -36,15 +36,6 @@ export const PROJECT_NAV: { id: ProjectView; label: string; icon: React.ReactNod
             </svg>
         ),
     },
-    {
-        id: 'messages',
-        label: 'Messages',
-        icon: (
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0114.25 14H1.75A1.75 1.75 0 010 12.25v-8.5C0 2.784.784 2 1.75 2zM1.5 12.251c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V5.06l-5.563 3.516a1.75 1.75 0 01-1.874 0L1.5 5.06v7.19zm13-8.181L8.312 7.512a.25.25 0 01-.264 0L1.5 4.07v-.32a.25.25 0 01.25-.25h12.5a.25.25 0 01.25.25v.32z"/>
-            </svg>
-        ),
-    },
 ]
 
 export default function Sidebar({
@@ -53,7 +44,6 @@ export default function Sidebar({
     projectView,
     onChangeView,
     taskCount,
-    newMessageCount,
     onAddAgent,
     activeId,
     onAddProject,
@@ -68,7 +58,6 @@ export default function Sidebar({
     projectView: ProjectView
     onChangeView: (v: ProjectView) => void
     taskCount: number
-    newMessageCount: number
     onAddAgent: () => void
     activeId: number | null
     onAddProject: (workspaceId: number | null) => void
@@ -196,7 +185,7 @@ export default function Sidebar({
                 <div style={{ padding: '0 8px 8px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
                     {PROJECT_NAV.map(item => {
                         const active = item.id === projectView
-                        const count = item.id === 'tasks' ? taskCount : item.id === 'messages' ? newMessageCount : 0
+                        const count = item.id === 'tasks' ? taskCount : 0
                         return (
                             <button
                                 key={item.id}
