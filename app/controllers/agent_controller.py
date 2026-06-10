@@ -128,6 +128,14 @@ async def destroy(request: Request, agent_id: int):
         new_default = remaining[0].id if remaining else None
         await _set_project_default(project_id, new_default)
 
+    # Clean up the agent's git worktree (.worktrees/agent-<id>) if it exists
+    if project and getattr(project, "path", None):
+        from app.utils.worktree_cleanup import cleanup_agent_worktree
+        try:
+            cleanup_agent_worktree(project.path, agent_id)
+        except Exception:
+            pass
+
     return JSONResponse({"ok": True})
 
 

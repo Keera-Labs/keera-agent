@@ -533,6 +533,8 @@ class DeleteAgentTool(Tool):
     async def handle(self, arguments: dict) -> Response:
         import datetime
         from app.models.Agent import Agent
+        from app.models.Project import Project
+        from app.utils.worktree_cleanup import cleanup_agent_worktree
 
         agent_id = arguments.get("agent_id")
         if not agent_id:
@@ -547,6 +549,14 @@ class DeleteAgentTool(Tool):
 
         agent.deleted_at = datetime.datetime.utcnow()
         await agent.save()
+
+        # Clean up the agent's git worktree (.worktrees/agent-<id>) if it exists
+        project = await Project.find(agent.project_id)
+        if project and getattr(project, "path", None):
+            try:
+                cleanup_agent_worktree(project.path, agent_id)
+            except Exception:
+                pass
 
         return Response.text(f"Agent '{agent.name}' (ID: {agent_id}) has been deleted.")
 
