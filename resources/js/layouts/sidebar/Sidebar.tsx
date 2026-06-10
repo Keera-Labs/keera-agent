@@ -1,8 +1,8 @@
-import { useState } from 'react'
 import type React from 'react'
 import { router, usePage } from '@inertiajs/react'
 import { color } from '@/tokens'
 import type { Project } from '@/types/type'
+import { useLocalStorage } from '@/layouts/hooks/useLocalStorage'
 import { ProjectItem } from './Project'
 import { WorkspacePicker } from './WorkSpace'
 
@@ -67,7 +67,7 @@ export default function Sidebar({
     claudeStatus: Record<number, 'running' | 'done'>
     onCreateWorkspace: () => void
 }) {
-    const [filterWorkspaceId, setFilterWorkspaceId] = useState<number | null>(null)
+    const [filterWorkspaceId, setFilterWorkspaceId] = useLocalStorage<number | null>('keera:selectedWorkspaceId', null)
     const { component } = usePage()
     const isSettingsPage = component === 'Settings'
 
