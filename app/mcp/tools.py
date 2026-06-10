@@ -375,7 +375,7 @@ class ListAgentsTool(Tool):
 class SpawnAgentInput(BaseModel):
     project_path: str = Field(description="Absolute path of the project (use the current working directory).")
     name: str = Field(description="Short display name for the agent (e.g. 'Backend Engineer', 'QA Bot').")
-    agent_type: str = Field(pattern="^(pm|software_engineer|qa|qa_browser|custom)$", description="Role type for the agent.")
+    agent_type: str = Field(pattern="^(pm|software_engineer|software_engineer_frontend|reviewer|qa|qa_browser)$", description="Role type for the agent.")
     system_prompt: Optional[str] = Field(default=None, description="System prompt defining the agent's role and behavior.")
     message: Optional[str] = Field(default=None, description="Initial task or instruction to send to the agent after it starts. Omit to create an idle agent.")
     model: Optional[str] = Field(default=None, description="Claude model to use. Defaults to claude-sonnet-4-6.")
@@ -388,7 +388,7 @@ class SpawnAgentTool(Tool):
     description = (
         "Create a new agent in the current project and optionally start it with an initial task. "
         "The new agent will appear in the sidebar immediately. "
-        "Use this to delegate work to specialist agents (software_engineer, qa, custom)."
+        "Use this to delegate work to specialist agents (software_engineer, qa, reviewer, pm)."
     )
 
     def schema(self):
@@ -425,7 +425,7 @@ class SpawnAgentTool(Tool):
                 project_id=project.id,
                 request=AgentStoreRequest(
                     name=name,
-                    agent_type=arguments.get("agent_type", "custom"),
+                    agent_type=arguments.get("agent_type", "software_engineer"),
                     model=arguments.get("model") or "claude-sonnet-4-6",
                     description=f"{name} agent",
                     system_prompt=(arguments.get("system_prompt") or "").strip() or None,

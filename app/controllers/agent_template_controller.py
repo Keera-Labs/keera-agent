@@ -40,7 +40,7 @@ async def store(request: Request):
     if not name:
         return JSONResponse({"error": "name is required"}, status_code=422)
 
-    agent_type = (body.get("agent_type") or "custom").strip()
+    agent_type = (body.get("agent_type") or "software_engineer").strip()
     description = (body.get("description") or "").strip() or None
     model = (body.get("model") or "claude-sonnet-4-6").strip()
     system_prompt = (body.get("system_prompt") or "").strip() or None
@@ -81,7 +81,7 @@ async def update(request: Request, template_id: int):
     if "description" in body:
         template.description = (body["description"] or "").strip() or None
     if "agent_type" in body:
-        template.agent_type = (body["agent_type"] or "custom").strip()
+        template.agent_type = (body["agent_type"] or "software_engineer").strip()
     if "system_prompt" in body:
         template.system_prompt = (body["system_prompt"] or "").strip() or None
     if "model" in body:

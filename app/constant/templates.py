@@ -37,7 +37,7 @@ AGENT_TEMPLATES: list[AgentTemplateSeed] = [
     AgentTemplateSeed(
         name="Planner",
         description="Read-only planning mode — analyses and proposes but never modifies files.",
-        agent_type="custom",
+        agent_type="reviewer",
         dangerously_skip_permissions=False,
         plan_mode=True,
     ),
