@@ -16,6 +16,7 @@ from app.controllers import agent_trigger_controller
 from app.controllers import agent_template_controller
 from app.controllers import poc_controller
 from app.controllers import settings_controller
+from app.controllers import broadcast_poc_controller
 from app.controllers import heartbeat_controller
 from app.controllers import global_settings_controller
 from app.mcp.server import KeeraServer
@@ -100,6 +101,9 @@ router.post("/api/heartbeat/stop", heartbeat_controller.stop)
 
 # Settings page — before wildcard
 router.get("/settings", settings_controller.settings)
+
+# Broadcasting POC route — before wildcard
+router.post('/api/broadcast/fire', broadcast_poc_controller.fire)
 
 # POC route — before wildcard
 router.get("/poc", poc_controller.poc_page)

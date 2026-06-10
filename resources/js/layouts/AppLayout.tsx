@@ -4,6 +4,7 @@ import { color } from '@/tokens'
 import Sidebar, { type ProjectView } from './sidebar/Sidebar'
 import { AppLayoutStateProvider, useAppLayout } from './context/AppLayoutContext'
 import { ModalLayer } from './ModalLayer'
+import { BroadcastPocPanel } from '@/components/BroadcastPocPanel'
 
 // ─── Phase 1 re-exports ───────────────────────────────────────────────────────
 export { agentColor } from '@/utils/agentColor'
@@ -117,6 +118,7 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
             </div>
 
             <ModalLayer />
+            <BroadcastPocPanel />
 
         </div>
     )
