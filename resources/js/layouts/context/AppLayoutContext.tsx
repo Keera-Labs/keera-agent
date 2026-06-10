@@ -53,8 +53,6 @@ export interface AppLayoutContextValue {
     setProjectView: (v: ProjectView) => void
     activeAgentId: number | null
     setActiveAgentId: (id: number | null) => void
-    newMessageIds: number[]
-    setNewMessageIds: React.Dispatch<React.SetStateAction<number[]>>
     isDraggingOver: boolean
     setIsDraggingOver: (v: boolean) => void
 
@@ -218,7 +216,6 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     const [showCreateTask, setShowCreateTask] = useState(false)
     const [isDraggingOver, setIsDraggingOver] = useState(false)
     const [selectedTask, setSelectedTask] = useState<Task | null>(null)
-    const [newMessageIds, setNewMessageIds] = useState<number[]>([])
     const [agentTemplates, setAgentTemplates] = useState<AgentTemplate[]>([])
     const [showAddAgent, setShowAddAgent] = useState(false)
 
@@ -382,7 +379,6 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
                             setClaudeStatus(prev => ({ ...prev, [activeProject.id]: 'done' }))
                             playSound('done')
                         } else if (msg.type === 'agent_message') {
-                            setNewMessageIds(prev => [...prev, msg.message_id])
                             playSound('input')
                         } else if (msg.type === 'agent_created') {
                             agentHook.addAgent(normalizeAgent(msg.agent.data))
@@ -611,7 +607,6 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         // View state
         projectView, setProjectView,
         activeAgentId, setActiveAgentId,
-        newMessageIds, setNewMessageIds,
         isDraggingOver, setIsDraggingOver,
         // Terminal state
         sessions, agentSessions, containerRefs, agentContainerRefs, fileInputRef,

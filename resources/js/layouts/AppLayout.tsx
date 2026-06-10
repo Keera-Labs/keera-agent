@@ -8,7 +8,6 @@ import { ModalLayer } from './ModalLayer'
 import { AgentsView } from './views/AgentsView'
 import { CommandsView } from './views/CommandsView'
 import { TasksView } from './views/TasksView'
-import { MessagesView } from './views/MessagesView'
 import type { Task } from '@/types/type'
 
 // ─── Phase 1 re-exports ───────────────────────────────────────────────────────
@@ -69,7 +68,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 function AppLayoutShell({ children }: { children: React.ReactNode }) {
     const {
         allProjects, activeProject, tasks,
-        claudeStatus, newMessageIds,
+        claudeStatus,
         projectView, setProjectView,
 
         setShowCreateTask, setSelectedTask,
@@ -111,7 +110,6 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
                         { id: 'agents' as ProjectView, label: 'Dashboard' },
                         { id: 'commands' as ProjectView, label: 'Configurations' },
                         { id: 'tasks' as ProjectView, label: 'Tasks' },
-                        { id: 'messages' as ProjectView, label: 'History' },
                     ] as const).map(tab => {
                         const isActive = activeView === tab.id
                         return (
@@ -167,7 +165,6 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
                         if (isTasksPage) router.visit(`/${activeProject?.slug}`)
                     }}
                     taskCount={tasks.length}
-                    newMessageCount={newMessageIds.length}
                     onAddAgent={() => setShowAddAgent(true)}
                     activeId={activeProject?.id ?? null}
                     onAddProject={openAddProject}
@@ -201,15 +198,6 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
                             onUpdateStatus={handleUpdateStatus}
                             onDeleteTask={handleDeleteTask}
                             onOpenTask={(task: Task) => setSelectedTask(task)}
-                        />
-                    )}
-
-                    {/* Messages view */}
-                    {activeView === 'messages' && activeProject && (
-                        <MessagesView
-                            projectId={activeProject.id}
-                            projectName={activeProject.name}
-                            newMessageIds={newMessageIds}
                         />
                     )}
 
