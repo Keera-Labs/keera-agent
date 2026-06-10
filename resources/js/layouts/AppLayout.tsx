@@ -2,13 +2,8 @@ import { router, usePage } from '@inertiajs/react'
 import '@xterm/xterm/css/xterm.css'
 import { color } from '@/tokens'
 import Sidebar, { type ProjectView } from './sidebar/Sidebar'
-import { DotsIndicator } from './sidebar/Project'
 import { AppLayoutStateProvider, useAppLayout } from './context/AppLayoutContext'
 import { ModalLayer } from './ModalLayer'
-import { AgentsView } from './views/AgentsView'
-import { CommandsView } from './views/CommandsView'
-import { TasksView } from './views/TasksView'
-import type { Task } from '@/types/type'
 
 // ─── Phase 1 re-exports ───────────────────────────────────────────────────────
 export { agentColor } from '@/utils/agentColor'
@@ -35,26 +30,6 @@ export { CreateTaskModal } from '@/components/modals/CreateTaskModal'
 export { TaskDetailModal } from '@/components/modals/TaskDetailModal'
 export { AddAgentModal } from '@/components/modals/AddAgentModal'
 
-// ─── Claude status badge (header indicator) ───────────────────────────────────
-
-function ClaudeStatusBadge({ status }: { status?: 'running' | 'done' }) {
-    if (!status) return null
-    if (status === 'running') {
-        return (
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '8px' }}>
-                <DotsIndicator />
-                <span style={{ color: color.warning, fontSize: '11px', fontFamily: '"JetBrains Mono", monospace' }}>running</span>
-            </span>
-        )
-    }
-    return (
-        <span style={{ display: 'flex', alignItems: 'center', gap: '5px', marginLeft: '6px' }}>
-            <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: color.success }} />
-            <span style={{ color: color.success, fontSize: '11px', fontFamily: '"JetBrains Mono", monospace' }}>done</span>
-        </span>
-    )
-}
-
 // ─── Persistent layout ────────────────────────────────────────────────────────
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -70,17 +45,13 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
         allProjects, activeProject, tasks,
         claudeStatus,
         projectView, setProjectView,
-
-        setShowCreateTask, setSelectedTask,
+        setShowAddAgent,
         openAddProject, setMovingProject, setEditingProject,
         setDeletingProject, setShowWorkspaceModal,
-        setShowAddAgent,
-        handleUpdateStatus, handleDeleteTask,
     } = useAppLayout()
 
     const { component } = usePage()
     const isTasksPage = component === 'Tasks'
-    const pageHasContent = new Set(['settings/Index']).has(component)
     const activeView: ProjectView = isTasksPage ? 'tasks' : projectView
 
     return (
@@ -88,7 +59,7 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
 
             {/* ═══════════════════════════════════════════════════════════
                 FULL-WIDTH TOP BAR
-                Logo (220px) | Nav tabs (flex-1)
+                Logo (220px) | center zone (flex-1) | Avatar
             ════════════════════════════════════════════════════════════ */}
             <header className="shrink-0 bg-white flex items-stretch" style={{ height: '48px', borderBottom: `1px solid ${color.stroke}`, zIndex: 20 }}>
 
@@ -104,47 +75,11 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
                     </span>
                 </div>
 
-                {/* Nav tabs — centered */}
-                <div className="flex items-stretch flex-1 px-2">
-                    {([
-                        { id: 'agents' as ProjectView, label: 'Dashboard' },
-                        { id: 'commands' as ProjectView, label: 'Configurations' },
-                        { id: 'tasks' as ProjectView, label: 'Tasks' },
-                    ] as const).map(tab => {
-                        const isActive = activeView === tab.id
-                        return (
-                            <button
-                                key={tab.id}
-                                onClick={() => {
-                                    if (tab.id === 'tasks' && activeProject) { router.visit(`/${activeProject.slug}/tasks`); return }
-                                    setProjectView(tab.id)
-                                    if (isTasksPage) router.visit(`/${activeProject?.slug}`)
-                                }}
-                                className="bg-transparent border-none cursor-pointer px-4 h-full text-[13px] transition-colors duration-100 relative"
-                                style={{
-                                    color: isActive ? color.textPrimary : color.textMuted,
-                                    fontWeight: isActive ? 600 : 400,
-                                    borderBottom: isActive ? `2px solid ${color.accent}` : '2px solid transparent',
-                                    marginBottom: '-1px',
-                                }}
-                            >
-                                {tab.label}
-                            </button>
-                        )
-                    })}
-                    {activeProject && (
-                        <>
-                            <div className="my-3 mx-1" style={{ width: '1px', background: color.stroke }} />
-                            <div className="flex items-center gap-1.5 px-2">
-                                <ClaudeStatusBadge status={claudeStatus[activeProject.id]} />
-                            </div>
-                        </>
-                    )}
-                </div>
+                {/* Center flex zone — reserved for project-level nav tabs (rendered by ProjectLayout) */}
+                <div className="flex items-stretch flex-1" />
 
-                {/* Right: icons */}
+                {/* Right: avatar */}
                 <div className="flex items-center gap-1 pr-3">
-                    {/* Avatar */}
                     <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white cursor-pointer ml-1 shrink-0" style={{ background: '#7c6af7' }}>
                         B
                     </div>
@@ -152,7 +87,7 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
             </header>
 
             {/* ═══════════════════════════════════════════════════════════
-                BODY: Sidebar + Content
+                BODY: Sidebar + Content slot
             ════════════════════════════════════════════════════════════ */}
             <div className="flex flex-1 overflow-hidden">
                 <Sidebar
@@ -175,42 +110,9 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
                     onCreateWorkspace={() => setShowWorkspaceModal(true)}
                 />
 
-                {/* Main content area */}
+                {/* Main content slot — ProjectLayout or page children rendered here */}
                 <div className="flex-1 flex overflow-hidden bg-white">
-
-                    {pageHasContent ? children : (<>
-
-                    {/* Agents view — always rendered to keep sessions alive */}
-                    <div style={{ flex: 1, overflow: 'hidden', display: activeView === 'agents' ? 'flex' : 'none' }}>
-                        <AgentsView />
-                    </div>
-
-                    {/* Commands view */}
-                    {activeView === 'commands' && activeProject && (
-                        <CommandsView project={activeProject} />
-                    )}
-
-                    {/* Tasks view */}
-                    {activeView === 'tasks' && activeProject && (
-                        <TasksView
-                            tasks={tasks}
-                            onOpenCreateTask={() => setShowCreateTask(true)}
-                            onUpdateStatus={handleUpdateStatus}
-                            onDeleteTask={handleDeleteTask}
-                            onOpenTask={(task: Task) => setSelectedTask(task)}
-                        />
-                    )}
-
-                    {/* Empty state when no project */}
-                    {!activeProject && (
-                        <div style={{
-                            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                            <span style={{ color: color.textFaint, fontSize: '13px' }}>No project selected</span>
-                        </div>
-                    )}
-
-                    </>)}
+                    {children}
                 </div>
             </div>
 
