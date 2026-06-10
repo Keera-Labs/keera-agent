@@ -3,10 +3,7 @@ import { router, usePage } from '@inertiajs/react'
 import { useAppLayout } from './context/AppLayoutContext'
 import { AgentsView } from './views/AgentsView'
 import { CommandsView } from './views/CommandsView'
-import { TasksView } from './views/TasksView'
-import type { Task } from '@/types/type'
 import { color } from '@/tokens'
-import AppLayout from './AppLayout'
 import type { ProjectView } from './sidebar/Sidebar'
 import { DotsIndicator } from './sidebar/Project'
 
@@ -34,11 +31,9 @@ function ClaudeStatusBadge({ status }: { status?: 'running' | 'done' }) {
 
 export function ProjectLayout({ children }: { children: React.ReactNode }) {
     const {
-        activeProject, tasks,
+        activeProject,
         claudeStatus,
         projectView, setProjectView,
-        setShowCreateTask, setSelectedTask,
-        handleUpdateStatus, handleDeleteTask,
     } = useAppLayout()
 
     const { component } = usePage()
@@ -99,16 +94,8 @@ export function ProjectLayout({ children }: { children: React.ReactNode }) {
                     <CommandsView project={activeProject} />
                 )}
 
-                {/* Tasks view */}
-                {activeView === 'tasks' && activeProject && (
-                    <TasksView
-                        tasks={tasks}
-                        onOpenCreateTask={() => setShowCreateTask(true)}
-                        onUpdateStatus={handleUpdateStatus}
-                        onDeleteTask={handleDeleteTask}
-                        onOpenTask={(task: Task) => setSelectedTask(task)}
-                    />
-                )}
+                {/* Tasks view is rendered by the Tasks page itself (see pages/Tasks.tsx),
+                    delivered here through {children}. */}
 
                 {/* Empty state when no project is selected */}
                 {!activeProject && (
@@ -126,7 +113,3 @@ export function ProjectLayout({ children }: { children: React.ReactNode }) {
         </div>
     )
 }
-
-// Wire up Inertia nested persistent layouts:
-// ProjectLayout is wrapped by AppLayout so both stay alive across navigations.
-ProjectLayout.layout = (page: React.ReactNode) => <AppLayout>{page}</AppLayout>

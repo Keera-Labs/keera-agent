@@ -1,9 +1,7 @@
+import AppLayout from "@/layouts/AppLayout"
 import { ProjectLayout } from "@/layouts/ProjectLayout"
 
 export function Project() {}
 
-Project.layout = (page: React.ReactNode) => (
-    <ProjectLayout>
-        {page}
-    </ProjectLayout>
-);
+// Nested persistent layouts — see Home.tsx for why both must be listed here.
+Project.layout = [AppLayout, ProjectLayout];

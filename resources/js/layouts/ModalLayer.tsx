@@ -9,8 +9,6 @@ import { ProjectSearchModal } from '@/components/modals/ProjectSearchModal'
 import { ConfirmDeleteProjectModal } from '@/components/modals/ConfirmDeleteProjectModal'
 import { ConfirmDeleteWorkspaceModal } from '@/components/modals/ConfirmDeleteWorkspaceModal'
 import { MoveProjectModal } from '@/components/modals/MoveProjectModal'
-import { CreateTaskModal } from '@/components/modals/CreateTaskModal'
-import { TaskDetailModal } from '@/components/modals/TaskDetailModal'
 import { AddAgentModal } from '@/components/modals/AddAgentModal'
 import type { ProjectAgent } from '@/layouts/hooks/agents'
 
@@ -59,13 +57,6 @@ export function ModalLayer() {
         agentHook,
         // Global settings
         maxAgentsPerProject,
-        // Create task
-        showCreateTask,
-        setShowCreateTask,
-        handleAddTask,
-        // Task detail
-        selectedTask,
-        setSelectedTask,
         // Project search
         showProjectSearch,
         setShowProjectSearch,
@@ -73,25 +64,6 @@ export function ModalLayer() {
 
     return (
         <>
-            {/* Task detail */}
-            {selectedTask && (
-                <TaskDetailModal
-                    task={selectedTask}
-                    onClose={() => setSelectedTask(null)}
-                />
-            )}
-
-            {/* Create task */}
-            {showCreateTask && (
-                <CreateTaskModal
-                    onClose={() => setShowCreateTask(false)}
-                    onCreated={(title, body, assignees) => handleAddTask(title, body, assignees)}
-                    projects={allProjects}
-                    workspaces={workspaces}
-                    defaultProjectId={activeProject?.id ?? null}
-                />
-            )}
-
             {/* Add workspace */}
             {showWorkspaceModal && (
                 <AddWorkspaceModal
