@@ -1,6 +1,8 @@
 from pathlib import Path
 
 from fastapi_startkit import Application
+from fastapi_startkit.broadcasting import ReverbProvider
+from fastapi_startkit.broadcasting.config import BroadcastingConfig
 from fastapi_startkit.fastapi import FastAPIProvider
 from fastapi_startkit.inertia import InertiaProvider
 from fastapi_startkit.logging import LogProvider
@@ -24,6 +26,7 @@ app = Application(
         (FastAPIProvider, FastAPIConfig),
         McpProvider,
         (StorageProvider, StorageConfig),
+        (ReverbProvider, BroadcastingConfig),
         AppProvider,
         TerminalProvider,
         (ViteProvider, ViteConfig),
