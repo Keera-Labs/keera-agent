@@ -74,9 +74,20 @@ class Terminal:
             await asyncio.sleep(0.002)
 
     async def write_input(self, data: bytes) -> None:
-        """Write a complete message: strips trailing CR/LF then appends \\r."""
+        """Write a complete message atomically: strips trailing CR/LF, appends \\r,
+        then writes the entire payload in a single os.write call.
+
+        Unlike write_raw (which writes byte-by-byte with asyncio.sleep delays),
+        this is guaranteed to be atomic within a single asyncio task — no other
+        coroutine can interleave bytes between the characters of this message.
+        That prevents spaces and other characters from being dropped when multiple
+        coroutines write to the same PTY concurrently (e.g. agent relay messages
+        arriving while other I/O is in flight).
+        """
         data = data.rstrip(b'\r\n') + b'\r'
-        await self.write_raw(data)
+        if self.master_fd is None or not data:
+            return
+        os.write(self.master_fd, data)
 
     def resize(self, cols: int, rows: int) -> None:
         self._cols = cols
