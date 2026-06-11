@@ -4,7 +4,7 @@ import json
 import os
 
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Union
 
 from fastapi_startkit.mcp import Tool, Response
 
@@ -26,8 +26,7 @@ def _load_json(value) -> list:
 def _serialize_task(t: Task) -> dict:
     return {
         "id": t.id,
-        "title": t.title or t.description,
-        "description": t.description,
+        "title": t.title,
         "body": t.body,
         "priority": t.priority or "medium",
         "status": t.status,
@@ -53,7 +52,7 @@ async def _project_by_path(path: str) -> Optional[Project]:
 class CreateTaskInput(BaseModel):
     project_path: str = Field(description="Absolute path of the project (use the current working directory).")
     title: str = Field(description="Short, imperative title. e.g. 'Add CSV export for tasks'.")
-    description: str = Field(description="One-paragraph summary of what needs to be built and why.")
+    body: Optional[str] = Field(default=None, description="One-paragraph summary of what needs to be built and why.")
     acceptance_criteria: list[str] = Field(min_length=1, description="Concrete, checkable statements that define when the task is done.")
     testing_methods: list[str] = Field(min_length=1, description="How the feature will be tested (unit, integration, manual, e2e).")
     validation_steps: list[str] = Field(min_length=1, description="QA / edge-case checks to perform before marking done.")
@@ -86,8 +85,7 @@ class CreateTaskTool(Tool):
         task = await Task.create({
             "project_id": project.id,
             "title": title,
-            "description": arguments.get("description", "").strip() or title,
-            "body": arguments.get("description", "").strip() or None,
+            "body": (arguments.get("body") or "").strip() or None,
             "priority": arguments.get("priority", "medium"),
             "assignees": json.dumps(arguments.get("assignees") or []),
             "acceptance_criteria": json.dumps(arguments.get("acceptance_criteria") or []),
@@ -135,7 +133,7 @@ class ListTasksTool(Tool):
         lines = []
         for t in tasks:
             priority = t.priority or "medium"
-            lines.append(f"[{t.status}] #{t.id} {t.title or t.description}  ({priority})")
+            lines.append(f"[{t.status}] #{t.id} {t.title or t.body}  ({priority})")
         return Response.text("\n".join(lines))
 
 
@@ -165,8 +163,8 @@ class GetTaskTool(Tool):
             f"Assignees: {', '.join(t['assignees']) if t['assignees'] else 'none'}",
             f"Created:  {t['created_at']}",
             "",
-            "Description:",
-            t["description"] or "(none)",
+            "Body:",
+            t["body"] or "(none)",
         ]
         if t["acceptance_criteria"]:
             lines += ["", "Acceptance criteria:"] + [f"  • {c}" for c in t["acceptance_criteria"]]
@@ -182,7 +180,6 @@ class GetTaskTool(Tool):
 class UpdateTaskInput(BaseModel):
     task_id: int = Field(description="The numeric task ID.")
     title: Optional[str] = None
-    description: Optional[str] = None
     body: Optional[str] = None
     priority: Optional[str] = Field(default=None, pattern="^(low|medium|high)$")
     assignees: Optional[list[str]] = None
@@ -193,7 +190,7 @@ class UpdateTaskInput(BaseModel):
 
 class UpdateTaskTool(Tool):
     name = "update_task"
-    description = "Update any fields of a task (title, description, body, acceptance_criteria, testing_methods, validation_steps, priority, assignees)."
+    description = "Update any fields of a task (title, body, acceptance_criteria, testing_methods, validation_steps, priority, assignees)."
 
     def schema(self):
         return UpdateTaskInput
@@ -203,7 +200,7 @@ class UpdateTaskTool(Tool):
         if not task:
             return Response.text(f"Error: task #{arguments['task_id']} not found")
 
-        for field in ["title", "description", "body", "priority"]:
+        for field in ["title", "body", "priority"]:
             if field in arguments and arguments[field] is not None:
                 setattr(task, field, arguments[field])
         for field in ["assignees", "acceptance_criteria", "testing_methods", "validation_steps"]:
@@ -211,7 +208,7 @@ class UpdateTaskTool(Tool):
                 setattr(task, field, json.dumps(arguments[field]))
 
         await task.save()
-        return Response.text(f"Task #{task.id} '{task.title or task.description}' updated.")
+        return Response.text(f"Task #{task.id} '{task.title or task.body}' updated.")
 
 
 # ── update_task_status ────────────────────────────────────────────────────────
@@ -234,7 +231,7 @@ class UpdateTaskStatusTool(Tool):
             return Response.text(f"Error: task #{arguments['task_id']} not found")
         task.status = arguments["status"]
         await task.save()
-        return Response.text(f"Task #{task.id} '{task.title or task.description}' → {task.status}")
+        return Response.text(f"Task #{task.id} '{task.title or task.body}' → {task.status}")
 
 
 # ── delete_task ───────────────────────────────────────────────────────────────
@@ -254,7 +251,7 @@ class DeleteTaskTool(Tool):
         task = await Task.find(arguments["task_id"])
         if not task:
             return Response.text(f"Error: task #{arguments['task_id']} not found")
-        title = task.title or task.description or f"#{task.id}"
+        title = task.title or task.body or f"#{task.id}"
         await Task.where("id", task.id).delete()
         return Response.text(f"Task '{title}' deleted.")
 
@@ -262,8 +259,10 @@ class DeleteTaskTool(Tool):
 # ── send_message_to_agent ─────────────────────────────────────────────────────
 
 class SendMessageInput(BaseModel):
-    sender_agent_id: int = Field(description="Your own agent ID.")
-    receiver_agent_id: int = Field(description="The ID of the agent to send the message to.")
+    sender_agent_id: int = Field(description="Your own agent ID (numeric).")
+    receiver_agent_id: Union[int, str] = Field(
+        description="The ID (numeric) or name of the agent to send the message to."
+    )
     message: str = Field(description="The message content to send.")
 
 
@@ -271,6 +270,7 @@ class SendMessageTool(Tool):
     name = "send_message_to_agent"
     description = (
         "Send a message from this agent to another agent. "
+        "receiver_agent_id accepts either a numeric agent ID or the agent's name. "
         "If the target agent is active, the message is delivered immediately to its terminal. "
         "Otherwise it is queued and delivered when it next connects."
     )
@@ -282,15 +282,53 @@ class SendMessageTool(Tool):
         from app.models.Agent import Agent
         from app.actions.agent_message_send_action import AgentMessageSendAction
 
-        sender = await Agent.find(arguments["sender_agent_id"])
+        # Validate required fields explicitly so callers get a clear error message
+        missing = [
+            f for f in ("sender_agent_id", "receiver_agent_id", "message")
+            if f not in arguments or arguments[f] is None
+        ]
+        if missing:
+            return Response.text(
+                f"Error: missing required parameter(s): {', '.join(missing)}. "
+                "Expected: sender_agent_id (int), receiver_agent_id (int or agent name), message (str)."
+            )
+
+        sender_id = arguments["sender_agent_id"]
+        if not isinstance(sender_id, int):
+            try:
+                sender_id = int(sender_id)
+            except (TypeError, ValueError):
+                return Response.text(
+                    f"Error: sender_agent_id must be a numeric agent ID, got '{sender_id}'. "
+                    "Expected: sender_agent_id (int), receiver_agent_id (int or agent name), message (str)."
+                )
+
+        sender = await Agent.find(sender_id)
         if not sender:
-            return Response.text(f"Error: agent #{arguments['sender_agent_id']} not found")
+            return Response.text(f"Error: agent #{sender_id} not found")
 
-        receiver = await Agent.find(arguments["receiver_agent_id"])
-        if not receiver:
-            return Response.text(f"Error: agent #{arguments['receiver_agent_id']} not found")
+        # receiver_agent_id accepts int ID or string name
+        raw_receiver = arguments["receiver_agent_id"]
+        receiver = None
+        if isinstance(raw_receiver, int) or (isinstance(raw_receiver, str) and raw_receiver.isdigit()):
+            receiver = await Agent.find(int(raw_receiver))
+            if not receiver:
+                return Response.text(f"Error: agent #{raw_receiver} not found")
+        else:
+            # Look up by name (case-insensitive), skip deleted agents
+            all_agents = await Agent.where_null("deleted_at").get()
+            name_lower = str(raw_receiver).lower()
+            for a in all_agents:
+                if (a.name or "").lower() == name_lower:
+                    receiver = a
+                    break
+            if not receiver:
+                return Response.text(
+                    f"Error: no agent found with name '{raw_receiver}'. "
+                    "Use list_agents to see available agents and their IDs."
+                )
 
-        content = arguments["message"].strip()
+        content = str(arguments["message"]).strip()
         if not content:
             return Response.text("Error: message cannot be empty")
 
