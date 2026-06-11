@@ -3,15 +3,15 @@ import { color } from '@/tokens'
 import type { Project } from '@/types/type'
 import { TagInput } from '@/components/ui/TagInput'
 
-// Dark modal palette
+// Light modal palette
 const M = {
-    bg:        '#1c1f26',
-    border:    '#2a2f3a',
-    inputBg:   '#0d1117',
-    inputText: '#e2e6ed',
-    heading:   '#f0f6fc',
-    body:      '#8b949e',
-    faint:     '#6e7681',
+    bg:        '#ffffff',
+    border:    '#d0d7de',
+    inputBg:   '#f6f8fa',
+    inputText: '#1f2328',
+    heading:   '#1f2328',
+    body:      '#57606a',
+    faint:     '#6e7781',
 }
 
 export function EditProjectModal({
@@ -70,12 +70,12 @@ export function EditProjectModal({
     }
 
     const cancelSty: React.CSSProperties = {
-        background: 'transparent', border: `1px solid ${M.border}`, borderRadius: '6px',
+        background: M.bg, border: `1px solid ${M.border}`, borderRadius: '6px',
         color: M.body, fontSize: '12px', padding: '6px 14px', cursor: 'pointer',
     }
 
     const saveBtnSty: React.CSSProperties = {
-        background: saved ? '#238636' : color.accent,
+        background: saved ? '#1a7f37' : color.accent,
         border: 'none', borderRadius: '6px', color: '#fff',
         fontSize: '12px', fontWeight: 600, padding: '6px 14px',
         cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1,
@@ -100,7 +100,7 @@ export function EditProjectModal({
                 style={{
                     background: M.bg, border: `1px solid ${M.border}`, borderRadius: '10px',
                     width: '520px', maxHeight: '90vh', display: 'flex', flexDirection: 'column',
-                    boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
                     overflow: 'hidden',
                 }}
                 onClick={e => e.stopPropagation()}
