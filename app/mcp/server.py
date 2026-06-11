@@ -51,7 +51,7 @@ class ActiveTasksResource(Resource):
         lines = [f"Active tasks for '{project.name}':", ""]
         for t in tasks:
             status_label = "[ ]" if t.status == "pending" else "[→]"
-            lines.append(f"{status_label} #{t.id} {t.title or t.description}  ({t.priority or 'medium'})")
+            lines.append(f"{status_label} #{t.id} {t.title or t.body}  ({t.priority or 'medium'})")
             for c in _load(t.acceptance_criteria):
                 lines.append(f"     • {c}")
         return "\n".join(lines)
