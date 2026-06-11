@@ -118,10 +118,18 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
     ready_event = claude_ready.setdefault(session_id, asyncio.Event())
     asyncio.create_task(_signal_ready_and_relay(ready_event, agent_record.id))
 
-    claude_cmd = agent_record.to_command()
+    system_prompt_suffix = (
+        f"\n\n## Your identity\nYour agent ID is {agent_record.id}. "
+        f"When other agents ask you to report back, always use this ID as `from_agent_id` in relay calls."
+    )
+    claude_cmd = agent_record.to_command(system_prompt_suffix=system_prompt_suffix)
 
     def build_cmd(a):
-        return a.to_command()
+        suffix = (
+            f"\n\n## Your identity\nYour agent ID is {a.id}. "
+            f"When other agents ask you to report back, always use this ID as `from_agent_id` in relay calls."
+        )
+        return a.to_command(system_prompt_suffix=suffix)
 
     # Build the output monitor callback (Parts 1 & 3 for WS path)
     monitor = make_claude_session_monitor(
