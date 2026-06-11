@@ -20,6 +20,7 @@ from app.controllers import broadcast_poc_controller
 from app.controllers import heartbeat_controller
 from app.controllers import global_settings_controller
 from app.controllers import ai_controller
+from app.controllers import broadcasting_controller
 from app.mcp.server import KeeraServer
 
 router = Router()
@@ -108,6 +109,10 @@ router.post('/api/ai/chat', ai_controller.chat)
 
 # Broadcasting POC route — before wildcard
 router.post('/api/broadcast/fire', broadcast_poc_controller.fire)
+
+# Broadcasting page and API — before wildcard
+router.get('/broadcasting', broadcasting_controller.broadcasting_page)
+router.post('/api/broadcasting/ping', broadcasting_controller.ping)
 
 # POC route — before wildcard
 router.get("/poc", poc_controller.poc_page)
