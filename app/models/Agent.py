@@ -10,6 +10,9 @@ class Agent(Model):
     id: int
     flags: dict
     dangerously_skip_permissions: bool
+    # plan_mode is stored in the DB and surfaced in the UI, but no longer affects
+    # the spawned claude command (--system-prompt injection was removed).
+    # To re-enable plan-mode enforcement, wire this flag back into to_command().
     plan_mode: bool
 
     def to_command(self) -> str:

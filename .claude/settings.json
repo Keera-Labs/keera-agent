@@ -26,7 +26,7 @@
       "type": "http",
       "url": "http://localhost:4545/mcp",
       "headers": {
-        "X-Project-Path": "/Users/ellite/code/keera/fix-stale-description-refs"
+        "X-Project-Path": "/Users/ellite/code/keera/keera-agent"
       }
     }
   },

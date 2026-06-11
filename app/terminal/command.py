@@ -1,11 +1,5 @@
 import shlex
 
-PLAN_MODE_PREFIX = (
-    "You are in PLAN-ONLY mode. Analyze and plan — do NOT write or edit any files, "
-    "run commands, or execute any tool that modifies the filesystem or codebase. "
-    "Only Read and Glob tools are permitted.\n\n"
-)
-
 
 class ClaudeCommand:
     def __init__(self):
