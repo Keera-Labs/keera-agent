@@ -310,4 +310,4 @@ export default function Broadcasting() {
     )
 }
 
-Broadcasting.layout = (page: React.ReactNode) => <AppLayout>{page}</AppLayout>
+Broadcasting.layout = [AppLayout]

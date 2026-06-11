@@ -1,4 +1,5 @@
 from fastapi import Request
+from fastapi.responses import JSONResponse
 from fastapi_startkit.inertia.inertia import Inertia
 from fastapi_startkit.broadcasting.helpers import broadcast
 
@@ -13,4 +14,4 @@ async def ping(request: Request):
     body = await request.json()
     message = (body.get("message") or "ping").strip() or "ping"
     await broadcast(PingEvent(message))
-    return {"status": "ok", "message": message}
+    return JSONResponse({"status": "ok", "message": message})
