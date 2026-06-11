@@ -116,7 +116,7 @@ async def _handle_claude_stopped(project, project_cwd: str) -> None:
         active_agent = next((ag for ag in agents if ag.session_id and terminal_manager.find(ag.session_id)), None)
         if active_agent:
             await asyncio.sleep(0.5)
-            await terminal_manager.write_input(active_agent.session_id, next_task.description)
+            await terminal_manager.write_input(active_agent.session_id, next_task.body or next_task.title)
             await Project.where('id', project.id).update({'claude_status': 'running'})
 
             bridge = _find_project_bridge(project_cwd)
@@ -126,7 +126,7 @@ async def _handle_claude_stopped(project, project_cwd: str) -> None:
                         'type': 'task_started',
                         'cwd': project_cwd,
                         'task_id': next_task.id,
-                        'description': next_task.description,
+                        'body': next_task.body or next_task.title,
                     }))
                 except Exception:
                     pass

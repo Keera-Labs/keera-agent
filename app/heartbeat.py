@@ -38,7 +38,7 @@ async def send_heartbeat(project_id: int) -> None:
         return
     lines = ["[HEARTBEAT] Task status @ " + datetime.now().strftime("%H:%M:%S")]
     for t in active:
-        lines.append(f"* #{t.id} {t.status:<12} - {t.title or t.description}")
+        lines.append(f"* #{t.id} {t.status:<12} - {t.title or t.body}")
     await AgentMessageSendAction.prepare(pm, pm, "\n".join(lines)).execute()
 
 

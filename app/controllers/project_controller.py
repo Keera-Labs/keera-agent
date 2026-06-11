@@ -27,7 +27,6 @@ async def index(request: Request):
             "language": p.language,
             "workspace_id": int(p.workspace_id) if p.workspace_id is not None else None,
             "claude_status": p.claude_status,
-            "system_prompt": p.system_prompt,
         }
         for p in projects
     ])
@@ -68,9 +67,6 @@ async def update(request: Request, project_id: int):
         project.path = new_path
         ensure_claude_settings(expanded, BASE_URL)
 
-    if "system_prompt" in body:
-        project.system_prompt = body["system_prompt"] or None
-
     await project.save()
 
     project_data = {
@@ -81,7 +77,6 @@ async def update(request: Request, project_id: int):
         "language": project.language,
         "workspace_id": int(project.workspace_id) if project.workspace_id is not None else None,
         "claude_status": project.claude_status,
-        "system_prompt": project.system_prompt,
     }
 
     if is_inertia:
@@ -200,7 +195,7 @@ async def store(request: Request):
         "workspace_id": workspace_id,
     })
 
-    ensure_claude_settings(expanded_path, BASE_URL, apply_default_permissions=True)
+    ensure_claude_settings(expanded_path, BASE_URL)
 
     # Create a default PM agent for every new project
     import json as _json
@@ -229,7 +224,6 @@ async def store(request: Request):
         "path": project.path,
         "language": project.language,
         "workspace_id": int(project.workspace_id) if project.workspace_id is not None else None,
-        "system_prompt": project.system_prompt,
     }
 
     if is_inertia:

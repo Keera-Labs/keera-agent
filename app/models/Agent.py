@@ -2,7 +2,7 @@ import json
 
 from fastapi_startkit.masoniteorm import Model
 
-from app.terminal.command import ClaudeCommand, PLAN_MODE_PREFIX
+from app.terminal.command import ClaudeCommand
 
 
 class Agent(Model):
@@ -12,7 +12,7 @@ class Agent(Model):
     dangerously_skip_permissions: bool
     plan_mode: bool
 
-    def to_command(self, system_prompt_suffix: str = '') -> str:
+    def to_command(self) -> str:
         try:
             flags = json.loads(self.flags) if self.flags else {}
         except (json.JSONDecodeError, TypeError):
@@ -27,17 +27,6 @@ class Agent(Model):
 
         if getattr(self, 'has_session', False):
             cmd.continue_session()
-
-        system_prompt = self.system_prompt or ''
-        if self.plan_mode:
-            system_prompt = PLAN_MODE_PREFIX + system_prompt
-        if system_prompt_suffix:
-            system_prompt = system_prompt + system_prompt_suffix
-        if system_prompt.strip():
-            prompt_file = f'/tmp/keera-agent-{self.id}.txt'
-            with open(prompt_file, 'w') as f:
-                f.write(system_prompt.strip())
-            cmd.system_prompt_file(prompt_file)
 
         if self.dangerously_skip_permissions:
             cmd.skip_permissions()

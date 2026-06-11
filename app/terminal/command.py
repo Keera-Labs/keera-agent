@@ -12,7 +12,6 @@ class ClaudeCommand:
         self._model: str | None = None
         self._worktree: str | None = None
         self._continue: bool = False
-        self._system_prompt_file: str | None = None
         self._allowed_tools: list[str] | None = None
         self._disallowed_tools: list[str] | None = None
         self._skip_permissions: bool = False
@@ -29,10 +28,6 @@ class ClaudeCommand:
 
     def continue_session(self) -> 'ClaudeCommand':
         self._continue = True
-        return self
-
-    def system_prompt_file(self, path: str) -> 'ClaudeCommand':
-        self._system_prompt_file = path
         return self
 
     def allowed_tools(self, tools: list[str]) -> 'ClaudeCommand':
@@ -61,8 +56,6 @@ class ClaudeCommand:
             parts.append(f'--worktree {shlex.quote(self._worktree)}')
         if self._continue:
             parts.append('--continue')
-        if self._system_prompt_file:
-            parts.append(f'--system-prompt "$(cat {shlex.quote(self._system_prompt_file)})"')
         if self._model:
             parts.append(f'--model {shlex.quote(self._model)}')
         if self._allowed_tools:
