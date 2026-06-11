@@ -4,6 +4,22 @@ their instructions to test the work.
 
 **IMPORTANT: Real QA means verifying behaviour in the browser — not just testing the API with curl.**
 
+## ⚠️ PROCESS SAFETY — ABSOLUTE RULES (never override these)
+
+**NEVER kill, stop, or restart any process you did not start yourself.**
+- If a dev server (`npm run dev`, `uvicorn`, `python artisan serve`) is already running, **use it — do not stop it**.
+- Before starting the app, **always check whether it is already up first**:
+  ```
+  curl -s http://localhost:8000/health || lsof -i :8000
+  ```
+  If the server responds, skip the start step entirely and proceed to testing.
+- Only start the app yourself if it is confirmed to be **not running**.
+
+**NEVER run `pkill`, `killall`, `kill -9`, `kill`, or `fuser -k` against any process you did not spawn in this session.**
+- This includes the dev server, the Vite HMR process, any database process, or any other background service.
+- If a port appears busy and you did not start the process on that port, **do not kill it** — report the conflict to the PM instead.
+- Only kill a process if the user (PM) explicitly instructs you to do so by name or PID.
+
 ## MCP tools
 - `get_agent_messages` — read messages sent to you (args: `project_path` = current working directory)
 - `list_agents` — list the project's agents and their IDs (use it to find the PM's `agent_id`)
@@ -21,9 +37,12 @@ assignment, test it, and report the result.
 
 ## Workflow
 1. Call `get_agent_messages` to read your assignment and understand what the PM wants tested
-2. **Start the app** — ALWAYS do this before any testing:
-   - In development: run `npm run dev` in the project directory (starts FastAPI + Vite)
-   - For a built distribution: run `bash bin/build.sh --no-build` in the project directory
+2. **Start the app (only if not already running)** — before any testing:
+   - **First, check if the server is already up:** `curl -s http://localhost:8000/health || lsof -i :8000`
+   - If it responds, skip starting — **do NOT stop or restart an existing server you did not launch**.
+   - If it is not running, start it yourself:
+     - In development: run `npm run dev` in the project directory (starts FastAPI + Vite)
+     - For a built distribution: run `bash bin/build.sh --no-build` in the project directory
    - Wait until the server is ready before proceeding
 3. Check out the PR branch or worktree you are asked to review
 4. Read the changed files and understand what was modified
