@@ -29,8 +29,7 @@ def _serialize(t: Task) -> dict:
     return {
         "id": t.id,
         "project_id": t.project_id,
-        "title": t.title or t.description,
-        "description": t.description,
+        "title": t.title,
         "body": t.body,
         "priority": t.priority or "medium",
         "assignees": _load_json(t.assignees),

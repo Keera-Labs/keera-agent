@@ -26,24 +26,6 @@ _DEFAULT_PERMS_PATH = os.path.join(
 )
 
 
-def _read_project_settings(project_path: str) -> dict:
-    settings_path = os.path.join(os.path.expanduser(project_path), ".claude", "settings.json")
-    if os.path.exists(settings_path):
-        try:
-            with open(settings_path) as f:
-                return json.load(f)
-        except (json.JSONDecodeError, OSError):
-            pass
-    return {}
-
-
-def _write_project_settings(project_path: str, settings: dict) -> None:
-    expanded = os.path.expanduser(project_path)
-    settings_path = os.path.join(expanded, ".claude", "settings.json")
-    os.makedirs(os.path.dirname(settings_path), exist_ok=True)
-    atomic_write_json(settings_path, settings)
-
-
 def read_default_permissions() -> dict:
     if os.path.exists(_DEFAULT_PERMS_PATH):
         try:
@@ -57,47 +39,6 @@ def read_default_permissions() -> dict:
 def write_default_permissions(perms: dict) -> None:
     os.makedirs(os.path.dirname(_DEFAULT_PERMS_PATH), exist_ok=True)
     atomic_write_json(_DEFAULT_PERMS_PATH, perms)
-
-
-# ── Project permissions ────────────────────────────────────────────────────────
-
-async def get_project_permissions(request: Request, project_id: int):
-    project = await Project.find(project_id)
-    if not project:
-        return JSONResponse({"error": "Project not found"}, status_code=404)
-
-    # Prefer DB values; fall back to settings file, then defaults
-    db_allow = _parse_json_list(getattr(project, "permissions_allow", None))
-    db_deny  = _parse_json_list(getattr(project, "permissions_deny", None))
-
-    if db_allow or db_deny:
-        return JSONResponse({"allow": db_allow, "deny": db_deny})
-
-    settings = _read_project_settings(project.path)
-    if "permissions" in settings:
-        perms = settings["permissions"]
-    else:
-        perms = read_default_permissions()
-    return JSONResponse({
-        "allow": perms.get("allow", []),
-        "deny":  perms.get("deny", []),
-    })
-
-
-async def update_project_permissions(request: Request, project_id: int):
-    project = await Project.find(project_id)
-    if not project:
-        return JSONResponse({"error": "Project not found"}, status_code=404)
-
-    body = await request.json()
-    allow = [s for s in (body.get("allow") or []) if isinstance(s, str) and s.strip()]
-    deny  = [s for s in (body.get("deny")  or []) if isinstance(s, str) and s.strip()]
-
-    project.permissions_allow = json.dumps(allow)
-    project.permissions_deny  = json.dumps(deny)
-    await project.save()
-
-    return JSONResponse({"allow": allow, "deny": deny})
 
 
 # ── Default permissions ────────────────────────────────────────────────────────

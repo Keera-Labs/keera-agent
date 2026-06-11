@@ -85,8 +85,6 @@ router.get("/api/agents/{agent_id}/relay-messages", agent_relay_controller.get_m
 # Backend-triggered agent start
 router.post("/api/agents/{agent_id}/trigger", agent_trigger_controller.trigger)
 
-router.get("/api/projects/{project_id}/permissions", permission_controller.get_project_permissions)
-router.patch("/api/projects/{project_id}/permissions", permission_controller.update_project_permissions)
 router.get("/api/agents/{agent_id}/permissions", permission_controller.get_agent_permissions)
 router.patch("/api/agents/{agent_id}/permissions", permission_controller.update_agent_permissions)
 router.get("/api/default-permissions", permission_controller.get_default_permissions)

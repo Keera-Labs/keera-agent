@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { color } from '@/tokens'
 import type { Project } from '@/types/type'
-import { TagInput } from '@/components/ui/TagInput'
 
 // Light modal palette
 const M = {
@@ -24,34 +23,21 @@ export function EditProjectModal({
     onUpdated: (p: Project) => void
 }) {
     const [path,   setPath]   = useState(project.path)
-    const [prompt, setPrompt] = useState(project.system_prompt ?? '')
-
-    const [allow,        setAllow]        = useState<string[]>([])
-    const [deny,         setDeny]         = useState<string[]>([])
-    const [permFetching, setPermFetching] = useState(true)
-
     const [saving, setSaving] = useState(false)
     const [saved,  setSaved]  = useState(false)
     const [error,  setError]  = useState('')
-
-    useEffect(() => {
-        fetch(`/api/projects/${project.id}/permissions`)
-            .then(r => r.json())
-            .then(d => { setAllow(d.allow ?? []); setDeny(d.deny ?? []) })
-            .catch(() => setError('Failed to load permissions'))
-            .finally(() => setPermFetching(false))
-    }, [project.id])
 
     async function saveAll(e: React.FormEvent) {
         e.preventDefault()
         setSaving(true); setError('')
         try {
-            const [projectRes, permRes] = await Promise.all([
-                fetch(`/api/projects/${project.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: path.trim(), system_prompt: prompt.trim() || null }) }),
-                fetch(`/api/projects/${project.id}/permissions`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ allow, deny }) }),
-            ])
-            if (!projectRes.ok || !permRes.ok) { setError('Something went wrong'); return }
-            onUpdated(await projectRes.json())
+            const res = await fetch(`/api/projects/${project.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: path.trim() }),
+            })
+            if (!res.ok) { setError('Something went wrong'); return }
+            onUpdated(await res.json())
             setSaved(true)
             setTimeout(() => { setSaved(false); onClose() }, 1200)
         } catch { setError('Network error') } finally { setSaving(false) }
@@ -82,10 +68,6 @@ export function EditProjectModal({
         transition: 'background 0.2s',
     }
 
-    const dividerSty: React.CSSProperties = {
-        border: 'none', borderTop: `1px solid ${M.border}`, margin: '4px 0',
-    }
-
     // ── Render ────────────────────────────────────────────────────────────────
 
     return (
@@ -99,7 +81,7 @@ export function EditProjectModal({
             <div
                 style={{
                     background: M.bg, border: `1px solid ${M.border}`, borderRadius: '10px',
-                    width: '520px', maxHeight: '90vh', display: 'flex', flexDirection: 'column',
+                    width: '520px', display: 'flex', flexDirection: 'column',
                     boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
                     overflow: 'hidden',
                 }}
@@ -133,14 +115,13 @@ export function EditProjectModal({
                     </div>
                 </div>
 
-                {/* ── Scrollable form ── */}
+                {/* ── Form ── */}
                 <form
                     onSubmit={saveAll}
-                    style={{ padding: '20px 24px 24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '20px' }}
+                    style={{ padding: '20px 24px 24px', display: 'flex', flexDirection: 'column', gap: '20px' }}
                 >
                     {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
 
-                    {/* ── General ── */}
                     <section style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                         <p style={{ margin: 0, color: M.faint, fontSize: '12px', lineHeight: '1.5' }}>
                             Local filesystem path. Claude Code will run from this directory.
@@ -157,71 +138,10 @@ export function EditProjectModal({
                         </label>
                     </section>
 
-                    <hr style={dividerSty} />
-
-                    {/* ── System Instructions ── */}
-                    <section style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        <p style={{ margin: 0, color: M.faint, fontSize: '12px', lineHeight: '1.5' }}>
-                            Instructions passed to Claude when a new agent session starts. Leave blank to use no system prompt.
-                        </p>
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                            <span style={labelSty}>System prompt</span>
-                            <textarea
-                                value={prompt}
-                                onChange={e => setPrompt(e.target.value)}
-                                placeholder="You are a helpful assistant specialized in..."
-                                rows={8}
-                                style={{
-                                    ...inputSty,
-                                    resize: 'vertical',
-                                    fontFamily: '"JetBrains Mono", monospace',
-                                    fontSize: '12px',
-                                    lineHeight: '1.6',
-                                }}
-                            />
-                        </label>
-                    </section>
-
-                    <hr style={dividerSty} />
-
-                    {/* ── Permissions ── */}
-                    <section style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        <p style={{ margin: 0, color: M.faint, fontSize: '12px', lineHeight: '1.5' }}>
-                            Saved to the project's .claude/settings.json. Takes effect on next agent start.
-                        </p>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                            <span style={labelSty}>Allow</span>
-                            <TagInput
-                                tags={allow}
-                                onChange={setAllow}
-                                placeholder={permFetching ? '' : 'Type a rule and press Enter…'}
-                                disabled={permFetching}
-                                tagColor={color.success}
-                            />
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                            <span style={labelSty}>Deny</span>
-                            <TagInput
-                                tags={deny}
-                                onChange={setDeny}
-                                placeholder={permFetching ? '' : 'Type a rule and press Enter…'}
-                                disabled={permFetching}
-                                tagColor={color.danger}
-                            />
-                        </div>
-                        <p style={{ margin: 0, color: M.faint, fontSize: '10px', lineHeight: '1.5' }}>
-                            Rules follow Claude Code syntax, e.g.{' '}
-                            <code style={{ fontFamily: 'monospace', color: M.body }}>Bash(*)</code>,{' '}
-                            <code style={{ fontFamily: 'monospace', color: M.body }}>Bash(npm run *)</code>,{' '}
-                            <code style={{ fontFamily: 'monospace', color: M.body }}>Read</code>.{' '}
-                            Press Enter to add. Leave both empty to rely on interactive prompts.
-                        </p>
-                    </section>
-
                     {/* ── Actions ── */}
                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', paddingTop: '4px' }}>
                         <button type="button" onClick={onClose} style={cancelSty}>Cancel</button>
-                        <button type="submit" disabled={saving || permFetching} style={saveBtnSty}>
+                        <button type="submit" disabled={saving} style={saveBtnSty}>
                             {saved ? '✓ Saved' : saving ? 'Saving…' : 'Save'}
                         </button>
                     </div>

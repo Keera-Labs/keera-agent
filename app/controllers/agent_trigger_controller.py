@@ -164,22 +164,27 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
         terminal=terminal,
         terminal_manager=terminal_manager,
         session_id=session_id,
-        build_cmd=lambda a: a.to_command(relay_instructions),
+        build_cmd=lambda a: a.to_command(),
         after_restart=lambda: terminal.write_input((initial_message + '\n').encode()),
     )
     bridge = WebsocketTerminal(None, terminal, on_output=monitor)
     asyncio.create_task(bridge.run(
-        auto_send=fresh_agent.to_command(relay_instructions).encode(),
+        auto_send=fresh_agent.to_command().encode(),
         stop_on_disconnect=False,
     ))
 
     start_time = time.monotonic()
 
-    # Signal ready and inject the initial message
+    # Signal ready and inject relay context + initial message.
+    # relay_instructions (agent identity, roster, project dir, communication
+    # protocol) was previously injected via --system-prompt; now that
+    # system_prompt_file() is removed we prepend it to the first user message so
+    # the agent still has its full context before acting on the task.
     ready_event = claude_ready.setdefault(session_id, asyncio.Event())
     await asyncio.sleep(1.5)
     ready_event.set()
-    await terminal_manager.write_input(session_id, initial_message)
+    contextual_message = f"{relay_instructions}\n\n---\n{initial_message}"
+    await terminal_manager.write_input(session_id, contextual_message)
 
     # Notify the frontend if it's already connected
     conn_manager: ConnectionManager = app().make('connections')
