@@ -17,6 +17,7 @@ from app.mcp.tools import (
     UpdateTaskStatusTool,
     DeleteTaskTool,
     SendMessageTool,
+    KEERA_TOOLS,
 )
 from databases.factories.project_factory import ProjectFactory
 from databases.factories.task_factory import TaskFactory
@@ -334,3 +335,24 @@ class TestSendMessageToolValidation(TestCase, DatabaseTransaction):
         self.assertNotIn("no agent found with name", text.lower())
         # Should mention the agent's display name
         self.assertIn("PM Agent", text)
+
+
+class TestMcpToolNames(TestCase):
+    """Verify MCP tool names are consistent — relay_to_agent must NOT be registered."""
+
+    def test_send_message_to_agent_is_registered(self):
+        """The real tool name is send_message_to_agent."""
+        names = [cls().name for cls in KEERA_TOOLS]
+        self.assertIn("send_message_to_agent", names)
+
+    def test_relay_to_agent_is_not_registered(self):
+        """relay_to_agent is a stale alias that was never wired — must not exist."""
+        names = [cls().name for cls in KEERA_TOOLS]
+        self.assertNotIn("relay_to_agent", names)
+
+    def test_system_prompt_fallback_references_correct_tool(self):
+        """The PM fallback prompt must reference send_message_to_agent, not relay_to_agent."""
+        from app.utils.system_prompts import _SYSTEM_PROMPTS_FALLBACK
+        pm_prompt = _SYSTEM_PROMPTS_FALLBACK.get("pm", "")
+        self.assertIn("send_message_to_agent", pm_prompt)
+        self.assertNotIn("relay_to_agent", pm_prompt)

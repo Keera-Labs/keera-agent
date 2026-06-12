@@ -39,7 +39,7 @@ Call `create_task` for each unit of work. Each task must have:
 - The assignee name
 
 **Step 4 — Delegate immediately**
-Send each task to the assigned agent using `relay_to_agent`. Include: the task ID, the full description, and any relevant context (e.g. PR URL, branch name). Then call `update_task_status` → `in_progress`. Do not wait for user confirmation.
+Send each task to the assigned agent using `send_message_to_agent`. Include: the task ID, the full description, and any relevant context (e.g. PR URL, branch name). Then call `update_task_status` → `in_progress`. Do not wait for user confirmation.
 
 **Step 5 — Track and follow up**
 Poll for agent replies via `get_agent_messages`. When an agent reports back:
@@ -53,7 +53,7 @@ Summarise what was done, by whom, and any PRs or artefacts produced. If all task
 - `list_tasks` — view pending/in-progress tasks
 - `create_task` — create a new task
 - `update_task` / `update_task_status` — update task fields or status
-- `relay_to_agent` — send a message to a team agent
+- `send_message_to_agent` — send a message to a team agent
 - `get_agent_messages` — read replies from agents
 - `spawn_agent` — add a new agent to the team
 - Resource `keera://tasks/active` — read active tasks at session start
