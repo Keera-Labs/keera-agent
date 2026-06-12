@@ -118,10 +118,10 @@ def _build_relay_instructions(agent, cwd: str, base_url: str, siblings) -> str:
         f"Project ID: {agent.project_id}\n"
         f"Project directory: {cwd}\n"
         f"{roster_section}"
-        f"To send a message to another agent, use the MCP tool relay_to_agent or run:\n"
-        f"  curl -s -X POST {base_url}/api/agent-relay \\\n"
-        f"    -H 'Content-Type: application/json' \\\n"
-        f"    -d '{{\"from_agent_id\": {agent.id}, \"to_agent_id\": TARGET_ID, \"content\": \"your message\"}}'\n"
+        f"To send a message to another agent, use the MCP tool send_message_to_agent with:\n"
+        f"  sender_agent_id: {agent.id}\n"
+        f"  receiver_agent_id: <target agent ID or name>\n"
+        f"  message: <your message>\n"
         f"Messages you receive appear as: [Message from Agent '<name>']: <content>\n"
         f"To create and start a NEW agent use the MCP tool spawn_agent."
     )
@@ -158,33 +158,31 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     fresh_agent = await _Agent.find(agent.id)
 
     # Parts 1 & 3: monitor PTY output via WebsocketTerminal (no WS connection)
-    # after_restart re-injects the initial message so the agent has a task after recovery
+    # Inject relay_instructions as a system-prompt suffix so the agent has its identity
+    # and communication protocol in the system prompt (not just in the first user message).
+    # after_restart re-injects the initial message so the agent has a task after recovery.
     monitor = make_claude_session_monitor(
         agent_id=agent.id,
         terminal=terminal,
         terminal_manager=terminal_manager,
         session_id=session_id,
-        build_cmd=lambda a: a.to_command(),
+        build_cmd=lambda a: a.to_command(system_prompt_suffix=relay_instructions),
         after_restart=lambda: terminal.write_input((initial_message + '\n').encode()),
     )
     bridge = WebsocketTerminal(None, terminal, on_output=monitor)
     asyncio.create_task(bridge.run(
-        auto_send=fresh_agent.to_command().encode(),
+        auto_send=fresh_agent.to_command(system_prompt_suffix=relay_instructions).encode(),
         stop_on_disconnect=False,
     ))
 
     start_time = time.monotonic()
 
-    # Signal ready and inject relay context + initial message.
-    # relay_instructions (agent identity, roster, project dir, communication
-    # protocol) was previously injected via --system-prompt; now that
-    # system_prompt_file() is removed we prepend it to the first user message so
-    # the agent still has its full context before acting on the task.
+    # Signal ready and inject only the task message — relay_instructions are now
+    # in the system prompt so they persist across the entire conversation.
     ready_event = claude_ready.setdefault(session_id, asyncio.Event())
     await asyncio.sleep(1.5)
     ready_event.set()
-    contextual_message = f"{relay_instructions}\n\n---\n{initial_message}"
-    await terminal_manager.write_input(session_id, contextual_message)
+    await terminal_manager.write_input(session_id, initial_message)
 
     # Notify the frontend if it's already connected
     conn_manager: ConnectionManager = app().make('connections')

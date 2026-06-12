@@ -5,7 +5,7 @@ _PROMPTS_DIR = _pathlib.Path(__file__).parent.parent / "prompts"
 # Keep the dict as a hard-coded fallback for environments where the prompts
 # directory cannot be found (e.g. during testing without assets).
 _SYSTEM_PROMPTS_FALLBACK: dict[str, str] = {
-    "pm": "You are the Project Manager (PM). Delegate all work to agents via spawn_agent and relay_to_agent.",
+    "pm": "You are the Project Manager (PM). Delegate all work to agents via spawn_agent and send_message_to_agent.",
     "software_engineer": "You are a Software Engineer agent. This is your permanent role — never abandon it.",
     "qa": "You are a QA (Quality Assurance) agent. This is your permanent role — never abandon it.",
     "software_engineer_frontend": "You are a Frontend Software Engineer. Work only on the frontend.",
