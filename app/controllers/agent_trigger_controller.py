@@ -118,10 +118,10 @@ def _build_relay_instructions(agent, cwd: str, base_url: str, siblings) -> str:
         f"Project ID: {agent.project_id}\n"
         f"Project directory: {cwd}\n"
         f"{roster_section}"
-        f"To send a message to another agent, use the MCP tool relay_to_agent or run:\n"
-        f"  curl -s -X POST {base_url}/api/agent-relay \\\n"
+        f"To send a message to another agent, use the MCP tool send_message_to_agent or run:\n"
+        f"  curl -s -X POST {base_url}/mcp \\\n"
         f"    -H 'Content-Type: application/json' \\\n"
-        f"    -d '{{\"from_agent_id\": {agent.id}, \"to_agent_id\": TARGET_ID, \"content\": \"your message\"}}'\n"
+        f"    -d '{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{{\"name\":\"send_message_to_agent\",\"arguments\":{{\"sender_agent_id\":{agent.id},\"receiver_agent_id\":TARGET_ID,\"message\":\"your message\"}}}}}}'\n"
         f"Messages you receive appear as: [Message from Agent '<name>']: <content>\n"
         f"To create and start a NEW agent use the MCP tool spawn_agent."
     )
@@ -157,6 +157,14 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     # Re-fetch agent so to_command() uses the current has_session value from DB
     fresh_agent = await _Agent.find(agent.id)
 
+    def _build_cmd_with_identity(a):
+        """Build claude command with agent identity injected into system prompt."""
+        suffix = (
+            f"\n\n## Your identity\nYour agent ID is {a.id}. "
+            f"When other agents ask you to report back, always use this ID as `sender_agent_id` in send_message_to_agent calls."
+        )
+        return a.to_command(system_prompt_suffix=suffix)
+
     # Parts 1 & 3: monitor PTY output via WebsocketTerminal (no WS connection)
     # after_restart re-injects the initial message so the agent has a task after recovery
     monitor = make_claude_session_monitor(
@@ -164,12 +172,12 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
         terminal=terminal,
         terminal_manager=terminal_manager,
         session_id=session_id,
-        build_cmd=lambda a: a.to_command(),
+        build_cmd=_build_cmd_with_identity,
         after_restart=lambda: terminal.write_input((initial_message + '\n').encode()),
     )
     bridge = WebsocketTerminal(None, terminal, on_output=monitor)
     asyncio.create_task(bridge.run(
-        auto_send=fresh_agent.to_command().encode(),
+        auto_send=_build_cmd_with_identity(fresh_agent).encode(),
         stop_on_disconnect=False,
     ))
 

@@ -8,6 +8,7 @@ import json
 
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
+from app.controllers.agent_trigger_controller import _build_relay_instructions
 from app.models.Agent import Agent
 from app.models.Project import Project
 from tests.test_case import TestCase
@@ -86,3 +87,74 @@ class TestAgentTriggerController(TestCase, DatabaseTransaction):
             json={"message": "Continue the task"},
         )
         self.assertEqual(response.status_code, 200)
+
+
+class TestBuildRelayInstructions(TestCase, DatabaseTransaction):
+    """Verify _build_relay_instructions uses the correct MCP tool name."""
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        import tempfile
+        self._tmpdir = tempfile.mkdtemp()
+        self.project = await Project.create({
+            "name": "relay-test-proj",
+            "slug": "relay-test-proj",
+            "path": self._tmpdir,
+            "language": "Python",
+        })
+        self.agent = await Agent.create({
+            "project_id": self.project.id,
+            "name": "RelayBot",
+            "agent_type": "software_engineer",
+            "model": "claude-sonnet-4-6",
+            "status": "idle",
+            "has_session": False,
+            "use_worktree": False,
+        })
+
+    def test_relay_instructions_use_send_message_to_agent_tool(self):
+        """_build_relay_instructions must reference send_message_to_agent, not relay_to_agent."""
+        instructions = _build_relay_instructions(
+            self.agent,
+            cwd=self._tmpdir,
+            base_url="http://localhost:4545",
+            siblings=[],
+        )
+        self.assertIn("send_message_to_agent", instructions)
+        self.assertNotIn("relay_to_agent", instructions)
+
+    def test_relay_instructions_include_agent_id(self):
+        """Relay instructions must include the agent's own ID for sender_agent_id."""
+        instructions = _build_relay_instructions(
+            self.agent,
+            cwd=self._tmpdir,
+            base_url="http://localhost:4545",
+            siblings=[],
+        )
+        self.assertIn(str(self.agent.id), instructions)
+
+    def test_relay_instructions_include_mcp_endpoint(self):
+        """Relay instructions must reference the MCP endpoint."""
+        instructions = _build_relay_instructions(
+            self.agent,
+            cwd=self._tmpdir,
+            base_url="http://localhost:4545",
+            siblings=[],
+        )
+        self.assertIn("http://localhost:4545/mcp", instructions)
+
+    def test_relay_instructions_with_siblings_includes_roster(self):
+        """Relay instructions must list sibling agents."""
+
+        class FakeAgent:
+            id = 99
+            name = "PM Agent"
+
+        instructions = _build_relay_instructions(
+            self.agent,
+            cwd=self._tmpdir,
+            base_url="http://localhost:4545",
+            siblings=[FakeAgent()],
+        )
+        self.assertIn("PM Agent", instructions)
+        self.assertIn("99", instructions)
