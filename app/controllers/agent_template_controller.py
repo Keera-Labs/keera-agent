@@ -42,7 +42,7 @@ async def store(request: Request):
 
     agent_type = (body.get("agent_type") or "software_engineer").strip()
     description = (body.get("description") or "").strip() or None
-    model = (body.get("model") or "claude-sonnet-4-6").strip()
+    model = (body.get("model") or "claude-opus-4-8").strip()
     system_prompt = (body.get("system_prompt") or "").strip() or None
     flags = body.get("flags") or {}
     permissions_allow = body.get("permissions_allow") or []
@@ -85,7 +85,7 @@ async def update(request: Request, template_id: int):
     if "system_prompt" in body:
         template.system_prompt = (body["system_prompt"] or "").strip() or None
     if "model" in body:
-        template.model = (body["model"] or "claude-sonnet-4-6").strip()
+        template.model = (body["model"] or "claude-opus-4-8").strip()
     if "flags" in body:
         template.flags = _json.dumps(body["flags"] or {})
     if "permissions_allow" in body:

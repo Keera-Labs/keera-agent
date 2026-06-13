@@ -420,7 +420,7 @@ class SpawnAgentInput(BaseModel):
     agent_type: str = Field(pattern="^(pm|software_engineer|software_engineer_frontend|reviewer|qa|qa_browser)$", description="Role type for the agent.")
     system_prompt: Optional[str] = Field(default=None, description="System prompt defining the agent's role and behavior.")
     message: Optional[str] = Field(default=None, description="Initial task or instruction to send to the agent after it starts. Omit to create an idle agent.")
-    model: Optional[str] = Field(default=None, description="Claude model to use. Defaults to claude-sonnet-4-6.")
+    model: Optional[str] = Field(default=None, description="Claude model to use. Defaults to claude-opus-4-8.")
     task_id: Optional[int] = Field(default=None, description="ID of the task this agent is working on.")
     from_agent_id: Optional[int] = Field(default=None, description="ID of the agent spawning this one. Sets orchestrator_id on the new agent.")
 
@@ -468,7 +468,7 @@ class SpawnAgentTool(Tool):
                 request=AgentStoreRequest(
                     name=name,
                     agent_type=arguments.get("agent_type", "software_engineer"),
-                    model=arguments.get("model") or "claude-sonnet-4-6",
+                    model=arguments.get("model") or "claude-opus-4-8",
                     description=f"{name} agent",
                     system_prompt=(arguments.get("system_prompt") or "").strip() or None,
                     task_id=arguments.get("task_id"),

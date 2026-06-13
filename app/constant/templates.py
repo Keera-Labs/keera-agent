@@ -6,7 +6,7 @@ class AgentTemplateSeed(BaseModel):
     name: str
     description: str
     agent_type: str
-    model: str = "claude-sonnet-4-6"
+    model: str = "claude-opus-4-8"
     dangerously_skip_permissions: bool = True
     plan_mode: bool = False
     flags: dict = Field(default_factory=dict)
