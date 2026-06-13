@@ -129,7 +129,7 @@ export function ModalLayer() {
             )}
 
             {/* Add agent */}
-            {showAddAgent && activeProject && (
+            {showAddAgent && activeProject?.id != null && (
                 <AddAgentModal
                     projectId={activeProject.id}
                     templates={agentTemplates}
