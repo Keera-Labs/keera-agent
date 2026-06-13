@@ -186,3 +186,71 @@ class TestBuildIdentitySuffix(TestCase):
         """Suffix must embed the agent's own numeric ID."""
         suffix = _build_identity_suffix(99)
         self.assertIn("99", suffix)
+
+
+class TestAgentRelayDeletedGuard(TestCase, DatabaseTransaction):
+    """Verify POST /api/agent-relay rejects soft-deleted senders and receivers."""
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        import tempfile
+        self._tmpdir = tempfile.mkdtemp()
+        self.project = await Project.create({
+            "name": "relay-deleted-proj",
+            "slug": "relay-deleted-proj",
+            "path": self._tmpdir,
+            "language": "Python",
+        })
+        self.live_agent = await Agent.create({
+            "project_id": self.project.id,
+            "name": "LiveBot",
+            "agent_type": "software_engineer",
+            "model": "claude-sonnet-4-6",
+            "status": "idle",
+            "has_session": False,
+            "use_worktree": False,
+        })
+
+    async def _make_deleted_agent(self, name: str):
+        import datetime
+        return await Agent.create({
+            "project_id": self.project.id,
+            "name": name,
+            "agent_type": "software_engineer",
+            "model": "claude-sonnet-4-6",
+            "status": "idle",
+            "has_session": False,
+            "use_worktree": False,
+            "deleted_at": datetime.datetime.utcnow(),
+        })
+
+    async def test_relay_to_deleted_agent_returns_404(self):
+        """Sending to a soft-deleted receiver must return HTTP 404."""
+        dead = await self._make_deleted_agent("DeadReceiver")
+        response = await self.post("/api/agent-relay", json={
+            "from_agent_id": self.live_agent.id,
+            "to_agent_id": dead.id,
+            "content": "knock knock",
+        })
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("deleted", response.json().get("error", "").lower())
+
+    async def test_relay_from_deleted_agent_returns_404(self):
+        """A soft-deleted agent must not be allowed to send via the relay endpoint."""
+        dead = await self._make_deleted_agent("DeadSender")
+        response = await self.post("/api/agent-relay", json={
+            "from_agent_id": dead.id,
+            "to_agent_id": self.live_agent.id,
+            "content": "ghost ping",
+        })
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("deleted", response.json().get("error", "").lower())
+
+    async def test_relay_to_nonexistent_agent_returns_404(self):
+        """Sending to a completely nonexistent agent ID returns 404."""
+        response = await self.post("/api/agent-relay", json={
+            "from_agent_id": self.live_agent.id,
+            "to_agent_id": 999999,
+            "content": "void message",
+        })
+        self.assertEqual(response.status_code, 404)

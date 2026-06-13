@@ -306,6 +306,8 @@ class SendMessageTool(Tool):
         sender = await Agent.find(sender_id)
         if not sender:
             return Response.text(f"Error: agent #{sender_id} not found")
+        if getattr(sender, "deleted_at", None):
+            return Response.text(f"Error: agent #{sender_id} not found or has been deleted")
 
         # receiver_agent_id accepts int ID or string name
         raw_receiver = arguments["receiver_agent_id"]
@@ -314,6 +316,8 @@ class SendMessageTool(Tool):
             receiver = await Agent.find(int(raw_receiver))
             if not receiver:
                 return Response.text(f"Error: agent #{raw_receiver} not found")
+            if getattr(receiver, "deleted_at", None):
+                return Response.text(f"Error: agent #{raw_receiver} not found or has been deleted")
         else:
             # Look up by name (case-insensitive), skip deleted agents
             all_agents = await Agent.where_null("deleted_at").get()
