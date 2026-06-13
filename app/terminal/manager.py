@@ -31,20 +31,10 @@ class TerminalManager:
     def find(self, session_id: str) -> Terminal | None:
         return self._sessions.get(session_id)
 
-    def write(self, session_id: str, data: bytes | str) -> None:
+    async def write(self, session_id: str, data: bytes | str) -> None:
         if isinstance(data, str):
             data = data.encode()
-        self._sessions[session_id].write(data)
-
-    async def write_input(self, session_id: str, data: bytes | str) -> None:
-        if isinstance(data, str):
-            data = data.encode()
-        await self._sessions[session_id].write_input(data)
-
-    async def write_relay_message(self, session_id: str, data: bytes | str) -> None:
-        if isinstance(data, str):
-            data = data.encode()
-        await self._sessions[session_id].write_relay_message(data)
+        await self._sessions[session_id].write(data)
 
     def resize(self, session_id: str, cols: int, rows: int):
         self._sessions[session_id].resize(cols, rows)

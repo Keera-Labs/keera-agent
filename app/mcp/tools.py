@@ -498,7 +498,7 @@ class SpawnAgentTool(Tool):
         conn_manager: ConnectionManager = _app().make('connections')
         for bridge in conn_manager.all_for_cwd(cwd):
             try:
-                await bridge.send_text(payload)
+                await bridge.write(payload)
             except Exception:
                 pass
 

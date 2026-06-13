@@ -46,7 +46,7 @@ async def _restart(agent_id, terminal, terminal_manager, session_id, build_cmd, 
         return
     agent = await Agent.find(agent_id)
     if agent:
-        await terminal.write_input(build_cmd(agent).encode())
+        await terminal.write(build_cmd(agent).encode().rstrip(b"\r\n") + b"\r")
         await asyncio.sleep(2.0)
         await Agent.where('id', agent_id).update({'has_session': True})
         if after_restart:

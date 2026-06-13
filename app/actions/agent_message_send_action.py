@@ -1,3 +1,4 @@
+import asyncio
 import os
 
 from app.models.Agent import Agent
@@ -35,14 +36,20 @@ class AgentMessageSendAction:
         conn_manager: ConnectionManager = app().make('connections')
         bridge = conn_manager.get(self.to_agent.session_id) if self.to_agent.session_id else None
         if bridge:
-            await bridge.write_relay_message(text)
+            text_bytes = text.encode().rstrip(b"\r\n")
+            await bridge.write(text_bytes)
+            await asyncio.sleep(0.05)
+            await bridge.write(b"\r")
             await AgentRelayMessage.where("id", msg.id).update({"status": "delivered"})
             return msg.id, True
 
         # Headless agent already running
         terminal_manager: TerminalManager = app().make('terminal')
         if self.to_agent.session_id and terminal_manager.find(self.to_agent.session_id):
-            await terminal_manager.write_relay_message(self.to_agent.session_id, text)
+            text_bytes = text.encode().rstrip(b"\r\n")
+            await terminal_manager.write(self.to_agent.session_id, text_bytes)
+            await asyncio.sleep(0.05)
+            await terminal_manager.write(self.to_agent.session_id, b"\r")
             await AgentRelayMessage.where("id", msg.id).update({"status": "delivered"})
             return msg.id, True
 

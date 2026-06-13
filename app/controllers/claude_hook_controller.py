@@ -103,7 +103,7 @@ async def _handle_claude_stopped(project, project_cwd: str) -> None:
     bridge = _find_project_bridge(project_cwd)
     if bridge:
         try:
-            await bridge.send_text(json.dumps({'type': 'claude_stopped', 'cwd': project_cwd}))
+            await bridge.write(json.dumps({'type': 'claude_stopped', 'cwd': project_cwd}))
         except Exception:
             pass
 
@@ -116,13 +116,16 @@ async def _handle_claude_stopped(project, project_cwd: str) -> None:
         active_agent = next((ag for ag in agents if ag.session_id and terminal_manager.find(ag.session_id)), None)
         if active_agent:
             await asyncio.sleep(0.5)
-            await terminal_manager.write_input(active_agent.session_id, next_task.body or next_task.title)
+            task_text = (next_task.body or next_task.title).encode().rstrip(b"\r\n")
+            await terminal_manager.write(active_agent.session_id, task_text)
+            await asyncio.sleep(0.05)
+            await terminal_manager.write(active_agent.session_id, b"\r")
             await Project.where('id', project.id).update({'claude_status': 'running'})
 
             bridge = _find_project_bridge(project_cwd)
             if bridge:
                 try:
-                    await bridge.send_text(json.dumps({
+                    await bridge.write(json.dumps({
                         'type': 'task_started',
                         'cwd': project_cwd,
                         'task_id': next_task.id,
@@ -161,14 +164,17 @@ async def _deliver_agent_relay_messages(project, cwd: str) -> None:
         for msg in pending:
             from_agent = await Agent.find(msg.from_agent_id)
             sender_name = from_agent.name if from_agent else f"Agent #{msg.from_agent_id}"
-            await terminal_manager.write_input(agent.session_id, f"[Message from Agent '{sender_name}']: {msg.content}")
+            relay_bytes = f"[Message from Agent '{sender_name}']: {msg.content}".encode().rstrip(b"\r\n")
+            await terminal_manager.write(agent.session_id, relay_bytes)
+            await asyncio.sleep(0.05)
+            await terminal_manager.write(agent.session_id, b"\r")
             await AgentRelayMessage.where('id', msg.id).update({'status': 'delivered'})
 
         # Notify frontend about the delivered messages
         bridge = _find_project_bridge(cwd)
         if bridge:
             try:
-                await bridge.send_text(json.dumps({
+                await bridge.write(json.dumps({
                     'type': 'agent_relay_delivered',
                     'agent_id': agent.id,
                     'count': len(pending),

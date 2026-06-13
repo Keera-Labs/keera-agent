@@ -58,44 +58,10 @@ class Terminal:
                 pass
             self.master_fd = None
 
-    def write(self, data: bytes) -> None:
+    async def write(self, data: bytes) -> None:
         if self.master_fd is None or not data:
             return
         os.write(self.master_fd, data)
-
-    async def write_raw(self, data: bytes) -> None:
-        if self.master_fd is None or not data:
-            return
-        if len(data) <= 1:
-            os.write(self.master_fd, data)
-            return
-        for byte in data:
-            os.write(self.master_fd, bytes([byte]))
-            await asyncio.sleep(0.002)
-
-    async def write_input(self, data: bytes) -> None:
-        """Write a complete message atomically: strips trailing CR/LF, appends \\r,
-        then writes the entire payload in a single os.write call.
-
-        Unlike write_raw (which writes byte-by-byte with asyncio.sleep delays),
-        this is guaranteed to be atomic within a single asyncio task — no other
-        coroutine can interleave bytes between the characters of this message.
-        That prevents spaces and other characters from being dropped when multiple
-        coroutines write to the same PTY concurrently (e.g. agent relay messages
-        arriving while other I/O is in flight).
-        """
-        data = data.rstrip(b'\r\n') + b'\r'
-        if self.master_fd is None or not data:
-            return
-        os.write(self.master_fd, data)
-
-    async def write_relay_message(self, data: bytes) -> None:
-        data = data.rstrip(b"\r\n")
-        if self.master_fd is None or not data:
-            return
-        os.write(self.master_fd, data)
-        await asyncio.sleep(0.05)
-        os.write(self.master_fd, b"\r")
 
     def resize(self, cols: int, rows: int) -> None:
         self._cols = cols

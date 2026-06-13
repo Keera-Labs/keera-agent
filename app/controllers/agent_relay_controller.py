@@ -59,7 +59,7 @@ async def relay(request: Request):
         ui_bridge = conn_manager.find_by_cwd(cwd)
         if ui_bridge:
             try:
-                await ui_bridge.send_text(_json.dumps({
+                await ui_bridge.write(_json.dumps({
                     "type": "agent_relay_message",
                     "message_id": msg_id,
                     "from_agent_id": from_agent_id,
