@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { router } from '@inertiajs/react'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import ProjectCreateModal from '@/components/project/ProjectCreateModal'
@@ -61,6 +62,15 @@ export function ModalLayer() {
         showProjectSearch,
         setShowProjectSearch,
     } = useAppLayout()
+
+    // If showAddAgent is true but there is no active project (e.g. because the
+    // project list refreshed and the slug no longer resolves), auto-close the
+    // modal so the UI doesn't get stuck in a silent non-rendering state.
+    useEffect(() => {
+        if (showAddAgent && !activeProject) {
+            setShowAddAgent(false)
+        }
+    }, [showAddAgent, activeProject, setShowAddAgent])
 
     return (
         <>
