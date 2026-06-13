@@ -19,6 +19,8 @@ export interface AppLayoutContextValue {
     allProjects: Project[]
     activeProject: Project | null
     tasks: Task[]
+    /** Total tasks for the active project after the 7-day completed-task filter. */
+    taskCount: number
 
     // ── Modal state ───────────────────────────────────────────────────────────
     showWorkspaceModal: boolean
@@ -238,6 +240,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     const taskHook = useTasks(activeProject?.id ?? null)
     const agentHook = useAgents(activeProject?.id ?? null)
     const tasks = taskHook.tasks
+    const taskCount = taskHook.totalCount
     const projectAgents = agentHook.agents
 
     // Null out the selected agent immediately (same render) if it doesn't belong
@@ -580,7 +583,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
 
     const value: AppLayoutContextValue = {
         // Data
-        workspaces, allProjects, activeProject, tasks,
+        workspaces, allProjects, activeProject, tasks, taskCount,
         // Modal state
         showWorkspaceModal, setShowWorkspaceModal,
         addProjectWorkspaceId, setAddProjectWorkspaceId,

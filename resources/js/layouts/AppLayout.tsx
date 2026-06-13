@@ -42,7 +42,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
 function AppLayoutShell({ children }: { children: React.ReactNode }) {
     const {
-        allProjects, activeProject, tasks,
+        allProjects, activeProject, taskCount,
         claudeStatus,
         projectView, setProjectView,
         setShowAddAgent,
@@ -99,7 +99,7 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
                         setProjectView(view)
                         if (isTasksPage) router.visit(`/${activeProject?.slug}`)
                     }}
-                    taskCount={tasks.length}
+                    taskCount={taskCount}
                     onAddAgent={() => setShowAddAgent(true)}
                     activeId={activeProject?.id ?? null}
                     onAddProject={openAddProject}
