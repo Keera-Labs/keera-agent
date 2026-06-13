@@ -11,16 +11,19 @@ from app.resources.task_resource import TaskResource
 async def index(project_id: int) -> ResourceCollection:
     cutoff = (datetime.datetime.now() - datetime.timedelta(days=7)).isoformat()
 
-    tasks = await (
-        Task
-        .where("project_id", project_id)
-        .where(lambda q: (
-            q.where_not_in("tasks.status", ["completed", "cancelled"])
-            .or_where("tasks.completed_at", ">=", cutoff)
-            .or_where_raw("tasks.completed_at IS NULL")
-        )).paginate())
+    # Active tasks (not completed or cancelled)
+    active = await Task.where("project_id", project_id)\
+        .where_not_in("status", TERMINAL_STATUSES).get()
 
-    return TaskResource.collection(tasks)
+    # Recently completed/cancelled tasks (within last 7 days)
+    recent = await Task.where("project_id", project_id)\
+        .where_in("status", TERMINAL_STATUSES)\
+        .where("completed_at", ">=", cutoff).get()
+
+    all_tasks = list(active) + list(recent)
+    all_tasks.sort(key=lambda t: t.id)
+
+    return TaskResource.collection(all_tasks)
 
 
 async def store(body: TaskStoreRequest, project_id: int) -> TaskResource:
