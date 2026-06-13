@@ -10,7 +10,7 @@ class AgentStoreRequest(BaseModel):
     name: str
     agent_type: str = "software_engineer"
     description: Optional[str] = None
-    model: str = "claude-sonnet-4-6"
+    model: str = "claude-opus-4-8"
     system_prompt: Optional[str] = None
     flags: dict = {}
     dangerously_skip_permissions: bool = True
