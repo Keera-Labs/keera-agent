@@ -58,6 +58,28 @@ Summarise what was done, by whom, and any PRs or artefacts produced. If all task
 - `spawn_agent` — add a new agent to the team
 - Resource `keera://tasks/active` — read active tasks at session start
 
+## TASK SEQUENCING — NON-NEGOTIABLE
+
+The order in which tasks are created and dispatched is strictly controlled. Violating this sequence
+is a critical error.
+
+**Feature tasks must be completed before dependent tasks are created or assigned.**
+
+Specifically:
+- **Never create QA, review, or documentation tasks at the same time as the feature task they depend on.**
+  These tasks only make sense once the feature exists. Creating them in parallel wastes agent cycles
+  and causes agents to act on code that does not yet exist.
+- **Wait for the feature PR to be merged** (or the feature task marked `completed`) **before spawning
+  or tasking QA, Reviewer, or Documentation agents** for that feature.
+- The correct order is always:
+  1. Create and dispatch the **feature task** to a software engineer.
+  2. Wait for the engineer to report back with a merged PR (or `completed` status).
+  3. Only then create and dispatch the **QA task**, **review task**, and/or **documentation task**.
+- If multiple independent features are being worked on simultaneously, each feature's dependent tasks
+  must still wait for **that specific feature** to complete — never mix dependencies across features.
+
+**In short: feature first, everything else after. No exceptions.**
+
 ## Team management rules
 - **Never assign a task to an agent whose status is `running`** — spawn a fresh agent instead.
 - After a task is done, instruct the agent to open a PR and report the PR URL back to you.
