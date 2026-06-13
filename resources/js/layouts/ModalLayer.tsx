@@ -17,7 +17,6 @@ export function ModalLayer() {
         // Data
         workspaces,
         allProjects,
-        activeProject,
         // Workspace modal
         showWorkspaceModal,
         setShowWorkspaceModal,
@@ -48,8 +47,8 @@ export function ModalLayer() {
         setDeletingWorkspace,
         handleWorkspaceDeleted,
         // Add agent
-        showAddAgent,
-        setShowAddAgent,
+        addAgentProject,
+        setAddAgentProject,
         // Edit agent
         editingAgent,
         setEditingAgent,
@@ -128,15 +127,16 @@ export function ModalLayer() {
                 />
             )}
 
-            {/* Add agent */}
-            {showAddAgent && activeProject && (
+            {/* Add agent — uses the project snapshotted at click time so the
+                modal never silently fails due to activeProject being null */}
+            {addAgentProject && (
                 <AddAgentModal
-                    projectId={activeProject.id}
+                    projectId={addAgentProject.id}
                     templates={agentTemplates}
                     agentCount={agentHook.agents.length}
                     maxAgents={maxAgentsPerProject}
-                    onClose={() => setShowAddAgent(false)}
-                    onCreated={(agent: ProjectAgent) => { agentHook.addAgent(agent); setShowAddAgent(false) }}
+                    onClose={() => setAddAgentProject(null)}
+                    onCreated={(agent: ProjectAgent) => { agentHook.addAgent(agent); setAddAgentProject(null) }}
                 />
             )}
 

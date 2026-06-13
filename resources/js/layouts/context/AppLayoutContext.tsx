@@ -37,8 +37,8 @@ export interface AppLayoutContextValue {
     setDeletingProject: (p: Project | null) => void
     deletingWorkspace: Workspace | null
     setDeletingWorkspace: (w: Workspace | null) => void
-    showAddAgent: boolean
-    setShowAddAgent: (v: boolean) => void
+    addAgentProject: Project | null
+    setAddAgentProject: (p: Project | null) => void
     editingAgent: ProjectAgent | null
     setEditingAgent: (a: ProjectAgent | null) => void
     showProjectSearch: boolean
@@ -206,7 +206,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     const [projectView, setProjectView] = useState<ProjectView>('agents')
     const [isDraggingOver, setIsDraggingOver] = useState(false)
     const [agentTemplates, setAgentTemplates] = useState<AgentTemplate[]>([])
-    const [showAddAgent, setShowAddAgent] = useState(false)
+    const [addAgentProject, setAddAgentProject] = useState<Project | null>(null)
 
     // Derived directly from Inertia props — no separate fetch needed
     const maxAgentsPerProject = props.global_settings?.max_agents_per_project ?? 10
@@ -580,7 +580,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         showDefaultPermissions, setShowDefaultPermissions,
         deletingProject, setDeletingProject,
         deletingWorkspace, setDeletingWorkspace,
-        showAddAgent, setShowAddAgent,
+        addAgentProject, setAddAgentProject,
         editingAgent, setEditingAgent,
         showProjectSearch, setShowProjectSearch,
         // View state

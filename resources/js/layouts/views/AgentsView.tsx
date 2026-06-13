@@ -46,7 +46,7 @@ export function AgentsView() {
         claudeStatus,
         fileInputRef,
         setEditingAgent,
-        setShowAddAgent,
+        setAddAgentProject,
     } = useAppLayout()
 
     const { agents: projectAgents, remove: removeAgent } = useAgents(activeProject?.id ?? null)
@@ -149,7 +149,7 @@ export function AgentsView() {
                                 </button>
                             )}
                             <button
-                                onClick={() => setShowAddAgent(true)}
+                                onClick={() => activeProject && setAddAgentProject(activeProject)}
                                 title="Add agent"
                                 style={{
                                     background: 'transparent', border: `1px solid ${color.stroke}`,
