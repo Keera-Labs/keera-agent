@@ -56,7 +56,6 @@ class AgentMessageSendAction:
         # Receiver idle — spawn headlessly with the message as its initial task
         project = await Project.find(self.to_agent.project_id)
         if project:
-            import asyncio
             from app.controllers.agent_trigger_controller import _spawn_headless_agent
             cwd = os.path.expanduser(project.path)
             asyncio.create_task(_spawn_headless_agent(self.to_agent, project, cwd, text))
