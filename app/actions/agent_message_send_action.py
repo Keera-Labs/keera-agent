@@ -35,14 +35,14 @@ class AgentMessageSendAction:
         conn_manager: ConnectionManager = app().make('connections')
         bridge = conn_manager.get(self.to_agent.session_id) if self.to_agent.session_id else None
         if bridge:
-            await bridge.write(text)
+            await bridge.write_relay_message(text)
             await AgentRelayMessage.where("id", msg.id).update({"status": "delivered"})
             return msg.id, True
 
         # Headless agent already running
         terminal_manager: TerminalManager = app().make('terminal')
         if self.to_agent.session_id and terminal_manager.find(self.to_agent.session_id):
-            await terminal_manager.write_input(self.to_agent.session_id, text)
+            await terminal_manager.write_relay_message(self.to_agent.session_id, text)
             await AgentRelayMessage.where("id", msg.id).update({"status": "delivered"})
             return msg.id, True
 

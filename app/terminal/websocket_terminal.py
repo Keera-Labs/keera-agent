@@ -114,6 +114,9 @@ class WebsocketTerminal:
     async def write(self, data: bytes | str) -> None:
         await self._terminal.write_input(data if isinstance(data, bytes) else data.encode())
 
+    async def write_relay_message(self, data: bytes | str) -> None:
+        await self._terminal.write_relay_message(data if isinstance(data, bytes) else data.encode())
+
     async def send_text(self, data: str) -> None:
         if self._ws:
             await self._ws.send_text(data)
