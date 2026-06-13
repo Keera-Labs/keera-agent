@@ -29,7 +29,7 @@ export function AddAgentModal({ projectId, onClose, onCreated, templates, agentC
     const [agentType, setAgentType] = useState<string>('software_engineer')
     const [description, setDescription] = useState(() => findBuiltinForType(templates, 'software_engineer')?.description ?? '')
     const [systemPrompt, setSystemPrompt] = useState(() => findBuiltinForType(templates, 'software_engineer')?.system_prompt ?? '')
-    const [model, setModel] = useState('claude-sonnet-4-6')
+    const [model, setModel] = useState('claude-opus-4-8')
     const [flags, setFlags] = useState<AgentFlags>({})
     const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null)
     const [error, setError] = useState('')
@@ -64,7 +64,7 @@ export function AddAgentModal({ projectId, onClose, onCreated, templates, agentC
             setAgentType('software_engineer')
             setDescription('')
             setSystemPrompt('')
-            setModel('claude-sonnet-4-6')
+            setModel('claude-opus-4-8')
             setFlags({})
             return
         }
@@ -232,7 +232,7 @@ export function AddAgentModal({ projectId, onClose, onCreated, templates, agentC
                         <span style={labelStyle}>Model</span>
                         <select value={model} onChange={e => setModel(e.target.value)} style={inputStyle}>
                             <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
-                            <option value="claude-opus-4-6">Claude Opus 4.6</option>
+                            <option value="claude-opus-4-8">Claude Opus 4.8</option>
                             <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
                         </select>
                     </label>

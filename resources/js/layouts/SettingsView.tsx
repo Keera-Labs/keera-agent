@@ -153,7 +153,7 @@ function TemplatesTab() {
     const [tplName, setTplName] = useState('')
     const [tplDesc, setTplDesc] = useState('')
     const [tplType, setTplType] = useState('software_engineer')
-    const [tplModel, setTplModel] = useState('claude-sonnet-4-6')
+    const [tplModel, setTplModel] = useState('claude-opus-4-8')
     const [tplPrompt, setTplPrompt] = useState('')
     const [tplFlags, setTplFlags] = useState<AgentFlags>({})
     const [formError, setFormError] = useState('')
@@ -177,7 +177,7 @@ function TemplatesTab() {
     function startNew() {
         setSelected(null); setIsNew(true)
         setTplName(''); setTplDesc(''); setTplType('software_engineer')
-        setTplModel('claude-sonnet-4-6'); setTplPrompt(''); setTplFlags({})
+        setTplModel('claude-opus-4-8'); setTplPrompt(''); setTplFlags({})
         setFormError('')
     }
 
