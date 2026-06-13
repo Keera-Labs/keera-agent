@@ -85,6 +85,7 @@ export interface AppLayoutContextValue {
 
     // ── Global settings ───────────────────────────────────────────────────────
     maxAgentsPerProject: number
+    setMaxAgentsPerProject: (v: number) => void
 }
 
 // ─── Context + dumb provider ──────────────────────────────────────────────────
@@ -208,8 +209,17 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     const [agentTemplates, setAgentTemplates] = useState<AgentTemplate[]>([])
     const [showAddAgent, setShowAddAgent] = useState(false)
 
-    // Derived directly from Inertia props — no separate fetch needed
-    const maxAgentsPerProject = props.global_settings?.max_agents_per_project ?? 10
+    // Initialise from Inertia props; updated immediately after a successful
+    // PATCH /api/global-settings save so UI shows the new value without waiting
+    // for router.reload() to complete.
+    const [maxAgentsPerProject, setMaxAgentsPerProject] = useState<number>(
+        props.global_settings?.max_agents_per_project ?? 10
+    )
+    // Keep in sync whenever Inertia reloads the page props (e.g. router.reload)
+    useEffect(() => {
+        const v = props.global_settings?.max_agents_per_project
+        if (v !== undefined) setMaxAgentsPerProject(v)
+    }, [props.global_settings?.max_agents_per_project])
     // Raw selection — may refer to an agent from a previous project after switching.
     const [_activeAgentId, setActiveAgentId] = useState<number | null>(null)
     const [showProjectSearch, setShowProjectSearch] = useState(false)
@@ -600,7 +610,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         // Agent templates
         agentTemplates, setAgentTemplates,
         // Global settings
-        maxAgentsPerProject,
+        maxAgentsPerProject, setMaxAgentsPerProject,
     }
 
     return (
