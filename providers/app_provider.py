@@ -15,8 +15,6 @@ class AppProvider(Provider):
         from app.console.queue_work_command import QueueWorkCommand
         from app.console.seed_templates_command import SeedTemplatesCommand
         self.app.fastapi.include_router(router.router)
-        reverb_server = self.app.make('reverb.server')
-        self.app.fastapi.mount('/reverb', reverb_server.as_starlette_app('local'))
         ensure_hooks()
         self.commands([QueueWorkCommand, SeedTemplatesCommand])
 
