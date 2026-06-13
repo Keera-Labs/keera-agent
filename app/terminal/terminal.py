@@ -90,20 +90,12 @@ class Terminal:
         os.write(self.master_fd, data)
 
     async def write_relay_message(self, data: bytes) -> None:
-        """Write a relayed message byte-by-byte so the Claude TUI processes each
-        character as an individual keystroke, then send the trailing \\r in a
-        separate write so the TUI recognises it as Enter.
-
-        write_input() sends message + \\r in one atomic os.write() and the Claude
-        TUI silently ignores the \\r when it arrives bundled with a large payload.
-        Writing byte-by-byte + a final \\r as a separate write ensures the TUI
-        auto-submits the message without requiring the user to press Enter.
-        """
-        data = data.rstrip(b'\r\n')
+        data = data.rstrip(b"\r\n")
         if self.master_fd is None or not data:
             return
-        await self.write_raw(data)
-        os.write(self.master_fd, b'\r')
+        os.write(self.master_fd, data)
+        await asyncio.sleep(0.05)
+        os.write(self.master_fd, b"\r")
 
     def resize(self, cols: int, rows: int) -> None:
         self._cols = cols
