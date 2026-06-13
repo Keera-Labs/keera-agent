@@ -106,6 +106,30 @@ def _cleanup_stale_worktree(agent, cwd: str) -> None:
         )
 
 
+async def _prune_all_orphaned_worktrees() -> None:
+    """One-off startup prune: remove git worktrees for all soft-deleted agents.
+
+    Iterates every soft-deleted Agent row, looks up its project path, and calls
+    _cleanup_stale_worktree() to remove the worktree directory and branch that
+    were left behind when the agent was deleted without cleanup.
+    """
+    from app.models.Agent import Agent as _Agent
+    from app.models.Project import Project as _Project
+
+    deleted_agents = await _Agent.where_not_null("deleted_at").get()
+    for agent in deleted_agents:
+        try:
+            project = await _Project.find(agent.project_id)
+            if not project:
+                continue
+            cwd = os.path.expanduser(project.path)
+            if not os.path.isdir(cwd):
+                continue
+            _cleanup_stale_worktree(agent, cwd)
+        except Exception:
+            pass
+
+
 def _build_relay_instructions(agent, cwd: str, base_url: str, siblings) -> str:
     """Build the relay-instructions system-prompt suffix for an agent."""
     if siblings:

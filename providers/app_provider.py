@@ -27,7 +27,11 @@ class AppProvider(Provider):
             from app.models.Agent import Agent
             from app.utils.hook_setup import ensure_claude_settings, BASE_URL
             from app.actions.seed_builtin_templates_action import SeedBuiltinTemplatesAction
+            from app.controllers.agent_trigger_controller import _prune_all_orphaned_worktrees
             await SeedBuiltinTemplatesAction().execute()
+
+            # Prune git worktrees left behind by previously deleted agents
+            await _prune_all_orphaned_worktrees()
 
             projects = await Project.all()
             for project in projects:

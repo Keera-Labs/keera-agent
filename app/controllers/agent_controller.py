@@ -94,6 +94,7 @@ async def destroy(request: Request, agent_id: int):
     from fastapi_startkit.application import app
     from app.terminal.connection_manager import ConnectionManager
     from app.terminal.manager import TerminalManager
+    from app.controllers.agent_trigger_controller import _cleanup_stale_worktree
 
     agent = await Agent.find_or_fail(agent_id)
 
@@ -127,6 +128,14 @@ async def destroy(request: Request, agent_id: int):
         remaining = await Agent.where("project_id", project_id).where_null("deleted_at").order_by("id", "asc").get()
         new_default = remaining[0].id if remaining else None
         await _set_project_default(project_id, new_default)
+
+    # Remove the agent's git worktree and branch so it doesn't accumulate
+    if project:
+        cwd = os.path.expanduser(project.path)
+        try:
+            _cleanup_stale_worktree(agent, cwd)
+        except Exception:
+            pass
 
     return JSONResponse({"ok": True})
 
