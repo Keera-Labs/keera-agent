@@ -120,14 +120,14 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
 
     system_prompt_suffix = (
         f"\n\n## Your identity\nYour agent ID is {agent_record.id}. "
-        f"When other agents ask you to report back, always use this ID as `from_agent_id` in relay calls."
+        f"When other agents ask you to report back, always use this ID as `sender_agent_id` in send_message_to_agent calls."
     )
     claude_cmd = agent_record.to_command(system_prompt_suffix=system_prompt_suffix)
 
     def build_cmd(a):
         suffix = (
             f"\n\n## Your identity\nYour agent ID is {a.id}. "
-            f"When other agents ask you to report back, always use this ID as `from_agent_id` in relay calls."
+            f"When other agents ask you to report back, always use this ID as `sender_agent_id` in send_message_to_agent calls."
         )
         return a.to_command(system_prompt_suffix=suffix)
 
