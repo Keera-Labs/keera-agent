@@ -85,8 +85,13 @@ class WebsocketTerminal:
                 if msg.get('type') == 'websocket.disconnect':
                     break
                 if msg.get('bytes'):
-                    # Binary = message send → write_input auto-appends \r
-                    await self._terminal.write_input(msg['bytes'])
+                    # Binary = message send: strip trailing CR/LF, write atomically,
+                    # sleep 0.05 s so the TUI registers the text, then send Enter.
+                    data = msg['bytes'].rstrip(b"\r\n")
+                    if data:
+                        await self._terminal.write(data)
+                        await asyncio.sleep(0.05)
+                        await self._terminal.write(b"\r")
                 elif msg.get('text'):
                     text: str = msg['text']
                     try:
@@ -95,9 +100,9 @@ class WebsocketTerminal:
                             self._terminal.resize(int(parsed['cols']), int(parsed['rows']))
                         else:
                             # Text = raw keyboard from term.onData → no modification
-                            await self._terminal.write_raw(text.encode())
+                            await self._terminal.write(text.encode())
                     except (json.JSONDecodeError, ValueError):
-                        await self._terminal.write_raw(text.encode())
+                        await self._terminal.write(text.encode())
             except (WebSocketDisconnect, Exception):
                 break
         self._stopped.set()
@@ -112,16 +117,13 @@ class WebsocketTerminal:
         return self._ws
 
     async def write(self, data: bytes | str) -> None:
-        await self._terminal.write_input(data if isinstance(data, bytes) else data.encode())
-
-    async def send_text(self, data: str) -> None:
-        if self._ws:
-            await self._ws.send_text(data)
-
-    async def send_bytes(self, data: bytes) -> None:
-        if self._ws:
-            await self._ws.send_bytes(data)
+        """Write to PTY if bytes, send to WebSocket if str."""
+        if isinstance(data, bytes):
+            await self._terminal.write(data)
+        else:
+            if self._ws:
+                await self._ws.send_text(data)
 
     async def _auto_send(self, data: bytes) -> None:
         await asyncio.sleep(0.5)
-        await self._terminal.write_input(data)
+        await self._terminal.write(data.rstrip(b"\r\n") + b"\r")

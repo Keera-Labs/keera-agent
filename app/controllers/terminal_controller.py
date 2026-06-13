@@ -72,7 +72,10 @@ async def _deliver_pending_relay_messages(agent_id: int) -> None:
         from_agent = await Agent.find(msg.from_agent_id)
         sender_name = from_agent.name if from_agent else f"Agent #{msg.from_agent_id}"
         if bridge:
-            await bridge.write(f"[Message from Agent '{sender_name}']: {msg.content}")
+            text_bytes = f"[Message from Agent '{sender_name}']: {msg.content}".encode().rstrip(b"\r\n")
+            await bridge.write(text_bytes)
+            await asyncio.sleep(0.05)
+            await bridge.write(b"\r")
         await AgentRelayMessage.where("id", msg.id).update({"status": "delivered"})
 
 

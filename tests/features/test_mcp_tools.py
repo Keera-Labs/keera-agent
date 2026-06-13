@@ -336,6 +336,88 @@ class TestSendMessageToolValidation(TestCase, DatabaseTransaction):
         # Should mention the agent's display name
         self.assertIn("PM Agent", text)
 
+    async def test_deleted_receiver_by_id_returns_error(self):
+        """Sending to a soft-deleted agent (by ID) must fail with an error."""
+        import datetime
+        from app.models.Agent import Agent
+        project = await ProjectFactory.new().create()
+        sender = await Agent.create({
+            "project_id": project.id,
+            "name": "Active Sender",
+            "model": "claude-sonnet-4-6",
+            "status": "idle",
+        })
+        receiver = await Agent.create({
+            "project_id": project.id,
+            "name": "Deleted Receiver",
+            "model": "claude-sonnet-4-6",
+            "status": "idle",
+            "deleted_at": datetime.datetime.utcnow(),
+        })
+        response = await self.tool.handle({
+            "sender_agent_id": sender.id,
+            "receiver_agent_id": receiver.id,
+            "message": "this should not be delivered",
+        })
+        text = _text(response)
+        self.assertIn("Error", text)
+        self.assertIn(str(receiver.id), text)
+
+    async def test_deleted_receiver_by_name_returns_error(self):
+        """Sending to a soft-deleted agent by name must fail — name lookup excludes deleted agents."""
+        import datetime
+        from app.models.Agent import Agent
+        project = await ProjectFactory.new().create()
+        sender = await Agent.create({
+            "project_id": project.id,
+            "name": "Active Sender",
+            "model": "claude-sonnet-4-6",
+            "status": "idle",
+        })
+        await Agent.create({
+            "project_id": project.id,
+            "name": "Retired Bot",
+            "model": "claude-sonnet-4-6",
+            "status": "idle",
+            "deleted_at": datetime.datetime.utcnow(),
+        })
+        response = await self.tool.handle({
+            "sender_agent_id": sender.id,
+            "receiver_agent_id": "Retired Bot",
+            "message": "ghost message",
+        })
+        text = _text(response)
+        self.assertIn("Error", text)
+        # Should say the agent was not found (deleted → excluded from name lookup)
+        self.assertIn("Retired Bot", text)
+
+    async def test_deleted_sender_returns_error(self):
+        """A soft-deleted agent must not be allowed to send messages."""
+        import datetime
+        from app.models.Agent import Agent
+        project = await ProjectFactory.new().create()
+        sender = await Agent.create({
+            "project_id": project.id,
+            "name": "Deleted Sender",
+            "model": "claude-sonnet-4-6",
+            "status": "idle",
+            "deleted_at": datetime.datetime.utcnow(),
+        })
+        receiver = await Agent.create({
+            "project_id": project.id,
+            "name": "Active Receiver",
+            "model": "claude-sonnet-4-6",
+            "status": "idle",
+        })
+        response = await self.tool.handle({
+            "sender_agent_id": sender.id,
+            "receiver_agent_id": receiver.id,
+            "message": "from a ghost",
+        })
+        text = _text(response)
+        self.assertIn("Error", text)
+        self.assertIn(str(sender.id), text)
+
 
 class TestMcpToolNames(TestCase):
     """Verify MCP tool names are consistent — relay_to_agent must NOT be registered."""

@@ -29,7 +29,10 @@ async def _inject_when_ready(session_id: str, message: str, timeout: float = 30.
         except asyncio.TimeoutError:
             pass
     terminal_manager: TerminalManager = app().make('terminal')
-    await terminal_manager.write_input(session_id, message)
+    data = message.encode() if isinstance(message, str) else message
+    await terminal_manager.write(session_id, data.rstrip(b"\r\n"))
+    await asyncio.sleep(0.05)
+    await terminal_manager.write(session_id, b"\r")
 
 
 async def trigger(request: Request, agent_id: int):
@@ -127,6 +130,16 @@ def _build_relay_instructions(agent, cwd: str, base_url: str, siblings) -> str:
     )
 
 
+def _make_after_restart(terminal, initial_message: str):
+    """Return an async callable that re-injects the initial message after a Claude restart."""
+    async def _after_restart():
+        data = initial_message.encode().rstrip(b"\r\n")
+        await terminal.write(data)
+        await asyncio.sleep(0.05)
+        await terminal.write(b"\r")
+    return _after_restart
+
+
 async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) -> None:
     """Spawn a Terminal for the agent without a WebSocket — triggered from the backend.
 
@@ -173,7 +186,7 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
         terminal_manager=terminal_manager,
         session_id=session_id,
         build_cmd=_build_cmd_with_identity,
-        after_restart=lambda: terminal.write_input((initial_message + '\n').encode()),
+        after_restart=_make_after_restart(terminal, initial_message),
     )
     bridge = WebsocketTerminal(None, terminal, on_output=monitor)
     asyncio.create_task(bridge.run(
@@ -192,7 +205,9 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     await asyncio.sleep(1.5)
     ready_event.set()
     contextual_message = f"{relay_instructions}\n\n---\n{initial_message}"
-    await terminal_manager.write_input(session_id, contextual_message)
+    await terminal_manager.write(session_id, contextual_message.encode().rstrip(b"\r\n"))
+    await asyncio.sleep(0.05)
+    await terminal_manager.write(session_id, b"\r")
 
     # Notify the frontend if it's already connected
     conn_manager: ConnectionManager = app().make('connections')
@@ -200,7 +215,7 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     if ws_bridge:
         import json as _json
         try:
-            await ws_bridge.send_text(_json.dumps({
+            await ws_bridge.write(_json.dumps({
                 "type": "agent_triggered",
                 "agent_id": agent.id,
                 "message": initial_message,
