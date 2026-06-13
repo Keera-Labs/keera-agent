@@ -18,7 +18,7 @@ export default function AgentEditModal({
     const [name, setName] = useState(agent.name)
     const [agentType, setAgentType] = useState(agent.agent_type)
     const [description, setDescription] = useState(agent.description ?? '')
-    const [model, setModel] = useState(agent.model ?? 'claude-sonnet-4-6')
+    const [model, setModel] = useState(agent.model ?? 'claude-opus-4-8')
     const [systemPrompt, setSystemPrompt] = useState(agent.system_prompt ?? '')
     const [flags, setFlags] = useState<AgentFlags>(agent.flags ?? {})
     const [error, setError] = useState('')
@@ -29,7 +29,7 @@ export default function AgentEditModal({
         setName(agent.name)
         setAgentType(agent.agent_type)
         setDescription(agent.description ?? '')
-        setModel(agent.model ?? 'claude-sonnet-4-6')
+        setModel(agent.model ?? 'claude-opus-4-8')
         setSystemPrompt(agent.system_prompt ?? '')
         setFlags(agent.flags ?? {})
         setError('')
@@ -155,7 +155,7 @@ export default function AgentEditModal({
                             style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' as const }}
                         >
                             <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
-                            <option value="claude-opus-4-6">Claude Opus 4.6</option>
+                            <option value="claude-opus-4-8">Claude Opus 4.8</option>
                             <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
                         </select>
                     </label>
