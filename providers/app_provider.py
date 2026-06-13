@@ -15,17 +15,13 @@ class AppProvider(Provider):
         from app.console.queue_work_command import QueueWorkCommand
         from app.console.seed_templates_command import SeedTemplatesCommand
         self.app.fastapi.include_router(router.router)
-        reverb_server = self.app.make('reverb.server')
-        self.app.fastapi.mount('/reverb', reverb_server.as_starlette_app('local'))
         ensure_hooks()
         self.commands([QueueWorkCommand, SeedTemplatesCommand])
 
         async def on_startup():
-            """Sync Claude settings for all projects and ensure each has a default PM agent."""
-            import os
+            """Ensure built-in templates are seeded and each project has a default PM agent."""
             from app.models.Project import Project
             from app.models.Agent import Agent
-            from app.utils.hook_setup import ensure_claude_settings, BASE_URL
             from app.actions.seed_builtin_templates_action import SeedBuiltinTemplatesAction
             from app.controllers.agent_trigger_controller import _prune_all_orphaned_worktrees
             await SeedBuiltinTemplatesAction().execute()
@@ -33,21 +29,9 @@ class AppProvider(Provider):
             # Prune git worktrees left behind by previously deleted agents
             await _prune_all_orphaned_worktrees()
 
+            # Ensure each project has a default PM agent
             projects = await Project.all()
             for project in projects:
-                expanded = os.path.expanduser(project.path)
-                if os.path.isdir(expanded):
-                    # Re-sync MCP + hooks for every project directory
-                    ensure_claude_settings(expanded, BASE_URL)
-
-                    # Also re-sync any existing agent subdirectories
-                    agents_dir = os.path.join(expanded, '.keera-agents')
-                    if os.path.isdir(agents_dir):
-                        for entry in os.scandir(agents_dir):
-                            if entry.is_dir():
-                                ensure_claude_settings(entry.path, BASE_URL, project_path=expanded)
-
-                # Ensure default PM agent exists
                 existing = await Agent.where("project_id", project.id).first()
                 if not existing:
                     from app.utils.system_prompts import default_system_prompt
