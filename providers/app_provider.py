@@ -19,32 +19,9 @@ class AppProvider(Provider):
         self.commands([QueueWorkCommand, SeedTemplatesCommand])
 
         async def on_startup():
-            """Ensure built-in templates are seeded and each project has a default PM agent."""
-            from app.models.Project import Project
-            from app.models.Agent import Agent
+            """Ensure built-in templates are seeded."""
             from app.actions.seed_builtin_templates_action import SeedBuiltinTemplatesAction
             await SeedBuiltinTemplatesAction().execute()
-
-            # Ensure each project has a default PM agent
-            projects = await Project.all()
-            for project in projects:
-                existing = await Agent.where("project_id", project.id).first()
-                if not existing:
-                    from app.utils.system_prompts import default_system_prompt
-                    import json as _json
-                    await Agent.create({
-                        "project_id": project.id,
-                        "name": "PM",
-                        "agent_type": "pm",
-                        "description": "Project manager agent that coordinates work across the team.",
-                        "model": "claude-opus-4-8",
-                        "system_prompt": default_system_prompt("pm"),
-                        "flags": _json.dumps({}),
-                        "status": "idle",
-                        "has_session": False,
-                        "dangerously_skip_permissions": True,
-                        "plan_mode": True,
-                    })
 
         self.app.fastapi.add_event_handler("startup", on_startup)
 
