@@ -337,6 +337,79 @@ class TestSendMessageToolValidation(TestCase, DatabaseTransaction):
         self.assertIn("PM Agent", text)
 
 
+class TestSendMessageToDeletedAgent(TestCase, DatabaseTransaction):
+    """Guard: send_message_to_agent must reject messages to soft-deleted agents."""
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        import datetime
+        from app.models.Agent import Agent
+
+        self.tool = SendMessageTool()
+        project = await ProjectFactory.new().create()
+
+        self.sender = await Agent.create({
+            "project_id": project.id,
+            "name": "Sender Agent",
+            "model": "claude-sonnet-4-6",
+            "status": "idle",
+        })
+
+        self.deleted_agent = await Agent.create({
+            "project_id": project.id,
+            "name": "Deleted Agent",
+            "model": "claude-sonnet-4-6",
+            "status": "idle",
+            "deleted_at": str(datetime.datetime.utcnow()),
+        })
+
+    async def test_send_to_deleted_agent_by_id_returns_error(self):
+        """Messaging a soft-deleted agent by numeric ID must return a clear error."""
+        response = await self.tool.handle({
+            "sender_agent_id": self.sender.id,
+            "receiver_agent_id": self.deleted_agent.id,
+            "message": "Are you there?",
+        })
+        text = _text(response)
+        self.assertIn("Error", text)
+        self.assertIn("deleted", text.lower())
+        self.assertIn(str(self.deleted_agent.id), text)
+
+    async def test_send_to_deleted_agent_by_name_returns_error(self):
+        """Messaging a soft-deleted agent by name must return a clear error (name lookup skips deleted)."""
+        response = await self.tool.handle({
+            "sender_agent_id": self.sender.id,
+            "receiver_agent_id": "Deleted Agent",
+            "message": "Hello?",
+        })
+        text = _text(response)
+        self.assertIn("Error", text)
+        # Name-based lookup skips deleted agents, so it returns "no agent found"
+        self.assertIn("Deleted Agent", text)
+
+    async def test_send_to_active_agent_by_id_is_not_blocked(self):
+        """Active (non-deleted) agents must still be reachable by numeric ID."""
+        from app.models.Agent import Agent
+
+        project = await ProjectFactory.new().create()
+        active_receiver = await Agent.create({
+            "project_id": project.id,
+            "name": "Active Receiver",
+            "model": "claude-sonnet-4-6",
+            "status": "idle",
+        })
+        response = await self.tool.handle({
+            "sender_agent_id": self.sender.id,
+            "receiver_agent_id": active_receiver.id,
+            "message": "Hello active agent!",
+        })
+        text = _text(response)
+        # Must NOT be the deleted-agent error
+        self.assertNotIn("is deleted", text.lower())
+        # Should mention the receiver's name in a success/queue response
+        self.assertIn("Active Receiver", text)
+
+
 class TestMcpToolNames(TestCase):
     """Verify MCP tool names are consistent — relay_to_agent must NOT be registered."""
 

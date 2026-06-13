@@ -40,6 +40,11 @@ async def relay(request: Request):
         return JSONResponse({"error": f"Agent {from_agent_id} not found"}, status_code=404)
     if not to_agent:
         return JSONResponse({"error": f"Agent {to_agent_id} not found"}, status_code=404)
+    if getattr(to_agent, "deleted_at", None) is not None:
+        return JSONResponse(
+            {"error": f"Agent {to_agent_id} is deleted and cannot receive messages."},
+            status_code=410,
+        )
 
     from app.actions.agent_message_send_action import AgentMessageSendAction
     msg_id, delivered = await AgentMessageSendAction.prepare(from_agent, to_agent, content).execute()
