@@ -6,6 +6,7 @@ import type { AgentFlags } from '@/layouts/hooks/agents'
 import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS } from '@/types/agent'
 import { labelStyle, inputStyle, cancelBtnStyle, submitBtnStyle, flagRowStyle, toggleStyle } from '@/components/ui/styles'
 import { TagInput } from '@/components/ui/TagInput'
+import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 
 export function GlobalSettingsModal({
     onClose,
@@ -28,6 +29,9 @@ export function GlobalSettingsModal({
     const [generalSaved, setGeneralSaved] = useState(false)
     const [generalError, setGeneralError] = useState('')
 
+    // Update the global layout context so AddAgentModal warning refreshes immediately
+    const { setMaxAgentsPerProject } = useAppLayout()
+
     async function saveGeneralSettings() {
         setGeneralSaving(true)
         setGeneralError('')
@@ -42,7 +46,10 @@ export function GlobalSettingsModal({
             if (!res.ok) { setGeneralError(d.error ?? 'Save failed'); return }
             setGeneralSaved(true)
             setTimeout(() => setGeneralSaved(false), 2000)
-            // Re-fetch Inertia props so the rest of the app sees the new value
+            // Update context immediately so AddAgentModal warning reflects the new
+            // limit without waiting for router.reload() to complete.
+            setMaxAgentsPerProject(d.max_agents_per_project ?? maxAgents)
+            // Also re-fetch Inertia props so the page-level value stays in sync
             router.reload({ only: ['global_settings'] })
         } catch { setGeneralError('Network error') }
         finally { setGeneralSaving(false) }
