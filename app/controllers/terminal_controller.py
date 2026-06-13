@@ -18,6 +18,15 @@ from app.terminal.websocket_terminal import WebsocketTerminal
 claude_ready: dict[str, asyncio.Event] = {}
 
 
+def _build_identity_suffix(agent_id: int) -> str:
+    """Return the system-prompt suffix that tells a WS-connected agent its own ID
+    and the correct parameter name to use when calling send_message_to_agent."""
+    return (
+        f"\n\n## Your identity\nYour agent ID is {agent_id}. "
+        f"When other agents ask you to report back, always use this ID as `sender_agent_id` in send_message_to_agent calls."
+    )
+
+
 def _ensure_git_repo(path: str) -> None:
     """Ensure `path` is inside a git repository, running `git init` if not.
 
@@ -118,18 +127,10 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
     ready_event = claude_ready.setdefault(session_id, asyncio.Event())
     asyncio.create_task(_signal_ready_and_relay(ready_event, agent_record.id))
 
-    system_prompt_suffix = (
-        f"\n\n## Your identity\nYour agent ID is {agent_record.id}. "
-        f"When other agents ask you to report back, always use this ID as `from_agent_id` in relay calls."
-    )
-    claude_cmd = agent_record.to_command(system_prompt_suffix=system_prompt_suffix)
+    claude_cmd = agent_record.to_command(system_prompt_suffix=_build_identity_suffix(agent_record.id))
 
     def build_cmd(a):
-        suffix = (
-            f"\n\n## Your identity\nYour agent ID is {a.id}. "
-            f"When other agents ask you to report back, always use this ID as `from_agent_id` in relay calls."
-        )
-        return a.to_command(system_prompt_suffix=suffix)
+        return a.to_command(system_prompt_suffix=_build_identity_suffix(a.id))
 
     # Build the output monitor callback (Parts 1 & 3 for WS path)
     monitor = make_claude_session_monitor(

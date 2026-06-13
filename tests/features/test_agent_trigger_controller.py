@@ -9,6 +9,7 @@ import json
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
 from app.controllers.agent_trigger_controller import _build_relay_instructions
+from app.controllers.terminal_controller import _build_identity_suffix
 from app.models.Agent import Agent
 from app.models.Project import Project
 from tests.test_case import TestCase
@@ -158,3 +159,30 @@ class TestBuildRelayInstructions(TestCase, DatabaseTransaction):
         )
         self.assertIn("PM Agent", instructions)
         self.assertIn("99", instructions)
+
+
+class TestBuildIdentitySuffix(TestCase):
+    """Verify _build_identity_suffix uses the correct MCP parameter name.
+
+    Regression guard for the bug where WS-path agents were told to use
+    `from_agent_id` (stale name) instead of `sender_agent_id` when calling
+    send_message_to_agent, causing all agent-originated messages to fail.
+    """
+
+    def test_identity_suffix_uses_sender_agent_id(self):
+        """Must say sender_agent_id, not from_agent_id."""
+        suffix = _build_identity_suffix(42)
+        self.assertIn("sender_agent_id", suffix)
+        self.assertNotIn("from_agent_id", suffix)
+
+    def test_identity_suffix_references_send_message_to_agent(self):
+        """Must reference the correct MCP tool name."""
+        suffix = _build_identity_suffix(42)
+        self.assertIn("send_message_to_agent", suffix)
+        # Old stale name 'relay calls' should not appear
+        self.assertNotIn("relay calls", suffix)
+
+    def test_identity_suffix_includes_agent_id(self):
+        """Suffix must embed the agent's own numeric ID."""
+        suffix = _build_identity_suffix(99)
+        self.assertIn("99", suffix)
