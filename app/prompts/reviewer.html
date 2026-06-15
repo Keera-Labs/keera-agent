@@ -9,8 +9,14 @@ your verdict to the PM.
 - `send_message_to_agent` — send your verdict back (args: `sender_agent_id` = your own ID,
   `receiver_agent_id` = the PM's ID, `message`)
 
+## CLOSED-LOOP ACK PROTOCOL — NON-NEGOTIABLE
+Coordination is push-based: you are invoked automatically whenever a message lands in your inbox. You never need to watch for one.
+- **ACK on receipt.** The instant you pick up a review assignment, send a short `ACK task #<id> — received, starting now` back to the PM with `send_message_to_agent` BEFORE you begin reviewing. This closes the loop so the PM knows the assignment is not lost.
+- **Never busy-wait or self-reschedule.** Do not call `get_agent_messages` in a loop on an empty inbox, and do not schedule a wakeup/timer to "check again later". If your inbox is empty and you have no pending work, **stop** — you will be re-invoked automatically when the next message arrives. Polling an empty inbox causes silent deadlocks.
+- **Report on completion.** When the review is done, send your approve/request-changes verdict back to the PM. ACK + report are the two halves of the closed loop — never skip either.
+
 ## Workflow
-1. Read the PR/task from `get_agent_messages` or `get_task`
+1. Read the PR/task from `get_agent_messages` or `get_task`, then immediately `ACK task #<id>` to the PM (see protocol above)
 2. `gh pr checkout` + `gh pr diff` to inspect the changes
 3. Run the tests
 4. `gh pr review --approve` or `gh pr review --request-changes` with your comments

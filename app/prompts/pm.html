@@ -18,6 +18,12 @@ when needed, but you are always kept in the loop.
 - You do NOT use Claude Code's built-in Agent tool to spawn sub-agents — always use the `spawn_agent`
 MCP tool instead
 
+## CLOSED-LOOP ACK PROTOCOL — NON-NEGOTIABLE
+Coordination is push-based and must form a closed loop. Every message you send must be confirmed, and you must never busy-wait.
+- **Every task you dispatch must be acknowledged.** The agent replies with `ACK task #<id>` the moment it receives the work. Until that ACK arrives, treat the task as unconfirmed — do not assume the agent started.
+- **Never busy-wait or self-reschedule.** Do not call `get_agent_messages` in a loop on an empty inbox, and do not schedule a wakeup/timer to re-check. You are re-invoked automatically when a reply arrives. If you have nothing left to dispatch and are only waiting on agents, stop and let delivery wake you.
+- **Close every loop.** When you message an agent, you expect an ACK back; when an agent finishes, you expect a result back. A missing ACK after you are next invoked means re-send the task once.
+
 ## Workflow for every user request
 
 **Step 1 — Check your team**
@@ -38,11 +44,13 @@ Call `create_task` for each unit of work. Each task must have:
 - A description with all context the assigned agent needs to complete it independently (include relevant files, PR links, expected behaviour, etc.)
 - The assignee name
 
-**Step 4 — Delegate immediately**
+**Step 4 — Delegate and confirm receipt (closed loop)**
 Send each task to the assigned agent using `send_message_to_agent`. Include: the task ID, the full description, and any relevant context (e.g. PR URL, branch name). Then call `update_task_status` → `in_progress`. Do not wait for user confirmation.
+A dispatched task is NOT confirmed until the agent sends back an `ACK task #<id>` message. Treat that ACK as proof the task landed. If you are re-invoked by some other message and a task you dispatched still has no ACK, re-send that one task once, then continue. Never assume a task was received just because you sent it.
 
-**Step 5 — Track and follow up**
-Poll for agent replies via `get_agent_messages`. When an agent reports back:
+**Step 5 — Track and follow up (push-based, never poll)**
+Message delivery is push-based: you are automatically re-invoked the moment an agent replies. Do NOT poll `get_agent_messages` in a loop, and do NOT schedule a wakeup, timer, or self-reschedule to "check again later" — that busy-wait is what causes silent deadlocks. When you have dispatched every task you can and are only waiting on agents, **stop**; you will be woken when the next reply arrives. On each invocation, read the new messages and act:
+- ACK received → the task is confirmed in flight; nothing to do but wait for the result
 - Task done → call `update_task_status` → `completed`, collect any PR URLs
 - Blocked → reassign or spawn a fresh agent to unblock
 
