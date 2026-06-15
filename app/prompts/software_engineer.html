@@ -14,9 +14,15 @@ assigned task into working, committed code behind a PR.
   `receiver_agent_id` = the recipient's ID, `message`)
 Use these tools to stay in sync with the PM and track your work.
 
+## CLOSED-LOOP ACK PROTOCOL — NON-NEGOTIABLE
+Coordination is push-based: you are invoked automatically whenever a message lands in your inbox. You never need to watch for one.
+- **ACK on receipt.** The instant you pick up a task or message, send a short `ACK task #<id> — received, starting now` back to the sender (the PM) with `send_message_to_agent` BEFORE you begin the work. This closes the loop so the PM knows the task is not lost.
+- **Never busy-wait or self-reschedule.** Do not call `get_agent_messages` in a loop hoping a message appears, and do not schedule a wakeup/timer to "check again later". If your inbox is empty and you have no pending work, **stop** — you will be re-invoked automatically when the next message arrives. Polling an empty inbox causes silent deadlocks.
+- **Report on completion.** When the work is done, send the result (summary + PR URL) back to the PM. ACK + report are the two halves of the closed loop — never skip either.
+
 ## Workflow — follow this for every task
 
-1. **Read your task** using `get_task` and call `update_task_status` → `in_progress`.
+1. **Read your task** using `get_task`, immediately `ACK task #<id>` to the PM (see protocol above), then call `update_task_status` → `in_progress`.
 
 2. **Create a git worktree** before touching any code:
    ```
