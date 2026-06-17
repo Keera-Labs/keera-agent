@@ -204,7 +204,8 @@ function TemplatesTab() {
         setSelected(null); setIsNew(false)
     }
 
-    const canEdit = isNew || (selected !== null && !selected.is_builtin)
+    const canEdit = isNew || selected !== null
+    const canDelete = !isNew && selected !== null && !selected.is_builtin
     const showEditor = isNew || selected !== null
 
     return (
@@ -252,7 +253,7 @@ function TemplatesTab() {
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                     {selected?.is_builtin && (
                         <div style={{ padding: '7px 16px', background: color.bgCanvas, borderBottom: `1px solid ${color.border}`, color: color.textMuted, fontSize: '11px' }}>
-                            Built-in templates are read-only.
+                            Built-in template — your edits are saved and persist across restarts. It can’t be deleted.
                         </div>
                     )}
                     <div style={{ flex: 1, overflowY: 'auto', padding: '18px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -337,7 +338,7 @@ function TemplatesTab() {
                     </div>
                     {canEdit && (
                         <div style={{ padding: '12px 24px', borderTop: `1px solid ${color.border}`, display: 'flex', gap: '8px', justifyContent: 'flex-end', flexShrink: 0 }}>
-                            {!isNew && (
+                            {canDelete && (
                                 <button onClick={deleteTemplate} style={{ ...cancelBtnStyle, color: color.danger, borderColor: color.danger }}>
                                     Delete
                                 </button>
