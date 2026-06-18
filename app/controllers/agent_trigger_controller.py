@@ -187,7 +187,7 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     await asyncio.sleep(0.5)
 
     siblings = await _Agent.where("project_id", agent.project_id)\
-        .where("id", "!=", agent.id).get()
+        .where("id", "!=", agent.id).where_null("deleted_at").get()
 
     relay_instructions = _build_relay_instructions(agent, cwd, base_url, siblings)
 

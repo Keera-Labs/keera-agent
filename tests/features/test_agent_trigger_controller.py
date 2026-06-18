@@ -161,6 +161,63 @@ class TestBuildRelayInstructions(TestCase, DatabaseTransaction):
         self.assertIn("99", instructions)
 
 
+class TestRelayRosterExcludesDeleted(TestCase, DatabaseTransaction):
+    """Regression: the siblings roster must exclude soft-deleted agents.
+
+    Guards the fix where the siblings query in _spawn_headless_agent gained
+    .where_null('deleted_at') so soft-deleted agents are no longer listed as
+    contactable in the AGENT COMMUNICATION PROTOCOL roster.
+    """
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        import tempfile
+        self._tmpdir = tempfile.mkdtemp()
+        self.project = await Project.create({
+            "name": "roster-test-proj",
+            "slug": "roster-test-proj",
+            "path": self._tmpdir,
+            "language": "Python",
+        })
+        self.agent = await self._make_agent("RosterBot")
+
+    async def _make_agent(self, name: str, deleted: bool = False):
+        attrs = {
+            "project_id": self.project.id,
+            "name": name,
+            "agent_type": "software_engineer",
+            "model": "claude-sonnet-4-6",
+            "status": "idle",
+            "has_session": False,
+            "use_worktree": False,
+        }
+        if deleted:
+            import datetime
+            attrs["deleted_at"] = datetime.datetime.utcnow()
+        return await Agent.create(attrs)
+
+    async def _siblings(self):
+        """Mirror the siblings query from _spawn_headless_agent."""
+        return await Agent.where("project_id", self.agent.project_id)\
+            .where("id", "!=", self.agent.id).where_null("deleted_at").get()
+
+    async def test_roster_excludes_soft_deleted_sibling(self):
+        live = await self._make_agent("LiveSibling")
+        dead = await self._make_agent("DeadSibling", deleted=True)
+
+        instructions = _build_relay_instructions(
+            self.agent,
+            cwd=self._tmpdir,
+            base_url="http://localhost:4545",
+            siblings=await self._siblings(),
+        )
+
+        self.assertIn("LiveSibling", instructions)
+        self.assertIn(str(live.id), instructions)
+        self.assertNotIn("DeadSibling", instructions)
+        self.assertNotIn(f"(ID: {dead.id})", instructions)
+
+
 class TestBuildIdentitySuffix(TestCase):
     """Verify _build_identity_suffix uses the correct MCP parameter name.
 
