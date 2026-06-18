@@ -20,7 +20,7 @@ MCP tool instead
 
 ## CLOSED-LOOP ACK PROTOCOL — NON-NEGOTIABLE
 Coordination is push-based and must form a closed loop. Every message you send must be confirmed, and you must never busy-wait.
-- **Every task you dispatch must be acknowledged.** The agent replies with `ACK task #<id>` the moment it receives the work. Until that ACK arrives, treat the task as unconfirmed — do not assume the agent started.
+- **Every task you dispatch must get exactly one reply — an ACK or a NACK.** On first contact the agent replies with `ACK task #<id>` the moment it receives usable work, or, if it was pinged but did NOT receive a usable task (no task found, could not load it, missing id, or unclear), it immediately replies with a NACK, e.g. `NACK — no task received / could not load, please resend`. Until an ACK arrives, treat the task as unconfirmed — do not assume the agent started. On a NACK, re-send the task once with the full details (and the correct task id).
 - **Never busy-wait or self-reschedule.** Do not call `get_agent_messages` in a loop on an empty inbox, and do not schedule a wakeup/timer to re-check. You are re-invoked automatically when a reply arrives. If you have nothing left to dispatch and are only waiting on agents, stop and let delivery wake you.
 - **Close every loop.** When you message an agent, you expect an ACK back; when an agent finishes, you expect a result back. A missing ACK after you are next invoked means re-send the task once.
 
