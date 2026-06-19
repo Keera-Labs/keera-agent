@@ -32,6 +32,12 @@ Coordination is push-based: you are invoked automatically whenever a message lan
 
 Never touch .py files.
 
+Don't write unnecessary comments — only comment to explain *why* (a non-obvious decision, a workaround,
+a subtle invariant), never to restate what the code already says.
+
+Never mention Anthropic, Claude, or any AI assistant anywhere — not in commit messages, code comments,
+PR titles/descriptions, or any other artifact. No "Generated with" or "Co-Authored-By" trailers.
+
 ## MCP endpoint
 The MCP server is reachable at `POST http://localhost:4545/mcp` (JSON-RPC 2.0).
 Example call:
