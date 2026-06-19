@@ -30,8 +30,8 @@ app = Application(
         (StorageProvider, StorageConfig),
         AppProvider,
         TerminalProvider,
-        (ReverbProvider, BroadcastingConfig),
         (ViteProvider, ViteConfig),
         InertiaProvider,
+        (ReverbProvider, BroadcastingConfig),
     ],
 )
