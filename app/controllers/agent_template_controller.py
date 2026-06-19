@@ -48,7 +48,7 @@ async def store(request: Request):
     permissions_allow = body.get("permissions_allow") or []
     permissions_deny = body.get("permissions_deny") or []
     dangerously_skip_permissions = bool(body.get("dangerously_skip_permissions", True))
-    plan_mode = bool(body.get("plan_mode", agent_type == "pm"))
+    plan_mode = bool(body.get("plan_mode", False))
 
     template = await AgentTemplate.create({
         "name": name,

@@ -14,7 +14,7 @@ class AgentStoreRequest(BaseModel):
     system_prompt: Optional[str] = None
     flags: dict = {}
     dangerously_skip_permissions: bool = True
-    plan_mode: Optional[bool] = None  # None → resolved from agent_type at creation time
+    plan_mode: Optional[bool] = None  # None → defaults to False (only on when explicitly set)
     task_id: Optional[int] = None
     orchestrator_id: Optional[int] = None
     # Transient field: initial message to send after agent creation (not stored)

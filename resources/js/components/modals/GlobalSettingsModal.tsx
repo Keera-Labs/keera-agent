@@ -64,6 +64,7 @@ export function GlobalSettingsModal({
     const [tplModel, setTplModel] = useState('claude-opus-4-8')
     const [tplPrompt, setTplPrompt] = useState('')
     const [tplFlags, setTplFlags] = useState<AgentFlags>({})
+    const [tplPlanMode, setTplPlanMode] = useState(false)
     const [formError, setFormError] = useState('')
     const [saving, setSaving] = useState(false)
 
@@ -88,6 +89,7 @@ export function GlobalSettingsModal({
         setTplName(tpl.name); setTplDesc(tpl.description ?? '')
         setTplType(tpl.agent_type); setTplModel(tpl.model)
         setTplPrompt(tpl.system_prompt ?? ''); setTplFlags(tpl.flags ?? {})
+        setTplPlanMode(!!tpl.plan_mode)
         setFormError('')
     }
 
@@ -95,6 +97,7 @@ export function GlobalSettingsModal({
         setSelected(null); setIsNew(true)
         setTplName(''); setTplDesc(''); setTplType('software_engineer')
         setTplModel('claude-opus-4-8'); setTplPrompt(''); setTplFlags({})
+        setTplPlanMode(false)
         setFormError('')
     }
 
@@ -102,7 +105,7 @@ export function GlobalSettingsModal({
         if (!tplName.trim()) { setFormError('Name is required'); return }
         setSaving(true); setFormError('')
         try {
-            const body = { name: tplName, description: tplDesc, agent_type: tplType, model: tplModel, system_prompt: tplPrompt, flags: tplFlags }
+            const body = { name: tplName, description: tplDesc, agent_type: tplType, model: tplModel, system_prompt: tplPrompt, flags: tplFlags, plan_mode: tplPlanMode }
             const url = isNew ? '/api/agent-templates' : `/api/agent-templates/${selected!.id}`
             const res = await fetch(url, { method: isNew ? 'POST' : 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
             if (!res.ok) { const d = await res.json(); setFormError(d.error ?? 'Save failed'); return }
@@ -296,7 +299,6 @@ export function GlobalSettingsModal({
                                             <span style={labelStyle}>Launch Flags</span>
                                             {([
                                                 { key: 'dangerously_skip_permissions' as const, label: 'Skip Permissions', hint: '--dangerously-skip-permissions — no prompts' },
-                                                { key: 'plan_mode' as const, label: 'Plan Mode', hint: 'Read-only — analyse and plan, never edit files' },
                                                 { key: 'verbose' as const, label: 'Verbose', hint: '--verbose — detailed output' },
                                             ] as const).map(({ key, label, hint }) => (
                                                 <div key={key} style={flagRowStyle} onClick={() => setTplFlags(f => ({ ...f, [key]: !f[key] }))}>
@@ -309,6 +311,15 @@ export function GlobalSettingsModal({
                                                     </button>
                                                 </div>
                                             ))}
+                                            <div style={flagRowStyle} onClick={() => setTplPlanMode(p => !p)}>
+                                                <div>
+                                                    <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Plan Mode</div>
+                                                    <div style={{ fontSize: '10px', color: color.textFaint }}>Read-only — analyse and plan, never edit files</div>
+                                                </div>
+                                                <button type="button" style={toggleStyle(tplPlanMode)} onClick={e => e.stopPropagation()}>
+                                                    <span style={{ position: 'absolute', top: '3px', left: tplPlanMode ? '17px' : '3px', width: '12px', height: '12px', borderRadius: '50%', background: '#fff', transition: 'left 0.15s' }} />
+                                                </button>
+                                            </div>
                                             <div style={{ ...flagRowStyle, gap: '12px' }}>
                                                 <div style={{ flex: 1 }}>
                                                     <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Max Turns</div>

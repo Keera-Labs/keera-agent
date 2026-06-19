@@ -10,6 +10,8 @@ export interface AgentTemplate {
     system_prompt: string | null
     model: string
     flags: AgentFlags
+    dangerously_skip_permissions: boolean
+    plan_mode: boolean
     is_builtin: boolean
 }
 
