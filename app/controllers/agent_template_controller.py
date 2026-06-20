@@ -68,12 +68,11 @@ async def store(request: Request):
 
 
 async def update(request: Request, template_id: int):
-    """Update a user-defined template. Built-ins cannot be modified."""
+    """Update a template. Built-ins are editable too (model + all fields);
+    startup seeding is insert-if-missing only, so edits survive a re-seed."""
     template = await AgentTemplate.find(template_id)
     if not template:
         return JSONResponse({"error": "Template not found"}, status_code=404)
-    if getattr(template, "is_builtin", False):
-        return JSONResponse({"error": "Built-in templates cannot be modified"}, status_code=403)
 
     body = await request.json()
     if "name" in body:
