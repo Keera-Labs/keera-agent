@@ -590,6 +590,18 @@ class DeleteAgentTool(Tool):
         agent.deleted_at = datetime.datetime.utcnow()
         await agent.save()
 
+        # Remove the agent's git worktree and branch so they don't accumulate
+        # (mirrors app/controllers/agent_controller.py::destroy)
+        from app.controllers.agent_trigger_controller import _cleanup_stale_worktree
+
+        project = await Project.find(agent.project_id)
+        if project:
+            cwd = os.path.expanduser(project.path)
+            try:
+                _cleanup_stale_worktree(agent, cwd)
+            except Exception:
+                pass
+
         return Response.text(f"Agent '{agent.name}' (ID: {agent_id}) has been deleted.")
 
 

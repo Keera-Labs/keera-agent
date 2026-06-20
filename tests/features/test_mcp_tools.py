@@ -17,6 +17,7 @@ from app.mcp.tools import (
     UpdateTaskStatusTool,
     DeleteTaskTool,
     SendMessageTool,
+    DeleteAgentTool,
     KEERA_TOOLS,
 )
 from databases.factories.project_factory import ProjectFactory
@@ -417,6 +418,85 @@ class TestSendMessageToolValidation(TestCase, DatabaseTransaction):
         text = _text(response)
         self.assertIn("Error", text)
         self.assertIn(str(sender.id), text)
+
+
+class TestDeleteAgentTool(TestCase, DatabaseTransaction):
+    """delete_agent must soft-delete the row AND remove the agent's git worktree + branch."""
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        self.tool = DeleteAgentTool()
+
+    async def test_delete_agent_removes_worktree_and_branch(self):
+        import os
+        import subprocess
+        import tempfile
+
+        from app.models.Agent import Agent
+
+        # Set up a throwaway git repo to act as the project's working directory.
+        repo = tempfile.mkdtemp(prefix="keera-test-repo-")
+        subprocess.run(["git", "init"], cwd=repo, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "t@t.com"], cwd=repo, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Tester"], cwd=repo, capture_output=True)
+        with open(os.path.join(repo, "README.md"), "w") as f:
+            f.write("hello")
+        subprocess.run(["git", "add", "."], cwd=repo, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "init"], cwd=repo, capture_output=True)
+
+        project = await ProjectFactory.new().create(path=repo)
+        agent = await Agent.create({
+            "project_id": project.id,
+            "name": "Worktree Agent",
+            "model": "claude-sonnet-4-6",
+            "status": "idle",
+        })
+
+        # Create the worktree + branch the way Claude would (agent-<id> / worktree-agent-<id>).
+        worktree_path = os.path.join(repo, ".claude", "worktrees", f"agent-{agent.id}")
+        branch_name = f"worktree-agent-{agent.id}"
+        subprocess.run(
+            ["git", "worktree", "add", "-b", branch_name, worktree_path],
+            cwd=repo, capture_output=True,
+        )
+        self.assertTrue(os.path.isdir(worktree_path), "worktree should exist before delete")
+
+        response = await self.tool.handle({"agent_id": agent.id})
+        text = _text(response)
+        self.assertNotIn("Error", text)
+        self.assertIn("deleted", text.lower())
+
+        # Row is soft-deleted.
+        refreshed = await Agent.find(agent.id)
+        self.assertIsNotNone(refreshed.deleted_at)
+
+        # Worktree directory and branch are gone.
+        self.assertFalse(os.path.isdir(worktree_path), "worktree should be removed after delete")
+        branch_list = subprocess.run(
+            ["git", "branch", "--list", branch_name],
+            cwd=repo, capture_output=True, text=True,
+        )
+        self.assertEqual(branch_list.stdout.strip(), "", "stale branch should be deleted")
+
+    async def test_delete_agent_not_found_returns_error(self):
+        response = await self.tool.handle({"agent_id": 999999})
+        self.assertIn("Error", _text(response))
+
+    async def test_delete_agent_already_deleted_returns_error(self):
+        import datetime
+
+        from app.models.Agent import Agent
+
+        project = await ProjectFactory.new().create()
+        agent = await Agent.create({
+            "project_id": project.id,
+            "name": "Already Gone",
+            "model": "claude-sonnet-4-6",
+            "status": "idle",
+            "deleted_at": datetime.datetime.utcnow(),
+        })
+        response = await self.tool.handle({"agent_id": agent.id})
+        self.assertIn("already been deleted", _text(response))
 
 
 class TestMcpToolNames(TestCase):
