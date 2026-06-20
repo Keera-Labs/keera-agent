@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { color } from '@/tokens'
 import type { Project } from '@/types/type'
+import { ProjectTemplatesModal } from '@/components/modals/ProjectTemplatesModal'
 
 // Light modal palette
 const M = {
@@ -26,6 +27,7 @@ export function EditProjectModal({
     const [saving, setSaving] = useState(false)
     const [saved,  setSaved]  = useState(false)
     const [error,  setError]  = useState('')
+    const [showTemplates, setShowTemplates] = useState(false)
 
     async function saveAll(e: React.FormEvent) {
         e.preventDefault()
@@ -138,6 +140,21 @@ export function EditProjectModal({
                         </label>
                     </section>
 
+                    <section style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: `1px solid ${M.border}`, paddingTop: '16px' }}>
+                        <span style={labelSty}>Agent templates</span>
+                        <p style={{ margin: 0, color: M.faint, fontSize: '12px', lineHeight: '1.5' }}>
+                            Customise templates for this project. Edits are copy-on-write — they create
+                            project overrides and never change the global defaults.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => setShowTemplates(true)}
+                            style={{ ...cancelSty, alignSelf: 'flex-start' }}
+                        >
+                            Manage agent templates
+                        </button>
+                    </section>
+
                     {/* ── Actions ── */}
                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', paddingTop: '4px' }}>
                         <button type="button" onClick={onClose} style={cancelSty}>Cancel</button>
@@ -147,6 +164,14 @@ export function EditProjectModal({
                     </div>
                 </form>
             </div>
+
+            {showTemplates && (
+                <ProjectTemplatesModal
+                    projectId={project.id}
+                    projectName={project.name}
+                    onClose={() => setShowTemplates(false)}
+                />
+            )}
         </div>
     )
 }

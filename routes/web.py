@@ -72,11 +72,19 @@ router.patch("/api/agents/{agent_id}", agent_controller.update)
 router.delete("/api/agents/{agent_id}", agent_controller.destroy)
 router.get("/api/agents/{agent_id}/output", agent_controller.output)
 
-# Agent templates
+# Agent templates — GLOBAL (project_id NULL)
 router.get("/api/agent-templates", agent_template_controller.index)
 router.post("/api/agent-templates", agent_template_controller.store)
+router.post("/api/agent-templates/sync-defaults", agent_template_controller.sync_defaults)
 router.patch("/api/agent-templates/{template_id}", agent_template_controller.update)
 router.delete("/api/agent-templates/{template_id}", agent_template_controller.destroy)
+
+# Agent templates — PROJECT-scoped (effective list + copy-on-write overrides)
+router.get("/api/projects/{project_id}/agent-templates", agent_template_controller.project_index)
+router.post("/api/projects/{project_id}/agent-templates", agent_template_controller.project_store)
+router.post("/api/projects/{project_id}/agent-templates/reset", agent_template_controller.project_reset)
+router.patch("/api/projects/{project_id}/agent-templates/{template_id}", agent_template_controller.project_update)
+router.delete("/api/projects/{project_id}/agent-templates/{template_id}", agent_template_controller.project_destroy)
 
 # Agent-to-agent relay
 router.post("/api/agent-relay", agent_relay_controller.relay)
