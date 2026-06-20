@@ -13,6 +13,10 @@ export interface AgentTemplate {
     dangerously_skip_permissions: boolean
     plan_mode: boolean
     is_builtin: boolean
+    // Two-tier scoping (task #283). project_id null = global template.
+    project_id?: number | null
+    source_template_id?: number | null
+    is_override?: boolean
 }
 
 export const AGENT_TYPE_LABELS: Record<string, string> = {

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import type React from 'react'
 import { router, usePage } from '@inertiajs/react'
 import { FitAddon } from '@xterm/addon-fit'
@@ -82,6 +82,7 @@ export interface AppLayoutContextValue {
     // ── Agent templates ───────────────────────────────────────────────────────
     agentTemplates: AgentTemplate[]
     setAgentTemplates: (templates: AgentTemplate[]) => void
+    refetchAgentTemplates: () => void
 
     // ── Global settings ───────────────────────────────────────────────────────
     maxAgentsPerProject: number
@@ -282,13 +283,22 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         return () => window.removeEventListener('keydown', onKeyDown)
     }, [])
 
-    // Fetch agent templates once on mount
-    useEffect(() => {
-        fetch('/api/agent-templates')
+    // Fetch the EFFECTIVE template list for the active project (project overrides
+    // resolved over globals). Falls back to the global list when no project is
+    // active. Re-fetches on project switch and after edits/sync/reset.
+    const refetchAgentTemplates = useCallback(() => {
+        const url = activeProject
+            ? `/api/projects/${activeProject.id}/agent-templates`
+            : '/api/agent-templates'
+        fetch(url)
             .then(r => r.json())
             .then(setAgentTemplates)
             .catch(() => {})
-    }, [])
+    }, [activeProject?.id])
+
+    useEffect(() => {
+        refetchAgentTemplates()
+    }, [refetchAgentTemplates])
 
 
     // When an agent is selected, start ALL agents (so they can communicate)
@@ -608,7 +618,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         // Agent hook
         agentHook,
         // Agent templates
-        agentTemplates, setAgentTemplates,
+        agentTemplates, setAgentTemplates, refetchAgentTemplates,
         // Global settings
         maxAgentsPerProject, setMaxAgentsPerProject,
     }

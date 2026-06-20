@@ -10,7 +10,9 @@ import json
 
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
+from app.actions.seed_builtin_templates_action import SeedBuiltinTemplatesAction
 from app.actions.sync_global_templates_action import SyncGlobalTemplatesAction
+from app.constant.templates import AGENT_TEMPLATES
 from app.models.AgentTemplate import AgentTemplate
 from tests.test_case import TestCase
 
@@ -169,6 +171,21 @@ class TestProjectTemplates(TestCase, DatabaseTransaction):
         names = self._names((await self.get(f"/api/projects/{PID}/agent-templates")).json())
         self.assertIn("t283-reset", names)          # global still resolved
         self.assertNotIn("t283-reset-extra", names)  # project-only template gone
+
+
+class TestSeedGlobals(TestCase, DatabaseTransaction):
+
+    async def test_seed_creates_global_with_null_project_id(self):
+        name = AGENT_TEMPLATES[0].name
+        await AgentTemplate.where("name", name).where_null("project_id").delete()
+
+        await SeedBuiltinTemplatesAction().execute()
+
+        row = await (
+            AgentTemplate.where("name", name).where("is_builtin", True).where_null("project_id").first()
+        )
+        self.assertIsNotNone(row)
+        self.assertIsNone(row.project_id)
 
 
 class TestGlobalTemplateSync(TestCase, DatabaseTransaction):

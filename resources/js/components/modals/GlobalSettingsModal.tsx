@@ -11,11 +11,12 @@ import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 export function GlobalSettingsModal({
     onClose,
     initialTemplates,
-    onTemplatesChange,
 }: {
     onClose: () => void
     initialTemplates: AgentTemplate[]
-    onTemplatesChange: (templates: AgentTemplate[]) => void
+    // Still accepted from ModalLayer for compatibility; the editor now manages the
+    // global list itself and syncs the effective list via refetchAgentTemplates.
+    onTemplatesChange?: (templates: AgentTemplate[]) => void
 }) {
     type SettingsTab = 'general' | 'templates' | 'permissions'
     const [tab, setTab] = useState<SettingsTab>('general')
@@ -30,7 +31,29 @@ export function GlobalSettingsModal({
     const [generalError, setGeneralError] = useState('')
 
     // Update the global layout context so AddAgentModal warning refreshes immediately
-    const { setMaxAgentsPerProject } = useAppLayout()
+    const { setMaxAgentsPerProject, refetchAgentTemplates } = useAppLayout()
+    const [syncing, setSyncing] = useState(false)
+
+    // This is the GLOBAL editor: always load the global list (project_id NULL),
+    // independent of the context's effective (project-resolved) list.
+    async function reloadGlobals(): Promise<AgentTemplate[]> {
+        const res = await fetch('/api/agent-templates')
+        const data: AgentTemplate[] = res.ok ? await res.json() : []
+        setTemplates(data)
+        refetchAgentTemplates()  // keep AddAgentModal's effective list in sync
+        return data
+    }
+
+    useEffect(() => { reloadGlobals() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+    async function syncFromDefaults() {
+        setSyncing(true)
+        try {
+            await fetch('/api/agent-templates/sync-defaults', { method: 'POST' })
+            await reloadGlobals()
+            setSelected(null); setIsNew(false)
+        } finally { setSyncing(false) }
+    }
 
     async function saveGeneralSettings() {
         setGeneralSaving(true)
@@ -110,8 +133,7 @@ export function GlobalSettingsModal({
             const res = await fetch(url, { method: isNew ? 'POST' : 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
             if (!res.ok) { const d = await res.json(); setFormError(d.error ?? 'Save failed'); return }
             const tpl: AgentTemplate = await res.json()
-            const updated = isNew ? [...templates, tpl] : templates.map(t => t.id === tpl.id ? tpl : t)
-            setTemplates(updated); onTemplatesChange(updated)
+            await reloadGlobals()
             setIsNew(false); setSelected(tpl)
         } finally { setSaving(false) }
     }
@@ -120,8 +142,7 @@ export function GlobalSettingsModal({
         if (!selected || selected.is_builtin) return
         const res = await fetch(`/api/agent-templates/${selected.id}`, { method: 'DELETE' })
         if (!res.ok) return
-        const updated = templates.filter(t => t.id !== selected.id)
-        setTemplates(updated); onTemplatesChange(updated)
+        await reloadGlobals()
         setSelected(null); setIsNew(false)
     }
 
@@ -211,9 +232,17 @@ export function GlobalSettingsModal({
                     <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
                         {/* Left list */}
                         <div style={{ width: '220px', flexShrink: 0, borderRight: `1px solid ${color.border}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                            <div style={{ padding: '10px', borderBottom: `1px solid ${color.border}` }}>
+                            <div style={{ padding: '10px', borderBottom: `1px solid ${color.border}`, display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                 <button onClick={startNew} style={{ ...submitBtnStyle, width: '100%', textAlign: 'center' as const, padding: '6px 0' }}>
                                     + New Template
+                                </button>
+                                <button
+                                    onClick={syncFromDefaults}
+                                    disabled={syncing}
+                                    title="Re-pull code defaults into the built-in templates, overwriting manual edits"
+                                    style={{ ...cancelBtnStyle, width: '100%', textAlign: 'center' as const, padding: '6px 0', opacity: syncing ? 0.6 : 1 }}
+                                >
+                                    {syncing ? 'Syncing…' : 'Sync from defaults'}
                                 </button>
                             </div>
                             <div style={{ flex: 1, overflowY: 'auto' }}>

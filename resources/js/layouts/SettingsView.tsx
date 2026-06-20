@@ -160,13 +160,25 @@ function TemplatesTab() {
     const [tplPlanMode, setTplPlanMode] = useState(false)
     const [formError, setFormError] = useState('')
     const [saving, setSaving] = useState(false)
+    const [syncing, setSyncing] = useState(false)
 
-    useEffect(() => {
-        fetch('/api/agent-templates')
+    function reload() {
+        return fetch('/api/agent-templates')
             .then(r => r.json())
-            .then(data => { setTemplates(data); setLoading(false) })
-            .catch(() => setLoading(false))
-    }, [])
+            .then(data => { setTemplates(data); setLoading(false); return data as AgentTemplate[] })
+            .catch(() => { setLoading(false); return [] as AgentTemplate[] })
+    }
+
+    useEffect(() => { reload() }, [])
+
+    async function syncFromDefaults() {
+        setSyncing(true)
+        try {
+            await fetch('/api/agent-templates/sync-defaults', { method: 'POST' })
+            await reload()
+            setSelected(null); setIsNew(false)
+        } finally { setSyncing(false) }
+    }
 
     function loadTemplate(tpl: AgentTemplate) {
         setSelected(tpl); setIsNew(false)
@@ -216,9 +228,17 @@ function TemplatesTab() {
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
             {/* Left list */}
             <div style={{ width: '220px', flexShrink: 0, borderRight: `1px solid ${color.border}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                <div style={{ padding: '10px', borderBottom: `1px solid ${color.border}` }}>
+                <div style={{ padding: '10px', borderBottom: `1px solid ${color.border}`, display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <button onClick={startNew} style={{ ...submitBtnStyle, width: '100%', textAlign: 'center' as const, padding: '6px 0' }}>
                         + New Template
+                    </button>
+                    <button
+                        onClick={syncFromDefaults}
+                        disabled={syncing}
+                        title="Re-pull code defaults into the built-in templates, overwriting manual edits"
+                        style={{ ...cancelBtnStyle, width: '100%', textAlign: 'center' as const, padding: '6px 0', opacity: syncing ? 0.6 : 1 }}
+                    >
+                        {syncing ? 'Syncing…' : 'Sync from defaults'}
                     </button>
                 </div>
                 <div style={{ flex: 1, overflowY: 'auto' }}>
