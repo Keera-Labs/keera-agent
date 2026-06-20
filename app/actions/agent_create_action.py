@@ -42,9 +42,13 @@ class AgentCreateAction:
         flags.pop("dangerously_skip_permissions", None)
         dsp = bool(req.dangerously_skip_permissions)
 
+        # plan_mode is column-authoritative and defaults to off — including for
+        # the PM, which must stay writable to coordinate the team. Honour an
+        # explicit top-level value, fall back to a legacy nested flags.plan_mode,
+        # and never leave it in flags (a second, divergent source of truth).
         plan_mode = req.plan_mode
         if plan_mode is None:
-            plan_mode = bool(flags.pop("plan_mode")) if "plan_mode" in flags else (req.agent_type == "pm")
+            plan_mode = bool(flags.pop("plan_mode", False))
         else:
             flags.pop("plan_mode", None)
 

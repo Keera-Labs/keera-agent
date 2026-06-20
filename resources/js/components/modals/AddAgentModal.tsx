@@ -12,7 +12,7 @@ import { labelStyle, inputStyle, cancelBtnStyle, submitBtnStyle, flagRowStyle, t
  */
 function findBuiltinForType(templates: AgentTemplate[], agentType: string): AgentTemplate | undefined {
     return (
-        templates.find(t => t.is_builtin && t.agent_type === agentType && !t.flags?.dangerously_skip_permissions && !t.flags?.plan_mode)
+        templates.find(t => t.is_builtin && t.agent_type === agentType && !t.flags?.dangerously_skip_permissions && !t.plan_mode)
         ?? templates.find(t => t.is_builtin && t.agent_type === agentType)
     )
 }
@@ -31,6 +31,7 @@ export function AddAgentModal({ projectId, onClose, onCreated, templates, agentC
     const [systemPrompt, setSystemPrompt] = useState(() => findBuiltinForType(templates, 'software_engineer')?.system_prompt ?? '')
     const [model, setModel] = useState('claude-opus-4-8')
     const [flags, setFlags] = useState<AgentFlags>({})
+    const [planMode, setPlanMode] = useState(false)
     const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null)
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
@@ -56,6 +57,7 @@ export function AddAgentModal({ projectId, onClose, onCreated, templates, agentC
         const tpl = findBuiltinForType(templates, type)
         setDescription(tpl?.description ?? '')
         setSystemPrompt(tpl?.system_prompt ?? '')
+        setPlanMode(!!tpl?.plan_mode)
     }
 
     function applyTemplate(tpl: AgentTemplate | null) {
@@ -66,12 +68,14 @@ export function AddAgentModal({ projectId, onClose, onCreated, templates, agentC
             setSystemPrompt('')
             setModel('claude-opus-4-8')
             setFlags({})
+            setPlanMode(false)
             return
         }
         setSelectedTemplateId(tpl.id)
         setAgentType(tpl.agent_type)
         setModel(tpl.model)
         setFlags(tpl.flags ?? {})
+        setPlanMode(!!tpl.plan_mode)
         setDescription(tpl.description ?? '')
         setSystemPrompt(tpl.system_prompt ?? '')
     }
@@ -88,7 +92,7 @@ export function AddAgentModal({ projectId, onClose, onCreated, templates, agentC
             const res = await fetch(`/api/projects/${projectId}/agents`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, agent_type: agentType, description, system_prompt: systemPrompt, model, flags }),
+                body: JSON.stringify({ name, agent_type: agentType, description, system_prompt: systemPrompt, model, flags, plan_mode: planMode }),
             })
             const data = await res.json()
             if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
@@ -162,12 +166,12 @@ export function AddAgentModal({ projectId, onClose, onCreated, templates, agentC
                                             <div style={{ fontSize: '10px', color: typeColor, marginTop: '2px' }}>
                                                 {AGENT_TYPE_LABELS[tpl.agent_type] ?? tpl.agent_type}
                                             </div>
-                                            {(tpl.flags?.dangerously_skip_permissions || tpl.flags?.plan_mode) && (
+                                            {(tpl.flags?.dangerously_skip_permissions || tpl.plan_mode) && (
                                                 <div style={{ display: 'flex', gap: '3px', marginTop: '4px', flexWrap: 'wrap' }}>
-                                                    {tpl.flags.dangerously_skip_permissions && (
+                                                    {tpl.flags?.dangerously_skip_permissions && (
                                                         <span style={{ fontSize: '9px', padding: '1px 4px', borderRadius: '3px', background: '#ff6b3518', color: '#ff6b35', fontWeight: 600 }}>FULL AUTO</span>
                                                     )}
-                                                    {tpl.flags.plan_mode && (
+                                                    {tpl.plan_mode && (
                                                         <span style={{ fontSize: '9px', padding: '1px 4px', borderRadius: '3px', background: `${color.accent}18`, color: color.accent, fontWeight: 600 }}>PLAN ONLY</span>
                                                     )}
                                                 </div>
@@ -279,13 +283,13 @@ export function AddAgentModal({ projectId, onClose, onCreated, templates, agentC
                             </div>
                             <button
                                 type="button"
-                                style={toggleStyle(!!flags.plan_mode)}
-                                onClick={() => setFlag('plan_mode', !flags.plan_mode)}
+                                style={toggleStyle(planMode)}
+                                onClick={() => setPlanMode(p => !p)}
                                 title="Toggle plan mode"
                             >
                                 <span style={{
                                     position: 'absolute', top: '3px',
-                                    left: flags.plan_mode ? '17px' : '3px',
+                                    left: planMode ? '17px' : '3px',
                                     width: '12px', height: '12px', borderRadius: '50%',
                                     background: '#fff', transition: 'left 0.15s',
                                 }} />

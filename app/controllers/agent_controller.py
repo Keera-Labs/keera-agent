@@ -38,7 +38,6 @@ async def index(request: Request, project_id: int):
                 agent_type="pm",
                 description="Project manager agent that coordinates work across the team.",
                 dangerously_skip_permissions=True,
-                plan_mode=True,
             ),
         ).execute()
 
@@ -76,6 +75,12 @@ async def update(body: AgentUpdateRequest, agent_id: int):
         return JSONResponse({"error": "Agent not found"}, status_code=404)
 
     update_data = body.model_dump(exclude_unset=True)
+
+    # plan_mode is column-authoritative. If a legacy client nests it in flags,
+    # promote it to the column and strip it so the two never diverge.
+    if isinstance(update_data.get("flags"), dict) and "plan_mode" in update_data["flags"]:
+        nested = update_data["flags"].pop("plan_mode")
+        update_data.setdefault("plan_mode", bool(nested))
 
     # Masonite ORM cannot serialize a Python dict in UPDATE queries — it generates
     # malformed SQL (e.g. `."flags"` instead of `"agents"."flags"`).  The `flags`
