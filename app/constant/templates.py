@@ -17,27 +17,29 @@ AGENT_TEMPLATES: list[AgentTemplateSeed] = [
         name="PM",
         description="Project Manager — coordinates work, delegates tasks, never touches code.",
         agent_type="pm",
+        plan_mode=True,
+        dangerously_skip_permissions=True,
+        model="claude-opus-4-8"
     ),
     AgentTemplateSeed(
         name="Software Engineer",
         description="Creates worktrees, implements features, opens PRs, reports back to PM.",
         agent_type="software_engineer",
+        dangerously_skip_permissions=True,
+        model="claude-opus-4-6"
     ),
     AgentTemplateSeed(
         name="QA",
         description="Checks out branches, runs tests, browser tests, reports pass/fail and bugs to PM.",
         agent_type="qa",
+        dangerously_skip_permissions=True,
+        model="claude-opus-4-6"
     ),
     AgentTemplateSeed(
         name="Full Auto",
         description="Software Engineer with --dangerously-skip-permissions — no permission prompts.",
         agent_type="software_engineer",
-    ),
-    AgentTemplateSeed(
-        name="Planner",
-        description="Read-only planning mode — analyses and proposes but never modifies files.",
-        agent_type="reviewer",
-        dangerously_skip_permissions=False,
-        plan_mode=True,
+        dangerously_skip_permissions=True,
+        model="claude-opus-4-6"
     ),
 ]
