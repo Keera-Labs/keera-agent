@@ -17,7 +17,6 @@ AGENT_TEMPLATES: list[AgentTemplateSeed] = [
         name="PM",
         description="Project Manager — coordinates work, delegates tasks, never touches code.",
         agent_type="pm",
-        plan_mode=True,
     ),
     AgentTemplateSeed(
         name="Software Engineer",

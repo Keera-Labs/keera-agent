@@ -42,15 +42,37 @@ class TestAgents(HttpTestCase):
         self.assertTrue(attrs["dangerously_skip_permissions"])
         self.assertFalse(attrs["plan_mode"])
 
-    async def test_store_pm_agent_enables_plan_mode(self):
+    async def test_store_pm_agent_defaults_plan_mode_off(self):
+        # A PM must stay writable to coordinate the team — it is never forced
+        # into plan mode by default.
         response = await self.post(f"/api/projects/{self.project_id}/agents", json={
             "name": "PM",
             "agent_type": "pm",
         })
         self.assertEqual(response.status_code, 200)
         attrs = _attrs(response)
-        self.assertTrue(attrs["plan_mode"])
+        self.assertFalse(attrs["plan_mode"])
         self.assertTrue(attrs["dangerously_skip_permissions"])
+
+    async def test_store_explicit_plan_mode_true(self):
+        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
+            "name": "Planner",
+            "agent_type": "reviewer",
+            "plan_mode": True,
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(_attrs(response)["plan_mode"])
+
+    async def test_store_nested_flags_plan_mode_promotes_to_column(self):
+        # Legacy clients that nest plan_mode in flags still set the column.
+        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
+            "name": "Legacy Plan",
+            "flags": {"plan_mode": True},
+        })
+        self.assertEqual(response.status_code, 200)
+        attrs = _attrs(response)
+        self.assertTrue(attrs["plan_mode"])
+        self.assertNotIn("plan_mode", json.loads(attrs["flags"]))
 
     async def test_store_explicit_plan_mode_false(self):
         response = await self.post(f"/api/projects/{self.project_id}/agents", json={
@@ -111,6 +133,16 @@ class TestAgents(HttpTestCase):
         response = await self.client.patch(f"/api/agents/{agent['id']}", json={"plan_mode": True})
         self.assertEqual(response.status_code, 200)
         self.assertTrue(_attrs(response)["plan_mode"])
+
+    async def test_update_nested_flags_plan_mode_promotes_to_column(self):
+        agent = await self._create_agent()
+        response = await self.client.patch(
+            f"/api/agents/{agent['id']}", json={"flags": {"plan_mode": True}}
+        )
+        self.assertEqual(response.status_code, 200)
+        attrs = _attrs(response)
+        self.assertTrue(attrs["plan_mode"])
+        self.assertNotIn("plan_mode", json.loads(attrs["flags"]))
 
     async def test_update_omitted_fields_unchanged(self):
         agent = await self._create_agent(model="claude-opus-4-5")
@@ -182,13 +214,13 @@ class TestAgentTypeEnforcement(HttpTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Reviewer", _attrs(response)["system_prompt"])
 
-    async def test_pm_has_plan_mode_true(self):
+    async def test_pm_defaults_plan_mode_off(self):
         response = await self.post(f"/api/projects/{self.project_id}/agents", json={
             "name": "PM Agent",
             "agent_type": "pm",
         })
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(_attrs(response)["plan_mode"])
+        self.assertFalse(_attrs(response)["plan_mode"])
 
     async def test_se_has_dangerously_skip_true(self):
         response = await self.post(f"/api/projects/{self.project_id}/agents", json={
@@ -221,6 +253,8 @@ class TestAgentTypeEnforcement(HttpTestCase):
         agents = response.json()["data"]
         pm_agent = next(a for a in agents if a["attributes"]["agent_type"] == "pm")
         self.assertFalse(pm_agent["attributes"]["use_worktree"])
+        # The auto-created PM must not be trapped in plan-only mode.
+        self.assertFalse(pm_agent["attributes"]["plan_mode"])
 
 
 class TestAgentLimit(HttpTestCase):

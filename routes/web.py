@@ -112,10 +112,6 @@ router.post('/api/broadcast/fire', broadcast_poc_controller.fire)
 router.get('/broadcasting', broadcasting_controller.broadcasting_page)
 router.post('/api/broadcasting/ping', broadcasting_controller.ping)
 
-# POC route — before wildcard
-router.get("/poc", poc_controller.poc_page)
-router.router.add_api_websocket_route("/poc/ws", poc_controller.poc_ws)
-
 # Wildcard page routes — must come last
 router.get("/", home_controller.home)
 router.get("/{project}/tasks", tasks_page_controller.tasks_page)

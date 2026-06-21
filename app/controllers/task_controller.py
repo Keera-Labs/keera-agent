@@ -18,7 +18,8 @@ async def index(project_id: int) -> ResourceCollection:
             q.where_not_in("tasks.status", ["completed", "cancelled"])
             .or_where("tasks.completed_at", ">=", cutoff)
             .or_where_raw("tasks.completed_at IS NULL")
-        )).paginate())
+        )).paginate()
+    )
 
     return TaskResource.collection(tasks)
 

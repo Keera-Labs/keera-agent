@@ -21,6 +21,7 @@ export default function AgentEditModal({
     const [model, setModel] = useState(agent.model ?? 'claude-opus-4-8')
     const [systemPrompt, setSystemPrompt] = useState(agent.system_prompt ?? '')
     const [flags, setFlags] = useState<AgentFlags>(agent.flags ?? {})
+    const [planMode, setPlanMode] = useState(!!agent.plan_mode)
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
 
@@ -32,6 +33,7 @@ export default function AgentEditModal({
         setModel(agent.model ?? 'claude-opus-4-8')
         setSystemPrompt(agent.system_prompt ?? '')
         setFlags(agent.flags ?? {})
+        setPlanMode(!!agent.plan_mode)
         setError('')
     }, [agent.id])
 
@@ -56,6 +58,7 @@ export default function AgentEditModal({
                     model,
                     system_prompt: systemPrompt.trim() || null,
                     flags,
+                    plan_mode: planMode,
                 }),
             })
             const data = await res.json()
@@ -207,7 +210,7 @@ export default function AgentEditModal({
                         {/* Plan Mode */}
                         <div
                             style={flagRowStyle}
-                            onClick={() => setFlag('plan_mode', !flags.plan_mode)}
+                            onClick={() => setPlanMode(p => !p)}
                         >
                             <div>
                                 <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Plan Mode</div>
@@ -215,13 +218,13 @@ export default function AgentEditModal({
                             </div>
                             <button
                                 type="button"
-                                style={toggleStyle(!!flags.plan_mode)}
+                                style={toggleStyle(planMode)}
                                 onClick={e => e.stopPropagation()}
                                 title="Toggle plan mode"
                             >
                                 <span style={{
                                     position: 'absolute', top: '3px',
-                                    left: flags.plan_mode ? '17px' : '3px',
+                                    left: planMode ? '17px' : '3px',
                                     width: '12px', height: '12px', borderRadius: '50%',
                                     background: '#fff', transition: 'left 0.15s',
                                 }} />
