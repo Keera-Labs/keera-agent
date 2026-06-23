@@ -418,7 +418,6 @@ class SpawnAgentInput(BaseModel):
     project_path: str = Field(description="Absolute path of the project (use the current working directory).")
     name: str = Field(description="Short display name for the agent (e.g. 'Backend Engineer', 'QA Bot').")
     agent_type: str = Field(pattern="^(pm|software_engineer|software_engineer_frontend|reviewer|qa|qa_browser)$", description="Role type for the agent.")
-    system_prompt: Optional[str] = Field(default=None, description="System prompt defining the agent's role and behavior.")
     message: Optional[str] = Field(default=None, description="Initial task or instruction to send to the agent after it starts. Omit to create an idle agent.")
     model: Optional[str] = Field(default=None, description="Claude model to use. Defaults to claude-opus-4-8.")
     task_id: Optional[int] = Field(default=None, description="ID of the task this agent is working on.")
@@ -445,13 +444,33 @@ class SpawnAgentTool(Tool):
         from app.terminal.connection_manager import ConnectionManager
         from fastapi_startkit.application import app as _app
 
-        project = await _project_by_path(arguments["project_path"])
-        if not project:
-            return Response.text(f"Error: no Keera project found at path '{arguments['project_path']}'")
-
         name = (arguments.get("name") or "").strip()
         if not name:
             return Response.text("Error: name is required")
+
+        # A spawned agent must always belong to the same project as the
+        # orchestrator that spawned it. When from_agent_id is supplied the project
+        # is derived from the orchestrator and the caller-supplied project_path is
+        # ignored — a caller must not be able to place a spawned agent in another
+        # project. We fall back to project_path only when there is no orchestrator
+        # (e.g. the non-MCP creation paths).
+        from_agent_id = arguments.get("from_agent_id")
+        orchestrator = None
+        if from_agent_id is not None:
+            orchestrator = await _Agent.where("id", from_agent_id).where_null("deleted_at").first()
+            if not orchestrator:
+                return Response.text(f"Error: orchestrator agent #{from_agent_id} not found")
+
+        if orchestrator is not None:
+            project = await Project.find(orchestrator.project_id)
+            if not project:
+                return Response.text(
+                    f"Error: orchestrator agent #{from_agent_id} is not attached to a valid project"
+                )
+        else:
+            project = await _project_by_path(arguments["project_path"])
+            if not project:
+                return Response.text(f"Error: no Keera project found at path '{arguments['project_path']}'")
 
         # Enforce per-project agent limit before creating
         settings = await read_global_settings()
@@ -470,7 +489,10 @@ class SpawnAgentTool(Tool):
                     agent_type=arguments.get("agent_type", "software_engineer"),
                     model=arguments.get("model") or "claude-opus-4-8",
                     description=f"{name} agent",
-                    system_prompt=(arguments.get("system_prompt") or "").strip() or None,
+                    # system_prompt is intentionally not forwarded: spawned agents
+                    # always use their role-based default prompt and a caller must
+                    # not be able to override an agent's role at spawn time.
+                    system_prompt=None,
                     task_id=arguments.get("task_id"),
                     orchestrator_id=arguments.get("from_agent_id"),
                 ),
