@@ -78,7 +78,7 @@ def _serve() -> None:
 
     console = ConsoleApplication(console_app)
     console.auto_exits(False)
-    console.run(StringInput("serve"))
+    console.run(StringInput(f"serve --host {HOST} --port {PORT}"))
 
 
 def _boot_server() -> None:
