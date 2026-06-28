@@ -1,7 +1,8 @@
-"""Desktop shell (proof of concept)."""
+"""Desktop shell."""
 
 import os
 import pathlib
+import shutil
 import socket
 import subprocess
 import sys
@@ -19,6 +20,41 @@ PROJECT_ROOT = pathlib.Path(__file__).resolve().parent
 SERVER_CMD = ["uv", "run", "python", "artisan", "serve"]
 BUNDLED = getattr(sys, "frozen", False)
 BASE_DIR = pathlib.Path(getattr(sys, "_MEIPASS", PROJECT_ROOT)) if BUNDLED else PROJECT_ROOT
+DATA_DIR = pathlib.Path(
+    os.environ.get("KEERA_DATA_DIR")
+    or pathlib.Path.home() / "Library" / "Application Support" / "Keera Agent"
+)
+
+
+def _configure_data_dir() -> None:
+    storage = DATA_DIR / "storage"
+    (storage / "logs").mkdir(parents=True, exist_ok=True)
+    (storage / "app" / "public").mkdir(parents=True, exist_ok=True)
+
+    db = DATA_DIR / "keera.db"
+    perms = storage / "default_permissions.json"
+    if not perms.exists():
+        seed = BASE_DIR / "storage" / "default_permissions.json"
+        if seed.exists():
+            shutil.copyfile(seed, perms)
+
+    os.environ["DB_DATABASE"] = str(db)
+    os.environ["DB_URL"] = f"sqlite+aiosqlite:///{db}"
+    os.environ["FILESYSTEM_DISK_ROOT"] = str(storage)
+    os.environ["FILESYSTEM_PUBLIC_DISK_ROOT"] = str(storage / "app" / "public")
+    os.environ["LOG_DAILY_PATH"] = str(storage / "logs")
+    os.environ["KEERA_DEFAULT_PERMS_PATH"] = str(perms)
+
+
+def _migrate() -> None:
+    from cleo.io.inputs.string_input import StringInput
+    from fastapi_startkit.console import ConsoleApplication
+
+    from bootstrap.application import app as console_app
+
+    console = ConsoleApplication(console_app)
+    console.auto_exits(False)
+    console.run(StringInput("db:migrate --force"))
 
 
 def _is_listening(host: str, port: int) -> bool:
@@ -81,6 +117,10 @@ def main() -> None:
     import webview
 
     os.chdir(BASE_DIR)
+    if BUNDLED:
+        _configure_data_dir()
+        _migrate()
+
     handle = _boot_server()
 
     webview.create_window(WINDOW_TITLE, f"http://{HOST}:{PORT}", width=1280, height=860)

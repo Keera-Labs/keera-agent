@@ -19,7 +19,7 @@ def _parse_json_list(value) -> list:
     except (json.JSONDecodeError, TypeError):
         return []
 
-_DEFAULT_PERMS_PATH = os.path.join(
+_DEFAULT_PERMS_PATH = os.environ.get("KEERA_DEFAULT_PERMS_PATH") or os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "storage",
     "default_permissions.json",

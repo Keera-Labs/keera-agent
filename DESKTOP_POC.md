@@ -32,39 +32,71 @@ uv run python desktop.py         # boots the server + opens the window
 Host/port follow the existing `APP_PORT` / `APP_HOST` env (defaults: `4545` /
 `127.0.0.1`), matching `bin/build.sh`.
 
-## Bundle as a macOS `.app` (PyInstaller)
-
-When frozen, `desktop.py` boots the server **in-process** (it can't call
-`uv`/`artisan` from inside a bundle) and `chdir`s to the bundle root so the
-app's relative paths resolve — so the `.app` is self-launching.
+## Build a macOS `.app` (PyInstaller)
 
 ```bash
-bash bin/release.sh           # full build (frontend + migrate + package)
-bash bin/release.sh --no-build  # skip the frontend build, reuse public/build
+bash bin/release.sh             # full build (frontend + package + sign)
+bash bin/release.sh --no-build  # reuse existing public/build
 open "dist-app/Keera Agent.app"
 ```
 
-`bin/release.sh` runs `npm run build`, migrates the SQLite DB, then packages a
-`Keera Agent.app` via PyInstaller (`--windowed --onedir`). The server is loaded
-through the factory string `bootstrap.application:app`, which PyInstaller's
-static analysis can't see, so the script explicitly collects the local
-packages (`bootstrap`, `config`, `routes`, `providers`, `databases`, `app`) and
-`fastapi_startkit`, plus the runtime data (`templates`, `public`, `databases`,
-`storage`, `app/prompts`).
+`bin/release.sh` builds the frontend, then packages an Apple-Silicon
+(`--target-arch arm64`) `Keera Agent.app` via PyInstaller (`--windowed
+--onedir`) and ad-hoc code-signs it. The server is loaded through the factory
+string `bootstrap.application:app`, which PyInstaller's static analysis can't
+see, so the script explicitly collects the local packages (`bootstrap`,
+`config`, `routes`, `providers`, `databases`, `app`) and `fastapi_startkit`,
+plus the read-only runtime data (`templates`, `public`, `databases`,
+`app/prompts`).
 
 > py2app was tried first but its standalone build is broken on Python 3.13
 > (`module 'zlib' has no attribute '__file__'` — zlib is a builtin in 3.13).
 > PyInstaller does not have that problem.
 
+## Per-user data (read-only bundle)
+
+An installed `.app` is read-only, so the app must not write inside the bundle.
+When frozen, `desktop.py` points all writable paths at
+`~/Library/Application Support/Keera Agent/` (override with `KEERA_DATA_DIR`) via
+env before the server boots:
+
+| Data | Env var | Location |
+| --- | --- | --- |
+| SQLite database | `DB_URL` / `DB_DATABASE` | `…/keera.db` |
+| Uploads (local disk) | `FILESYSTEM_DISK_ROOT` | `…/storage` |
+| Public uploads | `FILESYSTEM_PUBLIC_DISK_ROOT` | `…/storage/app/public` |
+| Daily logs | `LOG_DAILY_PATH` | `…/storage/logs` |
+| Default permissions | `KEERA_DEFAULT_PERMS_PATH` | `…/storage/default_permissions.json` |
+
+On launch it creates the directory, **runs `db:migrate`** (so a fresh install
+gets the schema and a new release applies new migrations — verified idempotent),
+and seeds `default_permissions.json` from the bundle on first run.
+
+Two project configs honor an env override so this works without forking the
+framework: `config/storage.py` reads `FILESYSTEM_DISK_ROOT`, and
+`permission_controller.py` reads `KEERA_DEFAULT_PERMS_PATH` (both default to the
+previous relative paths, so dev/server behavior is unchanged).
+
+## Distribution (no Apple Developer account)
+
+The `.app` is **ad-hoc signed**, not notarized. It runs locally as-is; on
+another Mac the first launch is gated by Gatekeeper. The user opens it once via
+**right-click → Open**, or removes the download quarantine:
+
+```bash
+xattr -dr com.apple.quarantine "Keera Agent.app"
+```
+
+A frictionless double-click would require a paid Apple Developer ID +
+notarization.
+
 ## Notes / follow-ups
 
-- The bundled SQLite DB lives **inside** the `.app` (writes land there). A real
-  release should relocate storage/the DB to a writable per-user location
-  (e.g. `~/Library/Application Support/Keera Agent`).
+- Apple Silicon only (`arm64`); no Intel/universal build.
 - The bundle embeds the **prebuilt** frontend, so `npm run build` must run before
   packaging (`bin/release.sh` does this unless `--no-build`).
 - pywebview lives in the **dev** dependency group (`[dependency-groups].dev`).
-- Native window only — no installer, app menu, icon, code-signing/notarization,
-  or single-instance guard yet.
+- No installer/`.dmg`, app menu, app icon, Developer-ID signing/notarization, or
+  single-instance guard yet.
 - "Already listening" is a TCP connect to the port; it does not verify the
   listener is *this* app.
