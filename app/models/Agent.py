@@ -52,9 +52,11 @@ class Agent(Model):
                 pass
 
         # Allow/deny tool lists only matter when permissions are enforced.
-        # With --dangerously-skip-permissions on, every tool runs regardless,
-        # so the gating args are dead weight — omit them entirely.
-        if not self.dangerously_skip_permissions:
+        # They are dead weight only when --dangerously-skip-permissions is the
+        # active flag — i.e. the skip toggle is on AND plan mode isn't overriding
+        # it. Plan mode wins and enforces permissions, so the lists still apply
+        # there even though the (independent) skip column may default to True.
+        if self.plan_mode or not self.dangerously_skip_permissions:
             try:
                 allow = json.loads(self.permissions_allow) if getattr(self, 'permissions_allow', None) else []
                 if allow:

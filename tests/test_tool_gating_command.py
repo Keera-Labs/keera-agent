@@ -30,3 +30,13 @@ class TestToolGatingCommand(TestCase, DatabaseTransaction):
         self.assertNotIn("--dangerously-skip-permissions", cmd)
         self.assertIn("--allowedTools", cmd)
         self.assertIn("--disallowedTools", cmd)
+
+    async def test_plan_mode_keeps_tool_gating_even_when_skip_defaults_on(self):
+        # plan_mode wins and enforces permissions; the independent skip column
+        # defaulting to True must not strip the tool gating args.
+        agent = await self._agent(dangerously_skip_permissions=True, plan_mode=True)
+        cmd = agent.to_command()
+        self.assertIn("--permission-mode plan", cmd)
+        self.assertNotIn("--dangerously-skip-permissions", cmd)
+        self.assertIn("--allowedTools", cmd)
+        self.assertIn("--disallowedTools", cmd)
