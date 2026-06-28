@@ -9,6 +9,13 @@ dependencies = [
     "playwright>=1.60.0",
 ]
 
+[project.optional-dependencies]
+# Proof-of-concept native desktop shell (desktop.py). Kept optional so the
+# default install is unaffected: install with `uv sync --extra desktop`.
+desktop = [
+    "pywebview>=5.0",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
