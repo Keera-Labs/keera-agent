@@ -39,3 +39,7 @@ storage/uploads/
 # Keera uploads
 .keera/uploads/
 storage
+
+# py2app build artifacts
+/build/
+/dist-app/

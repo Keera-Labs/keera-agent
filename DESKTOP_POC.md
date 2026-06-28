@@ -32,6 +32,31 @@ uv run python desktop.py         # boots the server + opens the window
 Host/port follow the existing `APP_PORT` / `APP_HOST` env (defaults: `4545` /
 `127.0.0.1`), matching `bin/build.sh`.
 
+## Bundle as a macOS `.app` (py2app)
+
+When frozen, `desktop.py` boots the server **in-process** (it can't call
+`uv`/`artisan` from inside a bundle), then opens the window — so the `.app` is
+self-launching.
+
+```bash
+uv sync
+npm run build                                   # assets must be built first
+uv run python setup.py py2app -A --dist-dir dist-app
+open "dist-app/Keera Agent.app"
+```
+
+The **alias** build (`-A`) produces a working `Keera Agent.app` that runs the
+full app + window on this machine (it references the source tree, so it is not
+distributable to another machine).
+
+**Standalone (distributable) build is not working yet.** `uv run python
+setup.py py2app` (without `-A`) currently fails with
+`module 'zlib' has no attribute '__file__'` — a known incompatibility between
+py2app 0.28.10 and Python 3.13 (zlib is a built-in module in 3.13). Unblocking
+the distributable build (toolchain pin/patch, data-file collection, and a
+writable storage/db path outside the read-only bundle) is left to the prod
+packaging script.
+
 ## Notes / follow-ups
 
 - The boot command is a single constant (`SERVER_CMD`) in `desktop.py`. For a
