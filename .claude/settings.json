@@ -26,7 +26,7 @@
       "type": "http",
       "url": "http://127.0.0.1:4545/mcp",
       "headers": {
-        "X-Project-Path": "/Users/ellite/code/keera/keera-agent-task-455"
+        "X-Project-Path": "/Users/ellite/code/keera/keera-agent"
       }
     }
   },
