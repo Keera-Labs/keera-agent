@@ -8,8 +8,8 @@
 
 `desktop.py` is the single entry point for the standalone app. It:
 
-1. boots the framework **in-process** (uvicorn on a background thread — the same
-   server `artisan serve` runs, minus the subprocess),
+1. boots the framework by running the project's own `serve` command in-process
+   (on a background thread) — no duplicated server config in desktop.py,
 2. waits for it to listen on `APP_HOST:APP_PORT`,
 3. opens a native pywebview window pointing at `http://127.0.0.1:4545`,
 4. stops the server when the window closes.

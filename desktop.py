@@ -8,8 +8,6 @@ import sys
 import threading
 import time
 
-import uvicorn
-
 from fastapi_startkit.environment import env
 
 HOST = env("APP_HOST", "127.0.0.1")
@@ -72,31 +70,25 @@ def _wait_until_listening(host: str, port: int, timeout: float) -> bool:
     return False
 
 
-def _boot_server():
+def _serve() -> None:
+    from cleo.io.inputs.string_input import StringInput
+    from fastapi_startkit.console import ConsoleApplication
+
+    from bootstrap.application import app as console_app
+
+    console = ConsoleApplication(console_app)
+    console.auto_exits(False)
+    console.run(StringInput("serve"))
+
+
+def _boot_server() -> None:
     if _is_listening(HOST, PORT):
         print(f"reusing server already listening on {HOST}:{PORT}")
-        return None
+        return
 
-    config = uvicorn.Config(
-        app="bootstrap.application:app",
-        factory=True,
-        host=HOST,
-        port=PORT,
-        reload=False,
-        ws="websockets-sansio",
-    )
-    server = uvicorn.Server(config)
-    threading.Thread(target=server.run, name="uvicorn", daemon=True).start()
-
+    threading.Thread(target=_serve, name="serve", daemon=True).start()
     if not _wait_until_listening(HOST, PORT, STARTUP_TIMEOUT):
-        server.should_exit = True
         raise RuntimeError(f"server did not start on {HOST}:{PORT} within {STARTUP_TIMEOUT}s")
-    return server
-
-
-def _stop_server(server) -> None:
-    if server is not None:
-        server.should_exit = True
 
 
 def main() -> None:
@@ -107,12 +99,10 @@ def main() -> None:
         _configure_data_dir()
         _migrate()
 
-    server = _boot_server()
+    _boot_server()
 
     webview.create_window(WINDOW_TITLE, f"http://{HOST}:{PORT}", width=1280, height=860)
     webview.start()
-
-    _stop_server(server)
 
 
 if __name__ == "__main__":
