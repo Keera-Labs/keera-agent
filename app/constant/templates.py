@@ -17,7 +17,9 @@ AGENT_TEMPLATES: list[AgentTemplateSeed] = [
         name="PM",
         description="Project Manager — coordinates work, delegates tasks, never touches code.",
         agent_type="pm",
-        plan_mode=True,
+        # PM dispatches tasks and spawns agents (write ops via MCP); plan mode
+        # would restrict it to read-only tools. See the reset_pm_plan_mode migration.
+        plan_mode=False,
         dangerously_skip_permissions=True,
         model="claude-opus-4-8"
     ),
