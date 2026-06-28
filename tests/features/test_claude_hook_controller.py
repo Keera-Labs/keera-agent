@@ -24,12 +24,12 @@ class TestClaudeHookController(TestCase, DatabaseTransaction):
     async def test_claude_stopped_returns_200_with_no_cwd(self):
         """Missing cwd is a no-op — should not crash."""
         response = await self.post("/api/claude-stopped", json={})
-        self.assertEqual(response.status_code, 200)
+        response.assert_ok()
 
     async def test_claude_stopped_returns_200_with_unknown_cwd(self):
         """Unknown cwd returns 200; no project match is a graceful no-op."""
         response = await self.post("/api/claude-stopped", json={"cwd": "/tmp/nonexistent-path-xyz"})
-        self.assertEqual(response.status_code, 200)
+        response.assert_ok()
 
     async def test_claude_stopped_marks_project_idle(self):
         """Claude stopping for a known project marks it claude_status=idle."""
@@ -57,7 +57,7 @@ class TestClaudeHookController(TestCase, DatabaseTransaction):
 
         cwd = os.path.expanduser(self.project.path)
         response = await self.post("/api/claude-stopped", json={"cwd": cwd})
-        self.assertEqual(response.status_code, 200)
+        response.assert_ok()
 
         # Give the background asyncio.create_task a moment to run
         import asyncio
@@ -70,7 +70,7 @@ class TestClaudeHookController(TestCase, DatabaseTransaction):
 
     async def test_claude_started_returns_200_with_no_cwd(self):
         response = await self.post("/api/claude-started", json={})
-        self.assertEqual(response.status_code, 200)
+        response.assert_ok()
 
     async def test_claude_started_marks_first_pending_task_in_progress(self):
         """UserPromptSubmit hook should mark the first pending task in_progress."""
@@ -79,7 +79,7 @@ class TestClaudeHookController(TestCase, DatabaseTransaction):
         cwd = os.path.expanduser(self.project.path)
 
         response = await self.post("/api/claude-started", json={"cwd": cwd})
-        self.assertEqual(response.status_code, 200)
+        response.assert_ok()
 
         refreshed = await Task.find(task.id)
         self.assertEqual(refreshed.status, "in_progress")
