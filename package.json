@@ -2,7 +2,7 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "dev": "concurrently -c \"#fb7185,#fdba74\" \"APP_RELOAD=false uv run python artisan serve\" \"vite\"",
+        "dev": "concurrently -c \"#fb7185,#fdba74\" \"KEERA_APP_RELOAD=false uv run python artisan serve\" \"vite\"",
         "build": "vite build",
         "types:check": "tsc --noEmit"
     },
