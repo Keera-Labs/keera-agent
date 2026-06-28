@@ -7,11 +7,13 @@ import socket
 import sys
 import threading
 import time
+from urllib.parse import urlparse
 
 from fastapi_startkit.environment import env
 
-HOST = env("APP_HOST", "127.0.0.1")
-PORT = int(env("APP_PORT", 4545))
+_APP_URL = urlparse(env("KEERA_APP_URL", "http://127.0.0.1:4545"))
+HOST = _APP_URL.hostname or "127.0.0.1"
+PORT = _APP_URL.port or 4545
 WINDOW_TITLE = "Keera Agent"
 STARTUP_TIMEOUT = 30.0
 

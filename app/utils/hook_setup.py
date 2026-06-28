@@ -10,6 +10,8 @@ new project is created (for the project's own directory).
 import json
 import os
 
+from fastapi_startkit.environment import env
+
 from app.utils.json_utils import atomic_write_json
 
 # URL path fragments that identify keera-managed hooks
@@ -83,7 +85,7 @@ def ensure_claude_settings(directory: str, base_url: str, project_path: str | No
         print(f"[keera] Claude settings updated in {directory}/.claude/settings.json")
 
 
-BASE_URL = "http://localhost:4545"
+BASE_URL = env("KEERA_APP_URL", "http://127.0.0.1:4545")
 
 
 def ensure_hooks() -> None:
