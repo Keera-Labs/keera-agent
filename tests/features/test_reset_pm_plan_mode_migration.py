@@ -9,12 +9,13 @@ legitimately use plan mode (e.g. reviewer/Planner) untouched, and that it is
 idempotent.
 """
 import importlib
-import json
 
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
 from app.models.Agent import Agent
 from app.models.AgentTemplate import AgentTemplate
+from databases.factories.agent_factory import AgentFactory
+from databases.factories.agent_template_factory import AgentTemplateFactory
 from tests.test_case import TestCase
 
 _migration = importlib.import_module(
@@ -24,30 +25,15 @@ ResetPmPlanMode = _migration.ResetPmPlanMode
 
 
 async def _make_template(*, name: str, agent_type: str, is_builtin: bool, plan_mode: bool) -> AgentTemplate:
-    return await AgentTemplate.create({
-        "name": name,
-        "description": "d",
-        "agent_type": agent_type,
-        "system_prompt": "p",
-        "model": "claude-sonnet-4-6",
-        "flags": json.dumps({}),
-        "permissions_allow": json.dumps([]),
-        "permissions_deny": json.dumps([]),
-        "dangerously_skip_permissions": True,
-        "plan_mode": plan_mode,
-        "is_builtin": is_builtin,
-    })
+    return await AgentTemplateFactory.new().create(
+        name=name, agent_type=agent_type, is_builtin=is_builtin, plan_mode=plan_mode,
+    )
 
 
 async def _make_agent(*, name: str, agent_type: str, plan_mode: bool) -> Agent:
-    return await Agent.create({
-        "project_id": 1,
-        "name": name,
-        "agent_type": agent_type,
-        "model": "claude-sonnet-4-6",
-        "plan_mode": plan_mode,
-        "status": "idle",
-    })
+    return await AgentFactory.new().create(
+        project_id=1, name=name, agent_type=agent_type, plan_mode=plan_mode,
+    )
 
 
 class TestResetPmPlanModeMigration(TestCase, DatabaseTransaction):

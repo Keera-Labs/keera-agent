@@ -4,14 +4,13 @@ Feature tests for agent_trigger_controller.
 Guards against regressions in POST /api/agents/:id/trigger — the headless
 spawn path that was broken when to_command() signature changed.
 """
-import json
-
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
 from app.controllers.agent_trigger_controller import _build_relay_instructions
 from app.controllers.terminal_controller import _build_identity_suffix
 from app.models.Agent import Agent
-from app.models.Project import Project
+from databases.factories.agent_factory import AgentFactory
+from databases.factories.project_factory import ProjectFactory
 from tests.test_case import TestCase
 
 
@@ -19,45 +18,32 @@ class TestAgentTriggerController(TestCase, DatabaseTransaction):
     async def asyncSetUp(self):
         await super().asyncSetUp()
         # Create a project with a real tmp directory so cwd exists
-        import os, tempfile
+        import tempfile
         self._tmpdir = tempfile.mkdtemp()
-        self.project = await Project.create({
-            "name": "trigger-test-proj",
-            "slug": "trigger-test-proj",
-            "path": self._tmpdir,
-            "language": "Python",
-        })
-        self.agent = await Agent.create({
-            "project_id": self.project.id,
-            "name": "TriggerBot",
-            "agent_type": "software_engineer",
-            "model": "claude-sonnet-4-6",
-            "system_prompt": None,
-            "permissions_allow": json.dumps([]),
-            "permissions_deny": json.dumps([]),
-            "status": "idle",
-            "has_session": False,
-            "use_worktree": False,
-        })
+        self.project = await ProjectFactory.new().create(path=self._tmpdir)
+        self.agent = await AgentFactory.new().create(
+            project_id=self.project.id, name="TriggerBot",
+        )
 
     # ── /api/agents/:id/trigger ───────────────────────────────────────────────
 
     async def test_trigger_returns_400_without_message(self):
         """Omitting message returns 400 — does NOT crash with TypeError."""
         response = await self.post(f"/api/agents/{self.agent.id}/trigger", json={})
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("message", response.json().get("error", "").lower())
+        response.assert_status(400).assert_json(
+            lambda j: j.where("error", lambda v: "message" in v.lower()).etc()
+        )
 
     async def test_trigger_returns_400_with_blank_message(self):
         response = await self.post(
             f"/api/agents/{self.agent.id}/trigger",
             json={"message": "   "},
         )
-        self.assertEqual(response.status_code, 400)
+        response.assert_status(400)
 
     async def test_trigger_returns_404_for_missing_agent(self):
         response = await self.post("/api/agents/999999/trigger", json={"message": "hi"})
-        self.assertEqual(response.status_code, 404)
+        response.assert_status(404)
 
     async def test_trigger_with_no_running_session_returns_starting(self):
         """
@@ -70,9 +56,7 @@ class TestAgentTriggerController(TestCase, DatabaseTransaction):
             json={"message": "Implement the feature"},
         )
         # Must be 200, not 500
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertEqual(data.get("status"), "starting")
+        response.assert_ok().assert_json(lambda j: j.where("status", "starting").etc())
 
     async def test_trigger_with_active_session_returns_injected(self):
         """
@@ -87,7 +71,7 @@ class TestAgentTriggerController(TestCase, DatabaseTransaction):
             f"/api/agents/{self.agent.id}/trigger",
             json={"message": "Continue the task"},
         )
-        self.assertEqual(response.status_code, 200)
+        response.assert_ok()
 
 
 class TestBuildRelayInstructions(TestCase, DatabaseTransaction):
@@ -97,21 +81,10 @@ class TestBuildRelayInstructions(TestCase, DatabaseTransaction):
         await super().asyncSetUp()
         import tempfile
         self._tmpdir = tempfile.mkdtemp()
-        self.project = await Project.create({
-            "name": "relay-test-proj",
-            "slug": "relay-test-proj",
-            "path": self._tmpdir,
-            "language": "Python",
-        })
-        self.agent = await Agent.create({
-            "project_id": self.project.id,
-            "name": "RelayBot",
-            "agent_type": "software_engineer",
-            "model": "claude-sonnet-4-6",
-            "status": "idle",
-            "has_session": False,
-            "use_worktree": False,
-        })
+        self.project = await ProjectFactory.new().create(path=self._tmpdir)
+        self.agent = await AgentFactory.new().create(
+            project_id=self.project.id, name="RelayBot",
+        )
 
     def test_relay_instructions_use_send_message_to_agent_tool(self):
         """_build_relay_instructions must reference send_message_to_agent, not relay_to_agent."""
@@ -173,28 +146,17 @@ class TestRelayRosterExcludesDeleted(TestCase, DatabaseTransaction):
         await super().asyncSetUp()
         import tempfile
         self._tmpdir = tempfile.mkdtemp()
-        self.project = await Project.create({
-            "name": "roster-test-proj",
-            "slug": "roster-test-proj",
-            "path": self._tmpdir,
-            "language": "Python",
-        })
+        self.project = await ProjectFactory.new().create(path=self._tmpdir)
         self.agent = await self._make_agent("RosterBot")
 
     async def _make_agent(self, name: str, deleted: bool = False):
-        attrs = {
-            "project_id": self.project.id,
-            "name": name,
-            "agent_type": "software_engineer",
-            "model": "claude-sonnet-4-6",
-            "status": "idle",
-            "has_session": False,
-            "use_worktree": False,
-        }
+        overrides = {}
         if deleted:
             import datetime
-            attrs["deleted_at"] = datetime.datetime.utcnow()
-        return await Agent.create(attrs)
+            overrides["deleted_at"] = datetime.datetime.utcnow()
+        return await AgentFactory.new().create(
+            project_id=self.project.id, name=name, **overrides,
+        )
 
     async def _siblings(self):
         """Mirror the siblings query from _spawn_headless_agent."""
@@ -252,34 +214,17 @@ class TestAgentRelayDeletedGuard(TestCase, DatabaseTransaction):
         await super().asyncSetUp()
         import tempfile
         self._tmpdir = tempfile.mkdtemp()
-        self.project = await Project.create({
-            "name": "relay-deleted-proj",
-            "slug": "relay-deleted-proj",
-            "path": self._tmpdir,
-            "language": "Python",
-        })
-        self.live_agent = await Agent.create({
-            "project_id": self.project.id,
-            "name": "LiveBot",
-            "agent_type": "software_engineer",
-            "model": "claude-sonnet-4-6",
-            "status": "idle",
-            "has_session": False,
-            "use_worktree": False,
-        })
+        self.project = await ProjectFactory.new().create(path=self._tmpdir)
+        self.live_agent = await AgentFactory.new().create(
+            project_id=self.project.id, name="LiveBot",
+        )
 
     async def _make_deleted_agent(self, name: str):
         import datetime
-        return await Agent.create({
-            "project_id": self.project.id,
-            "name": name,
-            "agent_type": "software_engineer",
-            "model": "claude-sonnet-4-6",
-            "status": "idle",
-            "has_session": False,
-            "use_worktree": False,
-            "deleted_at": datetime.datetime.utcnow(),
-        })
+        return await AgentFactory.new().create(
+            project_id=self.project.id, name=name,
+            deleted_at=datetime.datetime.utcnow(),
+        )
 
     async def test_relay_to_deleted_agent_returns_404(self):
         """Sending to a soft-deleted receiver must return HTTP 404."""
@@ -289,8 +234,9 @@ class TestAgentRelayDeletedGuard(TestCase, DatabaseTransaction):
             "to_agent_id": dead.id,
             "content": "knock knock",
         })
-        self.assertEqual(response.status_code, 404)
-        self.assertIn("deleted", response.json().get("error", "").lower())
+        response.assert_status(404).assert_json(
+            lambda j: j.where("error", lambda v: "deleted" in v.lower()).etc()
+        )
 
     async def test_relay_from_deleted_agent_returns_404(self):
         """A soft-deleted agent must not be allowed to send via the relay endpoint."""
@@ -300,8 +246,9 @@ class TestAgentRelayDeletedGuard(TestCase, DatabaseTransaction):
             "to_agent_id": self.live_agent.id,
             "content": "ghost ping",
         })
-        self.assertEqual(response.status_code, 404)
-        self.assertIn("deleted", response.json().get("error", "").lower())
+        response.assert_status(404).assert_json(
+            lambda j: j.where("error", lambda v: "deleted" in v.lower()).etc()
+        )
 
     async def test_relay_to_nonexistent_agent_returns_404(self):
         """Sending to a completely nonexistent agent ID returns 404."""
@@ -310,4 +257,4 @@ class TestAgentRelayDeletedGuard(TestCase, DatabaseTransaction):
             "to_agent_id": 999999,
             "content": "void message",
         })
-        self.assertEqual(response.status_code, 404)
+        response.assert_status(404)

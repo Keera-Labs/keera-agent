@@ -10,9 +10,7 @@ class TestBroadcastingPage(TestCase):
     async def test_broadcasting_page_renders_inertia_component(self):
         """The page must render the Broadcasting Inertia component (Inertia XHR)."""
         response = await self.get("/broadcasting", headers={"X-Inertia": "true"})
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertEqual(data["component"], "Broadcasting")
+        response.assert_ok().assert_json(lambda j: j.where("component", "Broadcasting").etc())
 
 
 class TestBroadcastingPingEndpoint(TestCase):
@@ -27,10 +25,11 @@ class TestBroadcastingPingEndpoint(TestCase):
                 "/api/broadcasting/ping",
                 json={"message": "hello"},
             )
-        self.assertEqual(response.status_code, 200)
-        body = response.json()
-        self.assertEqual(body["status"], "ok")
-        self.assertEqual(body["message"], "hello")
+        response.assert_ok().assert_json(lambda j: (
+            j.where("status", "ok")
+             .where("message", "hello")
+             .etc()
+        ))
 
     async def test_ping_uses_default_message_when_omitted(self):
         with patch(
@@ -38,8 +37,7 @@ class TestBroadcastingPingEndpoint(TestCase):
             new_callable=AsyncMock,
         ):
             response = await self.post("/api/broadcasting/ping", json={})
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["message"], "ping")
+        response.assert_ok().assert_json(lambda j: j.where("message", "ping").etc())
 
     async def test_ping_broadcasts_ping_event(self):
         """broadcast() must be awaited with a PingEvent carrying the message."""
@@ -77,4 +75,4 @@ class TestBroadcastingPingEndpoint(TestCase):
                 "/api/broadcasting/ping",
                 json={"message": "  padded  "},
             )
-        self.assertEqual(response.json()["message"], "padded")
+        response.assert_json(lambda j: j.where("message", "padded").etc())
