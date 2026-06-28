@@ -2,7 +2,7 @@ import json
 
 from fastapi_startkit.masoniteorm import Model
 
-from app.terminal.command import ClaudeCommand, PLAN_MODE_PREFIX
+from app.terminal.command import ClaudeCommand
 
 
 class Agent(Model):
@@ -29,8 +29,6 @@ class Agent(Model):
             cmd.continue_session()
 
         system_prompt = self.system_prompt or ''
-        if self.plan_mode:
-            system_prompt = PLAN_MODE_PREFIX + system_prompt
         if system_prompt_suffix:
             system_prompt = system_prompt + system_prompt_suffix
         if system_prompt.strip():
@@ -39,7 +37,10 @@ class Agent(Model):
                 f.write(system_prompt.strip())
             cmd.system_prompt_file(prompt_file)
 
-        if self.dangerously_skip_permissions:
+        # Plan mode and skip-permissions are mutually exclusive; plan mode wins.
+        if self.plan_mode:
+            cmd.permission_mode('plan')
+        else:
             cmd.skip_permissions()
         if flags.get('verbose'):
             cmd.verbose()
