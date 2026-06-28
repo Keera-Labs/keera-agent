@@ -18,6 +18,7 @@ STARTUP_TIMEOUT = 30.0
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parent
 SERVER_CMD = ["uv", "run", "python", "artisan", "serve"]
 BUNDLED = getattr(sys, "frozen", False)
+BASE_DIR = pathlib.Path(getattr(sys, "_MEIPASS", PROJECT_ROOT)) if BUNDLED else PROJECT_ROOT
 
 
 def _is_listening(host: str, port: int) -> bool:
@@ -79,7 +80,7 @@ def _stop_server(handle) -> None:
 def main() -> None:
     import webview
 
-    os.chdir(PROJECT_ROOT)
+    os.chdir(BASE_DIR)
     handle = _boot_server()
 
     webview.create_window(WINDOW_TITLE, f"http://{HOST}:{PORT}", width=1280, height=860)

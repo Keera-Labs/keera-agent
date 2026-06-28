@@ -40,6 +40,7 @@ storage/uploads/
 .keera/uploads/
 storage
 
-# py2app build artifacts
+# PyInstaller build artifacts
 /build/
 /dist-app/
+*.spec
