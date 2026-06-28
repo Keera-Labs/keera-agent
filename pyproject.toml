@@ -11,8 +11,12 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "pyinstaller>=6.21.0",
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
+    # Proof-of-concept native desktop shell (desktop.py). Dev-only so it never
+    # ships in the runtime dependency set.
+    "pywebview>=5.0",
 ]
 
 [tool.pytest.ini_options]

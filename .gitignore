@@ -39,3 +39,8 @@ storage/uploads/
 # Keera uploads
 .keera/uploads/
 storage
+
+# PyInstaller build artifacts
+/build/
+/dist-app/
+*.spec
