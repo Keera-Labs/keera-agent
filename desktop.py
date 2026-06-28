@@ -4,10 +4,11 @@ import os
 import pathlib
 import shutil
 import socket
-import subprocess
 import sys
 import threading
 import time
+
+import uvicorn
 
 from fastapi_startkit.environment import env
 
@@ -17,7 +18,6 @@ WINDOW_TITLE = "Keera Agent"
 STARTUP_TIMEOUT = 30.0
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parent
-SERVER_CMD = ["uv", "run", "python", "artisan", "serve"]
 BUNDLED = getattr(sys, "frozen", False)
 BASE_DIR = pathlib.Path(getattr(sys, "_MEIPASS", PROJECT_ROOT)) if BUNDLED else PROJECT_ROOT
 DATA_DIR = pathlib.Path(
@@ -72,8 +72,10 @@ def _wait_until_listening(host: str, port: int, timeout: float) -> bool:
     return False
 
 
-def _boot_inprocess():
-    import uvicorn
+def _boot_server():
+    if _is_listening(HOST, PORT):
+        print(f"reusing server already listening on {HOST}:{PORT}")
+        return None
 
     config = uvicorn.Config(
         app="bootstrap.application:app",
@@ -85,32 +87,16 @@ def _boot_inprocess():
     )
     server = uvicorn.Server(config)
     threading.Thread(target=server.run, name="uvicorn", daemon=True).start()
+
+    if not _wait_until_listening(HOST, PORT, STARTUP_TIMEOUT):
+        server.should_exit = True
+        raise RuntimeError(f"server did not start on {HOST}:{PORT} within {STARTUP_TIMEOUT}s")
     return server
 
 
-def _boot_server():
-    if _is_listening(HOST, PORT):
-        print(f"reusing server already listening on {HOST}:{PORT}")
-        return None
-
-    handle = _boot_inprocess() if BUNDLED else subprocess.Popen(SERVER_CMD, cwd=PROJECT_ROOT)
-    if not _wait_until_listening(HOST, PORT, STARTUP_TIMEOUT):
-        _stop_server(handle)
-        raise RuntimeError(f"server did not start on {HOST}:{PORT} within {STARTUP_TIMEOUT}s")
-    return handle
-
-
-def _stop_server(handle) -> None:
-    if handle is None:
-        return
-    if isinstance(handle, subprocess.Popen):
-        handle.terminate()
-        try:
-            handle.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            handle.kill()
-    else:
-        handle.should_exit = True
+def _stop_server(server) -> None:
+    if server is not None:
+        server.should_exit = True
 
 
 def main() -> None:
@@ -121,12 +107,12 @@ def main() -> None:
         _configure_data_dir()
         _migrate()
 
-    handle = _boot_server()
+    server = _boot_server()
 
     webview.create_window(WINDOW_TITLE, f"http://{HOST}:{PORT}", width=1280, height=860)
     webview.start()
 
-    _stop_server(handle)
+    _stop_server(server)
 
 
 if __name__ == "__main__":
