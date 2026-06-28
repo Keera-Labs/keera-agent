@@ -21,6 +21,7 @@ from app.mcp.tools import (
     DeleteAgentTool,
     KEERA_TOOLS,
 )
+from databases.factories.agent_factory import AgentFactory
 from databases.factories.project_factory import ProjectFactory
 from databases.factories.task_factory import TaskFactory
 from tests.test_case import TestCase
@@ -274,12 +275,7 @@ class TestSendMessageToolValidation(TestCase, DatabaseTransaction):
         from app.models.Agent import Agent
         # We need a valid sender first
         project = await ProjectFactory.new().create()
-        sender = await Agent.create({
-            "project_id": project.id,
-            "name": "Sender",
-            "model": "claude-sonnet-4-6",
-            "status": "idle",
-        })
+        sender = await AgentFactory.new().create(project_id=project.id, name="Sender")
         response = await self.tool.handle({
             "sender_agent_id": sender.id,
             "receiver_agent_id": 999999,
@@ -292,12 +288,7 @@ class TestSendMessageToolValidation(TestCase, DatabaseTransaction):
     async def test_receiver_by_name_not_found_returns_helpful_error(self):
         from app.models.Agent import Agent
         project = await ProjectFactory.new().create()
-        sender = await Agent.create({
-            "project_id": project.id,
-            "name": "Sender",
-            "model": "claude-sonnet-4-6",
-            "status": "idle",
-        })
+        sender = await AgentFactory.new().create(project_id=project.id, name="Sender")
         response = await self.tool.handle({
             "sender_agent_id": sender.id,
             "receiver_agent_id": "NonExistentAgent",
@@ -313,18 +304,8 @@ class TestSendMessageToolValidation(TestCase, DatabaseTransaction):
         """Name lookup must be case-insensitive and find existing agent."""
         from app.models.Agent import Agent
         project = await ProjectFactory.new().create()
-        sender = await Agent.create({
-            "project_id": project.id,
-            "name": "Sender Bot",
-            "model": "claude-sonnet-4-6",
-            "status": "idle",
-        })
-        receiver = await Agent.create({
-            "project_id": project.id,
-            "name": "PM Agent",
-            "model": "claude-sonnet-4-6",
-            "status": "idle",
-        })
+        sender = await AgentFactory.new().create(project_id=project.id, name="Sender Bot")
+        receiver = await AgentFactory.new().create(project_id=project.id, name="PM Agent")
         # The action will try to spawn headlessly which won't work in tests,
         # but we can verify the agent was found (no "not found" error)
         response = await self.tool.handle({
@@ -343,19 +324,11 @@ class TestSendMessageToolValidation(TestCase, DatabaseTransaction):
         import datetime
         from app.models.Agent import Agent
         project = await ProjectFactory.new().create()
-        sender = await Agent.create({
-            "project_id": project.id,
-            "name": "Active Sender",
-            "model": "claude-sonnet-4-6",
-            "status": "idle",
-        })
-        receiver = await Agent.create({
-            "project_id": project.id,
-            "name": "Deleted Receiver",
-            "model": "claude-sonnet-4-6",
-            "status": "idle",
-            "deleted_at": datetime.datetime.utcnow(),
-        })
+        sender = await AgentFactory.new().create(project_id=project.id, name="Active Sender")
+        receiver = await AgentFactory.new().create(
+            project_id=project.id, name="Deleted Receiver",
+            deleted_at=datetime.datetime.utcnow(),
+        )
         response = await self.tool.handle({
             "sender_agent_id": sender.id,
             "receiver_agent_id": receiver.id,
@@ -370,19 +343,11 @@ class TestSendMessageToolValidation(TestCase, DatabaseTransaction):
         import datetime
         from app.models.Agent import Agent
         project = await ProjectFactory.new().create()
-        sender = await Agent.create({
-            "project_id": project.id,
-            "name": "Active Sender",
-            "model": "claude-sonnet-4-6",
-            "status": "idle",
-        })
-        await Agent.create({
-            "project_id": project.id,
-            "name": "Retired Bot",
-            "model": "claude-sonnet-4-6",
-            "status": "idle",
-            "deleted_at": datetime.datetime.utcnow(),
-        })
+        sender = await AgentFactory.new().create(project_id=project.id, name="Active Sender")
+        await AgentFactory.new().create(
+            project_id=project.id, name="Retired Bot",
+            deleted_at=datetime.datetime.utcnow(),
+        )
         response = await self.tool.handle({
             "sender_agent_id": sender.id,
             "receiver_agent_id": "Retired Bot",
@@ -398,19 +363,11 @@ class TestSendMessageToolValidation(TestCase, DatabaseTransaction):
         import datetime
         from app.models.Agent import Agent
         project = await ProjectFactory.new().create()
-        sender = await Agent.create({
-            "project_id": project.id,
-            "name": "Deleted Sender",
-            "model": "claude-sonnet-4-6",
-            "status": "idle",
-            "deleted_at": datetime.datetime.utcnow(),
-        })
-        receiver = await Agent.create({
-            "project_id": project.id,
-            "name": "Active Receiver",
-            "model": "claude-sonnet-4-6",
-            "status": "idle",
-        })
+        sender = await AgentFactory.new().create(
+            project_id=project.id, name="Deleted Sender",
+            deleted_at=datetime.datetime.utcnow(),
+        )
+        receiver = await AgentFactory.new().create(project_id=project.id, name="Active Receiver")
         response = await self.tool.handle({
             "sender_agent_id": sender.id,
             "receiver_agent_id": receiver.id,
@@ -446,12 +403,7 @@ class TestDeleteAgentTool(TestCase, DatabaseTransaction):
         subprocess.run(["git", "commit", "-m", "init"], cwd=repo, capture_output=True)
 
         project = await ProjectFactory.new().create(path=repo)
-        agent = await Agent.create({
-            "project_id": project.id,
-            "name": "Worktree Agent",
-            "model": "claude-sonnet-4-6",
-            "status": "idle",
-        })
+        agent = await AgentFactory.new().create(project_id=project.id, name="Worktree Agent")
 
         # Create the worktree + branch the way Claude would (agent-<id> / worktree-agent-<id>).
         worktree_path = os.path.join(repo, ".claude", "worktrees", f"agent-{agent.id}")
@@ -489,13 +441,10 @@ class TestDeleteAgentTool(TestCase, DatabaseTransaction):
         from app.models.Agent import Agent
 
         project = await ProjectFactory.new().create()
-        agent = await Agent.create({
-            "project_id": project.id,
-            "name": "Already Gone",
-            "model": "claude-sonnet-4-6",
-            "status": "idle",
-            "deleted_at": datetime.datetime.utcnow(),
-        })
+        agent = await AgentFactory.new().create(
+            project_id=project.id, name="Already Gone",
+            deleted_at=datetime.datetime.utcnow(),
+        )
         response = await self.tool.handle({"agent_id": agent.id})
         self.assertIn("already been deleted", _text(response))
 
@@ -548,12 +497,9 @@ class TestSpawnAgentTool(TestCase, DatabaseTransaction):
         from app.models.Agent import Agent
 
         other_project = await ProjectFactory.new().create()
-        orchestrator = await Agent.create({
-            "project_id": self.project.id,
-            "name": "Orchestrator",
-            "model": "claude-opus-4-8",
-            "status": "idle",
-        })
+        orchestrator = await AgentFactory.new().create(
+            project_id=self.project.id, name="Orchestrator", model="claude-opus-4-8",
+        )
 
         # Caller points project_path at a DIFFERENT project; it must be ignored.
         text = await self._spawn(
@@ -574,13 +520,10 @@ class TestSpawnAgentTool(TestCase, DatabaseTransaction):
         import datetime
         from app.models.Agent import Agent
 
-        gone = await Agent.create({
-            "project_id": self.project.id,
-            "name": "Deleted Orchestrator",
-            "model": "claude-opus-4-8",
-            "status": "idle",
-            "deleted_at": datetime.datetime.utcnow(),
-        })
+        gone = await AgentFactory.new().create(
+            project_id=self.project.id, name="Deleted Orchestrator",
+            model="claude-opus-4-8", deleted_at=datetime.datetime.utcnow(),
+        )
         text = await self._spawn(from_agent_id=gone.id)
         self.assertIn("Error", text)
 

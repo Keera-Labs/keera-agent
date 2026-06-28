@@ -37,16 +37,14 @@ class TestTasksPageController(TestCase, DatabaseTransaction):
             f"/{self.slug}/tasks",
             headers={"X-Inertia": "true", "X-Inertia-Version": ""},
         )
-        self.assertEqual(response.status_code, 200)
-
-        data = response.json()
-        tasks = data.get("props", {}).get("tasks", [])
-        self.assertEqual(len(tasks), 1)
-
-        t = tasks[0]
-        self.assertIn("body", t)
-        self.assertNotIn("description", t)
-        self.assertEqual(t["body"], task.body)
+        response.assert_ok().assert_json(lambda j: j.has("props", lambda p: p.has(
+            "tasks", 1, lambda ts: ts.first(lambda t: (
+                t.has("body")
+                 .missing("description")
+                 .where("body", task.body)
+                 .etc()
+            ))
+        ).etc()).etc())
 
     async def test_tasks_page_title_falls_back_to_none_when_no_title(self):
         """title field is just t.title; body is separate — no silent None from .description."""
@@ -56,21 +54,19 @@ class TestTasksPageController(TestCase, DatabaseTransaction):
             f"/{self.slug}/tasks",
             headers={"X-Inertia": "true", "X-Inertia-Version": ""},
         )
-        self.assertEqual(response.status_code, 200)
-
-        tasks = response.json().get("props", {}).get("tasks", [])
-        self.assertEqual(len(tasks), 1)
         # title comes from the actual title column — not from the dropped description
-        self.assertEqual(tasks[0]["title"], task.title)
+        response.assert_ok().assert_json(lambda j: j.has("props", lambda p: p.has(
+            "tasks", 1, lambda ts: ts.first(lambda t: t.where("title", task.title).etc())
+        ).etc()).etc())
 
     async def test_tasks_page_with_no_tasks_returns_empty_list(self):
         response = await self.get(
             f"/{self.slug}/tasks",
             headers={"X-Inertia": "true", "X-Inertia-Version": ""},
         )
-        self.assertEqual(response.status_code, 200)
-        tasks = response.json().get("props", {}).get("tasks", [])
-        self.assertEqual(tasks, [])
+        response.assert_ok().assert_json(
+            lambda j: j.has("props", lambda p: p.where("tasks", []).etc()).etc()
+        )
 
     async def test_tasks_page_unknown_project_returns_empty_tasks(self):
         response = await self.get(
@@ -78,6 +74,6 @@ class TestTasksPageController(TestCase, DatabaseTransaction):
             headers={"X-Inertia": "true", "X-Inertia-Version": ""},
         )
         # Inertia renders the page even for unknown project slugs (tasks=[])
-        self.assertEqual(response.status_code, 200)
-        tasks = response.json().get("props", {}).get("tasks", [])
-        self.assertEqual(tasks, [])
+        response.assert_ok().assert_json(
+            lambda j: j.has("props", lambda p: p.where("tasks", []).etc()).etc()
+        )
