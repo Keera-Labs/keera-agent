@@ -38,9 +38,10 @@ class Agent(Model):
             cmd.system_prompt_file(prompt_file)
 
         # Plan mode and skip-permissions are mutually exclusive; plan mode wins.
+        # Outside plan mode, honor the per-agent skip-permissions toggle.
         if self.plan_mode:
             cmd.permission_mode('plan')
-        else:
+        elif self.dangerously_skip_permissions:
             cmd.skip_permissions()
         if flags.get('verbose'):
             cmd.verbose()

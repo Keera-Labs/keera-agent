@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "http",
-            "url": "http://127.0.0.1:4545/api/claude-stopped"
+            "url": "http://localhost:4545/api/claude-stopped"
           }
         ]
       }
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "http",
-            "url": "http://127.0.0.1:4545/api/claude-started"
+            "url": "http://localhost:4545/api/claude-started"
           }
         ]
       }
@@ -24,9 +24,9 @@
   "mcpServers": {
     "keera-agent": {
       "type": "http",
-      "url": "http://127.0.0.1:4545/mcp",
+      "url": "http://localhost:4545/mcp",
       "headers": {
-        "X-Project-Path": "/Users/ellite/code/keera/keera-agent-task-417"
+        "X-Project-Path": "/Users/ellite/code/keera/keera-agent"
       }
     }
   },
