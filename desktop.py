@@ -1,41 +1,28 @@
 """Desktop shell (proof of concept).
 
-Renders the existing FastAPI/Inertia app inside a native pywebview window. If a
-server is already listening on APP_HOST:APP_PORT (e.g. `npm run dev` or a built
-dist), it is reused as-is; only when nothing is listening does this boot its own
-uvicorn instance in a background thread. Either way the web stack is untouched —
-this is just a thin native wrapper around the same server `artisan serve` runs.
+Renders the existing FastAPI/Inertia app inside a native pywebview window. It
+does NOT manage a server — the app is expected to already be serving on
+APP_HOST:APP_PORT (started separately, or bundled alongside this window). This
+keeps the wrapper a thin native shell over the same server `artisan serve` runs.
 
 Run:
     uv sync
-    uv run python desktop.py
+    uv run python artisan serve      # (or `npm run dev`) — start the app
+    uv run python desktop.py         # open the native window
 """
 
 import socket
-import threading
+import sys
 import time
-
-import uvicorn
 
 from fastapi_startkit.environment import env
 
 HOST = env("APP_HOST", "127.0.0.1")
 PORT = int(env("APP_PORT", 4545))
 WINDOW_TITLE = "Keera Agent"
-STARTUP_TIMEOUT = 30.0
-
-
-def _build_server() -> uvicorn.Server:
-    config = uvicorn.Config(
-        app="bootstrap.application:app",
-        factory=True,
-        host=HOST,
-        port=PORT,
-        reload=False,
-        ws="websockets-sansio",
-        log_level="info",
-    )
-    return uvicorn.Server(config)
+# Tolerate a server that is still coming up (e.g. started concurrently by a
+# bundle); we wait for it, we never start it.
+READY_TIMEOUT = 15.0
 
 
 def _is_listening(host: str, port: int) -> bool:
@@ -53,32 +40,17 @@ def _wait_until_listening(host: str, port: int, timeout: float) -> bool:
     return False
 
 
-def _ensure_server() -> uvicorn.Server | None:
-    """Reuse an already-running server, else boot one. Returns the server we
-    started (so the caller can stop it on exit), or None if we reused one."""
-    if _is_listening(HOST, PORT):
-        print(f"reusing server already listening on {HOST}:{PORT}")
-        return None
-
-    server = _build_server()
-    threading.Thread(target=server.run, name="uvicorn", daemon=True).start()
-    if not _wait_until_listening(HOST, PORT, STARTUP_TIMEOUT):
-        raise RuntimeError(f"server did not start on {HOST}:{PORT} within {STARTUP_TIMEOUT}s")
-    return server
-
-
 def main() -> None:
     import webview
 
-    server = _ensure_server()
+    if not _wait_until_listening(HOST, PORT, READY_TIMEOUT):
+        sys.exit(
+            f"No server is listening on {HOST}:{PORT}. "
+            f"Start it first (e.g. `uv run python artisan serve`), then run desktop.py."
+        )
 
     webview.create_window(WINDOW_TITLE, f"http://{HOST}:{PORT}", width=1280, height=860)
     webview.start()
-
-    # pywebview.start() blocks until the window closes. Only stop the server if
-    # we started it; a reused (externally-managed) server is left running.
-    if server is not None:
-        server.should_exit = True
 
 
 if __name__ == "__main__":
