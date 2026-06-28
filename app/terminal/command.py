@@ -13,9 +13,6 @@ class ClaudeCommand:
         self._worktree: str | None = None
         self._continue: bool = False
         self._system_prompt_file: str | None = None
-        self._allowed_tools: list[str] | None = None
-        self._disallowed_tools: list[str] | None = None
-        self._skip_permissions: bool = False
         self._verbose: bool = False
         self._max_turns: int | None = None
 
@@ -33,18 +30,6 @@ class ClaudeCommand:
 
     def system_prompt_file(self, path: str) -> 'ClaudeCommand':
         self._system_prompt_file = path
-        return self
-
-    def allowed_tools(self, tools: list[str]) -> 'ClaudeCommand':
-        self._allowed_tools = tools
-        return self
-
-    def disallowed_tools(self, tools: list[str]) -> 'ClaudeCommand':
-        self._disallowed_tools = tools
-        return self
-
-    def skip_permissions(self) -> 'ClaudeCommand':
-        self._skip_permissions = True
         return self
 
     def verbose(self) -> 'ClaudeCommand':
@@ -65,12 +50,7 @@ class ClaudeCommand:
             parts.append(f'--system-prompt "$(cat {shlex.quote(self._system_prompt_file)})"')
         if self._model:
             parts.append(f'--model {shlex.quote(self._model)}')
-        if self._allowed_tools:
-            parts.append(f'--allowedTools {shlex.quote(",".join(self._allowed_tools))}')
-        if self._disallowed_tools:
-            parts.append(f'--disallowedTools {shlex.quote(",".join(self._disallowed_tools))}')
-        if self._skip_permissions:
-            parts.append('--dangerously-skip-permissions')
+        parts.append('--dangerously-skip-permissions')
         if self._verbose:
             parts.append('--verbose')
         if self._max_turns is not None:
