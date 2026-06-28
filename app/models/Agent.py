@@ -9,6 +9,7 @@ class Agent(Model):
     __table__ = "agents"
     id: int
     flags: dict
+    dangerously_skip_permissions: bool
     plan_mode: bool
 
     def to_command(self, system_prompt_suffix: str = '') -> str:
@@ -38,6 +39,8 @@ class Agent(Model):
                 f.write(system_prompt.strip())
             cmd.system_prompt_file(prompt_file)
 
+        if self.dangerously_skip_permissions:
+            cmd.skip_permissions()
         if flags.get('verbose'):
             cmd.verbose()
         if flags.get('max_turns'):
@@ -45,5 +48,19 @@ class Agent(Model):
                 cmd.max_turns(int(flags['max_turns']))
             except (TypeError, ValueError):
                 pass
+
+        try:
+            allow = json.loads(self.permissions_allow) if getattr(self, 'permissions_allow', None) else []
+            if allow:
+                cmd.allowed_tools(allow)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        try:
+            deny = json.loads(self.permissions_deny) if getattr(self, 'permissions_deny', None) else []
+            if deny:
+                cmd.disallowed_tools(deny)
+        except (json.JSONDecodeError, TypeError):
+            pass
 
         return cmd.to_command()
