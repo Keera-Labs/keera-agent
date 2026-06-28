@@ -1,19 +1,13 @@
 """Desktop shell (proof of concept).
 
-Single entry point for the standalone native app: it boots the existing
-FastAPI/Inertia framework by spawning the project's own serve command
-(`uv run python artisan serve`) and renders the app inside a native pywebview
-window. Closing the window stops the server. The web stack itself is untouched.
-
-If a server is already listening on APP_HOST:APP_PORT (e.g. `npm run dev`), it
-is reused instead of spawning a second one.
+Boots the app via `uv run python artisan serve` and renders it in a native
+pywebview window. Closing the window stops the server.
 
 Run:
     uv sync
     uv run python desktop.py
 """
 
-import os
 import pathlib
 import socket
 import subprocess
@@ -27,9 +21,6 @@ WINDOW_TITLE = "Keera Agent"
 STARTUP_TIMEOUT = 30.0
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parent
-# The command that boots the framework. Single place to swap when packaging a
-# true standalone bundle (where `uv`/`artisan` are replaced by the bundled
-# server executable).
 SERVER_CMD = ["uv", "run", "python", "artisan", "serve"]
 
 
@@ -49,18 +40,11 @@ def _wait_until_listening(host: str, port: int, timeout: float) -> bool:
 
 
 def _boot_server() -> subprocess.Popen | None:
-    """Spawn the framework's serve command, unless a server is already
-    listening (then reuse it). Returns the process we started so it can be
-    stopped on exit, or None if an existing server was reused."""
     if _is_listening(HOST, PORT):
         print(f"reusing server already listening on {HOST}:{PORT}")
         return None
 
-    # Force reload off so the server is a single process we can stop cleanly
-    # (uvicorn's reloader would spawn its own child tree).
-    server_env = {**os.environ, "APP_RELOAD": "false"}
-    proc = subprocess.Popen(SERVER_CMD, cwd=PROJECT_ROOT, env=server_env)
-
+    proc = subprocess.Popen(SERVER_CMD, cwd=PROJECT_ROOT)
     if not _wait_until_listening(HOST, PORT, STARTUP_TIMEOUT):
         proc.terminate()
         raise RuntimeError(f"server did not start on {HOST}:{PORT} within {STARTUP_TIMEOUT}s")
@@ -83,8 +67,6 @@ def main() -> None:
     webview.create_window(WINDOW_TITLE, f"http://{HOST}:{PORT}", width=1280, height=860)
     webview.start()
 
-    # pywebview.start() blocks until the window closes. Only stop the server if
-    # we spawned it; a reused, externally-managed one is left running.
     if proc is not None:
         _stop_server(proc)
 

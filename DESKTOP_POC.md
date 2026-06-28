@@ -35,11 +35,9 @@ Host/port follow the existing `APP_PORT` / `APP_HOST` env (defaults: `4545` /
 ## Notes / follow-ups
 
 - The boot command is a single constant (`SERVER_CMD`) in `desktop.py`. For a
-  **true standalone bundle** (PyInstaller/py2app, shipped to a machine without
-  `uv`/`artisan`), swap it for the packaged server executable — the rest of the
+  **true standalone bundle** (shipped to a machine without `uv`/`artisan`), the
+  prod packaging script swaps it for the packaged server — the rest of the
   window/lifecycle code is unchanged.
-- `APP_RELOAD` is forced off for the spawned server so it is a single process
-  that can be stopped cleanly (uvicorn's reloader would spawn its own child tree).
 - pywebview lives in the **dev** dependency group (`[dependency-groups].dev`).
 - Native window only — no installer, app menu, icon, or single-instance guard yet.
 - "Already listening" is a TCP connect to the port; it does not verify the
