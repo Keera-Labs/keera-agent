@@ -51,18 +51,24 @@ class Agent(Model):
             except (TypeError, ValueError):
                 pass
 
-        try:
-            allow = json.loads(self.permissions_allow) if getattr(self, 'permissions_allow', None) else []
-            if allow:
-                cmd.allowed_tools(allow)
-        except (json.JSONDecodeError, TypeError):
-            pass
+        # Allow/deny tool lists only matter when permissions are enforced.
+        # They are dead weight only when --dangerously-skip-permissions is the
+        # active flag — i.e. the skip toggle is on AND plan mode isn't overriding
+        # it. Plan mode wins and enforces permissions, so the lists still apply
+        # there even though the (independent) skip column may default to True.
+        if self.plan_mode or not self.dangerously_skip_permissions:
+            try:
+                allow = json.loads(self.permissions_allow) if getattr(self, 'permissions_allow', None) else []
+                if allow:
+                    cmd.allowed_tools(allow)
+            except (json.JSONDecodeError, TypeError):
+                pass
 
-        try:
-            deny = json.loads(self.permissions_deny) if getattr(self, 'permissions_deny', None) else []
-            if deny:
-                cmd.disallowed_tools(deny)
-        except (json.JSONDecodeError, TypeError):
-            pass
+            try:
+                deny = json.loads(self.permissions_deny) if getattr(self, 'permissions_deny', None) else []
+                if deny:
+                    cmd.disallowed_tools(deny)
+            except (json.JSONDecodeError, TypeError):
+                pass
 
         return cmd.to_command()
