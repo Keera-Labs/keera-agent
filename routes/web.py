@@ -5,6 +5,7 @@ from app.controllers import tasks_page_controller
 from app.controllers import terminal_controller
 from app.controllers import project_controller
 from app.controllers import task_controller
+from app.controllers import student_controller
 from app.controllers import workspace_controller
 from app.controllers import claude_hook_controller
 from app.controllers import command_controller
@@ -47,6 +48,8 @@ router.get("/api/projects/{project_id}/tasks", task_controller.index)
 router.post("/api/projects/{project_id}/tasks", task_controller.store)
 router.patch("/api/tasks/{task_id}", task_controller.update)
 router.delete("/api/tasks/{task_id}", task_controller.destroy)
+
+router.post("/students/register", student_controller.register)
 
 router.get("/api/projects/{project_id}/commands", command_controller.index)
 router.post("/api/projects/{project_id}/commands", command_controller.store)
