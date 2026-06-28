@@ -51,18 +51,22 @@ class Agent(Model):
             except (TypeError, ValueError):
                 pass
 
-        try:
-            allow = json.loads(self.permissions_allow) if getattr(self, 'permissions_allow', None) else []
-            if allow:
-                cmd.allowed_tools(allow)
-        except (json.JSONDecodeError, TypeError):
-            pass
+        # Allow/deny tool lists only matter when permissions are enforced.
+        # With --dangerously-skip-permissions on, every tool runs regardless,
+        # so the gating args are dead weight — omit them entirely.
+        if not self.dangerously_skip_permissions:
+            try:
+                allow = json.loads(self.permissions_allow) if getattr(self, 'permissions_allow', None) else []
+                if allow:
+                    cmd.allowed_tools(allow)
+            except (json.JSONDecodeError, TypeError):
+                pass
 
-        try:
-            deny = json.loads(self.permissions_deny) if getattr(self, 'permissions_deny', None) else []
-            if deny:
-                cmd.disallowed_tools(deny)
-        except (json.JSONDecodeError, TypeError):
-            pass
+            try:
+                deny = json.loads(self.permissions_deny) if getattr(self, 'permissions_deny', None) else []
+                if deny:
+                    cmd.disallowed_tools(deny)
+            except (json.JSONDecodeError, TypeError):
+                pass
 
         return cmd.to_command()
