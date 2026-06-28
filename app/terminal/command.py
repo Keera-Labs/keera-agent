@@ -1,11 +1,5 @@
 import shlex
 
-PLAN_MODE_PREFIX = (
-    "You are in PLAN-ONLY mode. Analyze and plan — do NOT write or edit any files, "
-    "run commands, or execute any tool that modifies the filesystem or codebase. "
-    "Only Read and Glob tools are permitted.\n\n"
-)
-
 
 class ClaudeCommand:
     def __init__(self):
@@ -16,6 +10,7 @@ class ClaudeCommand:
         self._allowed_tools: list[str] | None = None
         self._disallowed_tools: list[str] | None = None
         self._skip_permissions: bool = False
+        self._permission_mode: str | None = None
         self._verbose: bool = False
         self._max_turns: int | None = None
 
@@ -47,6 +42,10 @@ class ClaudeCommand:
         self._skip_permissions = True
         return self
 
+    def permission_mode(self, mode: str) -> 'ClaudeCommand':
+        self._permission_mode = mode
+        return self
+
     def verbose(self) -> 'ClaudeCommand':
         self._verbose = True
         return self
@@ -69,6 +68,8 @@ class ClaudeCommand:
             parts.append(f'--allowedTools {shlex.quote(",".join(self._allowed_tools))}')
         if self._disallowed_tools:
             parts.append(f'--disallowedTools {shlex.quote(",".join(self._disallowed_tools))}')
+        if self._permission_mode:
+            parts.append(f'--permission-mode {shlex.quote(self._permission_mode)}')
         if self._skip_permissions:
             parts.append('--dangerously-skip-permissions')
         if self._verbose:
