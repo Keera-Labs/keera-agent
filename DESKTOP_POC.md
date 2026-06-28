@@ -6,10 +6,16 @@
 
 ## What it does
 
-`desktop.py` boots the same app `artisan serve` runs (uvicorn, factory
-`bootstrap.application:app`) on a background thread, waits for the port to accept
-connections, then opens it in a native pywebview window pointing at
-`http://127.0.0.1:4545`. Closing the window shuts the server down.
+`desktop.py` opens the app in a native pywebview window pointing at
+`http://127.0.0.1:4545`.
+
+- If a server is **already listening** on that host/port (e.g. `npm run dev` or
+  a built dist), it is **reused** — no second server is started, avoiding the
+  dev double-boot / port clash.
+- If nothing is listening, it boots its own uvicorn instance (same app
+  `artisan serve` runs: factory `bootstrap.application:app`) on a background
+  thread, waits for the port, then opens the window. Closing the window stops
+  the server it started; a reused, externally-managed server is left running.
 
 ## Run it
 
@@ -17,19 +23,22 @@ The app must be served with frontend assets available — either a production
 build or the Vite dev server. Simplest path is to build first:
 
 ```bash
-uv sync --extra desktop      # installs pywebview (optional dependency)
+uv sync                      # pywebview is in the dev dependency group
 npm run build                # produces public/build/manifest.json
 uv run python artisan db:migrate
 uv run python desktop.py
 ```
+
+If `npm run dev` is already running, just `uv run python desktop.py` — it
+reuses that server.
 
 Port/host follow the existing `APP_PORT` / `APP_HOST` env (defaults: `4545` /
 `127.0.0.1`), matching `bin/build.sh`.
 
 ## Notes / follow-ups
 
-- pywebview is an **optional** dependency (`[project.optional-dependencies].desktop`)
-  so the default install is unaffected.
+- pywebview lives in the **dev** dependency group (`[dependency-groups].dev`) so
+  it never ships in the runtime dependency set.
 - Native window only — no packaging/installer, menu, or single-instance guard yet.
-- Reuses the running server's port; a real build would likely pick a free port
-  and/or detect an already-running instance.
+- "Already listening" is detected by a TCP connect to the port; it does not
+  verify the listener is *this* app.
