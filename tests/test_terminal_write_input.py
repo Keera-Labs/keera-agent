@@ -119,5 +119,20 @@ class TestWritePreservesSpaces(unittest.IsolatedAsyncioTestCase):
             os.close(master_fd)
 
 
+class TestColorEnv(unittest.TestCase):
+    """The PTY must advertise a color terminal so the claude CLI emits ANSI color,
+    even when the server is booted from a GUI process with no TERM (desktop build)."""
+
+    def test_adds_color_vars_when_missing(self):
+        term = Terminal(env={})
+        self.assertEqual(term._env["TERM"], "xterm-256color")
+        self.assertEqual(term._env["COLORTERM"], "truecolor")
+
+    def test_preserves_existing_term(self):
+        term = Terminal(env={"TERM": "screen-256color", "COLORTERM": "24bit"})
+        self.assertEqual(term._env["TERM"], "screen-256color")
+        self.assertEqual(term._env["COLORTERM"], "24bit")
+
+
 if __name__ == "__main__":
     unittest.main()
