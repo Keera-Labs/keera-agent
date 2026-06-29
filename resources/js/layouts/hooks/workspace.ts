@@ -1,28 +1,17 @@
-import { useState } from 'react'
-import { useHttp } from '@inertiajs/react'
-import type { Workspace } from '@/types/type'
+import { useForm, useHttp } from '@inertiajs/react'
+
+type InertiaPage = { props: Record<string, unknown> }
 
 export function useWorkspace() {
-    const [creating, setCreating] = useState(false)
+    const createForm = useForm({ name: '', description: '' })
     const updateHttp = useHttp({})
     const destroyHttp = useHttp({})
 
-    // Plain fetch (not an Inertia form) so we get the created workspace back and
-    // can select it — mirrors the project create flow in ProjectCreateModal.
-    const create = async (data: { name: string; description?: string }): Promise<Workspace> => {
-        setCreating(true)
-        try {
-            const res = await fetch('/api/workspaces', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data),
-            })
-            const json = await res.json()
-            if (!res.ok) throw new Error(json?.error ?? 'Failed to create workspace')
-            return json as Workspace
-        } finally {
-            setCreating(false)
-        }
+    // Inertia form post. The server redirects back, so Inertia re-fetches the
+    // page and the refreshed workspace list flows in via props automatically.
+    const create = (data: { name: string; description?: string }, onSuccess?: (page: InertiaPage) => void) => {
+        createForm.setData(data)
+        createForm.post('/api/workspaces', { preserveScroll: true, onSuccess })
     }
 
     const update = ({ id, ...data }: { id: number; name?: string; description?: string }, onSuccess?: () => void) => {
@@ -35,7 +24,8 @@ export function useWorkspace() {
     }
 
     return {
-        creating,
+        creating: createForm.processing,
+        createErrors: createForm.errors,
         updating: updateHttp.processing,
         destroying: destroyHttp.processing,
         create,

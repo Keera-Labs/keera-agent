@@ -78,7 +78,7 @@ export interface AppLayoutContextValue {
     handleProjectCreated: (project: Project) => void
     handleProjectDeleted: (projectId: number) => void
     handleProjectUpdated: (updated: Project) => void
-    handleWorkspaceCreated: (workspace: Workspace) => void
+    handleWorkspaceCreated: (page: { props: Record<string, unknown> }) => void
     handleWorkspaceDeleted: () => void
 
     // ── Agent hook (mutations used by ModalLayer and AgentsView) ─────────────
@@ -185,7 +185,8 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     const [allProjects, setAllProjects] = useState<Project[]>(() => props.projects ?? [])
 
     // Selected workspace filter — persisted so it survives reloads/navigations.
-    const [selectedWorkspaceId, setSelectedWorkspaceId] = useLocalStorage<number | null>('keera:selectedWorkspaceId', null)
+    // Raw value; guarded against stale ids where it's derived below.
+    const [_selectedWorkspaceId, setSelectedWorkspaceId] = useLocalStorage<number | null>('keera:selectedWorkspaceId', null)
 
     async function refreshData() {
         const [wsRes, prRes] = await Promise.all([
@@ -244,6 +245,12 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     // ── Derived data ──────────────────────────────────────────────────────────
     const activeProject = allProjects.find(p => p.slug === projectName) ?? allProjects[0] ?? null
 
+    // Guard the persisted selection against a stale id (e.g. a deleted workspace)
+    // inline — same render, no clearing effect that could race prop syncs.
+    const selectedWorkspaceId = _selectedWorkspaceId !== null && workspaces.some(w => w.id === _selectedWorkspaceId)
+        ? _selectedWorkspaceId
+        : null
+
     const taskHook = useTasks(activeProject?.id ?? null)
     const agentHook = useAgents(activeProject?.id ?? null)
     const tasks = taskHook.tasks
@@ -262,12 +269,15 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
 
     // ── Effects ───────────────────────────────────────────────────────────────
 
-    // Drop the selected workspace if it no longer exists (e.g. after deletion)
+    // Sync workspaces/projects from Inertia props. Page mutations (e.g. workspace
+    // create) redirect back, so the server re-renders with a fresh list and it
+    // flows in here automatically — no manual refetch needed.
     useEffect(() => {
-        if (selectedWorkspaceId !== null && !workspaces.some(w => w.id === selectedWorkspaceId)) {
-            setSelectedWorkspaceId(null)
-        }
-    }, [workspaces, selectedWorkspaceId])
+        if (props.workspaces) setWorkspaces(props.workspaces)
+    }, [props.workspaces])
+    useEffect(() => {
+        if (props.projects) setAllProjects(props.projects)
+    }, [props.projects])
 
     // Seed claudeStatus from fetched project data on first load
     useEffect(() => {
@@ -558,9 +568,14 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         }
     }
 
-    async function handleWorkspaceCreated(workspace: Workspace) {
-        await refreshData()
-        setSelectedWorkspaceId(workspace.id)
+    function handleWorkspaceCreated(page: { props: Record<string, unknown> }) {
+        // The redirect-back render already refreshed the list via props; just
+        // select the newest workspace (highest id) so it shows as active.
+        const list = page.props.workspaces as Workspace[] | undefined
+        if (list && list.length > 0) {
+            const newest = list.reduce((a, b) => (b.id > a.id ? b : a))
+            setSelectedWorkspaceId(newest.id)
+        }
     }
     async function handleWorkspaceDeleted() { await refreshData() }
 
