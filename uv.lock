@@ -234,6 +234,15 @@ wheels = [
 ]
 
 [[package]]
+name = "dumpdie"
+version = "1.5.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/2d/61/7ea2d95d55806d9e812e6a38880a479adb40a874c95c745a3a896e844998/dumpdie-1.5.0.tar.gz", hash = "sha256:0267fc9409a10fb0c3e023ba95b109df2108b72f5fb7f98e3cc68a3f825a3d46", size = 88462, upload-time = "2026-03-19T00:39:54.465Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/47/40/e7937be0300078626ff929e1d7856ebe3237aa03ad338d0c077c6cda301d/dumpdie-1.5.0-py3-none-any.whl", hash = "sha256:df487693dacfbe38fb2a3229e4734479e046c2485cb7ba723f3e7e5012da1087", size = 3369, upload-time = "2026-03-19T00:39:53.436Z" },
+]
+
+[[package]]
 name = "email-validator"
 version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -567,6 +576,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "dumpdie" },
     { name = "pyinstaller" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -581,6 +591,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "dumpdie", specifier = ">=1.5.0" },
     { name = "pyinstaller", specifier = ">=6.21.0" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-asyncio", specifier = ">=1.3.0" },
