@@ -1,6 +1,18 @@
 import pathlib as _pathlib
 
-_PROMPTS_DIR = _pathlib.Path(__file__).parent.parent / "prompts"
+
+def _prompts_dir() -> _pathlib.Path:
+    """Resolve the prompts directory from the application base path.
+
+    Anchored to ``app.base_path`` (the project root) so it stays correct if
+    this module moves. Falls back to a path relative to this file when the
+    application container is not booted (e.g. isolated unit tests).
+    """
+    try:
+        from bootstrap.application import app
+        return app.base_path / "app" / "prompts"
+    except Exception:
+        return _pathlib.Path(__file__).parent.parent / "prompts"
 
 # Fallback used only when the configured app URL cannot be resolved (e.g. the
 # config layer is not booted during isolated unit tests).
@@ -40,12 +52,13 @@ def default_system_prompt(agent_type: str) -> str | None:
     the in-process ``_SYSTEM_PROMPTS_FALLBACK`` dict if the file is missing.
     Returns ``None`` for unknown types that have no prompt defined.
     """
-    template_path = _PROMPTS_DIR / f"{agent_type}.html"
+    prompts_dir = _prompts_dir()
+    template_path = prompts_dir / f"{agent_type}.html"
     if template_path.exists():
         try:
             from jinja2 import Environment, FileSystemLoader, select_autoescape
             env = Environment(
-                loader=FileSystemLoader(str(_PROMPTS_DIR)),
+                loader=FileSystemLoader(str(prompts_dir)),
                 autoescape=select_autoescape([]),  # plain text — no HTML escaping
                 keep_trailing_newline=True,
             )
