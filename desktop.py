@@ -1,6 +1,8 @@
 """Desktop shell."""
-
 import os
+
+os.environ["APP_ENV"] = "desktop"
+
 import pathlib
 import shutil
 import socket
@@ -9,11 +11,15 @@ import threading
 import time
 from urllib.parse import urlparse
 
-from fastapi_startkit.environment import env
+from bootstrap.application import app
 
-_APP_URL = urlparse(env("KEERA_APP_URL", "http://127.0.0.1:4545"))
-HOST = _APP_URL.hostname or "127.0.0.1"
-PORT = _APP_URL.port or 4545
+from fastapi_startkit import Config
+
+url = Config.get('fastapi').get('app_url')
+
+url = urlparse(url)
+HOST = url.hostname or "127.0.0.1"
+PORT = url.port or 4545
 WINDOW_TITLE = "Keera Agent"
 STARTUP_TIMEOUT = 30.0
 
@@ -50,11 +56,9 @@ def _migrate() -> None:
     from cleo.io.inputs.string_input import StringInput
     from fastapi_startkit.console import ConsoleApplication
 
-    from bootstrap.application import app as console_app
-
-    console = ConsoleApplication(console_app)
+    console = ConsoleApplication(app)
     console.auto_exits(False)
-    console.run(StringInput("db:migrate --force"))
+    console.run(StringInput("db:migrate"))
 
 
 def _is_listening(host: str, port: int) -> bool:
@@ -76,11 +80,9 @@ def _serve() -> None:
     from cleo.io.inputs.string_input import StringInput
     from fastapi_startkit.console import ConsoleApplication
 
-    from bootstrap.application import app as console_app
-
-    console = ConsoleApplication(console_app)
+    console = ConsoleApplication(app)
     console.auto_exits(False)
-    console.run(StringInput(f"serve --host {HOST} --port {PORT}"))
+    console.run(StringInput(f"serve"))
 
 
 def _boot_server() -> None:
@@ -97,10 +99,8 @@ def main() -> None:
     import webview
 
     os.chdir(BASE_DIR)
-    if BUNDLED:
-        _configure_data_dir()
-        _migrate()
-
+    _configure_data_dir()
+    _migrate()
     _boot_server()
 
     webview.create_window(WINDOW_TITLE, f"http://{HOST}:{PORT}", width=1280, height=860)
