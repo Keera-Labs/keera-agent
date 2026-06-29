@@ -57,6 +57,25 @@ def _ensure_git_repo(path: str) -> None:
         )
 
 
+async def _ensure_repo_once(project: Project, path: str) -> None:
+    """Ensure the project directory is a git repo, but only on the first launch.
+
+    `is_repository` records that we have already ensured the directory is a
+    repository — it is NOT a detection of a pre-existing repo. While the flag is
+    false we run the (potentially init-ing) `_ensure_git_repo` and then flip it
+    to true, so on every later launch we skip both the git ensure/init and this
+    check entirely.
+
+    Propagates RuntimeError from `_ensure_git_repo` (the flag stays false if the
+    ensure fails, so it is retried on the next launch).
+    """
+    if project.is_repository:
+        return
+
+    _ensure_git_repo(path)
+    await Project.where("id", project.id).update({"is_repository": True})
+
+
 async def _deliver_pending_relay_messages(agent_id: int) -> None:
     """Inject any queued agent-to-agent relay messages into the running PTY."""
     from app.models.AgentRelayMessage import AgentRelayMessage
@@ -100,16 +119,12 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
     cwd = os.path.expanduser(project_record.path)
     os.makedirs(cwd, exist_ok=True)
 
-    # Detect once whether the project was already a git repository. This must run
-    # before `_ensure_git_repo` below, which would `git init` an empty dir and
-    # make the check meaningless. Once true it stays true, so we never re-check.
-    if not project_record.is_repository and _is_git_repo(cwd):
-        await Project.where("id", project_record.id).update({"is_repository": True})
-
     # Ensure the project directory is a git repository before spawning the PTY.
     # claude requires git; without it the process crashes in confusing ways.
+    # `_ensure_repo_once` runs this only on the first launch and then records it
+    # via `is_repository`, so later launches skip the redundant check.
     try:
-        _ensure_git_repo(cwd)
+        await _ensure_repo_once(project_record, cwd)
     except RuntimeError as exc:
         await websocket.send_text(
             json.dumps({"type": "error", "message": str(exc)})
