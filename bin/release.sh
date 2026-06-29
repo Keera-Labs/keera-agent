@@ -31,8 +31,15 @@ fi
 echo "==> Cleaning previous build..."
 rm -rf "$PROJECT_ROOT/build" "$DIST" "$PROJECT_ROOT/$APP_NAME.spec"
 
-EXTRA_DATA=()
-[ -f ".env" ] && EXTRA_DATA+=(--add-data ".env:.")
+if [ ! -f ".env.desktop" ]; then
+    echo "ERROR: .env.desktop missing — the packaged app reads its env from this file." >&2
+    exit 1
+fi
+
+# Bundle .env.desktop (APP_ENV=desktop, per-user URL/port) rather than the dev .env.
+# The framework loads it via the APP_ENV=desktop overlay; omitting the base .env keeps
+# the per-user storage/DB paths that desktop.py sets at runtime from being clobbered.
+EXTRA_DATA=(--add-data ".env.desktop:.")
 [ -f "storage/default_permissions.json" ] && EXTRA_DATA+=(--add-data "storage/default_permissions.json:storage")
 
 echo "==> Packaging $APP_NAME.app (PyInstaller, $TARGET_ARCH)..."
