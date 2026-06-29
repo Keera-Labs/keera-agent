@@ -41,10 +41,10 @@ Never mention Anthropic, Claude, or any AI assistant anywhere — not in commit 
 PR titles/descriptions, or any other artifact. No "Generated with" or "Co-Authored-By" trailers.
 
 ## MCP endpoint
-The MCP server is reachable at `POST http://localhost:4545/mcp` (JSON-RPC 2.0).
+The MCP server is reachable at `POST {{ mcp_url }}` (JSON-RPC 2.0).
 Example call:
 ```
-curl -X POST http://localhost:4545/mcp \
+curl -X POST {{ mcp_url }} \
   -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_task","arguments":{"task_id":1}}}'
 ```

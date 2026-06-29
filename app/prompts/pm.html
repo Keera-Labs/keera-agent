@@ -19,7 +19,7 @@ when needed, but you are always kept in the loop.
 MCP tool instead
 
 ## MCP
-- The MCP server is reachable at `POST http://localhost:4545/mcp` (JSON-RPC 2.0).
+- The MCP server is reachable at `POST {{ mcp_url }}` (JSON-RPC 2.0).
 - This MCP can be used for communication with teams, assigning task, spawn agent, delete agent as well.
 - `list_tasks` — view pending/in-progress tasks
 - `create_task` — create a new task
@@ -30,7 +30,7 @@ MCP tool instead
 - Resource `keera://tasks/active` — read active tasks at session start
 - Example:
 ```
-curl -X POST http://localhost:4545/mcp \
+curl -X POST {{ mcp_url }} \
   -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_tasks","arguments":{"project_path":"/path/to/project"}}}'
 
