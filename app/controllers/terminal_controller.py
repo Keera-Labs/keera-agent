@@ -27,18 +27,23 @@ def _build_identity_suffix(agent_id: int) -> str:
     )
 
 
+def _is_git_repo(path: str) -> bool:
+    """Return True if `path` is inside an existing git repository."""
+    result = subprocess.run(
+        ["git", "-C", path, "rev-parse", "--is-inside-work-tree"],
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0
+
+
 def _ensure_git_repo(path: str) -> None:
     """Ensure `path` is inside a git repository, running `git init` if not.
 
     Raises RuntimeError if git init fails, so callers can send a clean error
     to the client instead of letting the PTY crash unexpectedly.
     """
-    result = subprocess.run(
-        ["git", "-C", path, "rev-parse", "--is-inside-work-tree"],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode == 0:
+    if _is_git_repo(path):
         return  # Already a git repo — nothing to do.
 
     init_result = subprocess.run(
@@ -50,6 +55,25 @@ def _ensure_git_repo(path: str) -> None:
         raise RuntimeError(
             f"git init failed in {path!r}: {init_result.stderr.strip()}"
         )
+
+
+async def _ensure_repo_once(project: Project, path: str) -> None:
+    """Ensure the project directory is a git repo, but only on the first launch.
+
+    `is_repository` records that we have already ensured the directory is a
+    repository — it is NOT a detection of a pre-existing repo. While the flag is
+    false we run the (potentially init-ing) `_ensure_git_repo` and then flip it
+    to true, so on every later launch we skip both the git ensure/init and this
+    check entirely.
+
+    Propagates RuntimeError from `_ensure_git_repo` (the flag stays false if the
+    ensure fails, so it is retried on the next launch).
+    """
+    if project.is_repository:
+        return
+
+    _ensure_git_repo(path)
+    await Project.where("id", project.id).update({"is_repository": True})
 
 
 async def _deliver_pending_relay_messages(agent_id: int) -> None:
@@ -97,8 +121,10 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
 
     # Ensure the project directory is a git repository before spawning the PTY.
     # claude requires git; without it the process crashes in confusing ways.
+    # `_ensure_repo_once` runs this only on the first launch and then records it
+    # via `is_repository`, so later launches skip the redundant check.
     try:
-        _ensure_git_repo(cwd)
+        await _ensure_repo_once(project_record, cwd)
     except RuntimeError as exc:
         await websocket.send_text(
             json.dumps({"type": "error", "message": str(exc)})

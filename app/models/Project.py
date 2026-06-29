@@ -15,5 +15,6 @@ class Project(Model):
     system_prompt: str | None
     permissions_allow: str | None
     permissions_deny: str | None
+    is_repository: bool
     created_at: str | None
     updated_at: str | None
