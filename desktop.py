@@ -1,8 +1,5 @@
 """Desktop shell."""
 import os
-
-os.environ["APP_ENV"] = "desktop"
-
 import pathlib
 import shutil
 import socket
@@ -10,18 +7,6 @@ import sys
 import threading
 import time
 from urllib.parse import urlparse
-
-from bootstrap.application import app
-
-from fastapi_startkit import Config
-
-url = Config.get('fastapi').get('app_url')
-
-url = urlparse(url)
-HOST = url.hostname or "127.0.0.1"
-PORT = url.port or 4545
-WINDOW_TITLE = "Keera Agent"
-STARTUP_TIMEOUT = 30.0
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parent
 BUNDLED = getattr(sys, "frozen", False)
@@ -32,7 +17,16 @@ DATA_DIR = pathlib.Path(
 )
 
 
-def _configure_data_dir() -> None:
+def _configure_environment() -> None:
+    """Populate env vars and cwd that the framework reads at import time.
+
+    Must run before `bootstrap.application` is imported: the framework builds
+    its Config from the environment on import, so any DB/storage/log path set
+    afterwards (previously inside main()) was ignored, crashing the desktop boot.
+    """
+    os.environ["APP_ENV"] = "desktop"
+    os.chdir(BASE_DIR)
+
     storage = DATA_DIR / "storage"
     (storage / "logs").mkdir(parents=True, exist_ok=True)
     (storage / "app" / "public").mkdir(parents=True, exist_ok=True)
@@ -50,6 +44,18 @@ def _configure_data_dir() -> None:
     os.environ["FILESYSTEM_PUBLIC_DISK_ROOT"] = str(storage / "app" / "public")
     os.environ["LOG_DAILY_PATH"] = str(storage / "logs")
     os.environ["KEERA_DEFAULT_PERMS_PATH"] = str(perms)
+
+
+_configure_environment()
+
+from bootstrap.application import app  # noqa: E402
+from fastapi_startkit import Config  # noqa: E402
+
+url = urlparse(Config.get('fastapi').get('app_url'))
+HOST = url.hostname or "127.0.0.1"
+PORT = url.port or 4545
+WINDOW_TITLE = "Keera Agent"
+STARTUP_TIMEOUT = 30.0
 
 
 def _migrate() -> None:
@@ -98,8 +104,6 @@ def _boot_server() -> None:
 def main() -> None:
     import webview
 
-    os.chdir(BASE_DIR)
-    _configure_data_dir()
     _migrate()
     _boot_server()
 
