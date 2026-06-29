@@ -27,18 +27,23 @@ def _build_identity_suffix(agent_id: int) -> str:
     )
 
 
+def _is_git_repo(path: str) -> bool:
+    """Return True if `path` is inside an existing git repository."""
+    result = subprocess.run(
+        ["git", "-C", path, "rev-parse", "--is-inside-work-tree"],
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0
+
+
 def _ensure_git_repo(path: str) -> None:
     """Ensure `path` is inside a git repository, running `git init` if not.
 
     Raises RuntimeError if git init fails, so callers can send a clean error
     to the client instead of letting the PTY crash unexpectedly.
     """
-    result = subprocess.run(
-        ["git", "-C", path, "rev-parse", "--is-inside-work-tree"],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode == 0:
+    if _is_git_repo(path):
         return  # Already a git repo — nothing to do.
 
     init_result = subprocess.run(
@@ -94,6 +99,12 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
 
     cwd = os.path.expanduser(project_record.path)
     os.makedirs(cwd, exist_ok=True)
+
+    # Detect once whether the project was already a git repository. This must run
+    # before `_ensure_git_repo` below, which would `git init` an empty dir and
+    # make the check meaningless. Once true it stays true, so we never re-check.
+    if not project_record.is_repository and _is_git_repo(cwd):
+        await Project.where("id", project_record.id).update({"is_repository": True})
 
     # Ensure the project directory is a git repository before spawning the PTY.
     # claude requires git; without it the process crashes in confusing ways.
