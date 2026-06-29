@@ -30,7 +30,7 @@ export function GlobalSettingsModal({
     const [generalSaved, setGeneralSaved] = useState(false)
     const [generalError, setGeneralError] = useState('')
 
-    // Update the global layout context so AddAgentModal warning refreshes immediately
+    // Update the global layout context so AgentAddModal warning refreshes immediately
     const { setMaxAgentsPerProject, refetchAgentTemplates } = useAppLayout()
     const [syncing, setSyncing] = useState(false)
 
@@ -40,7 +40,7 @@ export function GlobalSettingsModal({
         const res = await fetch('/api/agent-templates')
         const data: AgentTemplate[] = res.ok ? await res.json() : []
         setTemplates(data)
-        refetchAgentTemplates()  // keep AddAgentModal's effective list in sync
+        refetchAgentTemplates()  // keep AgentAddModal's effective list in sync
         return data
     }
 
@@ -69,7 +69,7 @@ export function GlobalSettingsModal({
             if (!res.ok) { setGeneralError(d.error ?? 'Save failed'); return }
             setGeneralSaved(true)
             setTimeout(() => setGeneralSaved(false), 2000)
-            // Update context immediately so AddAgentModal warning reflects the new
+            // Update context immediately so AgentAddModal warning reflects the new
             // limit without waiting for router.reload() to complete.
             setMaxAgentsPerProject(d.max_agents_per_project ?? maxAgents)
             // Also re-fetch Inertia props so the page-level value stays in sync

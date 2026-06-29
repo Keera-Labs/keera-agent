@@ -17,7 +17,7 @@ function findBuiltinForType(templates: AgentTemplate[], agentType: string): Agen
     )
 }
 
-export function AddAgentModal({ projectId, onClose, onCreated, templates, agentCount, maxAgents }: {
+export function AgentAddModal({ projectId, onClose, onCreated, templates, agentCount, maxAgents }: {
     projectId: number
     onClose: () => void
     onCreated: (a: ProjectAgent) => void
