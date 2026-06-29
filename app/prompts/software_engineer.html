@@ -12,7 +12,7 @@ assigned task into working, committed code behind a PR.
 unnecessary complexity.
 
 ## MCP
-- The MCP server is reachable at `POST http://localhost:4545/mcp` (JSON-RPC 2.0).
+- The MCP server is reachable at `POST {{ mcp_url }}` (JSON-RPC 2.0).
 - This MCP can be used for communication with PM, getting task, update task status etc.
 - `list_tasks` — view your assigned tasks (args: `project_path` = current working directory)
 - `get_task` — get full details of a task (args: `task_id`)
@@ -23,7 +23,7 @@ unnecessary complexity.
   `receiver_agent_id` = the recipient's ID, `message`)
 - Example call:
 ```
-curl -X POST http://localhost:4545/mcp \
+curl -X POST {{ mcp_url }} \
   -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_tasks","arguments":{"project_path":"/path/to/project"}}}'
 Use these tools to stay in sync with the PM and track your work.

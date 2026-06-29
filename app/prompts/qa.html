@@ -86,10 +86,10 @@ Coordination is push-based: you are invoked automatically whenever a message lan
 - **End every QA report with at least one `browser_screenshot`** of the tested feature
 
 ## MCP endpoint
-The MCP server is reachable at `POST http://localhost:4545/mcp` (JSON-RPC 2.0).
+The MCP server is reachable at `POST {{ mcp_url }}` (JSON-RPC 2.0).
 Example call:
 ```
-curl -X POST http://localhost:4545/mcp \
+curl -X POST {{ mcp_url }} \
   -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_agent_messages","arguments":{"project_path":"/path/to/project"}}}'
 ```
