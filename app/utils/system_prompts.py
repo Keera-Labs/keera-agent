@@ -1,18 +1,18 @@
-import pathlib as _pathlib
+import pathlib
 
 
-def _prompts_dir() -> _pathlib.Path:
+def _prompts_dir() -> pathlib.Path:
     """Resolve the prompts directory from the application base path.
 
-    Anchored to ``app.base_path`` (the project root) so it stays correct if
-    this module moves. Falls back to a path relative to this file when the
+    Anchored to ``base_path`` (the project root) so it stays correct if this
+    module moves. Falls back to a path relative to this file when the
     application container is not booted (e.g. isolated unit tests).
     """
     try:
-        from bootstrap.application import app
-        return app.base_path / "app" / "prompts"
+        from fastapi_startkit import Application
+        return Application.instance().base_path / "app" / "prompts"
     except Exception:
-        return _pathlib.Path(__file__).parent.parent / "prompts"
+        return pathlib.Path(__file__).parent.parent / "prompts"
 
 # Fallback used only when the configured app URL cannot be resolved (e.g. the
 # config layer is not booted during isolated unit tests).
