@@ -5,6 +5,7 @@ from fastapi_startkit.inertia.inertia import Inertia
 
 from app.models.Project import Project
 from app.models.Task import Task
+from app.controllers.home_controller import _shared_props
 
 
 def _slugify(name: str) -> str:
@@ -49,7 +50,7 @@ async def tasks_page(request: Request, project: str):
         raw = await Task.where("project_id", proj.id).get()
         tasks = [_serialize(t) for t in raw]
     return Inertia.render("Tasks", {
-        "project": project,
+        **await _shared_props(project=project),
         "project_id": proj.id if proj else None,
         "tasks": tasks,
     })

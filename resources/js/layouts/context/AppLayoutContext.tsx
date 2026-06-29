@@ -10,6 +10,7 @@ import { makeTerminal } from '@/layouts/hooks/useTerminalSessions'
 import type { Session } from '@/layouts/hooks/useTerminalSessions'
 import type { ProjectView } from '@/layouts/sidebar/Sidebar'
 import { useTasks } from '@/layouts/hooks/tasks'
+import { useLocalStorage } from '@/layouts/hooks/useLocalStorage'
 
 // ─── Context value interface ──────────────────────────────────────────────────
 
@@ -19,6 +20,10 @@ export interface AppLayoutContextValue {
     allProjects: Project[]
     activeProject: Project | null
     tasks: Task[]
+
+    // ── Workspace selection (persisted) ───────────────────────────────────────
+    selectedWorkspaceId: number | null
+    setSelectedWorkspaceId: (v: number | null) => void
 
     // ── Modal state ───────────────────────────────────────────────────────────
     showWorkspaceModal: boolean
@@ -73,7 +78,7 @@ export interface AppLayoutContextValue {
     handleProjectCreated: (project: Project) => void
     handleProjectDeleted: (projectId: number) => void
     handleProjectUpdated: (updated: Project) => void
-    handleWorkspaceCreated: () => void
+    handleWorkspaceCreated: (page: { props: Record<string, unknown> }) => void
     handleWorkspaceDeleted: () => void
 
     // ── Agent hook (mutations used by ModalLayer and AgentsView) ─────────────
@@ -179,6 +184,10 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     const [workspaces, setWorkspaces] = useState<Workspace[]>(() => props.workspaces ?? [])
     const [allProjects, setAllProjects] = useState<Project[]>(() => props.projects ?? [])
 
+    // Selected workspace filter — persisted so it survives reloads/navigations.
+    // Raw value; guarded against stale ids where it's derived below.
+    const [_selectedWorkspaceId, setSelectedWorkspaceId] = useLocalStorage<number | null>('keera:selectedWorkspaceId', null)
+
     async function refreshData() {
         const [wsRes, prRes] = await Promise.all([
             fetch('/api/workspaces').then(r => r.json()),
@@ -236,6 +245,12 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     // ── Derived data ──────────────────────────────────────────────────────────
     const activeProject = allProjects.find(p => p.slug === projectName) ?? allProjects[0] ?? null
 
+    // Guard the persisted selection against a stale id (e.g. a deleted workspace)
+    // inline — same render, no clearing effect that could race prop syncs.
+    const selectedWorkspaceId = _selectedWorkspaceId !== null && workspaces.some(w => w.id === _selectedWorkspaceId)
+        ? _selectedWorkspaceId
+        : null
+
     const taskHook = useTasks(activeProject?.id ?? null)
     const agentHook = useAgents(activeProject?.id ?? null)
     const tasks = taskHook.tasks
@@ -253,6 +268,16 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         : null
 
     // ── Effects ───────────────────────────────────────────────────────────────
+
+    // Sync workspaces/projects from Inertia props. Page mutations (e.g. workspace
+    // create) redirect back, so the server re-renders with a fresh list and it
+    // flows in here automatically — no manual refetch needed.
+    useEffect(() => {
+        if (props.workspaces) setWorkspaces(props.workspaces)
+    }, [props.workspaces])
+    useEffect(() => {
+        if (props.projects) setAllProjects(props.projects)
+    }, [props.projects])
 
     // Seed claudeStatus from fetched project data on first load
     useEffect(() => {
@@ -543,7 +568,15 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         }
     }
 
-    async function handleWorkspaceCreated() { await refreshData() }
+    function handleWorkspaceCreated(page: { props: Record<string, unknown> }) {
+        // The redirect-back render already refreshed the list via props; just
+        // select the newest workspace (highest id) so it shows as active.
+        const list = page.props.workspaces as Workspace[] | undefined
+        if (list && list.length > 0) {
+            const newest = list.reduce((a, b) => (b.id > a.id ? b : a))
+            setSelectedWorkspaceId(newest.id)
+        }
+    }
     async function handleWorkspaceDeleted() { await refreshData() }
 
     function handleProjectCreated(project: Project) {
@@ -591,6 +624,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     const value: AppLayoutContextValue = {
         // Data
         workspaces, allProjects, activeProject, tasks,
+        selectedWorkspaceId, setSelectedWorkspaceId,
         // Modal state
         showWorkspaceModal, setShowWorkspaceModal,
         addProjectWorkspaceId, setAddProjectWorkspaceId,

@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { useWorkspace } from '@/layouts/hooks/workspace'
 
+type InertiaPage = { props: Record<string, unknown> }
+
 const inputCls = 'bg-canvas border border-stroke rounded-md text-zinc-200 text-[13px] px-2.5 py-1.5 font-mono outline-none w-full'
 const labelSpanCls = 'text-zinc-400 text-[11px] uppercase tracking-[0.05em]'
 const cancelCls = 'bg-transparent border border-stroke rounded-md text-zinc-400 text-xs px-3.5 py-1.5 cursor-pointer disabled:opacity-50'
 const submitCls = 'bg-success-emphasis border border-success-border rounded-md text-white text-xs px-3.5 py-1.5 cursor-pointer disabled:opacity-50'
 
-export default function AddWorkspaceModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-    const { create, creating } = useWorkspace()
+export default function AddWorkspaceModal({ onClose, onCreated }: { onClose: () => void; onCreated: (page: InertiaPage) => void }) {
+    const { create, creating, createErrors } = useWorkspace()
     const [name, setName] = useState('')
     const [description, setDescription] = useState('')
     const [error, setError] = useState('')
@@ -18,7 +20,7 @@ export default function AddWorkspaceModal({ onClose, onCreated }: { onClose: () 
         if (!name.trim()) { setError('Name is required'); return }
         create(
             { name: name.trim(), description: description.trim() || undefined },
-            () => { onCreated(); onClose() },
+            (page) => { onCreated(page); onClose() },
         )
     }
 
@@ -27,7 +29,7 @@ export default function AddWorkspaceModal({ onClose, onCreated }: { onClose: () 
             <div className="bg-modal border border-stroke rounded-lg p-6 w-[340px] flex flex-col gap-3.5">
                 <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
                     <h2 className="m-0 text-zinc-200 text-[15px] font-semibold">New Workspace</h2>
-                    {error && <span className="text-danger text-xs">{error}</span>}
+                    {(error || createErrors.name) && <span className="text-danger text-xs">{error || createErrors.name}</span>}
                     <label className="flex flex-col gap-1">
                         <span className={labelSpanCls}>Name</span>
                         <input value={name} onChange={e => setName(e.target.value)} placeholder="my-workspace" required className={inputCls} />

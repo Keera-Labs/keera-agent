@@ -1,13 +1,17 @@
 import { useForm, useHttp } from '@inertiajs/react'
 
+type InertiaPage = { props: Record<string, unknown> }
+
 export function useWorkspace() {
     const createForm = useForm({ name: '', description: '' })
     const updateHttp = useHttp({})
     const destroyHttp = useHttp({})
 
-    const create = (data: { name: string; description?: string }, onSuccess?: () => void) => {
+    // Inertia form post. The server redirects back, so Inertia re-fetches the
+    // page and the refreshed workspace list flows in via props automatically.
+    const create = (data: { name: string; description?: string }, onSuccess?: (page: InertiaPage) => void) => {
         createForm.setData(data)
-        createForm.post('/api/workspaces', { onSuccess })
+        createForm.post('/api/workspaces', { preserveScroll: true, onSuccess })
     }
 
     const update = ({ id, ...data }: { id: number; name?: string; description?: string }, onSuccess?: () => void) => {
