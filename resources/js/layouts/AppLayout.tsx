@@ -48,6 +48,7 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
         setShowAddAgent,
         openAddProject, setMovingProject, setEditingProject,
         setDeletingProject, setShowWorkspaceModal,
+        selectedWorkspaceId, setSelectedWorkspaceId,
     } = useAppLayout()
 
     const { component } = usePage()
@@ -108,6 +109,8 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
                     onDeleteProject={setDeletingProject}
                     claudeStatus={claudeStatus}
                     onCreateWorkspace={() => setShowWorkspaceModal(true)}
+                    filterWorkspaceId={selectedWorkspaceId}
+                    onSelectWorkspace={setSelectedWorkspaceId}
                 />
 
                 {/* Main content slot — ProjectLayout or page children rendered here */}

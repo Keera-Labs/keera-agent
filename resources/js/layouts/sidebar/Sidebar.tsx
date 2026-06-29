@@ -2,7 +2,6 @@ import type React from 'react'
 import { router, usePage } from '@inertiajs/react'
 import { color } from '@/tokens'
 import type { Project } from '@/types/type'
-import { useLocalStorage } from '@/layouts/hooks/useLocalStorage'
 import { ProjectItem } from './Project'
 import { WorkspacePicker } from './WorkSpace'
 
@@ -52,6 +51,8 @@ export default function Sidebar({
     onDeleteProject,
     claudeStatus,
     onCreateWorkspace,
+    filterWorkspaceId,
+    onSelectWorkspace,
 }: {
     allProjects: Project[]
     activeProject: Project | null
@@ -66,8 +67,9 @@ export default function Sidebar({
     onDeleteProject: (project: Project) => void
     claudeStatus: Record<number, 'running' | 'done'>
     onCreateWorkspace: () => void
+    filterWorkspaceId: number | null
+    onSelectWorkspace: (id: number | null) => void
 }) {
-    const [filterWorkspaceId, setFilterWorkspaceId] = useLocalStorage<number | null>('keera:selectedWorkspaceId', null)
     const { component } = usePage()
     const isSettingsPage = component === 'Settings'
 
@@ -82,7 +84,7 @@ export default function Sidebar({
         }}>
             <WorkspacePicker
                 selected={filterWorkspaceId}
-                onSelect={setFilterWorkspaceId}
+                onSelect={onSelectWorkspace}
                 onCreateWorkspace={onCreateWorkspace}
             />
 

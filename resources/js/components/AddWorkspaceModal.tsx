@@ -1,25 +1,29 @@
 import { useState } from 'react'
 import { useWorkspace } from '@/layouts/hooks/workspace'
+import type { Workspace } from '@/types/type'
 
 const inputCls = 'bg-canvas border border-stroke rounded-md text-zinc-200 text-[13px] px-2.5 py-1.5 font-mono outline-none w-full'
 const labelSpanCls = 'text-zinc-400 text-[11px] uppercase tracking-[0.05em]'
 const cancelCls = 'bg-transparent border border-stroke rounded-md text-zinc-400 text-xs px-3.5 py-1.5 cursor-pointer disabled:opacity-50'
 const submitCls = 'bg-success-emphasis border border-success-border rounded-md text-white text-xs px-3.5 py-1.5 cursor-pointer disabled:opacity-50'
 
-export default function AddWorkspaceModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+export default function AddWorkspaceModal({ onClose, onCreated }: { onClose: () => void; onCreated: (workspace: Workspace) => void }) {
     const { create, creating } = useWorkspace()
     const [name, setName] = useState('')
     const [description, setDescription] = useState('')
     const [error, setError] = useState('')
 
-    function handleSubmit(e: React.FormEvent) {
+    async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
         setError('')
         if (!name.trim()) { setError('Name is required'); return }
-        create(
-            { name: name.trim(), description: description.trim() || undefined },
-            () => { onCreated(); onClose() },
-        )
+        try {
+            const workspace = await create({ name: name.trim(), description: description.trim() || undefined })
+            onCreated(workspace)
+            onClose()
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to create workspace')
+        }
     }
 
     return (

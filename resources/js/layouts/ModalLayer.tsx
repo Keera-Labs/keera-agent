@@ -68,7 +68,7 @@ export function ModalLayer() {
             {showWorkspaceModal && (
                 <AddWorkspaceModal
                     onClose={() => setShowWorkspaceModal(false)}
-                    onCreated={() => handleWorkspaceCreated()}
+                    onCreated={handleWorkspaceCreated}
                 />
             )}
 

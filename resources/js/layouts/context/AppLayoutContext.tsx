@@ -10,6 +10,7 @@ import { makeTerminal } from '@/layouts/hooks/useTerminalSessions'
 import type { Session } from '@/layouts/hooks/useTerminalSessions'
 import type { ProjectView } from '@/layouts/sidebar/Sidebar'
 import { useTasks } from '@/layouts/hooks/tasks'
+import { useLocalStorage } from '@/layouts/hooks/useLocalStorage'
 
 // ─── Context value interface ──────────────────────────────────────────────────
 
@@ -19,6 +20,10 @@ export interface AppLayoutContextValue {
     allProjects: Project[]
     activeProject: Project | null
     tasks: Task[]
+
+    // ── Workspace selection (persisted) ───────────────────────────────────────
+    selectedWorkspaceId: number | null
+    setSelectedWorkspaceId: (v: number | null) => void
 
     // ── Modal state ───────────────────────────────────────────────────────────
     showWorkspaceModal: boolean
@@ -73,7 +78,7 @@ export interface AppLayoutContextValue {
     handleProjectCreated: (project: Project) => void
     handleProjectDeleted: (projectId: number) => void
     handleProjectUpdated: (updated: Project) => void
-    handleWorkspaceCreated: () => void
+    handleWorkspaceCreated: (workspace: Workspace) => void
     handleWorkspaceDeleted: () => void
 
     // ── Agent hook (mutations used by ModalLayer and AgentsView) ─────────────
@@ -179,6 +184,9 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     const [workspaces, setWorkspaces] = useState<Workspace[]>(() => props.workspaces ?? [])
     const [allProjects, setAllProjects] = useState<Project[]>(() => props.projects ?? [])
 
+    // Selected workspace filter — persisted so it survives reloads/navigations.
+    const [selectedWorkspaceId, setSelectedWorkspaceId] = useLocalStorage<number | null>('keera:selectedWorkspaceId', null)
+
     async function refreshData() {
         const [wsRes, prRes] = await Promise.all([
             fetch('/api/workspaces').then(r => r.json()),
@@ -253,6 +261,13 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         : null
 
     // ── Effects ───────────────────────────────────────────────────────────────
+
+    // Drop the selected workspace if it no longer exists (e.g. after deletion)
+    useEffect(() => {
+        if (selectedWorkspaceId !== null && !workspaces.some(w => w.id === selectedWorkspaceId)) {
+            setSelectedWorkspaceId(null)
+        }
+    }, [workspaces, selectedWorkspaceId])
 
     // Seed claudeStatus from fetched project data on first load
     useEffect(() => {
@@ -543,7 +558,10 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         }
     }
 
-    async function handleWorkspaceCreated() { await refreshData() }
+    async function handleWorkspaceCreated(workspace: Workspace) {
+        await refreshData()
+        setSelectedWorkspaceId(workspace.id)
+    }
     async function handleWorkspaceDeleted() { await refreshData() }
 
     function handleProjectCreated(project: Project) {
@@ -591,6 +609,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     const value: AppLayoutContextValue = {
         // Data
         workspaces, allProjects, activeProject, tasks,
+        selectedWorkspaceId, setSelectedWorkspaceId,
         // Modal state
         showWorkspaceModal, setShowWorkspaceModal,
         addProjectWorkspaceId, setAddProjectWorkspaceId,
