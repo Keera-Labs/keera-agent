@@ -85,6 +85,49 @@ def ensure_claude_settings(directory: str, base_url: str, project_path: str | No
         print(f"[keera] Claude settings updated in {directory}/.claude/settings.json")
 
 
+# Key under mcpServers reserved for the keera-managed HTTP MCP entry in .mcp.json.
+_MCP_KEY = "keera-agent-mcp"
+
+
+def _desired_mcp_entry(base_url: str, project_path: str) -> dict:
+    return {
+        "type": "http",
+        "url": f"{base_url}/mcp",
+        # X-Project-Path scopes the MCP server to this project root.
+        "headers": {"X-Project-Path": project_path},
+    }
+
+
+def ensure_mcp_json(directory: str, base_url: str, project_path: str | None = None) -> bool:
+    """
+    Upsert the keera-agent-mcp server entry into <directory>/.mcp.json, deriving
+    its URL from base_url so it stays synced when KEERA_APP_URL changes.  All
+    other mcpServers entries are preserved.  Returns True if the file changed.
+    """
+    mcp_path = os.path.join(directory, ".mcp.json")
+    os.makedirs(directory, exist_ok=True)
+
+    data: dict = {}
+    if os.path.exists(mcp_path):
+        try:
+            with open(mcp_path) as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            data = {}
+    if not isinstance(data, dict):
+        data = {}
+
+    desired = _desired_mcp_entry(base_url, project_path or directory)
+    servers = data.setdefault("mcpServers", {})
+    if servers.get(_MCP_KEY) == desired:
+        return False
+
+    servers[_MCP_KEY] = desired
+    atomic_write_json(mcp_path, data)
+    print(f"[keera] MCP config synced in {directory}/.mcp.json")
+    return True
+
+
 BASE_URL = env("KEERA_APP_URL", "http://127.0.0.1:4545")
 
 
@@ -92,3 +135,4 @@ def ensure_hooks() -> None:
     """Register hooks + MCP in the keera-agent app directory at startup."""
     app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     ensure_claude_settings(app_dir, BASE_URL)
+    ensure_mcp_json(app_dir, BASE_URL)

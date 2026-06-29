@@ -9,7 +9,7 @@ from fastapi_startkit.storage.storage import Storage
 
 from app.models.AgentMessage import AgentMessage
 from app.models.Project import Project
-from app.utils.hook_setup import ensure_claude_settings, BASE_URL
+from app.utils.hook_setup import ensure_claude_settings, ensure_mcp_json, BASE_URL
 
 
 def slugify(name: str) -> str:
@@ -66,6 +66,7 @@ async def update(request: Request, project_id: int):
             return JSONResponse({"error": "Directory does not exist"}, status_code=422)
         project.path = new_path
         ensure_claude_settings(expanded, BASE_URL)
+        ensure_mcp_json(expanded, BASE_URL)
 
     await project.save()
 
@@ -196,6 +197,7 @@ async def store(request: Request):
     })
 
     ensure_claude_settings(expanded_path, BASE_URL)
+    ensure_mcp_json(expanded_path, BASE_URL)
 
     # Create a default PM agent for every new project
     import json as _json

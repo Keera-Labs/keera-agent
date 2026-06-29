@@ -14,9 +14,10 @@ class AppProvider(Provider):
         from app.utils.hook_setup import ensure_hooks
         from app.console.queue_work_command import QueueWorkCommand
         from app.console.seed_templates_command import SeedTemplatesCommand
+        from app.console.mcp_sync_command import McpSyncCommand
         self.app.fastapi.include_router(router.router)
         ensure_hooks()
-        self.commands([QueueWorkCommand, SeedTemplatesCommand])
+        self.commands([QueueWorkCommand, SeedTemplatesCommand, McpSyncCommand])
 
         async def on_startup():
             """Ensure built-in templates are seeded."""
