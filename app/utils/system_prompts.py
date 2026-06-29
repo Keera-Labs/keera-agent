@@ -9,8 +9,8 @@ def _prompts_dir() -> pathlib.Path:
     application container is not booted (e.g. isolated unit tests).
     """
     try:
-        from fastapi_startkit import Application
-        return Application.instance().base_path / "app" / "prompts"
+        from fastapi_startkit.application import app
+        return app().base_path / "app" / "prompts"
     except Exception:
         return pathlib.Path(__file__).parent.parent / "prompts"
 
