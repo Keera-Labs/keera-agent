@@ -9,7 +9,7 @@ import { ProjectSearchModal } from '@/components/modals/ProjectSearchModal'
 import { ConfirmDeleteProjectModal } from '@/components/modals/ConfirmDeleteProjectModal'
 import { ConfirmDeleteWorkspaceModal } from '@/components/modals/ConfirmDeleteWorkspaceModal'
 import { MoveProjectModal } from '@/components/modals/MoveProjectModal'
-import { AddAgentModal } from '@/components/modals/AddAgentModal'
+import { AgentAddModal } from '@/components/modals/AgentAddModal'
 import type { ProjectAgent } from '@/layouts/hooks/agents'
 
 export function ModalLayer() {
@@ -130,7 +130,7 @@ export function ModalLayer() {
 
             {/* Add agent */}
             {showAddAgent && activeProject?.id != null && (
-                <AddAgentModal
+                <AgentAddModal
                     projectId={activeProject.id}
                     templates={agentTemplates}
                     agentCount={agentHook.agents.length}

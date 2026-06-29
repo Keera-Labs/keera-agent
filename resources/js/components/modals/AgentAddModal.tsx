@@ -17,7 +17,7 @@ function findBuiltinForType(templates: AgentTemplate[], agentType: string): Agen
     )
 }
 
-export function AddAgentModal({ projectId, onClose, onCreated, templates, agentCount, maxAgents }: {
+export function AgentAddModal({ projectId, onClose, onCreated, templates, agentCount, maxAgents }: {
     projectId: number
     onClose: () => void
     onCreated: (a: ProjectAgent) => void
@@ -50,15 +50,6 @@ export function AddAgentModal({ projectId, onClose, onCreated, templates, agentC
             }
         }
     }, [templates]) // eslint-disable-line react-hooks/exhaustive-deps
-
-    function handleTypeChange(type: string) {
-        setAgentType(type)
-        setSelectedTemplateId(null)
-        const tpl = findBuiltinForType(templates, type)
-        setDescription(tpl?.description ?? '')
-        setSystemPrompt(tpl?.system_prompt ?? '')
-        setPlanMode(!!tpl?.plan_mode)
-    }
 
     function applyTemplate(tpl: AgentTemplate | null) {
         if (!tpl) {
@@ -182,34 +173,6 @@ export function AddAgentModal({ projectId, onClose, onCreated, templates, agentC
                             </div>
                         </label>
                     )}
-
-                    {/* Type selector */}
-                    <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <span style={labelStyle}>Type</span>
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                            {Object.entries(AGENT_TYPE_LABELS).map(([type, label]) => {
-                                const active = agentType === type
-                                return (
-                                    <button
-                                        key={type}
-                                        type="button"
-                                        onClick={() => handleTypeChange(type)}
-                                        style={{
-                                            padding: '5px 12px',
-                                            borderRadius: '6px',
-                                            border: `1px solid ${active ? AGENT_TYPE_COLORS[type] : color.borderMuted}`,
-                                            background: active ? `${AGENT_TYPE_COLORS[type]}18` : 'transparent',
-                                            color: active ? AGENT_TYPE_COLORS[type] : color.textMuted,
-                                            fontSize: '12px', fontWeight: active ? 600 : 400,
-                                            cursor: 'pointer',
-                                        }}
-                                    >
-                                        {label}
-                                    </button>
-                                )
-                            })}
-                        </div>
-                    </label>
 
                     <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <span style={labelStyle}>Name</span>

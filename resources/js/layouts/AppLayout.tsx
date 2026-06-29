@@ -28,7 +28,7 @@ export { MoveProjectModal } from '@/components/modals/MoveProjectModal'
 export { EditProjectModal } from '@/components/modals/EditProjectModal'
 export { CreateTaskModal } from '@/components/modals/CreateTaskModal'
 export { TaskDetailModal } from '@/components/modals/TaskDetailModal'
-export { AddAgentModal } from '@/components/modals/AddAgentModal'
+export { AgentAddModal } from '@/components/modals/AgentAddModal'
 
 // ─── Persistent layout ────────────────────────────────────────────────────────
 
