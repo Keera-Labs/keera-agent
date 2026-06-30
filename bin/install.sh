@@ -60,9 +60,6 @@ fi
 echo "==> Running migrations (dev database)..."
 uv run python artisan db:migrate
 
-echo "==> Running migrations (testing database)..."
-uv run python artisan db:migrate --env=testing
-
 echo ""
 echo "==> Done. Dev environment is ready."
 echo "    next: npm run dev"
