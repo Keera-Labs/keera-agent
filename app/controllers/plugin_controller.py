@@ -36,6 +36,25 @@ async def deactivate(slug: str):
     return await _set_active(slug, False)
 
 
+async def uninstall(slug: str):
+    registry = _registry()
+    plugin = registry.get(slug)
+    if plugin is None:
+        return JSONResponse({"error": f"plugin '{slug}' not found"}, status_code=404)
+
+    # An active plugin is deactivated first so it unmounts and gets its normal
+    # teardown hook before uninstall() runs on a fully stopped plugin.
+    if registry.is_active(slug):
+        await plugin.deactivate()
+        registry.deactivate(slug)
+
+    await plugin.uninstall()
+
+    await PluginModel.where("slug", slug).delete()
+
+    return JSONResponse({"data": _present(plugin, False)})
+
+
 async def _set_active(slug: str, active: bool):
     registry = _registry()
     plugin = registry.get(slug)
@@ -54,9 +73,13 @@ async def _set_active(slug: str, active: bool):
     else:
         await row.update({"active": active})
 
+    # Mount/unmount around the plugin's own hook so activate() runs with routes
+    # and tools already live, and deactivate() runs before they are torn down.
     if active:
         registry.activate(slug)
+        await plugin.activate()
     else:
+        await plugin.deactivate()
         registry.deactivate(slug)
 
     return JSONResponse({"data": _present(plugin, active)})

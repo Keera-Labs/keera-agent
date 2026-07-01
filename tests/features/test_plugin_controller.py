@@ -5,7 +5,7 @@ discovery, DB-backed activation state, live route mounting and the MCP
 tools/list reflecting the active plugin — end to end.
 """
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi_startkit.application import app as container
 
@@ -73,3 +73,50 @@ class TestPluginController(TestCase):
     async def test_activate_unknown_plugin_returns_404(self):
         response = await self.post("/api/plugins/ghost/activate")
         response.assert_status(404)
+
+    async def test_toggle_fires_lifecycle_hooks(self):
+        plugin = self._registry().get("jira")
+        with patch.object(type(plugin), "activate", new=AsyncMock()) as on_activate, \
+                patch.object(type(plugin), "deactivate", new=AsyncMock()) as on_deactivate:
+            await self.post("/api/plugins/jira/activate")
+            on_activate.assert_awaited_once()
+            on_deactivate.assert_not_awaited()
+
+            await self.post("/api/plugins/jira/deactivate")
+            on_deactivate.assert_awaited_once()
+
+    async def test_uninstall_fires_hook_deactivates_and_removes_row(self):
+        from app.models.Plugin import Plugin as PluginModel
+
+        await self.post("/api/plugins/jira/activate")
+        plugin = self._registry().get("jira")
+        with patch.object(type(plugin), "uninstall", new=AsyncMock()) as on_uninstall:
+            response = await self.post("/api/plugins/jira/uninstall")
+            response.assert_ok()
+            on_uninstall.assert_awaited_once()
+
+        self.assertFalse(self._registry().is_active("jira"))
+        self.assertNotIn("jira_search", await self._plugin_names_in_tools_list())
+        self.assertIsNone(await PluginModel.where("slug", "jira").first())
+
+    async def test_uninstall_unknown_plugin_returns_404(self):
+        response = await self.post("/api/plugins/ghost/uninstall")
+        response.assert_status(404)
+
+    async def test_boot_sync_does_not_fire_activate_hook(self):
+        from app.models.Plugin import Plugin as PluginModel
+        from app.plugins.loader import sync_active
+
+        registry = self._registry()
+        row = await PluginModel.where("slug", "jira").first()
+        if row is None:
+            row = await PluginModel.create({"slug": "jira", "name": "Jira", "active": True})
+        else:
+            await row.update({"active": True})
+
+        plugin = registry.get("jira")
+        with patch.object(type(plugin), "activate", new=AsyncMock()) as on_activate:
+            await sync_active(registry)
+            on_activate.assert_not_awaited()
+
+        self.assertTrue(registry.is_active("jira"))
