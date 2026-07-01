@@ -107,6 +107,7 @@ router.patch("/api/global-settings", global_settings_controller.update_global_se
 router.get("/api/plugins", plugin_controller.index)
 router.post("/api/plugins/{slug}/activate", plugin_controller.activate)
 router.post("/api/plugins/{slug}/deactivate", plugin_controller.deactivate)
+router.post("/api/plugins/{slug}/uninstall", plugin_controller.uninstall)
 
 # Heartbeat management — before wildcard
 router.get("/api/heartbeat/status", heartbeat_controller.status)

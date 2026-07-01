@@ -29,3 +29,18 @@ class Plugin:
     def tools(self) -> "list[type[Tool]]":
         """MCP tool classes to expose while this plugin is active."""
         return []
+
+    # ── lifecycle hooks ──────────────────────────────────────────────────────
+    # Fired only on user-initiated transitions from plugin_controller, never on
+    # the boot-time restore of already-active plugins. Defaults are no-ops so a
+    # plugin overrides only the hooks it cares about. Route/tool mounting is
+    # handled by the registry — these hooks are for a plugin's own side effects
+    # (seeding data, publishing config, cleaning up on removal).
+    async def activate(self) -> None:
+        """Run once when a user activates this plugin."""
+
+    async def deactivate(self) -> None:
+        """Run once when a user deactivates this plugin."""
+
+    async def uninstall(self) -> None:
+        """Run once when a user removes this plugin; undo what activate() set up."""
