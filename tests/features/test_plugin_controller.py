@@ -85,6 +85,43 @@ class TestPluginController(TestCase):
             await self.post("/api/plugins/jira/deactivate")
             on_deactivate.assert_awaited_once()
 
+    async def test_redundant_toggle_is_noop_and_skips_hooks(self):
+        plugin = self._registry().get("jira")
+
+        await self.post("/api/plugins/jira/activate")
+        with patch.object(type(plugin), "activate", new=AsyncMock()) as on_activate:
+            response = await self.post("/api/plugins/jira/activate")
+            response.assert_ok()
+            self.assertTrue(response.json()["data"]["active"])
+            on_activate.assert_not_awaited()
+        self.assertTrue(self._registry().is_active("jira"))
+
+        await self.post("/api/plugins/jira/deactivate")
+        with patch.object(type(plugin), "deactivate", new=AsyncMock()) as on_deactivate:
+            response = await self.post("/api/plugins/jira/deactivate")
+            response.assert_ok()
+            self.assertFalse(response.json()["data"]["active"])
+            on_deactivate.assert_not_awaited()
+        self.assertFalse(self._registry().is_active("jira"))
+
+    async def test_activate_hook_failure_leaves_plugin_inactive(self):
+        from app.models.Plugin import Plugin as PluginModel
+
+        plugin = self._registry().get("jira")
+
+        async def boom(self):
+            raise RuntimeError("setup failed")
+
+        with patch.object(type(plugin), "activate", new=boom):
+            response = await self.post("/api/plugins/jira/activate")
+
+        response.assert_status(500)
+        self.assertFalse(self._registry().is_active("jira"))
+        self.assertNotIn("jira_search", await self._plugin_names_in_tools_list())
+
+        row = await PluginModel.where("slug", "jira").first()
+        self.assertFalse(bool(row.active) if row is not None else False)
+
     async def test_uninstall_fires_hook_deactivates_and_removes_row(self):
         from app.models.Plugin import Plugin as PluginModel
 

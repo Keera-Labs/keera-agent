@@ -1,10 +1,14 @@
 """Core API for the plugin system: list discovered plugins and toggle them."""
 
+import logging
+
 from fastapi.responses import JSONResponse
 from fastapi_startkit.application import app
 
 from app.models.Plugin import Plugin as PluginModel
 from app.plugins.registry import PluginRegistry
+
+logger = logging.getLogger("keera.plugins")
 
 
 def _registry() -> PluginRegistry:
@@ -62,8 +66,34 @@ async def _set_active(slug: str, active: bool):
         return JSONResponse({"error": f"plugin '{slug}' not found"}, status_code=404)
 
     row = await PluginModel.where("slug", slug).first()
+    currently_active = bool(row.active) if row is not None else False
+
+    # Lifecycle hooks fire only on a real transition. Re-issuing the current
+    # state is a true no-op: no hook, no write.
+    if currently_active == active:
+        return JSONResponse({"data": _present(plugin, active)})
+
+    # Run the plugin's own hook first so a failure cannot leave it half-toggled:
+    # nothing is mounted/unmounted or persisted unless the hook succeeds.
+    try:
+        if active:
+            await plugin.activate()
+        else:
+            await plugin.deactivate()
+    except Exception:
+        action = "activation" if active else "deactivation"
+        logger.exception("Plugin '%s' %s hook failed", slug, action)
+        return JSONResponse(
+            {"error": f"plugin '{slug}' {action} failed"}, status_code=500
+        )
+
+    if active:
+        registry.activate(slug)
+    else:
+        registry.deactivate(slug)
+
     if row is None:
-        row = await PluginModel.create({
+        await PluginModel.create({
             "slug": plugin.slug,
             "name": plugin.name,
             "description": plugin.description,
@@ -72,14 +102,5 @@ async def _set_active(slug: str, active: bool):
         })
     else:
         await row.update({"active": active})
-
-    # Mount/unmount around the plugin's own hook so activate() runs with routes
-    # and tools already live, and deactivate() runs before they are torn down.
-    if active:
-        registry.activate(slug)
-        await plugin.activate()
-    else:
-        await plugin.deactivate()
-        registry.deactivate(slug)
 
     return JSONResponse({"data": _present(plugin, active)})
