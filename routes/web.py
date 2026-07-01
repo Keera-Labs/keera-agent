@@ -21,6 +21,7 @@ from app.controllers import heartbeat_controller
 from app.controllers import global_settings_controller
 from app.controllers import ai_controller
 from app.controllers import broadcasting_controller
+from app.controllers import plugin_controller
 from app.mcp.server import KeeraServer
 
 router = Router()
@@ -101,6 +102,11 @@ router.patch("/api/default-permissions", permission_controller.update_default_pe
 # Global app settings
 router.get("/api/global-settings", global_settings_controller.get_global_settings)
 router.patch("/api/global-settings", global_settings_controller.update_global_settings)
+
+# Plugin system — list discovered plugins and toggle activation (before wildcard)
+router.get("/api/plugins", plugin_controller.index)
+router.post("/api/plugins/{slug}/activate", plugin_controller.activate)
+router.post("/api/plugins/{slug}/deactivate", plugin_controller.deactivate)
 
 # Heartbeat management — before wildcard
 router.get("/api/heartbeat/status", heartbeat_controller.status)

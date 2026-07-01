@@ -17,6 +17,7 @@ from config.fastapi import FastAPIConfig
 from config.storage import StorageConfig
 from config.vite import ViteConfig
 from providers.app_provider import AppProvider
+from providers.plugin_provider import PluginProvider
 from providers.terminal_provider import TerminalProvider
 
 app = Application(
@@ -29,6 +30,7 @@ app = Application(
         AISkillProvider,
         (StorageProvider, StorageConfig),
         AppProvider,
+        PluginProvider,
         TerminalProvider,
         (ViteProvider, ViteConfig),
         InertiaProvider,
