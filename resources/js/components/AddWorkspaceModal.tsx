@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useWorkspace } from '@/layouts/hooks/workspace'
 
-const inputCls = 'bg-canvas border border-stroke rounded-md text-zinc-200 text-[13px] px-2.5 py-1.5 font-mono outline-none w-full'
-const labelSpanCls = 'text-zinc-400 text-[11px] uppercase tracking-[0.05em]'
-const cancelCls = 'bg-transparent border border-stroke rounded-md text-zinc-400 text-xs px-3.5 py-1.5 cursor-pointer disabled:opacity-50'
+const inputCls = 'bg-canvas border border-stroke rounded-md text-zinc-900 placeholder:text-zinc-500 text-[13px] px-2.5 py-1.5 font-mono outline-none w-full'
+const labelSpanCls = 'text-zinc-600 text-[11px] uppercase tracking-[0.05em]'
+const cancelCls = 'bg-transparent border border-stroke rounded-md text-zinc-700 text-xs px-3.5 py-1.5 cursor-pointer disabled:opacity-50'
 const submitCls = 'bg-success-emphasis border border-success-border rounded-md text-white text-xs px-3.5 py-1.5 cursor-pointer disabled:opacity-50'
 
 export default function AddWorkspaceModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
@@ -26,7 +26,7 @@ export default function AddWorkspaceModal({ onClose, onCreated }: { onClose: () 
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
             <div className="bg-modal border border-stroke rounded-lg p-6 w-[340px] flex flex-col gap-3.5">
                 <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
-                    <h2 className="m-0 text-zinc-200 text-[15px] font-semibold">New Workspace</h2>
+                    <h2 className="m-0 text-zinc-900 text-[15px] font-semibold">New Workspace</h2>
                     {error && <span className="text-danger text-xs">{error}</span>}
                     <label className="flex flex-col gap-1">
                         <span className={labelSpanCls}>Name</span>
