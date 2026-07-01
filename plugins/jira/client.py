@@ -75,6 +75,40 @@ class JiraClient:
             response.raise_for_status()
             return response.json()
 
+    async def create_issue(
+        self,
+        project_key: str,
+        summary: str,
+        description: Optional[str] = None,
+        issue_type: str = "Task",
+        assignee: Optional[str] = None,
+        extra_fields: Optional[dict] = None,
+    ) -> dict:
+        fields: dict = {
+            "project": {"key": project_key},
+            "summary": summary,
+            "issuetype": {"name": issue_type},
+        }
+        if description:
+            fields["description"] = _text_to_adf(description)
+        if assignee:
+            fields["assignee"] = {"accountId": assignee}
+        if extra_fields:
+            fields.update(extra_fields)
+        async with self._http() as http:
+            response = await http.post("/rest/api/3/issue", json={"fields": fields})
+            response.raise_for_status()
+            return response.json()
+
+    async def add_comment(self, issue_key: str, body: str) -> dict:
+        async with self._http() as http:
+            response = await http.post(
+                f"/rest/api/3/issue/{issue_key}/comment",
+                json={"body": _text_to_adf(body)},
+            )
+            response.raise_for_status()
+            return response.json()
+
     async def update_issue(self, issue_key: str, fields: dict) -> dict:
         async with self._http() as http:
             response = await http.put(f"/rest/api/3/issue/{issue_key}", json={"fields": fields})

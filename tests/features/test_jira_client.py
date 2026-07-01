@@ -149,6 +149,74 @@ class TestJiraClientRequests(TestCase):
 
         self.assertEqual(seen["body"], {"timeSpent": "15m"})
 
+    async def test_create_issue_posts_fields_wrapper_with_defaults(self):
+        seen = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen["method"] = request.method
+            seen["path"] = request.url.path
+            seen["body"] = json.loads(request.content)
+            return httpx.Response(201, json={"key": "ENG-42"})
+
+        result = await _mock_client(handler).create_issue("ENG", "Fix login")
+
+        self.assertEqual(seen["method"], "POST")
+        self.assertEqual(seen["path"], "/rest/api/3/issue")
+        self.assertEqual(seen["body"], {
+            "fields": {
+                "project": {"key": "ENG"},
+                "summary": "Fix login",
+                "issuetype": {"name": "Task"},
+            },
+        })
+        self.assertEqual(result, {"key": "ENG-42"})
+
+    async def test_create_issue_includes_optional_fields(self):
+        seen = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen["body"] = json.loads(request.content)
+            return httpx.Response(201, json={"key": "ENG-43"})
+
+        await _mock_client(handler).create_issue(
+            "ENG",
+            "Investigate outage",
+            description="Root cause analysis needed",
+            issue_type="Bug",
+            assignee="acct-123",
+            extra_fields={"priority": {"name": "High"}},
+        )
+
+        fields = seen["body"]["fields"]
+        self.assertEqual(fields["issuetype"], {"name": "Bug"})
+        self.assertEqual(fields["assignee"], {"accountId": "acct-123"})
+        self.assertEqual(fields["priority"], {"name": "High"})
+        # Description is ADF-wrapped, not a bare string.
+        self.assertEqual(fields["description"]["type"], "doc")
+        self.assertEqual(
+            fields["description"]["content"][0]["content"][0]["text"],
+            "Root cause analysis needed",
+        )
+
+    async def test_add_comment_posts_adf_body(self):
+        seen = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen["method"] = request.method
+            seen["path"] = request.url.path
+            seen["body"] = json.loads(request.content)
+            return httpx.Response(201, json={"id": "10010"})
+
+        result = await _mock_client(handler).add_comment("ENG-1", "Looking into this")
+
+        self.assertEqual(seen["method"], "POST")
+        self.assertEqual(seen["path"], "/rest/api/3/issue/ENG-1/comment")
+        self.assertEqual(seen["body"]["body"]["type"], "doc")
+        self.assertEqual(
+            seen["body"]["body"]["content"][0]["content"][0]["text"], "Looking into this",
+        )
+        self.assertEqual(result, {"id": "10010"})
+
     async def test_raise_for_status_propagates(self):
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(410, text="Gone")
