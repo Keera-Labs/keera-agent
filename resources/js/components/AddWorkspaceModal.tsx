@@ -4,7 +4,7 @@ import { useWorkspace } from '@/layouts/hooks/workspace'
 const inputCls = 'bg-canvas border border-stroke rounded-md text-zinc-900 placeholder:text-zinc-500 text-[13px] px-2.5 py-1.5 font-mono outline-none w-full'
 const labelSpanCls = 'text-zinc-600 text-[11px] uppercase tracking-[0.05em]'
 const cancelCls = 'bg-transparent border border-stroke rounded-md text-zinc-700 text-xs px-3.5 py-1.5 cursor-pointer disabled:opacity-50'
-const submitCls = 'bg-success-emphasis border border-success-border rounded-md text-white text-xs px-3.5 py-1.5 cursor-pointer disabled:opacity-50'
+const submitCls = 'bg-success border border-success rounded-md text-white text-xs px-3.5 py-1.5 cursor-pointer disabled:opacity-50'
 
 export default function AddWorkspaceModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
     const { create, creating } = useWorkspace()
