@@ -136,6 +136,26 @@ class TestPluginController(TestCase):
         self.assertNotIn("jira_search", await self._plugin_names_in_tools_list())
         self.assertIsNone(await PluginModel.where("slug", "jira").first())
 
+    async def test_uninstall_hook_failure_leaves_plugin_intact(self):
+        from app.models.Plugin import Plugin as PluginModel
+
+        await self.post("/api/plugins/jira/activate")
+        plugin = self._registry().get("jira")
+
+        async def boom(self):
+            raise RuntimeError("teardown failed")
+
+        with patch.object(type(plugin), "uninstall", new=boom):
+            response = await self.post("/api/plugins/jira/uninstall")
+
+        response.assert_status(500)
+        # Routes stay mounted, tools stay advertised, row keeps active=True.
+        self.assertTrue(self._registry().is_active("jira"))
+        self.assertIn("jira_search", await self._plugin_names_in_tools_list())
+        row = await PluginModel.where("slug", "jira").first()
+        self.assertIsNotNone(row)
+        self.assertTrue(row.active)
+
     async def test_uninstall_unknown_plugin_returns_404(self):
         response = await self.post("/api/plugins/ghost/uninstall")
         response.assert_status(404)

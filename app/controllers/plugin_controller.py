@@ -46,14 +46,23 @@ async def uninstall(slug: str):
     if plugin is None:
         return JSONResponse({"error": f"plugin '{slug}' not found"}, status_code=404)
 
-    # An active plugin is deactivated first so it unmounts and gets its normal
-    # teardown hook before uninstall() runs on a fully stopped plugin.
-    if registry.is_active(slug):
-        await plugin.deactivate()
+    # Run the plugin's own hooks first so a failure cannot leave it half
+    # removed: routes stay mounted and the row keeps active=True until both
+    # hooks succeed. An active plugin gets its normal teardown hook before
+    # uninstall() so uninstall() always runs on a stopped plugin.
+    was_active = registry.is_active(slug)
+    try:
+        if was_active:
+            await plugin.deactivate()
+        await plugin.uninstall()
+    except Exception:
+        logger.exception("Plugin '%s' uninstall failed", slug)
+        return JSONResponse(
+            {"error": f"plugin '{slug}' uninstall failed"}, status_code=500
+        )
+
+    if was_active:
         registry.deactivate(slug)
-
-    await plugin.uninstall()
-
     await PluginModel.where("slug", slug).delete()
 
     return JSONResponse({"data": _present(plugin, False)})
