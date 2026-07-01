@@ -105,4 +105,67 @@ class JiraAddWorklogTool(Tool):
         return Response.text(f"Logged {arguments['time_spent']} against {arguments['issue_key']}.")
 
 
-JIRA_TOOLS = [JiraSearchTool, JiraUpdateIssueTool, JiraAddWorklogTool]
+class JiraCreateIssueInput(BaseModel):
+    project_key: str = Field(description="The project key the issue belongs to, e.g. 'ENG'.")
+    summary: str = Field(description="Issue summary / title.")
+    description: Optional[str] = Field(default=None, description="Issue description as plain text.")
+    issue_type: str = Field(default="Task", description="Issue type name, e.g. 'Task', 'Bug', 'Story'.")
+    assignee: Optional[str] = Field(default=None, description="Assignee accountId.")
+    extra_fields: Optional[dict] = Field(default=None, description="Additional issue fields merged into the request.")
+
+
+class JiraCreateIssueTool(Tool):
+    name = "jira_create_issue"
+    description = "Create a new Jira issue and return the created issue as JSON."
+
+    def schema(self):
+        return JiraCreateIssueInput
+
+    async def handle(self, arguments: dict) -> Response:
+        client, message = _client_or_message()
+        if message:
+            return message
+        try:
+            data = await client.create_issue(
+                arguments["project_key"],
+                arguments["summary"],
+                arguments.get("description"),
+                arguments.get("issue_type", "Task"),
+                arguments.get("assignee"),
+                arguments.get("extra_fields"),
+            )
+        except httpx.HTTPStatusError as exc:
+            return _upstream_message(exc)
+        return Response.text(json.dumps(data, indent=2))
+
+
+class JiraAddCommentInput(BaseModel):
+    issue_key: str = Field(description="The issue key, e.g. 'ENG-123'.")
+    body: str = Field(description="Comment text as plain text.")
+
+
+class JiraAddCommentTool(Tool):
+    name = "jira_add_comment"
+    description = "Add a comment to a Jira issue."
+
+    def schema(self):
+        return JiraAddCommentInput
+
+    async def handle(self, arguments: dict) -> Response:
+        client, message = _client_or_message()
+        if message:
+            return message
+        try:
+            await client.add_comment(arguments["issue_key"], arguments["body"])
+        except httpx.HTTPStatusError as exc:
+            return _upstream_message(exc)
+        return Response.text(f"Comment added to {arguments['issue_key']}.")
+
+
+JIRA_TOOLS = [
+    JiraSearchTool,
+    JiraUpdateIssueTool,
+    JiraAddWorklogTool,
+    JiraCreateIssueTool,
+    JiraAddCommentTool,
+]
