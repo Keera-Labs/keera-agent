@@ -13,6 +13,7 @@ class JiraSearchRequest(BaseModel):
     jql: str = Field(min_length=1, description="Jira Query Language expression.")
     max_results: int = Field(default=50, ge=1, le=100)
     fields: Optional[list[str]] = None
+    next_page_token: Optional[str] = Field(default=None, description="Token from a prior page's nextPageToken.")
 
 
 class JiraUpdateRequest(BaseModel):
@@ -44,7 +45,7 @@ async def search(body: JiraSearchRequest):
     if error:
         return error
     try:
-        data = await client.search(body.jql, body.max_results, body.fields)
+        data = await client.search(body.jql, body.max_results, body.fields, body.next_page_token)
     except httpx.HTTPStatusError as exc:
         return _upstream_error(exc)
     return JSONResponse({"data": data})

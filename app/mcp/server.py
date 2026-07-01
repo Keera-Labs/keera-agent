@@ -1,6 +1,7 @@
 """Keera MCP server — KeeraServer and its resources."""
 
 import json
+import logging
 import os
 
 from fastapi_startkit.mcp import Server, Resource
@@ -75,4 +76,5 @@ def _active_plugin_tools() -> list:
         from fastapi_startkit.application import app
         return app().make("plugins").active_tool_classes()
     except Exception:
+        logging.getLogger("keera.plugins").exception("Failed to collect active plugin MCP tools")
         return []

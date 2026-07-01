@@ -5,8 +5,11 @@ discovery, DB-backed activation state, live route mounting and the MCP
 tools/list reflecting the active plugin — end to end.
 """
 
+from unittest.mock import patch
+
 from fastapi_startkit.application import app as container
 
+from plugins.jira.config import JiraConfig
 from tests.test_case import TestCase
 
 
@@ -40,8 +43,10 @@ class TestPluginController(TestCase):
         # MCP tools/list now advertises the Jira tools.
         self.assertIn("jira_search", await self._plugin_names_in_tools_list())
 
-        # The Jira route is mounted; unconfigured credentials yield a clean 400.
-        search = await self.post("/api/plugins/jira/search", json={"jql": "project = ENG"})
+        # The Jira route is mounted; force an unconfigured client so the request
+        # never hits live Jira and deterministically yields a clean 400.
+        with patch("plugins.jira.client.jira_config", return_value=JiraConfig("", "", "")):
+            search = await self.post("/api/plugins/jira/search", json={"jql": "project = ENG"})
         search.assert_status(400)
 
     async def test_deactivate_unmounts_routes_and_tools(self):

@@ -39,6 +39,8 @@ class PluginRegistry:
         return slug in self._active
 
     # ── activation ─────────────────────────────────────────────────────────
+    # activate/deactivate mutate fastapi.router.routes in place at runtime.
+    # This is safe for a single-user desktop app but is not concurrency-guarded.
     def activate(self, slug: str) -> None:
         plugin = self._plugins.get(slug)
         if plugin is None or slug in self._active:

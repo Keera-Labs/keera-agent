@@ -23,25 +23,35 @@ def _text_to_adf(text: str) -> dict:
 
 
 class JiraClient:
-    def __init__(self, base_url: str, email: str, api_token: str, timeout: float = 30.0):
-        if not (base_url and email and api_token):
+    def __init__(
+        self,
+        base_url: str,
+        username: str,
+        api_token: str,
+        timeout: float = 30.0,
+        transport: Optional[httpx.BaseTransport] = None,
+    ):
+        if not (base_url and username and api_token):
             raise JiraConfigError(
-                "Jira is not configured. Set JIRA_BASE_URL, JIRA_EMAIL and JIRA_API_TOKEN."
+                "Jira is not configured. Set JIRA_BASE_URL, JIRA_USERNAME and JIRA_TOKEN."
             )
         self._base_url = base_url.rstrip("/")
-        self._auth = (email, api_token)
+        self._auth = (username, api_token)
         self._timeout = timeout
+        # Optional injected transport — used by tests to mock outbound requests.
+        self._transport = transport
 
     @classmethod
     def from_config(cls, config: Optional[JiraConfig] = None) -> "JiraClient":
         cfg = config or jira_config()
-        return cls(cfg.base_url, cfg.email, cfg.api_token)
+        return cls(cfg.base_url, cfg.username, cfg.api_token)
 
     def _http(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(
             base_url=self._base_url,
             auth=self._auth,
             timeout=self._timeout,
+            transport=self._transport,
             headers={"Accept": "application/json", "Content-Type": "application/json"},
         )
 
@@ -50,12 +60,18 @@ class JiraClient:
         jql: str,
         max_results: int = 50,
         fields: Optional[list[str]] = None,
+        next_page_token: Optional[str] = None,
     ) -> dict:
-        params: dict = {"jql": jql, "maxResults": max_results}
+        # Jira Cloud removed GET /rest/api/3/search in 2025; the enhanced
+        # endpoint is POST /rest/api/3/search/jql with body params and
+        # token-based pagination (nextPageToken, no startAt/total).
+        payload: dict = {"jql": jql, "maxResults": max_results}
         if fields:
-            params["fields"] = ",".join(fields)
+            payload["fields"] = fields
+        if next_page_token:
+            payload["nextPageToken"] = next_page_token
         async with self._http() as http:
-            response = await http.get("/rest/api/3/search", params=params)
+            response = await http.post("/rest/api/3/search/jql", json=payload)
             response.raise_for_status()
             return response.json()
 

@@ -26,6 +26,7 @@ class JiraSearchInput(BaseModel):
     jql: str = Field(description="Jira Query Language expression, e.g. 'project = ENG AND status = \"In Progress\"'.")
     max_results: int = Field(default=50, ge=1, le=100)
     fields: Optional[list[str]] = Field(default=None, description="Issue fields to return. Omit for defaults.")
+    next_page_token: Optional[str] = Field(default=None, description="Token from a prior page's nextPageToken to fetch the next page.")
 
 
 class JiraSearchTool(Tool):
@@ -44,6 +45,7 @@ class JiraSearchTool(Tool):
                 arguments["jql"],
                 arguments.get("max_results", 50),
                 arguments.get("fields"),
+                arguments.get("next_page_token"),
             )
         except httpx.HTTPStatusError as exc:
             return _upstream_message(exc)
