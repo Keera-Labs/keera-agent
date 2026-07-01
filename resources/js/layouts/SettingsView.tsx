@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { color } from '@/tokens'
+import PluginsTab from './views/PluginsTab'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -482,7 +483,7 @@ function DefaultPermissionsTab() {
 
 // ─── Main SettingsView ────────────────────────────────────────────────────────
 
-type SettingsTab = 'templates' | 'permissions'
+type SettingsTab = 'templates' | 'permissions' | 'plugins'
 
 export default function SettingsView() {
     const [tab, setTab] = useState<SettingsTab>('templates')
@@ -507,12 +508,14 @@ export default function SettingsView() {
                 <div style={{ display: 'flex', gap: '4px' }}>
                     <button style={tabBtnStyle('templates')} onClick={() => setTab('templates')}>Templates</button>
                     <button style={tabBtnStyle('permissions')} onClick={() => setTab('permissions')}>Default Permissions</button>
+                    <button style={tabBtnStyle('plugins')} onClick={() => setTab('plugins')}>Plugins</button>
                 </div>
             </div>
 
             {/* Tab content */}
             {tab === 'templates' && <TemplatesTab />}
             {tab === 'permissions' && <DefaultPermissionsTab />}
+            {tab === 'plugins' && <PluginsTab />}
         </div>
     )
 }
