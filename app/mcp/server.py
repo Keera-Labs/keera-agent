@@ -1,6 +1,7 @@
 """Keera MCP server — KeeraServer and its resources."""
 
 import json
+import logging
 import os
 
 from fastapi_startkit.mcp import Server, Resource
@@ -63,7 +64,17 @@ class KeeraServer(Server):
     instructions = "Call tools/list to see available tools. Use list_tasks or the keera://tasks/active resource to see current work."
 
     def tools(self):
-        return KEERA_TOOLS + BROWSER_TOOLS
+        return KEERA_TOOLS + BROWSER_TOOLS + _active_plugin_tools()
 
     def resources(self):
         return [ActiveTasksResource]
+
+
+def _active_plugin_tools() -> list:
+    """MCP tools contributed by currently-active plugins (empty if none)."""
+    try:
+        from fastapi_startkit.application import app
+        return app().make("plugins").active_tool_classes()
+    except Exception:
+        logging.getLogger("keera.plugins").exception("Failed to collect active plugin MCP tools")
+        return []
