@@ -207,7 +207,7 @@ async def store(request: Request):
     # Create a default PM agent for every new project
     import json as _json
     from app.models.Agent import Agent
-    from app.controllers.permission_controller import read_default_permissions
+    from app.services.permissions.permission import read_default_permissions
     from app.utils.system_prompts import default_system_prompt
     _dp = read_default_permissions()
     await Agent.create({

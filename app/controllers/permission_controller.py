@@ -1,44 +1,15 @@
 import json
-import os
 
-from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from app.models.Project import Project
 from app.models.Agent import Agent
-from app.utils.json_utils import atomic_write_json
-
-
-def _parse_json_list(value) -> list:
-    """Parse a JSON string column into a list, returning [] on failure."""
-    if not value:
-        return []
-    try:
-        parsed = json.loads(value)
-        return parsed if isinstance(parsed, list) else []
-    except (json.JSONDecodeError, TypeError):
-        return []
-
-_DEFAULT_PERMS_PATH = os.environ.get("KEERA_DEFAULT_PERMS_PATH") or os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "storage",
-    "default_permissions.json",
+from app.requests.permission_request import PermissionRequest
+from app.resources.permission_resource import PermissionResource, _as_list
+from app.services.permissions.permission import (
+    read_default_permissions,
+    write_default_permissions,
 )
-
-
-def read_default_permissions() -> dict:
-    if os.path.exists(_DEFAULT_PERMS_PATH):
-        try:
-            with open(_DEFAULT_PERMS_PATH) as f:
-                return json.load(f)
-        except (json.JSONDecodeError, OSError):
-            pass
-    return {"allow": [], "deny": []}
-
-
-def write_default_permissions(perms: dict) -> None:
-    os.makedirs(os.path.dirname(_DEFAULT_PERMS_PATH), exist_ok=True)
-    atomic_write_json(_DEFAULT_PERMS_PATH, perms)
 
 
 # ── Default permissions ────────────────────────────────────────────────────────
@@ -63,43 +34,38 @@ async def _apply_to_all_projects(perms: dict) -> int:
     return len(projects)
 
 
-async def get_default_permissions(request: Request):
-    return JSONResponse(read_default_permissions())
+async def get_default_permissions():
+    perms = read_default_permissions()
+    return PermissionResource(perms.get("allow"), perms.get("deny"))
 
 
-async def update_default_permissions(request: Request):
-    body = await request.json()
-    allow = [s for s in (body.get("allow") or []) if isinstance(s, str) and s.strip()]
-    deny  = [s for s in (body.get("deny")  or []) if isinstance(s, str) and s.strip()]
-    perms = {"allow": allow, "deny": deny}
+async def update_default_permissions(body: PermissionRequest):
+    perms = {"allow": body.allow, "deny": body.deny}
     write_default_permissions(perms)
     updated = await _apply_to_all_projects(perms)
-    return JSONResponse({**perms, "applied_to_projects": updated})
+    return PermissionResource(perms["allow"], perms["deny"], applied_to_projects=updated)
 
 
 # ── Agent permissions ──────────────────────────────────────────────────────────
 
-async def get_agent_permissions(request: Request, agent_id: int):
+async def get_agent_permissions(agent_id: int):
     agent = await Agent.find(agent_id)
     if not agent:
         return JSONResponse({"error": "Agent not found"}, status_code=404)
-    allow = _parse_json_list(getattr(agent, "permissions_allow", None))
-    deny  = _parse_json_list(getattr(agent, "permissions_deny", None))
+    allow = _as_list(getattr(agent, "permissions_allow", None))
+    deny  = _as_list(getattr(agent, "permissions_deny", None))
     if not allow and not deny:
         perms = read_default_permissions()
         allow = perms.get("allow", [])
         deny  = perms.get("deny", [])
-    return JSONResponse({"allow": allow, "deny": deny})
+    return PermissionResource(allow, deny)
 
 
-async def update_agent_permissions(request: Request, agent_id: int):
+async def update_agent_permissions(body: PermissionRequest, agent_id: int):
     agent = await Agent.find(agent_id)
     if not agent:
         return JSONResponse({"error": "Agent not found"}, status_code=404)
-    body = await request.json()
-    allow = [s for s in (body.get("allow") or []) if isinstance(s, str) and s.strip()]
-    deny  = [s for s in (body.get("deny")  or []) if isinstance(s, str) and s.strip()]
-    agent.permissions_allow = json.dumps(allow)
-    agent.permissions_deny  = json.dumps(deny)
+    agent.permissions_allow = json.dumps(body.allow)
+    agent.permissions_deny  = json.dumps(body.deny)
     await agent.save()
-    return JSONResponse({"allow": allow, "deny": deny})
+    return PermissionResource(body.allow, body.deny)

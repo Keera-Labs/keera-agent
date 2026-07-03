@@ -14,9 +14,7 @@ from app.controllers import agent_controller
 from app.controllers import agent_relay_controller
 from app.controllers import agent_trigger_controller
 from app.controllers import agent_template_controller
-from app.controllers import poc_controller
 from app.controllers import settings_controller
-from app.controllers import broadcast_poc_controller
 from app.controllers import heartbeat_controller
 from app.controllers import global_settings_controller
 from app.controllers import ai_controller
@@ -120,16 +118,9 @@ router.get("/settings", settings_controller.settings)
 # AI chat route — before wildcard
 router.post('/api/ai/chat', ai_controller.chat)
 
-# Broadcasting POC route — before wildcard
-router.post('/api/broadcast/fire', broadcast_poc_controller.fire)
-
 # Broadcasting page and API — before wildcard
 router.get('/broadcasting', broadcasting_controller.broadcasting_page)
 router.post('/api/broadcasting/ping', broadcasting_controller.ping)
-
-# POC route — before wildcard
-router.get("/poc", poc_controller.poc_page)
-router.router.add_api_websocket_route("/poc/ws", poc_controller.poc_ws)
 
 # Wildcard page routes — must come last
 router.get("/", home_controller.home)
