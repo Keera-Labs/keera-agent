@@ -5,6 +5,7 @@ Adopting an agent's work merges its worktree branch (worktree-agent-{id}) into
 the project's current branch, then removes the worktree directory while keeping
 the branch.
 """
+
 import os
 import subprocess
 import tempfile
@@ -27,7 +28,12 @@ def _git(cwd, *args):
         "GIT_COMMITTER_EMAIL": "test@example.com",
     }
     return subprocess.run(
-        ["git", *args], cwd=cwd, env=env, capture_output=True, text=True, check=True,
+        ["git", *args],
+        cwd=cwd,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
     )
 
 
@@ -44,7 +50,8 @@ class TestAdoptWork(TestCase, DatabaseTransaction):
 
         self.project = await ProjectFactory.new().create(path=self._tmpdir)
         self.agent = await AgentFactory.new().create(
-            project_id=self.project.id, name="AdoptBot",
+            project_id=self.project.id,
+            name="AdoptBot",
         )
 
     def _make_worktree_with_commit(self, filename="feature.txt"):
@@ -91,7 +98,9 @@ class TestAdoptWork(TestCase, DatabaseTransaction):
         # The branch is kept.
         branch_list = subprocess.run(
             ["git", "branch", "--list", branch],
-            cwd=self._tmpdir, capture_output=True, text=True,
+            cwd=self._tmpdir,
+            capture_output=True,
+            text=True,
         )
         self.assertIn(branch, branch_list.stdout)
 
@@ -112,9 +121,15 @@ class TestAdoptWork(TestCase, DatabaseTransaction):
         self.assertFalse(os.path.exists(os.path.join(self._tmpdir, ".git", "MERGE_HEAD")))
         status = subprocess.run(
             ["git", "status", "--porcelain"],
-            cwd=self._tmpdir, capture_output=True, text=True,
+            cwd=self._tmpdir,
+            capture_output=True,
+            text=True,
         )
-        unmerged = [ln for ln in status.stdout.splitlines() if ln[:2].strip() in {"U", "AA", "DD", "UU", "AU", "UA", "DU", "UD"}]
+        unmerged = [
+            ln
+            for ln in status.stdout.splitlines()
+            if ln[:2].strip() in {"U", "AA", "DD", "UU", "AU", "UA", "DU", "UD"}
+        ]
         self.assertEqual(unmerged, [])
 
     async def test_adopt_work_preserves_dirty_agent_worktree(self):
@@ -153,7 +168,9 @@ class TestAdoptWork(TestCase, DatabaseTransaction):
 
         response = await self.post(f"/api/agents/{self.agent.id}/adopt-work")
         response.assert_status(409).assert_json(
-            lambda j: j.where("error", lambda v: "uncommitted" in v.lower() or "stash" in v.lower()).etc()
+            lambda j: j.where(
+                "error", lambda v: "uncommitted" in v.lower() or "stash" in v.lower()
+            ).etc()
         )
 
         # No merge was ever started, so nothing was aborted and the local edit survives.

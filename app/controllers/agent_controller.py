@@ -238,8 +238,9 @@ async def adopt_work(agent_id: int):
     referenceable.
     """
     import subprocess
-    from app.models.Project import Project
+
     from app.controllers.agent_trigger_controller import discover_worktree_path
+    from app.models.Project import Project
 
     agent = await Agent.find(agent_id)
     if not agent:
@@ -265,7 +266,8 @@ async def adopt_work(agent_id: int):
     # merge so nothing is changed and no data is lost — the worktree is kept.
     wt_status = subprocess.run(
         ["git", "-C", worktree_path, "status", "--porcelain"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if wt_status.stdout.strip():
         return JSONResponse(
@@ -284,7 +286,9 @@ async def adopt_work(agent_id: int):
     # is fine since merge never touches the worktree's own working copy.
     merge = subprocess.run(
         ["git", "merge", "--no-edit", branch_name],
-        capture_output=True, text=True, cwd=cwd,
+        capture_output=True,
+        text=True,
+        cwd=cwd,
     )
     if merge.returncode != 0:
         detail = (merge.stderr or merge.stdout).strip()
@@ -293,10 +297,14 @@ async def adopt_work(agent_id: int):
         # tree is dirty and the merge would overwrite local changes — leaves no
         # merge in progress, so there is nothing to abort. Distinguish the two so
         # the caller gets an actionable message; both are safe (no partial state).
-        merge_in_progress = subprocess.run(
-            ["git", "rev-parse", "-q", "--verify", "MERGE_HEAD"],
-            capture_output=True, cwd=cwd,
-        ).returncode == 0
+        merge_in_progress = (
+            subprocess.run(
+                ["git", "rev-parse", "-q", "--verify", "MERGE_HEAD"],
+                capture_output=True,
+                cwd=cwd,
+            ).returncode
+            == 0
+        )
         if merge_in_progress:
             subprocess.run(["git", "merge", "--abort"], capture_output=True, cwd=cwd)
             error = "Merge conflict — resolve conflicts manually before adopting"
@@ -313,7 +321,9 @@ async def adopt_work(agent_id: int):
     # the worktree turned dirty in the meantime.
     remove = subprocess.run(
         ["git", "worktree", "remove", worktree_path],
-        capture_output=True, text=True, cwd=cwd,
+        capture_output=True,
+        text=True,
+        cwd=cwd,
     )
     if remove.returncode != 0:
         return JSONResponse(
@@ -325,11 +335,13 @@ async def adopt_work(agent_id: int):
             status_code=500,
         )
 
-    return JSONResponse({
-        "ok": True,
-        "branch": branch_name,
-        "worktree": worktree_path,
-    })
+    return JSONResponse(
+        {
+            "ok": True,
+            "branch": branch_name,
+            "worktree": worktree_path,
+        }
+    )
 
 
 async def output(request: Request, agent_id: int):
