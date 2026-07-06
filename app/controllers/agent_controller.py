@@ -266,15 +266,25 @@ async def adopt_work(agent_id: int):
         capture_output=True, text=True, cwd=cwd,
     )
     if merge.returncode != 0:
-        # Leave the main repo clean instead of stranding it mid-conflict.
-        subprocess.run(["git", "merge", "--abort"], capture_output=True, cwd=cwd)
-        return JSONResponse(
-            {
-                "error": "Merge failed — resolve conflicts manually",
-                "detail": (merge.stderr or merge.stdout).strip(),
-            },
-            status_code=409,
-        )
+        detail = (merge.stderr or merge.stdout).strip()
+        # A real content conflict starts a merge (MERGE_HEAD exists) that must be
+        # aborted to unwind it. A refusal to even start — the main repo's working
+        # tree is dirty and the merge would overwrite local changes — leaves no
+        # merge in progress, so there is nothing to abort. Distinguish the two so
+        # the caller gets an actionable message; both are safe (no partial state).
+        merge_in_progress = subprocess.run(
+            ["git", "rev-parse", "-q", "--verify", "MERGE_HEAD"],
+            capture_output=True, cwd=cwd,
+        ).returncode == 0
+        if merge_in_progress:
+            subprocess.run(["git", "merge", "--abort"], capture_output=True, cwd=cwd)
+            error = "Merge conflict — resolve conflicts manually before adopting"
+        else:
+            error = (
+                "Cannot merge: the project has uncommitted local changes that "
+                "would be overwritten. Commit or stash them, then retry."
+            )
+        return JSONResponse({"error": error, "detail": detail}, status_code=409)
 
     # Remove the worktree directory but keep the branch (no `git branch -D`).
     remove = subprocess.run(

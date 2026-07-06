@@ -103,7 +103,9 @@ class TestAdoptWork(TestCase, DatabaseTransaction):
         _git(self._tmpdir, "commit", "-am", "diverge main")
 
         response = await self.post(f"/api/agents/{self.agent.id}/adopt-work")
-        response.assert_status(409)
+        response.assert_status(409).assert_json(
+            lambda j: j.where("error", lambda v: "conflict" in v.lower()).etc()
+        )
 
         # The failed merge was aborted — no merge is left in progress and no
         # tracked file is stuck in a conflicted (unmerged) state.
@@ -114,3 +116,21 @@ class TestAdoptWork(TestCase, DatabaseTransaction):
         )
         unmerged = [ln for ln in status.stdout.splitlines() if ln[:2].strip() in {"U", "AA", "DD", "UU", "AU", "UA", "DU", "UD"}]
         self.assertEqual(unmerged, [])
+
+    async def test_adopt_work_returns_409_dirty_working_tree(self):
+        """A dirty main working tree that would be overwritten yields a distinct
+        dirty-tree message (not a conflict message), with no merge in progress."""
+        self._make_worktree_with_commit(filename="README.md")
+        # Uncommitted local change to a file the merge would touch.
+        with open(os.path.join(self._tmpdir, "README.md"), "w") as f:
+            f.write("uncommitted local edit\n")
+
+        response = await self.post(f"/api/agents/{self.agent.id}/adopt-work")
+        response.assert_status(409).assert_json(
+            lambda j: j.where("error", lambda v: "uncommitted" in v.lower() or "stash" in v.lower()).etc()
+        )
+
+        # No merge was ever started, so nothing was aborted and the local edit survives.
+        self.assertFalse(os.path.exists(os.path.join(self._tmpdir, ".git", "MERGE_HEAD")))
+        with open(os.path.join(self._tmpdir, "README.md")) as f:
+            self.assertEqual(f.read(), "uncommitted local edit\n")
