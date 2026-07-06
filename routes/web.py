@@ -9,14 +9,13 @@ from app.controllers import workspace_controller
 from app.controllers import claude_hook_controller
 from app.controllers import command_controller
 from app.controllers import agent_message_controller
-from app.controllers import permission_controller
+from app.controllers import agent_permission_controller
+from app.controllers import default_permission_controller
 from app.controllers import agent_controller
 from app.controllers import agent_relay_controller
 from app.controllers import agent_trigger_controller
 from app.controllers import agent_template_controller
-from app.controllers import poc_controller
 from app.controllers import settings_controller
-from app.controllers import broadcast_poc_controller
 from app.controllers import heartbeat_controller
 from app.controllers import global_settings_controller
 from app.controllers import ai_controller
@@ -94,10 +93,10 @@ router.get("/api/agents/{agent_id}/relay-messages", agent_relay_controller.get_m
 # Backend-triggered agent start
 router.post("/api/agents/{agent_id}/trigger", agent_trigger_controller.trigger)
 
-router.get("/api/agents/{agent_id}/permissions", permission_controller.get_agent_permissions)
-router.patch("/api/agents/{agent_id}/permissions", permission_controller.update_agent_permissions)
-router.get("/api/default-permissions", permission_controller.get_default_permissions)
-router.patch("/api/default-permissions", permission_controller.update_default_permissions)
+router.get("/api/agents/{agent_id}/permissions", agent_permission_controller.show)
+router.patch("/api/agents/{agent_id}/permissions", agent_permission_controller.update)
+router.get("/api/default-permissions", default_permission_controller.show)
+router.patch("/api/default-permissions", default_permission_controller.update)
 
 # Global app settings
 router.get("/api/global-settings", global_settings_controller.get_global_settings)
@@ -120,16 +119,9 @@ router.get("/settings", settings_controller.settings)
 # AI chat route — before wildcard
 router.post('/api/ai/chat', ai_controller.chat)
 
-# Broadcasting POC route — before wildcard
-router.post('/api/broadcast/fire', broadcast_poc_controller.fire)
-
 # Broadcasting page and API — before wildcard
 router.get('/broadcasting', broadcasting_controller.broadcasting_page)
 router.post('/api/broadcasting/ping', broadcasting_controller.ping)
-
-# POC route — before wildcard
-router.get("/poc", poc_controller.poc_page)
-router.router.add_api_websocket_route("/poc/ws", poc_controller.poc_ws)
 
 # Wildcard page routes — must come last
 router.get("/", home_controller.home)

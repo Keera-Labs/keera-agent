@@ -14,7 +14,7 @@ from app.resources.agent_resource import AgentResource
 
 def _default_permissions() -> tuple[str, str]:
     """Return (permissions_allow_json, permissions_deny_json) from storage/default_permissions.json."""
-    from app.controllers.permission_controller import read_default_permissions
+    from app.services.permissions.permission import read_default_permissions
     perms = read_default_permissions()
     return _json.dumps(perms.get("allow", [])), _json.dumps(perms.get("deny", []))
 

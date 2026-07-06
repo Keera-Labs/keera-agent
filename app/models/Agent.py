@@ -9,6 +9,8 @@ class Agent(Model):
     __table__ = "agents"
     id: int
     flags: dict
+    permissions_allow: list
+    permissions_deny: list
     dangerously_skip_permissions: bool
     plan_mode: bool
 
@@ -57,18 +59,9 @@ class Agent(Model):
         # it. Plan mode wins and enforces permissions, so the lists still apply
         # there even though the (independent) skip column may default to True.
         if self.plan_mode or not self.dangerously_skip_permissions:
-            try:
-                allow = json.loads(self.permissions_allow) if getattr(self, 'permissions_allow', None) else []
-                if allow:
-                    cmd.allowed_tools(allow)
-            except (json.JSONDecodeError, TypeError):
-                pass
-
-            try:
-                deny = json.loads(self.permissions_deny) if getattr(self, 'permissions_deny', None) else []
-                if deny:
-                    cmd.disallowed_tools(deny)
-            except (json.JSONDecodeError, TypeError):
-                pass
+            if self.permissions_allow:
+                cmd.allowed_tools(self.permissions_allow)
+            if self.permissions_deny:
+                cmd.disallowed_tools(self.permissions_deny)
 
         return cmd.to_command()
