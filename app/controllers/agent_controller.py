@@ -258,6 +258,26 @@ async def adopt_work(agent_id: int):
             status_code=404,
         )
 
+    # Pre-flight: refuse if the agent worktree has uncommitted or untracked
+    # changes. Only committed work is on the branch we merge, so removing the
+    # worktree would silently discard anything not committed. Bail before the
+    # merge so nothing is changed and no data is lost — the worktree is kept.
+    wt_status = subprocess.run(
+        ["git", "-C", worktree_path, "status", "--porcelain"],
+        capture_output=True, text=True,
+    )
+    if wt_status.stdout.strip():
+        return JSONResponse(
+            {
+                "error": (
+                    "The agent worktree has uncommitted changes that would be "
+                    "lost. Commit or discard them in the worktree, then retry."
+                ),
+                "detail": wt_status.stdout.strip(),
+            },
+            status_code=409,
+        )
+
     # Merge the agent branch into the current branch of the main repo. A branch
     # checked out in a worktree cannot be checked out here, but merging its ref
     # is fine since merge never touches the worktree's own working copy.
@@ -287,8 +307,11 @@ async def adopt_work(agent_id: int):
         return JSONResponse({"error": error, "detail": detail}, status_code=409)
 
     # Remove the worktree directory but keep the branch (no `git branch -D`).
+    # No --force: the pre-flight check confirmed the worktree is clean, so a
+    # plain remove succeeds and git still guards against destroying changes if
+    # the worktree turned dirty in the meantime.
     remove = subprocess.run(
-        ["git", "worktree", "remove", "--force", worktree_path],
+        ["git", "worktree", "remove", worktree_path],
         capture_output=True, text=True, cwd=cwd,
     )
     if remove.returncode != 0:

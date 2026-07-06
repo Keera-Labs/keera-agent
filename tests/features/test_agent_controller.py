@@ -117,6 +117,32 @@ class TestAdoptWork(TestCase, DatabaseTransaction):
         unmerged = [ln for ln in status.stdout.splitlines() if ln[:2].strip() in {"U", "AA", "DD", "UU", "AU", "UA", "DU", "UD"}]
         self.assertEqual(unmerged, [])
 
+    async def test_adopt_work_preserves_dirty_agent_worktree(self):
+        """QA Req5 regression: an agent worktree with uncommitted/untracked
+        changes must NOT be destroyed. adopt_work bails with 409 before merging,
+        keeps the worktree, and leaves both the branch commit unmerged and the
+        uncommitted work intact."""
+        branch, wt_path = self._make_worktree_with_commit()
+        # Uncommitted tracked edit + a brand-new untracked file in the worktree.
+        with open(os.path.join(wt_path, "feature.txt"), "a") as f:
+            f.write("uncommitted edit\n")
+        with open(os.path.join(wt_path, "scratch.txt"), "w") as f:
+            f.write("untracked work\n")
+
+        response = await self.post(f"/api/agents/{self.agent.id}/adopt-work")
+        response.assert_status(409).assert_json(
+            lambda j: j.where("error", lambda v: "worktree" in v.lower()).etc()
+        )
+
+        # Worktree still exists with both uncommitted items intact.
+        self.assertTrue(os.path.isdir(wt_path))
+        with open(os.path.join(wt_path, "feature.txt")) as f:
+            self.assertIn("uncommitted edit", f.read())
+        self.assertTrue(os.path.exists(os.path.join(wt_path, "scratch.txt")))
+        # Nothing was merged into main — the branch commit did not land.
+        self.assertFalse(os.path.exists(os.path.join(self._tmpdir, "feature.txt")))
+        self.assertFalse(os.path.exists(os.path.join(self._tmpdir, ".git", "MERGE_HEAD")))
+
     async def test_adopt_work_returns_409_dirty_working_tree(self):
         """A dirty main working tree that would be overwritten yields a distinct
         dirty-tree message (not a conflict message), with no merge in progress."""
