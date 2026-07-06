@@ -9,7 +9,8 @@ from app.controllers import workspace_controller
 from app.controllers import claude_hook_controller
 from app.controllers import command_controller
 from app.controllers import agent_message_controller
-from app.controllers import permission_controller
+from app.controllers import agent_permission_controller
+from app.controllers import default_permission_controller
 from app.controllers import agent_controller
 from app.controllers import agent_relay_controller
 from app.controllers import agent_trigger_controller
@@ -92,10 +93,10 @@ router.get("/api/agents/{agent_id}/relay-messages", agent_relay_controller.get_m
 # Backend-triggered agent start
 router.post("/api/agents/{agent_id}/trigger", agent_trigger_controller.trigger)
 
-router.get("/api/agents/{agent_id}/permissions", permission_controller.get_agent_permissions)
-router.patch("/api/agents/{agent_id}/permissions", permission_controller.update_agent_permissions)
-router.get("/api/default-permissions", permission_controller.get_default_permissions)
-router.patch("/api/default-permissions", permission_controller.update_default_permissions)
+router.get("/api/agents/{agent_id}/permissions", agent_permission_controller.show)
+router.patch("/api/agents/{agent_id}/permissions", agent_permission_controller.update)
+router.get("/api/default-permissions", default_permission_controller.show)
+router.patch("/api/default-permissions", default_permission_controller.update)
 
 # Global app settings
 router.get("/api/global-settings", global_settings_controller.get_global_settings)
