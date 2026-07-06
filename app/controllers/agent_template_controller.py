@@ -15,8 +15,12 @@ def _serialize(t: AgentTemplate) -> dict:
         "agent_type": t.agent_type,
         "system_prompt": t.system_prompt,
         "model": t.model,
-        "permissions_allow": _json.loads(t.permissions_allow) if getattr(t, "permissions_allow", None) else [],
-        "permissions_deny": _json.loads(t.permissions_deny) if getattr(t, "permissions_deny", None) else [],
+        "permissions_allow": _json.loads(t.permissions_allow)
+        if getattr(t, "permissions_allow", None)
+        else [],
+        "permissions_deny": _json.loads(t.permissions_deny)
+        if getattr(t, "permissions_deny", None)
+        else [],
         "flags": _json.loads(t.flags) if getattr(t, "flags", None) else {},
         "dangerously_skip_permissions": bool(getattr(t, "dangerously_skip_permissions", True)),
         "plan_mode": bool(getattr(t, "plan_mode", False)),
@@ -30,9 +34,16 @@ def _serialize(t: AgentTemplate) -> dict:
 
 # Columns copied verbatim when forking a global template into a project override.
 _COPYABLE_COLUMNS = (
-    "name", "description", "agent_type", "system_prompt", "model",
-    "flags", "permissions_allow", "permissions_deny",
-    "dangerously_skip_permissions", "plan_mode",
+    "name",
+    "description",
+    "agent_type",
+    "system_prompt",
+    "model",
+    "flags",
+    "permissions_allow",
+    "permissions_deny",
+    "dangerously_skip_permissions",
+    "plan_mode",
 )
 
 
@@ -78,11 +89,11 @@ def _new_template_fields(body: dict) -> dict:
 
 # ── GLOBAL templates (project_id NULL) ────────────────────────────────────────
 
+
 async def index(request: Request):
     """List GLOBAL templates — built-ins first, then user-created alphabetically."""
     templates = await (
-        AgentTemplate
-        .where_null("project_id")
+        AgentTemplate.where_null("project_id")
         .order_by("is_builtin", "desc")
         .order_by("name", "asc")
         .get()
@@ -96,12 +107,14 @@ async def store(request: Request):
     if not (body.get("name") or "").strip():
         return JSONResponse({"error": "name is required"}, status_code=422)
 
-    template = await AgentTemplate.create({
-        **_new_template_fields(body),
-        "is_builtin": False,
-        "project_id": None,
-        "source_template_id": None,
-    })
+    template = await AgentTemplate.create(
+        {
+            **_new_template_fields(body),
+            "is_builtin": False,
+            "project_id": None,
+            "source_template_id": None,
+        }
+    )
     return JSONResponse(_serialize(template), status_code=201)
 
 
@@ -138,6 +151,7 @@ async def sync_defaults(request: Request):
 
 # ── PROJECT-scoped templates (effective list + copy-on-write) ─────────────────
 
+
 async def _effective_for_project(project_id: int) -> list[AgentTemplate]:
     """Resolve the effective template list for a project: a project override
     where one shadows a global, otherwise the global, plus any templates created
@@ -152,7 +166,9 @@ async def _effective_for_project(project_id: int) -> list[AgentTemplate]:
     effective = [override_by_source.get(g.id, g) for g in globals_]
     effective.extend(o for o in overrides if o.source_template_id is None)
 
-    effective.sort(key=lambda t: (0 if getattr(t, "is_builtin", False) else 1, (t.name or "").lower()))
+    effective.sort(
+        key=lambda t: (0 if getattr(t, "is_builtin", False) else 1, (t.name or "").lower())
+    )
     return effective
 
 
@@ -168,12 +184,14 @@ async def project_store(request: Request, project_id: int):
     if not (body.get("name") or "").strip():
         return JSONResponse({"error": "name is required"}, status_code=422)
 
-    template = await AgentTemplate.create({
-        **_new_template_fields(body),
-        "is_builtin": False,
-        "project_id": project_id,
-        "source_template_id": None,
-    })
+    template = await AgentTemplate.create(
+        {
+            **_new_template_fields(body),
+            "is_builtin": False,
+            "project_id": project_id,
+            "source_template_id": None,
+        }
+    )
     return JSONResponse(_serialize(template), status_code=201)
 
 
@@ -202,8 +220,7 @@ async def project_update(request: Request, project_id: int, template_id: int):
 
     # It's a global → fork (or update an existing fork of it).
     existing = await (
-        AgentTemplate
-        .where("project_id", project_id)
+        AgentTemplate.where("project_id", project_id)
         .where("source_template_id", template.id)
         .first()
     )

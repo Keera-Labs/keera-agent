@@ -15,7 +15,7 @@ from fastapi_startkit.environment import env
 from app.utils.json_utils import atomic_write_json
 
 # URL path fragments that identify keera-managed hooks
-_STOP_PATH  = "/api/claude-stopped"
+_STOP_PATH = "/api/claude-stopped"
 _START_PATH = "/api/claude-started"
 
 
@@ -53,14 +53,14 @@ def ensure_claude_settings(directory: str, base_url: str, project_path: str | No
         except (json.JSONDecodeError, OSError):
             settings = {}
 
-    stop_url  = f"{base_url}{_STOP_PATH}"
+    stop_url = f"{base_url}{_STOP_PATH}"
     start_url = f"{base_url}{_START_PATH}"
-    mcp_url   = f"{base_url}/mcp"
+    mcp_url = f"{base_url}/mcp"
 
     hooks: dict = settings.setdefault("hooks", {})
     changed = False
 
-    changed |= _upsert_hook(hooks.setdefault("Stop", []),              _STOP_PATH,  stop_url)
+    changed |= _upsert_hook(hooks.setdefault("Stop", []), _STOP_PATH, stop_url)
     changed |= _upsert_hook(hooks.setdefault("UserPromptSubmit", []), _START_PATH, start_url)
 
     # Register MCP server with X-Project-Path header so the server knows

@@ -6,6 +6,7 @@ so it gates the (potentially init-ing) git check to run at most once. These
 tests drive the real `_ensure_repo_once` helper that `terminal_ws` calls on
 launch, rather than re-implementing its branch inline.
 """
+
 import subprocess
 import tempfile
 from unittest.mock import patch
@@ -80,7 +81,8 @@ class TestEnsureRepoOnce(TestCase, DatabaseTransaction):
             project = await ProjectFactory.new().create(path=tmp)
 
             with patch.object(
-                terminal_controller, "_ensure_git_repo",
+                terminal_controller,
+                "_ensure_git_repo",
                 side_effect=RuntimeError("git init failed"),
             ):
                 with self.assertRaises(RuntimeError):

@@ -2,10 +2,10 @@ from fastapi import Request
 from fastapi.responses import RedirectResponse
 from fastapi_startkit.inertia.inertia import Inertia
 
-from app.models.Project import Project
-from app.models.Agent import Agent
-from app.models.Workspace import Workspace
 from app.controllers.global_settings_controller import read_global_settings
+from app.models.Agent import Agent
+from app.models.Project import Project
+from app.models.Workspace import Workspace
 
 
 async def _shared_props(**extra) -> dict:
@@ -15,22 +15,24 @@ async def _shared_props(**extra) -> dict:
     workspaces = []
     for w in workspaces_raw:
         projects_in_ws = await Project.where("workspace_id", w.id).get()
-        workspaces.append({
-            "id": w.id,
-            "name": w.name,
-            "description": w.description,
-            "projects": [
-                {
-                    "id": p.id,
-                    "name": p.name,
-                    "slug": p.slug,
-                    "path": p.path,
-                    "language": p.language,
-                    "workspace_id": p.workspace_id,
-                }
-                for p in projects_in_ws
-            ],
-        })
+        workspaces.append(
+            {
+                "id": w.id,
+                "name": w.name,
+                "description": w.description,
+                "projects": [
+                    {
+                        "id": p.id,
+                        "name": p.name,
+                        "slug": p.slug,
+                        "path": p.path,
+                        "language": p.language,
+                        "workspace_id": p.workspace_id,
+                    }
+                    for p in projects_in_ws
+                ],
+            }
+        )
 
     # Build flat projects list (same shape as project_controller.index)
     all_projects = await Project.all()

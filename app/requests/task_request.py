@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class TaskStoreRequest(BaseModel):
     """Input model for creating a task."""
+
     model_config = ConfigDict(str_strip_whitespace=True)
 
     title: str = Field(min_length=1)
@@ -18,6 +19,7 @@ class TaskStoreRequest(BaseModel):
 
 class TaskUpdateRequest(BaseModel):
     """Partial update model — only the fields supplied by the client are applied."""
+
     model_config = ConfigDict(str_strip_whitespace=True)
 
     title: Optional[str] = None

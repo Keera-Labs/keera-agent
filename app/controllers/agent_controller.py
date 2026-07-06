@@ -14,7 +14,8 @@ from app.resources.agent_resource import AgentResource
 
 def _default_permissions() -> tuple[str, str]:
     """Return (permissions_allow_json, permissions_deny_json) from storage/default_permissions.json."""
-    from app.controllers.permission_controller import read_default_permissions
+    from app.services.permissions.permission import read_default_permissions
+
     perms = read_default_permissions()
     return _json.dumps(perms.get("allow", [])), _json.dumps(perms.get("deny", []))
 
@@ -23,12 +24,7 @@ async def index(request: Request, project_id: int):
     from app.actions.agent_create_action import AgentCreateAction
     from app.models.Project import Project
 
-    agents = (
-        await Agent
-        .where("project_id", project_id)
-        .where_null("deleted_at")
-        .exists()
-    )
+    agents = await Agent.where("project_id", project_id).where_null("deleted_at").exists()
 
     if not agents:
         agent = await AgentCreateAction(
@@ -43,12 +39,7 @@ async def index(request: Request, project_id: int):
 
         await Project.where("id", project_id).update({"default_agent_id": agent.id})
 
-    agents = (
-        await Agent
-        .where("project_id", project_id)
-        .where_null("deleted_at")
-        .get()
-    )
+    agents = await Agent.where("project_id", project_id).where_null("deleted_at").get()
 
     return AgentResource.collection(agents)
 
@@ -95,11 +86,12 @@ async def update(body: AgentUpdateRequest, agent_id: int):
 
 
 async def destroy(request: Request, agent_id: int):
-    from app.models.Project import Project
     from fastapi_startkit.application import app
+
+    from app.controllers.agent_trigger_controller import _cleanup_stale_worktree
+    from app.models.Project import Project
     from app.terminal.connection_manager import ConnectionManager
     from app.terminal.manager import TerminalManager
-    from app.controllers.agent_trigger_controller import _cleanup_stale_worktree
 
     agent = await Agent.find_or_fail(agent_id)
 
@@ -107,8 +99,8 @@ async def destroy(request: Request, agent_id: int):
     session_id = agent.session_id
     if session_id:
         try:
-            conn_manager: ConnectionManager = app().make('connections')
-            terminal_manager: TerminalManager = app().make('terminal')
+            conn_manager: ConnectionManager = app().make("connections")
+            terminal_manager: TerminalManager = app().make("terminal")
 
             bridge = conn_manager.get(session_id)
             if bridge:
@@ -130,7 +122,12 @@ async def destroy(request: Request, agent_id: int):
     # If this was the default, pick the next available (non-deleted) agent
     project = await Project.find(project_id)
     if project and getattr(project, "default_agent_id", None) == agent_id:
-        remaining = await Agent.where("project_id", project_id).where_null("deleted_at").order_by("id", "asc").get()
+        remaining = (
+            await Agent.where("project_id", project_id)
+            .where_null("deleted_at")
+            .order_by("id", "asc")
+            .get()
+        )
         new_default = remaining[0].id if remaining else None
         await _set_project_default(project_id, new_default)
 
@@ -147,6 +144,7 @@ async def destroy(request: Request, agent_id: int):
 
 async def _set_project_default(project_id: int, agent_id: int | None) -> None:
     from app.models.Project import Project
+
     project = await Project.find(project_id)
     if project:
         project.default_agent_id = agent_id
@@ -188,6 +186,8 @@ async def set_default(request: Request, project_id: int):
 
 async def spawn(request: Request, project_id: int):
     """Create a new agent, notify the frontend sidebar, and optionally start it."""
+    from fastapi_startkit.application import app
+
     from app.actions.agent_create_action import AgentCreateAction
     from app.models.Project import Project
     from app.terminal.connection_manager import ConnectionManager
@@ -210,7 +210,7 @@ async def spawn(request: Request, project_id: int):
     if project:
         cwd = os.path.expanduser(project.path)
         payload = _json.dumps({"type": "agent_created", "agent": AgentResource(agent).serialize()})
-        conn_manager: ConnectionManager = app().make('connections')
+        conn_manager: ConnectionManager = app().make("connections")
         for bridge in conn_manager.all_for_cwd(cwd):
             try:
                 await bridge.write(payload)
@@ -220,6 +220,7 @@ async def spawn(request: Request, project_id: int):
         # Trigger the agent headlessly if an initial message was provided
         if message:
             from app.controllers.agent_trigger_controller import _spawn_headless_agent
+
             conn_key = f"{cwd}:agent:{agent.id}"
             asyncio.create_task(_spawn_headless_agent(agent, project, cwd, conn_key, message))
 
@@ -333,9 +334,9 @@ async def adopt_work(agent_id: int):
 
 async def output(request: Request, agent_id: int):
     """Return the recent terminal output lines for a given agent."""
-    from app.models.TerminalSession import TerminalSession
-    from app.models.TerminalOutput import TerminalOutput
     from app.models.Project import Project
+    from app.models.TerminalOutput import TerminalOutput
+    from app.models.TerminalSession import TerminalSession
 
     agent = await Agent.find(agent_id)
     if not agent:
@@ -345,18 +346,29 @@ async def output(request: Request, agent_id: int):
     if not project:
         return JSONResponse({"lines": [], "status": "idle"})
 
-    agent_path = os.path.join(os.path.expanduser(project.path), '.keera-agents', f'agent_{agent_id}')
+    agent_path = os.path.join(
+        os.path.expanduser(project.path), ".keera-agents", f"agent_{agent_id}"
+    )
 
-    sessions = await TerminalSession.where('project_path', agent_path).order_by('id', 'desc').limit(1).get()
+    sessions = (
+        await TerminalSession.where("project_path", agent_path)
+        .order_by("id", "desc")
+        .limit(1)
+        .get()
+    )
     if not sessions:
-        return JSONResponse({"lines": [], "status": getattr(agent, 'status', 'idle')})
+        return JSONResponse({"lines": [], "status": getattr(agent, "status", "idle")})
 
     session = sessions[0]
-    rows = await TerminalOutput.where('session_id', session.id).order_by('id', 'desc').limit(200).get()
+    rows = (
+        await TerminalOutput.where("session_id", session.id).order_by("id", "desc").limit(200).get()
+    )
     lines = [{"id": r.id, "data": r.data, "created_at": str(r.created_at)} for r in reversed(rows)]
 
-    return JSONResponse({
-        "lines": lines,
-        "status": getattr(agent, 'status', 'idle'),
-        "session_id": session.id,
-    })
+    return JSONResponse(
+        {
+            "lines": lines,
+            "status": getattr(agent, "status", "idle"),
+            "session_id": session.id,
+        }
+    )

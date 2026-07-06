@@ -1,4 +1,5 @@
 """Feature tests for the /broadcasting page and /api/broadcasting/ping endpoint."""
+
 from unittest.mock import AsyncMock, patch
 
 from tests.test_case import TestCase
@@ -25,11 +26,9 @@ class TestBroadcastingPingEndpoint(TestCase):
                 "/api/broadcasting/ping",
                 json={"message": "hello"},
             )
-        response.assert_ok().assert_json(lambda j: (
-            j.where("status", "ok")
-             .where("message", "hello")
-             .etc()
-        ))
+        response.assert_ok().assert_json(
+            lambda j: j.where("status", "ok").where("message", "hello").etc()
+        )
 
     async def test_ping_uses_default_message_when_omitted(self):
         with patch(

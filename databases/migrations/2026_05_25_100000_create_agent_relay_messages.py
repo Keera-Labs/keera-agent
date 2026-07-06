@@ -10,7 +10,7 @@ class CreateAgentRelayMessages(Migration):
             table.integer("from_agent_id")
             table.integer("to_agent_id")
             table.text("content")
-            table.string("status").default("pending")   # pending | delivered
+            table.string("status").default("pending")  # pending | delivered
             table.timestamps()
 
     async def down(self):

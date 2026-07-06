@@ -1,7 +1,7 @@
 import json as _json
 
-from app.models.AgentTemplate import AgentTemplate
 from app.constant.templates import AGENT_TEMPLATES, AgentTemplateSeed
+from app.models.AgentTemplate import AgentTemplate
 
 
 def global_template_fields(tpl: AgentTemplateSeed) -> dict:
@@ -39,8 +39,7 @@ class SeedBuiltinTemplatesAction:
     async def execute(self) -> None:
         for tpl in AGENT_TEMPLATES:
             existing = await (
-                AgentTemplate
-                .where("name", tpl.name)
+                AgentTemplate.where("name", tpl.name)
                 .where("is_builtin", True)
                 .where_null("project_id")
                 .first()

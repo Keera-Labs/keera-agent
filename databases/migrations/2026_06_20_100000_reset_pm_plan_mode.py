@@ -32,16 +32,11 @@ from app.models.AgentTemplate import AgentTemplate
 class ResetPmPlanMode(Migration):
     async def up(self):
         await (
-            AgentTemplate
-            .where("is_builtin", True)
+            AgentTemplate.where("is_builtin", True)
             .where("agent_type", "pm")
             .update({"plan_mode": False})
         )
-        await (
-            Agent
-            .where("agent_type", "pm")
-            .update({"plan_mode": False})
-        )
+        await Agent.where("agent_type", "pm").update({"plan_mode": False})
 
     async def down(self):
         # Not reversible: the previous True value was a bug, and which rows held

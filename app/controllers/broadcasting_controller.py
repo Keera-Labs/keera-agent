@@ -1,7 +1,7 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
-from fastapi_startkit.inertia.inertia import Inertia
 from fastapi_startkit.broadcasting.helpers import broadcast
+from fastapi_startkit.inertia.inertia import Inertia
 
 from app.events.ping_event import PingEvent
 

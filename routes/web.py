@@ -1,27 +1,28 @@
 from fastapi_startkit.fastapi import Router
 
-from app.controllers import home_controller
-from app.controllers import tasks_page_controller
-from app.controllers import terminal_controller
-from app.controllers import project_controller
-from app.controllers import task_controller
-from app.controllers import workspace_controller
-from app.controllers import claude_hook_controller
-from app.controllers import command_controller
-from app.controllers import agent_message_controller
-from app.controllers import permission_controller
-from app.controllers import agent_controller
-from app.controllers import agent_relay_controller
-from app.controllers import agent_trigger_controller
-from app.controllers import agent_template_controller
-from app.controllers import poc_controller
-from app.controllers import settings_controller
-from app.controllers import broadcast_poc_controller
-from app.controllers import heartbeat_controller
-from app.controllers import global_settings_controller
-from app.controllers import ai_controller
-from app.controllers import broadcasting_controller
-from app.controllers import plugin_controller
+from app.controllers import (
+    agent_controller,
+    agent_message_controller,
+    agent_permission_controller,
+    agent_relay_controller,
+    agent_template_controller,
+    agent_trigger_controller,
+    ai_controller,
+    broadcasting_controller,
+    claude_hook_controller,
+    command_controller,
+    default_permission_controller,
+    global_settings_controller,
+    heartbeat_controller,
+    home_controller,
+    plugin_controller,
+    project_controller,
+    settings_controller,
+    task_controller,
+    tasks_page_controller,
+    terminal_controller,
+    workspace_controller,
+)
 from app.mcp.server import KeeraServer
 
 router = Router()
@@ -84,9 +85,17 @@ router.delete("/api/agent-templates/{template_id}", agent_template_controller.de
 # Agent templates — PROJECT-scoped (effective list + copy-on-write overrides)
 router.get("/api/projects/{project_id}/agent-templates", agent_template_controller.project_index)
 router.post("/api/projects/{project_id}/agent-templates", agent_template_controller.project_store)
-router.post("/api/projects/{project_id}/agent-templates/reset", agent_template_controller.project_reset)
-router.patch("/api/projects/{project_id}/agent-templates/{template_id}", agent_template_controller.project_update)
-router.delete("/api/projects/{project_id}/agent-templates/{template_id}", agent_template_controller.project_destroy)
+router.post(
+    "/api/projects/{project_id}/agent-templates/reset", agent_template_controller.project_reset
+)
+router.patch(
+    "/api/projects/{project_id}/agent-templates/{template_id}",
+    agent_template_controller.project_update,
+)
+router.delete(
+    "/api/projects/{project_id}/agent-templates/{template_id}",
+    agent_template_controller.project_destroy,
+)
 
 # Agent-to-agent relay
 router.post("/api/agent-relay", agent_relay_controller.relay)
@@ -95,10 +104,10 @@ router.get("/api/agents/{agent_id}/relay-messages", agent_relay_controller.get_m
 # Backend-triggered agent start
 router.post("/api/agents/{agent_id}/trigger", agent_trigger_controller.trigger)
 
-router.get("/api/agents/{agent_id}/permissions", permission_controller.get_agent_permissions)
-router.patch("/api/agents/{agent_id}/permissions", permission_controller.update_agent_permissions)
-router.get("/api/default-permissions", permission_controller.get_default_permissions)
-router.patch("/api/default-permissions", permission_controller.update_default_permissions)
+router.get("/api/agents/{agent_id}/permissions", agent_permission_controller.show)
+router.patch("/api/agents/{agent_id}/permissions", agent_permission_controller.update)
+router.get("/api/default-permissions", default_permission_controller.show)
+router.patch("/api/default-permissions", default_permission_controller.update)
 
 # Global app settings
 router.get("/api/global-settings", global_settings_controller.get_global_settings)
@@ -119,18 +128,11 @@ router.post("/api/heartbeat/stop", heartbeat_controller.stop)
 router.get("/settings", settings_controller.settings)
 
 # AI chat route — before wildcard
-router.post('/api/ai/chat', ai_controller.chat)
-
-# Broadcasting POC route — before wildcard
-router.post('/api/broadcast/fire', broadcast_poc_controller.fire)
+router.post("/api/ai/chat", ai_controller.chat)
 
 # Broadcasting page and API — before wildcard
-router.get('/broadcasting', broadcasting_controller.broadcasting_page)
-router.post('/api/broadcasting/ping', broadcasting_controller.ping)
-
-# POC route — before wildcard
-router.get("/poc", poc_controller.poc_page)
-router.router.add_api_websocket_route("/poc/ws", poc_controller.poc_ws)
+router.get("/broadcasting", broadcasting_controller.broadcasting_page)
+router.post("/api/broadcasting/ping", broadcasting_controller.ping)
 
 # Wildcard page routes — must come last
 router.get("/", home_controller.home)
@@ -139,4 +141,6 @@ router.get("/{project}/agents/{agent_id}", home_controller.agent_page)
 router.get("/{project}", home_controller.project_home)
 
 router.router.add_api_websocket_route("/{project}/ws", terminal_controller.terminal_ws)
-router.router.add_api_websocket_route("/{project}/command-ws/{command_id}", command_controller.command_ws)
+router.router.add_api_websocket_route(
+    "/{project}/command-ws/{command_id}", command_controller.command_ws
+)

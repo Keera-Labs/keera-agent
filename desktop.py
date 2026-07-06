@@ -1,4 +1,5 @@
 """Desktop shell."""
+
 import os
 import pathlib
 import shutil
@@ -48,10 +49,11 @@ def _configure_environment() -> None:
 
 _configure_environment()
 
-from bootstrap.application import app  # noqa: E402
 from fastapi_startkit import Config  # noqa: E402
 
-url = urlparse(Config.get('fastapi').get('app_url'))
+from bootstrap.application import app  # noqa: E402
+
+url = urlparse(Config.get("fastapi").get("app_url"))
 HOST = url.hostname or "127.0.0.1"
 PORT = url.port or 4545
 WINDOW_TITLE = "Keera Agent"
@@ -88,7 +90,7 @@ def _serve() -> None:
 
     console = ConsoleApplication(app)
     console.auto_exits(False)
-    console.run(StringInput(f"serve"))
+    console.run(StringInput("serve"))
 
 
 def _boot_server() -> None:

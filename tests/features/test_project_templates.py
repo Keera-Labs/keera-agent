@@ -6,6 +6,7 @@ GLOBAL templates (project_id NULL) are code-seeded and edited via
 copy-on-write and are managed under /api/projects/{id}/agent-templates. A
 project's effective list = override where present, else the global.
 """
+
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
 from app.actions.seed_builtin_templates_action import SeedBuiltinTemplatesAction
@@ -18,25 +19,45 @@ from tests.test_case import TestCase
 PID = 770283  # a scoping id that won't collide with real projects in tests
 
 
-async def _make_global(*, name: str, is_builtin: bool = False, model: str = "claude-sonnet-4-6",
-                       agent_type: str = "software_engineer", plan_mode: bool = False) -> AgentTemplate:
+async def _make_global(
+    *,
+    name: str,
+    is_builtin: bool = False,
+    model: str = "claude-sonnet-4-6",
+    agent_type: str = "software_engineer",
+    plan_mode: bool = False,
+) -> AgentTemplate:
     return await AgentTemplateFactory.new().create(
-        name=name, agent_type=agent_type, model=model, plan_mode=plan_mode,
-        is_builtin=is_builtin, project_id=None, source_template_id=None,
+        name=name,
+        agent_type=agent_type,
+        model=model,
+        plan_mode=plan_mode,
+        is_builtin=is_builtin,
+        project_id=None,
+        source_template_id=None,
     )
 
 
-async def _make_override(*, name: str, source_id: int, agent_type: str = "software_engineer",
-                         model: str = "claude-opus-4-8", project_id: int = PID) -> AgentTemplate:
+async def _make_override(
+    *,
+    name: str,
+    source_id: int,
+    agent_type: str = "software_engineer",
+    model: str = "claude-opus-4-8",
+    project_id: int = PID,
+) -> AgentTemplate:
     """A project-scoped override that shadows the global ``source_id``."""
     return await AgentTemplateFactory.new().create(
-        name=name, agent_type=agent_type, model=model, is_builtin=False,
-        project_id=project_id, source_template_id=source_id,
+        name=name,
+        agent_type=agent_type,
+        model=model,
+        is_builtin=False,
+        project_id=project_id,
+        source_template_id=source_id,
     )
 
 
 class TestProjectTemplates(TestCase, DatabaseTransaction):
-
     async def asyncTearDown(self):
         # HTTP-app writes commit on a separate connection and are not rolled back,
         # so clear this test project's rows explicitly.
@@ -87,14 +108,16 @@ class TestProjectTemplates(TestCase, DatabaseTransaction):
         res = await self.patch(
             f"/api/projects/{PID}/agent-templates/{g.id}", json={"model": "claude-opus-4-8"}
         )
-        res.assert_status(201).assert_json(lambda j: (
-            j.where("id", lambda v: v != g.id)
-             .where("project_id", PID)
-             .where("source_template_id", g.id)
-             .where("is_builtin", False)
-             .where("model", "claude-opus-4-8")
-             .etc()
-        ))
+        res.assert_status(201).assert_json(
+            lambda j: (
+                j.where("id", lambda v: v != g.id)
+                .where("project_id", PID)
+                .where("source_template_id", g.id)
+                .where("is_builtin", False)
+                .where("model", "claude-opus-4-8")
+                .etc()
+            )
+        )
         # the global itself is untouched
         fresh_global = await AgentTemplate.find(g.id)
         self.assertEqual(fresh_global.model, "claude-sonnet-4-6")
@@ -108,35 +131,37 @@ class TestProjectTemplates(TestCase, DatabaseTransaction):
         second = await self.patch(
             f"/api/projects/{PID}/agent-templates/{g.id}", json={"description": "tweaked"}
         )
-        second.assert_ok().assert_json(lambda j: (
-            j.where("id", override_id)  # no second override created
-             .where("description", "tweaked")
-             .etc()
-        ))
+        second.assert_ok().assert_json(
+            lambda j: (
+                j.where("id", override_id)  # no second override created
+                .where("description", "tweaked")
+                .etc()
+            )
+        )
 
     async def test_edit_existing_override_in_place(self):
         g = await _make_global(name="t283-cow3", model="claude-sonnet-4-6")
         override = await _make_override(name="t283-cow3", source_id=g.id)
         res = await self.patch(
-            f"/api/projects/{PID}/agent-templates/{override.id}", json={"model": "claude-haiku-4-5-20251001"}
+            f"/api/projects/{PID}/agent-templates/{override.id}",
+            json={"model": "claude-haiku-4-5-20251001"},
         )
-        res.assert_ok().assert_json(lambda j: (
-            j.where("id", override.id)
-             .where("model", "claude-haiku-4-5-20251001")
-             .etc()
-        ))
+        res.assert_ok().assert_json(
+            lambda j: j.where("id", override.id).where("model", "claude-haiku-4-5-20251001").etc()
+        )
 
     # ── project-only templates + delete + reset ───────────────────────────────
 
     async def test_project_store_creates_project_only_template(self):
         res = await self.post(
-            f"/api/projects/{PID}/agent-templates", json={"name": "t283-proj-only", "agent_type": "qa"}
+            f"/api/projects/{PID}/agent-templates",
+            json={"name": "t283-proj-only", "agent_type": "qa"},
         )
-        res.assert_status(201).assert_json(lambda j: (
-            j.where("project_id", PID)
-             .where("source_template_id", lambda v: v is None)
-             .etc()
-        ))
+        res.assert_status(201).assert_json(
+            lambda j: (
+                j.where("project_id", PID).where("source_template_id", lambda v: v is None).etc()
+            )
+        )
         eff = await self.get(f"/api/projects/{PID}/agent-templates")
         self.assertIn("t283-proj-only", self._names(eff.json()))
 
@@ -145,7 +170,9 @@ class TestProjectTemplates(TestCase, DatabaseTransaction):
         override = await _make_override(name="t283-del", source_id=g.id)
         res = await self.delete(f"/api/projects/{PID}/agent-templates/{override.id}")
         res.assert_ok()
-        row = self._by_name((await self.get(f"/api/projects/{PID}/agent-templates")).json(), "t283-del")
+        row = self._by_name(
+            (await self.get(f"/api/projects/{PID}/agent-templates")).json(), "t283-del"
+        )
         self.assertEqual(row["id"], g.id)  # back to the global
         self.assertFalse(row["is_override"])
 
@@ -153,19 +180,19 @@ class TestProjectTemplates(TestCase, DatabaseTransaction):
         g = await _make_global(name="t283-reset", model="claude-sonnet-4-6")
         await _make_override(name="t283-reset", source_id=g.id)
         await self.post(
-            f"/api/projects/{PID}/agent-templates", json={"name": "t283-reset-extra", "agent_type": "qa"}
+            f"/api/projects/{PID}/agent-templates",
+            json={"name": "t283-reset-extra", "agent_type": "qa"},
         )
         res = await self.post(f"/api/projects/{PID}/agent-templates/reset")
         res.assert_ok()
         remaining = await AgentTemplate.where("project_id", PID).count()
         self.assertEqual(remaining, 0)
         names = self._names((await self.get(f"/api/projects/{PID}/agent-templates")).json())
-        self.assertIn("t283-reset", names)          # global still resolved
+        self.assertIn("t283-reset", names)  # global still resolved
         self.assertNotIn("t283-reset-extra", names)  # project-only template gone
 
 
 class TestSeedGlobals(TestCase, DatabaseTransaction):
-
     async def test_seed_creates_global_with_null_project_id(self):
         name = AGENT_TEMPLATES[0].name
         await AgentTemplate.where("name", name).where_null("project_id").delete()
@@ -173,33 +200,44 @@ class TestSeedGlobals(TestCase, DatabaseTransaction):
         await SeedBuiltinTemplatesAction().execute()
 
         row = await (
-            AgentTemplate.where("name", name).where("is_builtin", True).where_null("project_id").first()
+            AgentTemplate.where("name", name)
+            .where("is_builtin", True)
+            .where_null("project_id")
+            .first()
         )
         self.assertIsNotNone(row)
         self.assertIsNone(row.project_id)
 
 
 class TestGlobalTemplateSync(TestCase, DatabaseTransaction):
-
     async def test_sync_overwrites_edited_global_builtin(self):
         # Start from a divergent built-in PM global, then sync from code defaults.
         await AgentTemplate.where("name", "PM").where_null("project_id").delete()
         await AgentTemplateFactory.new().create(
-            name="PM", agent_type="pm", model="claude-haiku-4-5-20251001",
-            system_prompt="STALE", plan_mode=True,
-            is_builtin=True, project_id=None, source_template_id=None,
+            name="PM",
+            agent_type="pm",
+            model="claude-haiku-4-5-20251001",
+            system_prompt="STALE",
+            plan_mode=True,
+            is_builtin=True,
+            project_id=None,
+            source_template_id=None,
         )
 
         await SyncGlobalTemplatesAction().execute()
 
         pm = await AgentTemplate.where("name", "PM").where_null("project_id").first()
         self.assertEqual(pm.model, "claude-opus-4-8")  # code default
-        self.assertFalse(bool(pm.plan_mode))           # PM is not a plan-mode role
+        self.assertFalse(bool(pm.plan_mode))  # PM is not a plan-mode role
 
     async def test_sync_leaves_project_overrides_untouched(self):
         override = await AgentTemplateFactory.new().create(
-            name="PM", agent_type="pm", model="claude-haiku-4-5-20251001",
-            is_builtin=False, project_id=779999, source_template_id=None,
+            name="PM",
+            agent_type="pm",
+            model="claude-haiku-4-5-20251001",
+            is_builtin=False,
+            project_id=779999,
+            source_template_id=None,
         )
         try:
             await SyncGlobalTemplatesAction().execute()

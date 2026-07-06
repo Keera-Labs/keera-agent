@@ -26,9 +26,10 @@ def is_running() -> bool:
 
 
 async def send_heartbeat(project_id: int) -> None:
+    from app.actions.agent_message_send_action import AgentMessageSendAction
     from app.models.Agent import Agent
     from app.models.Task import Task
-    from app.actions.agent_message_send_action import AgentMessageSendAction
+
     pm = await Agent.where("project_id", project_id).where("agent_type", "pm").first()
     if not pm:
         return
@@ -44,6 +45,7 @@ async def send_heartbeat(project_id: int) -> None:
 
 async def heartbeat_loop(interval_seconds: int = 300) -> None:
     from app.models.Project import Project
+
     try:
         while True:
             await asyncio.sleep(interval_seconds)

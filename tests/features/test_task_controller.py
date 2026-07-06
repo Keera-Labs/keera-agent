@@ -29,32 +29,40 @@ class TestTaskController(TestCase, DatabaseTransaction):
 
     async def test_store_creates_task_with_defaults(self):
         response = await self.post(self.tasks_url, json={"title": "Write docs"})
-        response.assert_ok().assert_json(_data_attrs(lambda a: (
-            a.where("title", "Write docs")
-             .where("status", "pending")
-             .where("priority", "medium")
-             .where("project_id", self.project.id)
-             .where("assignees", [])
-             .where("acceptance_criteria", [])
-             .where("testing_methods", [])
-             .where("validation_steps", [])
-             .etc()
-        )))
+        response.assert_ok().assert_json(
+            _data_attrs(
+                lambda a: (
+                    a.where("title", "Write docs")
+                    .where("status", "pending")
+                    .where("priority", "medium")
+                    .where("project_id", self.project.id)
+                    .where("assignees", [])
+                    .where("acceptance_criteria", [])
+                    .where("testing_methods", [])
+                    .where("validation_steps", [])
+                    .etc()
+                )
+            )
+        )
 
     async def test_store_persists_all_fields_as_lists(self):
         payload = (await TaskFactory.new().make()).serialize()
 
         response = await self.post(self.tasks_url, json=payload)
-        response.assert_ok().assert_json(_data_attrs(lambda a: (
-            a.where("title", payload["title"])
-             .where("body", payload["body"])
-             .where("priority", payload["priority"])
-             .where("assignees", payload["assignees"])
-             .where("acceptance_criteria", payload["acceptance_criteria"])
-             .where("testing_methods", payload["testing_methods"])
-             .where("validation_steps", payload["validation_steps"])
-             .etc()
-        )))
+        response.assert_ok().assert_json(
+            _data_attrs(
+                lambda a: (
+                    a.where("title", payload["title"])
+                    .where("body", payload["body"])
+                    .where("priority", payload["priority"])
+                    .where("assignees", payload["assignees"])
+                    .where("acceptance_criteria", payload["acceptance_criteria"])
+                    .where("testing_methods", payload["testing_methods"])
+                    .where("validation_steps", payload["validation_steps"])
+                    .etc()
+                )
+            )
+        )
 
     async def test_store_strips_title_whitespace(self):
         response = await self.post(self.tasks_url, json={"title": "  spaced  "})
@@ -93,7 +101,10 @@ class TestTaskController(TestCase, DatabaseTransaction):
     async def test_index_excludes_old_completed_tasks(self):
         stale = (datetime.datetime.now() - datetime.timedelta(days=30)).isoformat()
         await TaskFactory.new().create(
-            project_id=self.project.id, title="stale-task", status="completed", completed_at=stale,
+            project_id=self.project.id,
+            title="stale-task",
+            status="completed",
+            completed_at=stale,
         )
         await TaskFactory.new().create(project_id=self.project.id, title="active-task")
 
@@ -107,36 +118,45 @@ class TestTaskController(TestCase, DatabaseTransaction):
     async def test_update_modifies_fields(self):
         task = await TaskFactory.new().create(project_id=self.project.id, title="old")
 
-        response = await self.patch(f"/api/tasks/{task.id}", json={
-            "title": "new title",
-            "assignees": ["carol"],
-        })
-        response.assert_ok().assert_json(_data_attrs(lambda a: (
-            a.where("title", "new title")
-             .where("assignees", ["carol"])
-             .etc()
-        )))
+        response = await self.patch(
+            f"/api/tasks/{task.id}",
+            json={
+                "title": "new title",
+                "assignees": ["carol"],
+            },
+        )
+        response.assert_ok().assert_json(
+            _data_attrs(lambda a: a.where("title", "new title").where("assignees", ["carol"]).etc())
+        )
 
     async def test_update_to_terminal_status_sets_completed_at(self):
         task = await TaskFactory.new().create(project_id=self.project.id)
 
         response = await self.patch(f"/api/tasks/{task.id}", json={"status": "completed"})
-        response.assert_json(_data_attrs(lambda a: (
-            a.where("status", "completed")
-             .where("completed_at", lambda v: v is not None)
-             .etc()
-        )))
+        response.assert_json(
+            _data_attrs(
+                lambda a: (
+                    a.where("status", "completed")
+                    .where("completed_at", lambda v: v is not None)
+                    .etc()
+                )
+            )
+        )
 
     async def test_update_to_non_terminal_status_clears_completed_at(self):
         task = await TaskFactory.new().create(project_id=self.project.id)
         await self.patch(f"/api/tasks/{task.id}", json={"status": "completed"})
 
         response = await self.patch(f"/api/tasks/{task.id}", json={"status": "in_progress"})
-        response.assert_json(_data_attrs(lambda a: (
-            a.where("status", "in_progress")
-             .where("completed_at", lambda v: v is None)
-             .etc()
-        )))
+        response.assert_json(
+            _data_attrs(
+                lambda a: (
+                    a.where("status", "in_progress")
+                    .where("completed_at", lambda v: v is None)
+                    .etc()
+                )
+            )
+        )
 
     async def test_update_missing_task_returns_404(self):
         response = await self.patch("/api/tasks/999999", json={"title": "nope"})

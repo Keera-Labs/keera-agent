@@ -1,6 +1,6 @@
-from app.models.AgentTemplate import AgentTemplate
-from app.constant.templates import AGENT_TEMPLATES
 from app.actions.seed_builtin_templates_action import global_template_fields
+from app.constant.templates import AGENT_TEMPLATES
+from app.models.AgentTemplate import AgentTemplate
 
 
 class SyncGlobalTemplatesAction:
@@ -19,8 +19,7 @@ class SyncGlobalTemplatesAction:
         for tpl in AGENT_TEMPLATES:
             fields = global_template_fields(tpl)
             existing = await (
-                AgentTemplate
-                .where("name", tpl.name)
+                AgentTemplate.where("name", tpl.name)
                 .where("is_builtin", True)
                 .where_null("project_id")
                 .first()

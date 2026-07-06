@@ -67,19 +67,23 @@ async def sync_active(registry: PluginRegistry) -> None:
     for plugin in registry.all():
         row = rows.get(plugin.slug)
         if row is None:
-            await PluginModel.create({
-                "slug": plugin.slug,
+            await PluginModel.create(
+                {
+                    "slug": plugin.slug,
+                    "name": plugin.name,
+                    "description": plugin.description,
+                    "path": plugin.path,
+                    "active": False,
+                }
+            )
+            continue
+
+        await row.update(
+            {
                 "name": plugin.name,
                 "description": plugin.description,
                 "path": plugin.path,
-                "active": False,
-            })
-            continue
-
-        await row.update({
-            "name": plugin.name,
-            "description": plugin.description,
-            "path": plugin.path,
-        })
+            }
+        )
         if row.active:
             registry.activate(plugin.slug)

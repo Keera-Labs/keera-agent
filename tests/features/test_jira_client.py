@@ -15,7 +15,9 @@ from tests.test_case import TestCase
 def _mock_client(handler) -> JiraClient:
     """A JiraClient whose outbound requests are served by a MockTransport."""
     return JiraClient(
-        "https://x.atlassian.net", "a@b.c", "tok",
+        "https://x.atlassian.net",
+        "a@b.c",
+        "tok",
         transport=httpx.MockTransport(handler),
     )
 
@@ -68,19 +70,26 @@ class TestJiraClientRequests(TestCase):
             seen["method"] = request.method
             seen["path"] = request.url.path
             seen["body"] = json.loads(request.content)
-            return httpx.Response(200, json={"issues": [{"key": "ENG-1"}], "nextPageToken": "next-2"})
+            return httpx.Response(
+                200, json={"issues": [{"key": "ENG-1"}], "nextPageToken": "next-2"}
+            )
 
         client = _mock_client(handler)
-        data = await client.search("project = ENG", max_results=10, fields=["summary"], next_page_token="tok-1")
+        data = await client.search(
+            "project = ENG", max_results=10, fields=["summary"], next_page_token="tok-1"
+        )
 
         self.assertEqual(seen["method"], "POST")
         self.assertEqual(seen["path"], "/rest/api/3/search/jql")
-        self.assertEqual(seen["body"], {
-            "jql": "project = ENG",
-            "maxResults": 10,
-            "fields": ["summary"],
-            "nextPageToken": "tok-1",
-        })
+        self.assertEqual(
+            seen["body"],
+            {
+                "jql": "project = ENG",
+                "maxResults": 10,
+                "fields": ["summary"],
+                "nextPageToken": "tok-1",
+            },
+        )
         # Response is parsed and token-based pagination surfaced verbatim.
         self.assertEqual(data["issues"][0]["key"], "ENG-1")
         self.assertEqual(data["nextPageToken"], "next-2")
@@ -124,7 +133,10 @@ class TestJiraClientRequests(TestCase):
             return httpx.Response(201, json={"id": "10001"})
 
         result = await _mock_client(handler).add_worklog(
-            "ENG-1", "1h 30m", comment="Investigated", started="2026-06-30T09:00:00.000+0000",
+            "ENG-1",
+            "1h 30m",
+            comment="Investigated",
+            started="2026-06-30T09:00:00.000+0000",
         )
 
         self.assertEqual(seen["method"], "POST")
@@ -134,7 +146,8 @@ class TestJiraClientRequests(TestCase):
         # Comment is ADF-wrapped, not a bare string.
         self.assertEqual(seen["body"]["comment"]["type"], "doc")
         self.assertEqual(
-            seen["body"]["comment"]["content"][0]["content"][0]["text"], "Investigated",
+            seen["body"]["comment"]["content"][0]["content"][0]["text"],
+            "Investigated",
         )
         self.assertEqual(result, {"id": "10001"})
 
@@ -162,13 +175,16 @@ class TestJiraClientRequests(TestCase):
 
         self.assertEqual(seen["method"], "POST")
         self.assertEqual(seen["path"], "/rest/api/3/issue")
-        self.assertEqual(seen["body"], {
-            "fields": {
-                "project": {"key": "ENG"},
-                "summary": "Fix login",
-                "issuetype": {"name": "Task"},
+        self.assertEqual(
+            seen["body"],
+            {
+                "fields": {
+                    "project": {"key": "ENG"},
+                    "summary": "Fix login",
+                    "issuetype": {"name": "Task"},
+                },
             },
-        })
+        )
         self.assertEqual(result, {"key": "ENG-42"})
 
     async def test_create_issue_includes_optional_fields(self):
@@ -213,7 +229,8 @@ class TestJiraClientRequests(TestCase):
         self.assertEqual(seen["path"], "/rest/api/3/issue/ENG-1/comment")
         self.assertEqual(seen["body"]["body"]["type"], "doc")
         self.assertEqual(
-            seen["body"]["body"]["content"][0]["content"][0]["text"], "Looking into this",
+            seen["body"]["body"]["content"][0]["content"][0]["text"],
+            "Looking into this",
         )
         self.assertEqual(result, {"id": "10010"})
 

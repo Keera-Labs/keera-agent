@@ -19,8 +19,9 @@ class McpSyncCommand(Command):
 
     async def handle_async(self):
         from fastapi_startkit import Config
-        from app.models.Project import Project
+
         from app.actions.mcp_setting_write_action import McpSettingWriteAction
+        from app.models.Project import Project
 
         self.line(f"<info>Syncing .mcp.json from</info> {Config.get('fastapi.app_url')}")
 
@@ -29,7 +30,9 @@ class McpSyncCommand(Command):
         for project in projects:
             expanded = os.path.expanduser(project.path)
             if not os.path.isdir(expanded):
-                self.line(f"<comment>skip</comment> {project.name}: directory not found ({expanded})")
+                self.line(
+                    f"<comment>skip</comment> {project.name}: directory not found ({expanded})"
+                )
                 skipped += 1
                 continue
             if await McpSettingWriteAction.prepare(project.id).execute():
@@ -38,4 +41,6 @@ class McpSyncCommand(Command):
             else:
                 unchanged += 1
 
-        self.line(f"<info>Done.</info> {updated} updated, {unchanged} already current, {skipped} skipped.")
+        self.line(
+            f"<info>Done.</info> {updated} updated, {unchanged} already current, {skipped} skipped."
+        )

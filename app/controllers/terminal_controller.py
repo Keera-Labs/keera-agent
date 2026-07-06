@@ -52,9 +52,7 @@ def _ensure_git_repo(path: str) -> None:
         text=True,
     )
     if init_result.returncode != 0:
-        raise RuntimeError(
-            f"git init failed in {path!r}: {init_result.stderr.strip()}"
-        )
+        raise RuntimeError(f"git init failed in {path!r}: {init_result.stderr.strip()}")
 
 
 async def _ensure_repo_once(project: Project, path: str) -> None:
@@ -80,8 +78,12 @@ async def _deliver_pending_relay_messages(agent_id: int) -> None:
     """Inject any queued agent-to-agent relay messages into the running PTY."""
     from app.models.AgentRelayMessage import AgentRelayMessage
 
-    pending = await AgentRelayMessage.where("to_agent_id", agent_id) \
-        .where("status", "pending").order_by("id", "asc").get()
+    pending = (
+        await AgentRelayMessage.where("to_agent_id", agent_id)
+        .where("status", "pending")
+        .order_by("id", "asc")
+        .get()
+    )
     if not pending:
         return
 
@@ -89,14 +91,16 @@ async def _deliver_pending_relay_messages(agent_id: int) -> None:
 
     agent = await Agent.find(agent_id)
     session_id = agent.session_id if agent else None
-    conn_manager: ConnectionManager = app().make('connections')
+    conn_manager: ConnectionManager = app().make("connections")
     bridge = conn_manager.get(session_id) if session_id else None
 
     for msg in pending:
         from_agent = await Agent.find(msg.from_agent_id)
         sender_name = from_agent.name if from_agent else f"Agent #{msg.from_agent_id}"
         if bridge:
-            text_bytes = f"[Message from Agent '{sender_name}']: {msg.content}".encode().rstrip(b"\r\n")
+            text_bytes = f"[Message from Agent '{sender_name}']: {msg.content}".encode().rstrip(
+                b"\r\n"
+            )
             await bridge.write(text_bytes)
             await asyncio.sleep(0.05)
             await bridge.write(b"\r")
@@ -126,14 +130,12 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
     try:
         await _ensure_repo_once(project_record, cwd)
     except RuntimeError as exc:
-        await websocket.send_text(
-            json.dumps({"type": "error", "message": str(exc)})
-        )
+        await websocket.send_text(json.dumps({"type": "error", "message": str(exc)}))
         await websocket.close(code=1011, reason="git init failed")
         return
 
-    terminal_manager: TerminalManager = app().make('terminal')
-    conn_manager: ConnectionManager = app().make('connections')
+    terminal_manager: TerminalManager = app().make("terminal")
+    conn_manager: ConnectionManager = app().make("connections")
 
     # If this agent already has an active session, reattach without stopping it on disconnect.
     existing_key = agent_record.session_id
@@ -156,7 +158,9 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
     ready_event = claude_ready.setdefault(session_id, asyncio.Event())
     asyncio.create_task(_signal_ready_and_relay(ready_event, agent_record.id))
 
-    claude_cmd = agent_record.to_command(system_prompt_suffix=_build_identity_suffix(agent_record.id))
+    claude_cmd = agent_record.to_command(
+        system_prompt_suffix=_build_identity_suffix(agent_record.id)
+    )
 
     def build_cmd(a):
         return a.to_command(system_prompt_suffix=_build_identity_suffix(a.id))
@@ -174,7 +178,7 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
     conn_manager.set(session_id, bridge, cwd=cwd)
 
     try:
-        await bridge.run(auto_send=claude_cmd.encode() + b'\n')
+        await bridge.run(auto_send=claude_cmd.encode() + b"\n")
     finally:
         conn_manager.remove(session_id)
         claude_ready.pop(session_id, None)
