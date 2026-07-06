@@ -106,6 +106,32 @@ def _cleanup_stale_worktree(agent, cwd: str) -> None:
         )
 
 
+def discover_worktree_path(cwd: str, branch_name: str) -> str | None:
+    """Return the real filesystem path of the worktree checked out on ``branch_name``.
+
+    Parses ``git worktree list --porcelain`` (the same primitive
+    _cleanup_stale_worktree relies on) instead of reconstructing the path from a
+    convention, so an agent worktree registered at a non-default location is
+    still found. Returns None when no worktree has that branch checked out.
+    """
+    result = subprocess.run(
+        ["git", "worktree", "list", "--porcelain"],
+        capture_output=True, text=True, cwd=cwd,
+    )
+    if result.returncode != 0:
+        return None
+
+    current_path: str | None = None
+    for line in result.stdout.splitlines():
+        if line.startswith("worktree "):
+            current_path = line[len("worktree "):].strip()
+        elif line.startswith("branch "):
+            ref = line[len("branch "):].strip()
+            if ref == f"refs/heads/{branch_name}" or ref == branch_name:
+                return current_path
+    return None
+
+
 async def _prune_all_orphaned_worktrees() -> None:
     """One-off startup prune: remove git worktrees for all soft-deleted agents.
 
