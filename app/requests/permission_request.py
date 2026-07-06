@@ -8,6 +8,7 @@ class PermissionRequest(BaseModel):
 
     Empty and blank entries are dropped so callers no longer filter lists by hand.
     """
+
     model_config = ConfigDict(str_strip_whitespace=True)
 
     allow: List[str] = []

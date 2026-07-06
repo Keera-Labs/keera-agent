@@ -7,6 +7,7 @@ from app.constant.agent_types import ALLOWED_AGENT_TYPES
 
 class AgentStoreRequest(BaseModel):
     """Input model for AgentCreateAction — covers all agent-creation paths."""
+
     name: str
     agent_type: str = "software_engineer"
     description: Optional[str] = None

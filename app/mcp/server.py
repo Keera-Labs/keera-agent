@@ -4,16 +4,18 @@ import json
 import logging
 import os
 
-from fastapi_startkit.mcp import Server, Resource
+from fastapi_startkit.mcp import Resource, Server
 
-from app.mcp.tools import KEERA_TOOLS
 from app.mcp.browser_tools import BROWSER_TOOLS
+from app.mcp.tools import KEERA_TOOLS
 
 
 class ActiveTasksResource(Resource):
     uri = "keera://tasks/active"
     name = "active_tasks"
-    description = "Pending and in-progress tasks for this project. Read this at the start of every session."
+    description = (
+        "Pending and in-progress tasks for this project. Read this at the start of every session."
+    )
     mime_type = "text/plain"
 
     async def read(self, **kwargs) -> str:
@@ -35,9 +37,9 @@ class ActiveTasksResource(Resource):
 
         tasks = await (
             Task.where("project_id", project.id)
-                .where_in("status", ["pending", "in_progress"])
-                .order_by("id", "asc")
-                .get()
+            .where_in("status", ["pending", "in_progress"])
+            .order_by("id", "asc")
+            .get()
         )
 
         if not tasks:
@@ -74,6 +76,7 @@ def _active_plugin_tools() -> list:
     """MCP tools contributed by currently-active plugins (empty if none)."""
     try:
         from fastapi_startkit.application import app
+
         return app().make("plugins").active_tool_classes()
     except Exception:
         logging.getLogger("keera.plugins").exception("Failed to collect active plugin MCP tools")

@@ -2,8 +2,8 @@ import shlex
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
-from fastapi_startkit.process import Process
 from fastapi_startkit.broadcasting.helpers import broadcast
+from fastapi_startkit.process import Process
 
 from app.events.ai_response_event import AiResponseEvent
 

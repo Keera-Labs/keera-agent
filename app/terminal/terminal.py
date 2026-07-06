@@ -1,4 +1,3 @@
-import asyncio
 import fcntl
 import os
 import pty as _pty
@@ -20,15 +19,15 @@ def _with_color_env(env: dict) -> dict:
 
 class Terminal:
     def __init__(
-            self,
-            shell: str | None = None,
-            cwd: str | None = None,
-            cols: int = 80,
-            rows: int = 24,
-            env: dict | None = None,
+        self,
+        shell: str | None = None,
+        cwd: str | None = None,
+        cols: int = 80,
+        rows: int = 24,
+        env: dict | None = None,
     ):
-        self._shell = shell or os.environ.get('SHELL', '/bin/bash')
-        self._cwd = cwd or os.path.expanduser('~')
+        self._shell = shell or os.environ.get("SHELL", "/bin/bash")
+        self._cwd = cwd or os.path.expanduser("~")
         self._cols = cols
         self._rows = rows
         self._env = _with_color_env(env or os.environ.copy())
@@ -95,4 +94,4 @@ class Terminal:
 
     @staticmethod
     def _set_size(fd: int, rows: int, cols: int) -> None:
-        fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack('HHHH', rows, cols, 0, 0))
+        fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))

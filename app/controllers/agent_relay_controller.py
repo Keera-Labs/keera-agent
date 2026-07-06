@@ -31,7 +31,9 @@ async def relay(request: Request):
     content = (body.get("content") or "").strip()
 
     if not from_agent_id or not to_agent_id or not content:
-        return JSONResponse({"error": "from_agent_id, to_agent_id and content are required"}, status_code=400)
+        return JSONResponse(
+            {"error": "from_agent_id, to_agent_id and content are required"}, status_code=400
+        )
 
     from_agent = await Agent.find(from_agent_id)
     to_agent = await Agent.find(to_agent_id)
@@ -39,44 +41,60 @@ async def relay(request: Request):
     if not from_agent:
         return JSONResponse({"error": f"Agent {from_agent_id} not found"}, status_code=404)
     if getattr(from_agent, "deleted_at", None):
-        return JSONResponse({"error": f"Agent {from_agent_id} not found or has been deleted"}, status_code=404)
+        return JSONResponse(
+            {"error": f"Agent {from_agent_id} not found or has been deleted"}, status_code=404
+        )
     if not to_agent:
         return JSONResponse({"error": f"Agent {to_agent_id} not found"}, status_code=404)
     if getattr(to_agent, "deleted_at", None):
-        return JSONResponse({"error": f"Agent {to_agent_id} not found or has been deleted"}, status_code=404)
+        return JSONResponse(
+            {"error": f"Agent {to_agent_id} not found or has been deleted"}, status_code=404
+        )
 
     from app.actions.agent_message_send_action import AgentMessageSendAction
-    msg_id, delivered = await AgentMessageSendAction.prepare(from_agent, to_agent, content).execute()
+
+    msg_id, delivered = await AgentMessageSendAction.prepare(
+        from_agent, to_agent, content
+    ).execute()
 
     # Notify the frontend WebSocket so the UI updates
-    from app.terminal.connection_manager import ConnectionManager
-    from fastapi_startkit.application import app as _app
     import json as _json
+
+    from fastapi_startkit.application import app as _app
+
+    from app.terminal.connection_manager import ConnectionManager
+
     project = await Project.find(to_agent.project_id)
-    conn_manager: ConnectionManager = _app().make('connections')
+    conn_manager: ConnectionManager = _app().make("connections")
     if project:
         cwd = os.path.expanduser(project.path)
         ui_bridge = conn_manager.find_by_cwd(cwd)
         if ui_bridge:
             try:
-                await ui_bridge.write(_json.dumps({
-                    "type": "agent_relay_message",
-                    "message_id": msg_id,
-                    "from_agent_id": from_agent_id,
-                    "from_agent_name": from_agent.name,
-                    "to_agent_id": to_agent_id,
-                    "to_agent_name": to_agent.name,
-                    "content": content,
-                    "status": "delivered" if delivered else "pending",
-                }))
+                await ui_bridge.write(
+                    _json.dumps(
+                        {
+                            "type": "agent_relay_message",
+                            "message_id": msg_id,
+                            "from_agent_id": from_agent_id,
+                            "from_agent_name": from_agent.name,
+                            "to_agent_id": to_agent_id,
+                            "to_agent_name": to_agent.name,
+                            "content": content,
+                            "status": "delivered" if delivered else "pending",
+                        }
+                    )
+                )
             except Exception:
                 pass
 
-    return JSONResponse({
-        "id": msg_id,
-        "delivered": delivered,
-        "status": "delivered" if delivered else "pending",
-    })
+    return JSONResponse(
+        {
+            "id": msg_id,
+            "delivered": delivered,
+            "status": "delivered" if delivered else "pending",
+        }
+    )
 
 
 async def get_messages(request: Request, agent_id: int):

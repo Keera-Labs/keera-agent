@@ -3,34 +3,36 @@ import re
 import subprocess
 import sys
 
-from fastapi import Request, UploadFile, File
+from fastapi import File, Request, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi_startkit.storage.storage import Storage
 
+from app.actions.mcp_setting_write_action import McpSettingWriteAction
 from app.models.AgentMessage import AgentMessage
 from app.models.Project import Project
-from app.actions.mcp_setting_write_action import McpSettingWriteAction
-from app.utils.hook_setup import ensure_claude_settings, BASE_URL
+from app.utils.hook_setup import BASE_URL, ensure_claude_settings
 
 
 def slugify(name: str) -> str:
-    return re.sub(r'[^a-z0-9-]', '', name.lower().replace(' ', '-'))
+    return re.sub(r"[^a-z0-9-]", "", name.lower().replace(" ", "-"))
 
 
 async def index(request: Request):
     projects = await Project.all()
-    return JSONResponse([
-        {
-            "id": p.id,
-            "name": p.name,
-            "slug": p.slug,
-            "path": p.path,
-            "language": p.language,
-            "workspace_id": int(p.workspace_id) if p.workspace_id is not None else None,
-            "claude_status": p.claude_status,
-        }
-        for p in projects
-    ])
+    return JSONResponse(
+        [
+            {
+                "id": p.id,
+                "name": p.name,
+                "slug": p.slug,
+                "path": p.path,
+                "language": p.language,
+                "workspace_id": int(p.workspace_id) if p.workspace_id is not None else None,
+                "claude_status": p.claude_status,
+            }
+            for p in projects
+        ]
+    )
 
 
 async def validate_path(request: Request):
@@ -87,6 +89,7 @@ async def update(request: Request, project_id: int):
 
     if is_inertia:
         from fastapi_startkit.inertia.inertia import Inertia
+
         return Inertia.render("Home", {"updated_project": project_data})
 
     return JSONResponse(project_data)
@@ -115,8 +118,9 @@ async def destroy(request: Request, project_id: int):
         return JSONResponse({"error": "Project not found"}, status_code=404)
     try:
         # Cascade-delete related records before removing the project
-        from app.models.Task import Task
         from app.models.Command import Command
+        from app.models.Task import Task
+
         await Task.where("project_id", project_id).delete()
         await Command.where("project_id", project_id).delete()
         await AgentMessage.where("receiver_project_id", project_id).delete()
@@ -152,6 +156,7 @@ async def upload_image(request: Request, project_id: int, file: UploadFile = Fil
 
 def _inertia_error(request: Request, errors: dict, status: int) -> JSONResponse:
     from fastapi_startkit.inertia.inertia import Inertia
+
     return JSONResponse(
         content={
             "component": "Home",
@@ -190,39 +195,47 @@ async def store(request: Request):
         if not create_dir:
             if is_inertia:
                 return _inertia_error(request, {"path_not_found": expanded_path}, 422)
-            return JSONResponse({"error": "path_not_found", "expanded": expanded_path}, status_code=422)
+            return JSONResponse(
+                {"error": "path_not_found", "expanded": expanded_path}, status_code=422
+            )
         os.makedirs(expanded_path, exist_ok=True)
 
-    project = await Project.create({
-        "name": name,
-        "slug": slugify(name),
-        "path": path,
-        "language": language,
-        "workspace_id": workspace_id,
-    })
+    project = await Project.create(
+        {
+            "name": name,
+            "slug": slugify(name),
+            "path": path,
+            "language": language,
+            "workspace_id": workspace_id,
+        }
+    )
 
     ensure_claude_settings(expanded_path, BASE_URL)
     await McpSettingWriteAction.prepare(project.id).execute()
 
     # Create a default PM agent for every new project
     import json as _json
+
     from app.models.Agent import Agent
     from app.services.permissions.permission import read_default_permissions
     from app.utils.system_prompts import default_system_prompt
+
     _dp = read_default_permissions()
-    await Agent.create({
-        "project_id": project.id,
-        "name": "PM",
-        "agent_type": "pm",
-        "description": "Project manager agent that coordinates work across the team.",
-        "model": "claude-opus-4-8",
-        "system_prompt": default_system_prompt("pm"),
-        "permissions_allow": _json.dumps(_dp.get("allow", [])),
-        "permissions_deny": _json.dumps(_dp.get("deny", [])),
-        "status": "idle",
-        "has_session": False,
-        "use_worktree": False,
-    })
+    await Agent.create(
+        {
+            "project_id": project.id,
+            "name": "PM",
+            "agent_type": "pm",
+            "description": "Project manager agent that coordinates work across the team.",
+            "model": "claude-opus-4-8",
+            "system_prompt": default_system_prompt("pm"),
+            "permissions_allow": _json.dumps(_dp.get("allow", [])),
+            "permissions_deny": _json.dumps(_dp.get("deny", [])),
+            "status": "idle",
+            "has_session": False,
+            "use_worktree": False,
+        }
+    )
 
     project_data = {
         "id": project.id,
@@ -235,6 +248,7 @@ async def store(request: Request):
 
     if is_inertia:
         from fastapi_startkit.inertia.inertia import Inertia
+
         return Inertia.render("Home", {"new_project": project_data})
 
     return JSONResponse(project_data, status_code=201)

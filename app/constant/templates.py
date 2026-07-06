@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 
 class AgentTemplateSeed(BaseModel):
     """A built-in agent template definition seeded into the agent_templates table."""
+
     name: str
     description: str
     agent_type: str
@@ -21,27 +22,27 @@ AGENT_TEMPLATES: list[AgentTemplateSeed] = [
         # would restrict it to read-only tools. See the reset_pm_plan_mode migration.
         plan_mode=False,
         dangerously_skip_permissions=True,
-        model="claude-opus-4-8"
+        model="claude-opus-4-8",
     ),
     AgentTemplateSeed(
         name="Software Engineer",
         description="Creates worktrees, implements features, opens PRs, reports back to PM.",
         agent_type="software_engineer",
         dangerously_skip_permissions=True,
-        model="claude-opus-4-6"
+        model="claude-opus-4-6",
     ),
     AgentTemplateSeed(
         name="QA",
         description="Checks out branches, runs tests, browser tests, reports pass/fail and bugs to PM.",
         agent_type="qa",
         dangerously_skip_permissions=True,
-        model="claude-opus-4-6"
+        model="claude-opus-4-6",
     ),
     AgentTemplateSeed(
         name="Full Auto",
         description="Software Engineer with --dangerously-skip-permissions — no permission prompts.",
         agent_type="software_engineer",
         dangerously_skip_permissions=True,
-        model="claude-opus-4-6"
+        model="claude-opus-4-6",
     ),
 ]

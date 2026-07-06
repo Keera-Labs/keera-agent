@@ -20,18 +20,22 @@ def _serialize(m: AgentMessage, sender: Project | None, receiver: Project | None
 
 async def index(request: Request, project_id: int):
     """Return all messages sent to or from this project."""
-    messages = await AgentMessage.where("sender_project_id", project_id)\
-        .or_where("receiver_project_id", project_id)\
-        .order_by("id", "asc")\
+    messages = (
+        await AgentMessage.where("sender_project_id", project_id)
+        .or_where("receiver_project_id", project_id)
+        .order_by("id", "asc")
         .get()
+    )
 
     projects = await Project.all()
     proj_map = {p.id: p for p in projects}
 
-    return JSONResponse([
-        _serialize(m, proj_map.get(m.sender_project_id), proj_map.get(m.receiver_project_id))
-        for m in messages
-    ])
+    return JSONResponse(
+        [
+            _serialize(m, proj_map.get(m.sender_project_id), proj_map.get(m.receiver_project_id))
+            for m in messages
+        ]
+    )
 
 
 async def mark_read(request: Request, message_id: int):

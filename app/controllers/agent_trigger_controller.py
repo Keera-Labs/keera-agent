@@ -8,9 +8,9 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi_startkit.application import app
 
+from app.controllers.terminal_controller import claude_ready
 from app.models.Agent import Agent
 from app.models.Project import Project
-from app.controllers.terminal_controller import claude_ready
 from app.terminal.claude_monitor import make_claude_session_monitor
 from app.terminal.connection_manager import ConnectionManager
 from app.terminal.manager import TerminalManager
@@ -28,7 +28,7 @@ async def _inject_when_ready(session_id: str, message: str, timeout: float = 30.
             await asyncio.wait_for(event.wait(), timeout=timeout)
         except asyncio.TimeoutError:
             pass
-    terminal_manager: TerminalManager = app().make('terminal')
+    terminal_manager: TerminalManager = app().make("terminal")
     data = message.encode() if isinstance(message, str) else message
     await terminal_manager.write(session_id, data.rstrip(b"\r\n"))
     await asyncio.sleep(0.05)
@@ -57,7 +57,7 @@ async def trigger(request: Request, agent_id: int):
 
     # If an interactive Claude session is already running, wait for it to be ready then inject
     session_id = agent.session_id
-    terminal_manager: TerminalManager = app().make('terminal')
+    terminal_manager: TerminalManager = app().make("terminal")
     if session_id and terminal_manager.find(session_id):
         asyncio.create_task(_inject_when_ready(session_id, message))
         return JSONResponse({"status": "injected", "message": "Message queued for running agent"})
@@ -76,33 +76,39 @@ def _cleanup_stale_worktree(agent, cwd: str) -> None:
     spawn attempt fails with "branch already checked out".  This function detects
     and removes both the worktree directory and the stale branch before Claude runs.
     """
-    if not getattr(agent, 'use_worktree', True):
+    if not getattr(agent, "use_worktree", True):
         return
 
-    worktree_name = f'agent-{agent.id}'
-    worktree_path = os.path.join(cwd, '.claude', 'worktrees', worktree_name)
-    branch_name = f'worktree-{worktree_name}'
+    worktree_name = f"agent-{agent.id}"
+    worktree_path = os.path.join(cwd, ".claude", "worktrees", worktree_name)
+    branch_name = f"worktree-{worktree_name}"
 
     # Check if the worktree path is registered with git
     wt_list = subprocess.run(
         ["git", "worktree", "list", "--porcelain"],
-        capture_output=True, text=True, cwd=cwd,
+        capture_output=True,
+        text=True,
+        cwd=cwd,
     )
     if worktree_path in wt_list.stdout:
         subprocess.run(
             ["git", "worktree", "remove", "--force", worktree_path],
-            capture_output=True, cwd=cwd,
+            capture_output=True,
+            cwd=cwd,
         )
 
     # Delete the stale branch so Claude can recreate it fresh
     branch_list = subprocess.run(
         ["git", "branch", "--list", branch_name],
-        capture_output=True, text=True, cwd=cwd,
+        capture_output=True,
+        text=True,
+        cwd=cwd,
     )
     if branch_list.stdout.strip():
         subprocess.run(
             ["git", "branch", "-D", branch_name],
-            capture_output=True, cwd=cwd,
+            capture_output=True,
+            cwd=cwd,
         )
 
 
@@ -148,7 +154,7 @@ def _build_relay_instructions(agent, cwd: str, base_url: str, siblings) -> str:
         f"To send a message to another agent, use the MCP tool send_message_to_agent or run:\n"
         f"  curl -s -X POST {base_url}/mcp \\\n"
         f"    -H 'Content-Type: application/json' \\\n"
-        f"    -d '{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{{\"name\":\"send_message_to_agent\",\"arguments\":{{\"sender_agent_id\":{agent.id},\"receiver_agent_id\":TARGET_ID,\"message\":\"your message\"}}}}}}'\n"
+        f'    -d \'{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"send_message_to_agent","arguments":{{"sender_agent_id":{agent.id},"receiver_agent_id":TARGET_ID,"message":"your message"}}}}}}\'\n'
         f"Messages you receive appear as: [Message from Agent '<name>']: <content>\n"
         f"To create and start a NEW agent use the MCP tool spawn_agent."
     )
@@ -156,11 +162,13 @@ def _build_relay_instructions(agent, cwd: str, base_url: str, siblings) -> str:
 
 def _make_after_restart(terminal, initial_message: str):
     """Return an async callable that re-injects the initial message after a Claude restart."""
+
     async def _after_restart():
         data = initial_message.encode().rstrip(b"\r\n")
         await terminal.write(data)
         await asyncio.sleep(0.05)
         await terminal.write(b"\r")
+
     return _after_restart
 
 
@@ -179,15 +187,19 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     session_id = str(uuid.uuid4())
     await _Agent.where("id", agent.id).update({"session_id": session_id})
 
-    terminal_manager: TerminalManager = app().make('terminal')
+    terminal_manager: TerminalManager = app().make("terminal")
     terminal_manager.create(cwd=cwd, session_id=session_id)
     terminal = terminal_manager.get(session_id)
 
     # Give shell time to start, then launch claude
     await asyncio.sleep(0.5)
 
-    siblings = await _Agent.where("project_id", agent.project_id)\
-        .where("id", "!=", agent.id).where_null("deleted_at").get()
+    siblings = (
+        await _Agent.where("project_id", agent.project_id)
+        .where("id", "!=", agent.id)
+        .where_null("deleted_at")
+        .get()
+    )
 
     relay_instructions = _build_relay_instructions(agent, cwd, base_url, siblings)
 
@@ -213,10 +225,12 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
         after_restart=_make_after_restart(terminal, initial_message),
     )
     bridge = WebsocketTerminal(None, terminal, on_output=monitor)
-    asyncio.create_task(bridge.run(
-        auto_send=_build_cmd_with_identity(fresh_agent).encode(),
-        stop_on_disconnect=False,
-    ))
+    asyncio.create_task(
+        bridge.run(
+            auto_send=_build_cmd_with_identity(fresh_agent).encode(),
+            stop_on_disconnect=False,
+        )
+    )
 
     start_time = time.monotonic()
 
@@ -234,16 +248,21 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     await terminal_manager.write(session_id, b"\r")
 
     # Notify the frontend if it's already connected
-    conn_manager: ConnectionManager = app().make('connections')
+    conn_manager: ConnectionManager = app().make("connections")
     ws_bridge = conn_manager.find_by_cwd(cwd)
     if ws_bridge:
         import json as _json
+
         try:
-            await ws_bridge.write(_json.dumps({
-                "type": "agent_triggered",
-                "agent_id": agent.id,
-                "message": initial_message,
-            }))
+            await ws_bridge.write(
+                _json.dumps(
+                    {
+                        "type": "agent_triggered",
+                        "agent_id": agent.id,
+                        "message": initial_message,
+                    }
+                )
+            )
         except Exception:
             pass
 

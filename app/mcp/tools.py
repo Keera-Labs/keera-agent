@@ -2,17 +2,16 @@
 
 import json
 import os
-
-from pydantic import BaseModel, Field
 from typing import Optional, Union
 
-from fastapi_startkit.mcp import Tool, Response
+from fastapi_startkit.mcp import Response, Tool
+from pydantic import BaseModel, Field
 
 from app.models.Project import Project
 from app.models.Task import Task
 
-
 # ── helpers ───────────────────────────────────────────────────────────────────
+
 
 def _load_json(value) -> list:
     if not value:
@@ -49,15 +48,33 @@ async def _project_by_path(path: str) -> Optional[Project]:
 
 # ── create_task ───────────────────────────────────────────────────────────────
 
+
 class CreateTaskInput(BaseModel):
-    project_path: str = Field(description="Absolute path of the project (use the current working directory).")
+    project_path: str = Field(
+        description="Absolute path of the project (use the current working directory)."
+    )
     title: str = Field(description="Short, imperative title. e.g. 'Add CSV export for tasks'.")
-    body: Optional[str] = Field(default=None, description="One-paragraph summary of what needs to be built and why.")
-    acceptance_criteria: list[str] = Field(min_length=1, description="Concrete, checkable statements that define when the task is done.")
-    testing_methods: list[str] = Field(min_length=1, description="How the feature will be tested (unit, integration, manual, e2e).")
-    validation_steps: list[str] = Field(min_length=1, description="QA / edge-case checks to perform before marking done.")
-    priority: str = Field(default="medium", pattern="^(low|medium|high)$", description="Task priority. Default: medium.")
-    assignees: list[str] = Field(default_factory=list, description="Names of people assigned to this task (can be empty).")
+    body: Optional[str] = Field(
+        default=None, description="One-paragraph summary of what needs to be built and why."
+    )
+    acceptance_criteria: list[str] = Field(
+        min_length=1,
+        description="Concrete, checkable statements that define when the task is done.",
+    )
+    testing_methods: list[str] = Field(
+        min_length=1, description="How the feature will be tested (unit, integration, manual, e2e)."
+    )
+    validation_steps: list[str] = Field(
+        min_length=1, description="QA / edge-case checks to perform before marking done."
+    )
+    priority: str = Field(
+        default="medium",
+        pattern="^(low|medium|high)$",
+        description="Task priority. Default: medium.",
+    )
+    assignees: list[str] = Field(
+        default_factory=list, description="Names of people assigned to this task (can be empty)."
+    )
 
 
 class CreateTaskTool(Tool):
@@ -76,23 +93,27 @@ class CreateTaskTool(Tool):
     async def handle(self, arguments: dict) -> Response:
         project = await _project_by_path(arguments["project_path"])
         if not project:
-            return Response.text(f"Error: no Keera project found at path '{arguments['project_path']}'")
+            return Response.text(
+                f"Error: no Keera project found at path '{arguments['project_path']}'"
+            )
 
         title = arguments["title"].strip()
         if not title:
             return Response.text("Error: title is required")
 
-        task = await Task.create({
-            "project_id": project.id,
-            "title": title,
-            "body": (arguments.get("body") or "").strip() or None,
-            "priority": arguments.get("priority", "medium"),
-            "assignees": json.dumps(arguments.get("assignees") or []),
-            "acceptance_criteria": json.dumps(arguments.get("acceptance_criteria") or []),
-            "testing_methods": json.dumps(arguments.get("testing_methods") or []),
-            "validation_steps": json.dumps(arguments.get("validation_steps") or []),
-            "status": "pending",
-        })
+        task = await Task.create(
+            {
+                "project_id": project.id,
+                "title": title,
+                "body": (arguments.get("body") or "").strip() or None,
+                "priority": arguments.get("priority", "medium"),
+                "assignees": json.dumps(arguments.get("assignees") or []),
+                "acceptance_criteria": json.dumps(arguments.get("acceptance_criteria") or []),
+                "testing_methods": json.dumps(arguments.get("testing_methods") or []),
+                "validation_steps": json.dumps(arguments.get("validation_steps") or []),
+                "status": "pending",
+            }
+        )
 
         ac = arguments.get("acceptance_criteria") or []
         lines = [f"✓ Task #{task.id} created: {title}", ""]
@@ -105,9 +126,16 @@ class CreateTaskTool(Tool):
 
 # ── list_tasks ────────────────────────────────────────────────────────────────
 
+
 class ListTasksInput(BaseModel):
-    project_path: str = Field(description="Absolute path of the project (use the current working directory).")
-    status: Optional[str] = Field(default=None, pattern="^(pending|in_progress|completed|cancelled)$", description="Filter by status. Omit to return all tasks.")
+    project_path: str = Field(
+        description="Absolute path of the project (use the current working directory)."
+    )
+    status: Optional[str] = Field(
+        default=None,
+        pattern="^(pending|in_progress|completed|cancelled)$",
+        description="Filter by status. Omit to return all tasks.",
+    )
 
 
 class ListTasksTool(Tool):
@@ -120,7 +148,9 @@ class ListTasksTool(Tool):
     async def handle(self, arguments: dict) -> Response:
         project = await _project_by_path(arguments["project_path"])
         if not project:
-            return Response.text(f"Error: no Keera project found at path '{arguments['project_path']}'")
+            return Response.text(
+                f"Error: no Keera project found at path '{arguments['project_path']}'"
+            )
 
         q = Task.where("project_id", project.id)
         if arguments.get("status"):
@@ -138,6 +168,7 @@ class ListTasksTool(Tool):
 
 
 # ── get_task ──────────────────────────────────────────────────────────────────
+
 
 class GetTaskInput(BaseModel):
     task_id: int = Field(description="The numeric task ID.")
@@ -177,6 +208,7 @@ class GetTaskTool(Tool):
 
 # ── update_task ───────────────────────────────────────────────────────────────
 
+
 class UpdateTaskInput(BaseModel):
     task_id: int = Field(description="The numeric task ID.")
     title: Optional[str] = None
@@ -213,6 +245,7 @@ class UpdateTaskTool(Tool):
 
 # ── update_task_status ────────────────────────────────────────────────────────
 
+
 class UpdateTaskStatusInput(BaseModel):
     task_id: int = Field(description="The numeric task ID.")
     status: str = Field(pattern="^(pending|in_progress|completed|cancelled)$")
@@ -236,6 +269,7 @@ class UpdateTaskStatusTool(Tool):
 
 # ── delete_task ───────────────────────────────────────────────────────────────
 
+
 class DeleteTaskInput(BaseModel):
     task_id: int = Field(description="The numeric task ID to delete.")
 
@@ -258,6 +292,7 @@ class DeleteTaskTool(Tool):
 
 # ── send_message_to_agent ─────────────────────────────────────────────────────
 
+
 class SendMessageInput(BaseModel):
     sender_agent_id: int = Field(description="Your own agent ID (numeric).")
     receiver_agent_id: Union[int, str] = Field(
@@ -279,12 +314,13 @@ class SendMessageTool(Tool):
         return SendMessageInput
 
     async def handle(self, arguments: dict) -> Response:
-        from app.models.Agent import Agent
         from app.actions.agent_message_send_action import AgentMessageSendAction
+        from app.models.Agent import Agent
 
         # Validate required fields explicitly so callers get a clear error message
         missing = [
-            f for f in ("sender_agent_id", "receiver_agent_id", "message")
+            f
+            for f in ("sender_agent_id", "receiver_agent_id", "message")
             if f not in arguments or arguments[f] is None
         ]
         if missing:
@@ -312,7 +348,9 @@ class SendMessageTool(Tool):
         # receiver_agent_id accepts int ID or string name
         raw_receiver = arguments["receiver_agent_id"]
         receiver = None
-        if isinstance(raw_receiver, int) or (isinstance(raw_receiver, str) and raw_receiver.isdigit()):
+        if isinstance(raw_receiver, int) or (
+            isinstance(raw_receiver, str) and raw_receiver.isdigit()
+        ):
             receiver = await Agent.find(int(raw_receiver))
             if not receiver:
                 return Response.text(f"Error: agent #{raw_receiver} not found")
@@ -336,18 +374,27 @@ class SendMessageTool(Tool):
         if not content:
             return Response.text("Error: message cannot be empty")
 
-        msg_id, delivered = await AgentMessageSendAction.prepare(sender, receiver, content).execute()
+        msg_id, delivered = await AgentMessageSendAction.prepare(
+            sender, receiver, content
+        ).execute()
 
         if delivered:
             return Response.text(f"Message delivered to agent '{receiver.name}' (#{msg_id})")
-        return Response.text(f"Message queued for agent '{receiver.name}' (#{msg_id}) — will be delivered when Claude is ready")
+        return Response.text(
+            f"Message queued for agent '{receiver.name}' (#{msg_id}) — will be delivered when Claude is ready"
+        )
 
 
 # ── get_agent_messages ────────────────────────────────────────────────────────
 
+
 class GetAgentMessagesInput(BaseModel):
-    project_path: str = Field(description="Absolute path of the project (use current working directory).")
-    unread_only: bool = Field(default=False, description="If true, return only unread/pending messages.")
+    project_path: str = Field(
+        description="Absolute path of the project (use current working directory)."
+    )
+    unread_only: bool = Field(
+        default=False, description="If true, return only unread/pending messages."
+    )
 
 
 class GetAgentMessagesTool(Tool):
@@ -362,7 +409,9 @@ class GetAgentMessagesTool(Tool):
 
         project = await _project_by_path(arguments["project_path"])
         if not project:
-            return Response.text(f"Error: no Keera project found at path '{arguments['project_path']}'")
+            return Response.text(
+                f"Error: no Keera project found at path '{arguments['project_path']}'"
+            )
 
         q = AgentMessage.where("receiver_project_id", project.id)
         if arguments.get("unread_only"):
@@ -377,15 +426,22 @@ class GetAgentMessagesTool(Tool):
 
         lines = []
         for m in messages:
-            sender_name = proj_map[m.sender_project_id].name if m.sender_project_id in proj_map else str(m.sender_project_id)
+            sender_name = (
+                proj_map[m.sender_project_id].name
+                if m.sender_project_id in proj_map
+                else str(m.sender_project_id)
+            )
             lines.append(f"[#{m.id}] [{m.status}] From {sender_name}: {m.content}")
         return Response.text("\n".join(lines))
 
 
 # ── list_agents ───────────────────────────────────────────────────────────────
 
+
 class ListAgentsInput(BaseModel):
-    project_path: str = Field(description="Absolute path of the project (use the current working directory).")
+    project_path: str = Field(
+        description="Absolute path of the project (use the current working directory)."
+    )
 
 
 class ListAgentsTool(Tool):
@@ -400,7 +456,9 @@ class ListAgentsTool(Tool):
 
         project = await _project_by_path(arguments["project_path"])
         if not project:
-            return Response.text(f"Error: no Keera project found at path '{arguments['project_path']}'")
+            return Response.text(
+                f"Error: no Keera project found at path '{arguments['project_path']}'"
+            )
 
         agents = await Agent.where("project_id", project.id).where_null("deleted_at").get()
         if not agents:
@@ -414,14 +472,32 @@ class ListAgentsTool(Tool):
 
 # ── spawn_agent ───────────────────────────────────────────────────────────────
 
+
 class SpawnAgentInput(BaseModel):
-    project_path: str = Field(description="Absolute path of the project (use the current working directory).")
-    name: str = Field(description="Short display name for the agent (e.g. 'Backend Engineer', 'QA Bot').")
-    agent_type: str = Field(pattern="^(pm|software_engineer|software_engineer_frontend|reviewer|qa|qa_browser)$", description="Role type for the agent.")
-    message: Optional[str] = Field(default=None, description="Initial task or instruction to send to the agent after it starts. Omit to create an idle agent.")
-    model: Optional[str] = Field(default=None, description="Claude model to use. Defaults to claude-opus-4-8.")
-    task_id: Optional[int] = Field(default=None, description="ID of the task this agent is working on.")
-    from_agent_id: Optional[int] = Field(default=None, description="ID of the agent spawning this one. Sets orchestrator_id on the new agent.")
+    project_path: str = Field(
+        description="Absolute path of the project (use the current working directory)."
+    )
+    name: str = Field(
+        description="Short display name for the agent (e.g. 'Backend Engineer', 'QA Bot')."
+    )
+    agent_type: str = Field(
+        pattern="^(pm|software_engineer|software_engineer_frontend|reviewer|qa|qa_browser)$",
+        description="Role type for the agent.",
+    )
+    message: Optional[str] = Field(
+        default=None,
+        description="Initial task or instruction to send to the agent after it starts. Omit to create an idle agent.",
+    )
+    model: Optional[str] = Field(
+        default=None, description="Claude model to use. Defaults to claude-opus-4-8."
+    )
+    task_id: Optional[int] = Field(
+        default=None, description="ID of the task this agent is working on."
+    )
+    from_agent_id: Optional[int] = Field(
+        default=None,
+        description="ID of the agent spawning this one. Sets orchestrator_id on the new agent.",
+    )
 
 
 class SpawnAgentTool(Tool):
@@ -437,12 +513,14 @@ class SpawnAgentTool(Tool):
 
     async def handle(self, arguments: dict) -> Response:
         import asyncio
+
+        from fastapi_startkit.application import app as _app
+
         from app.actions.agent_create_action import AgentCreateAction
         from app.controllers.global_settings_controller import read_global_settings
         from app.models.Agent import Agent as _Agent
         from app.requests.agent_requests import AgentStoreRequest
         from app.terminal.connection_manager import ConnectionManager
-        from fastapi_startkit.application import app as _app
 
         name = (arguments.get("name") or "").strip()
         if not name:
@@ -470,7 +548,9 @@ class SpawnAgentTool(Tool):
         else:
             project = await _project_by_path(arguments["project_path"])
             if not project:
-                return Response.text(f"Error: no Keera project found at path '{arguments['project_path']}'")
+                return Response.text(
+                    f"Error: no Keera project found at path '{arguments['project_path']}'"
+                )
 
         # Enforce per-project agent limit before creating
         settings = await read_global_settings()
@@ -502,22 +582,24 @@ class SpawnAgentTool(Tool):
 
         cwd = os.path.expanduser(project.path)
 
-        payload = json.dumps({
-            "type": "agent_created",
-            "agent": {
-                "id": agent.id,
-                "project_id": agent.project_id,
-                "name": agent.name,
-                "description": agent.description,
-                "model": agent.model,
-                "system_prompt": agent.system_prompt,
-                "agent_type": agent.agent_type,
-                "status": agent.status,
-                "task_id": getattr(agent, "task_id", None),
-                "created_at": str(agent.created_at) if agent.created_at else None,
-            },
-        })
-        conn_manager: ConnectionManager = _app().make('connections')
+        payload = json.dumps(
+            {
+                "type": "agent_created",
+                "agent": {
+                    "id": agent.id,
+                    "project_id": agent.project_id,
+                    "name": agent.name,
+                    "description": agent.description,
+                    "model": agent.model,
+                    "system_prompt": agent.system_prompt,
+                    "agent_type": agent.agent_type,
+                    "status": agent.status,
+                    "task_id": getattr(agent, "task_id", None),
+                    "created_at": str(agent.created_at) if agent.created_at else None,
+                },
+            }
+        )
+        conn_manager: ConnectionManager = _app().make("connections")
         for bridge in conn_manager.all_for_cwd(cwd):
             try:
                 await bridge.write(payload)
@@ -527,13 +609,19 @@ class SpawnAgentTool(Tool):
         message = (arguments.get("message") or "").strip()
         if message:
             from app.controllers.agent_trigger_controller import _spawn_headless_agent
-            asyncio.create_task(_spawn_headless_agent(agent, project, cwd, message))
-            return Response.text(f"Agent '{name}' created (ID: {agent.id}) and starting with task: {message}")
 
-        return Response.text(f"Agent '{name}' created (ID: {agent.id}). Use send_message_to_agent to send it a task.")
+            asyncio.create_task(_spawn_headless_agent(agent, project, cwd, message))
+            return Response.text(
+                f"Agent '{name}' created (ID: {agent.id}) and starting with task: {message}"
+            )
+
+        return Response.text(
+            f"Agent '{name}' created (ID: {agent.id}). Use send_message_to_agent to send it a task."
+        )
 
 
 # ── get_orchestrated_agents ───────────────────────────────────────────────────
+
 
 class GetOrchestratedAgentsInput(BaseModel):
     agent_id: int = Field(description="Your own agent ID.")
@@ -563,13 +651,15 @@ class GetOrchestratedAgentsTool(Tool):
 
         rows = []
         for a in agents:
-            rows.append({
-                "id": a.id,
-                "name": a.name,
-                "agent_type": a.agent_type,
-                "status": getattr(a, "status", "unknown"),
-                "active": bool(getattr(a, "session_id", None)),
-            })
+            rows.append(
+                {
+                    "id": a.id,
+                    "name": a.name,
+                    "agent_type": a.agent_type,
+                    "status": getattr(a, "status", "unknown"),
+                    "active": bool(getattr(a, "session_id", None)),
+                }
+            )
 
         total = len(rows)
         active = sum(1 for r in rows if r["active"])
@@ -578,6 +668,7 @@ class GetOrchestratedAgentsTool(Tool):
 
 
 # ── delete_agent ──────────────────────────────────────────────────────────────
+
 
 class DeleteAgentInput(BaseModel):
     agent_id: int = Field(description="ID of the agent to delete.")
@@ -596,6 +687,7 @@ class DeleteAgentTool(Tool):
 
     async def handle(self, arguments: dict) -> Response:
         import datetime
+
         from app.models.Agent import Agent
 
         agent_id = arguments.get("agent_id")

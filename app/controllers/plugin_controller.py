@@ -57,9 +57,7 @@ async def uninstall(slug: str):
         await plugin.uninstall()
     except Exception:
         logger.exception("Plugin '%s' uninstall failed", slug)
-        return JSONResponse(
-            {"error": f"plugin '{slug}' uninstall failed"}, status_code=500
-        )
+        return JSONResponse({"error": f"plugin '{slug}' uninstall failed"}, status_code=500)
 
     if was_active:
         registry.deactivate(slug)
@@ -92,9 +90,7 @@ async def _set_active(slug: str, active: bool):
     except Exception:
         action = "activation" if active else "deactivation"
         logger.exception("Plugin '%s' %s hook failed", slug, action)
-        return JSONResponse(
-            {"error": f"plugin '{slug}' {action} failed"}, status_code=500
-        )
+        return JSONResponse({"error": f"plugin '{slug}' {action} failed"}, status_code=500)
 
     if active:
         registry.activate(slug)
@@ -102,13 +98,15 @@ async def _set_active(slug: str, active: bool):
         registry.deactivate(slug)
 
     if row is None:
-        await PluginModel.create({
-            "slug": plugin.slug,
-            "name": plugin.name,
-            "description": plugin.description,
-            "path": plugin.path,
-            "active": active,
-        })
+        await PluginModel.create(
+            {
+                "slug": plugin.slug,
+                "name": plugin.name,
+                "description": plugin.description,
+                "path": plugin.path,
+                "active": active,
+            }
+        )
     else:
         await row.update({"active": active})
 

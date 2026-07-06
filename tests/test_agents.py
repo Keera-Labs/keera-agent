@@ -1,11 +1,12 @@
 import json
 
-from bootstrap.application import app
 from fastapi_startkit.fastapi.testing import HttpTestCase
-from app.models.Agent import Agent
-from app.models.Project import Project
-from app.models.GlobalSettings import GlobalSettings
+
 from app.controllers.global_settings_controller import write_global_setting
+from app.models.Agent import Agent
+from app.models.GlobalSettings import GlobalSettings
+from app.models.Project import Project
+from bootstrap.application import app
 
 
 def _attrs(response) -> dict:
@@ -21,20 +22,26 @@ class TestAgents(HttpTestCase):
         await super().asyncSetUp()
         await Agent.where("id", ">", 0).delete()
         await Project.where("id", ">", 0).delete()
-        response = await self.post("/api/projects", json={
-            "name": "test-project",
-            "path": "~/code/test-project",
-            "language": "Python",
-            "create_dir": True,
-        })
+        response = await self.post(
+            "/api/projects",
+            json={
+                "name": "test-project",
+                "path": "~/code/test-project",
+                "language": "Python",
+                "create_dir": True,
+            },
+        )
         self.project_id = response.json()["id"]
 
     # --- store ---
 
     async def test_store_creates_agent_with_defaults(self):
-        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
-            "name": "My Agent",
-        })
+        response = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={
+                "name": "My Agent",
+            },
+        )
         self.assertEqual(response.status_code, 200)
         attrs = _attrs(response)
         self.assertEqual(attrs["name"], "My Agent")
@@ -45,63 +52,84 @@ class TestAgents(HttpTestCase):
     async def test_store_pm_agent_defaults_plan_mode_off(self):
         # A PM must stay writable to coordinate the team — it is never forced
         # into plan mode by default.
-        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
-            "name": "PM",
-            "agent_type": "pm",
-        })
+        response = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={
+                "name": "PM",
+                "agent_type": "pm",
+            },
+        )
         self.assertEqual(response.status_code, 200)
         attrs = _attrs(response)
         self.assertFalse(attrs["plan_mode"])
         self.assertTrue(attrs["dangerously_skip_permissions"])
 
     async def test_store_explicit_plan_mode_true(self):
-        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
-            "name": "Planner",
-            "agent_type": "reviewer",
-            "plan_mode": True,
-        })
+        response = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={
+                "name": "Planner",
+                "agent_type": "reviewer",
+                "plan_mode": True,
+            },
+        )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(_attrs(response)["plan_mode"])
 
     async def test_store_nested_flags_plan_mode_promotes_to_column(self):
         # Legacy clients that nest plan_mode in flags still set the column.
-        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
-            "name": "Legacy Plan",
-            "flags": {"plan_mode": True},
-        })
+        response = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={
+                "name": "Legacy Plan",
+                "flags": {"plan_mode": True},
+            },
+        )
         self.assertEqual(response.status_code, 200)
         attrs = _attrs(response)
         self.assertTrue(attrs["plan_mode"])
         self.assertNotIn("plan_mode", json.loads(attrs["flags"]))
 
     async def test_store_explicit_plan_mode_false(self):
-        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
-            "name": "PM No Plan",
-            "agent_type": "pm",
-            "plan_mode": False,
-        })
+        response = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={
+                "name": "PM No Plan",
+                "agent_type": "pm",
+                "plan_mode": False,
+            },
+        )
         self.assertEqual(response.status_code, 200)
         self.assertFalse(_attrs(response)["plan_mode"])
 
     async def test_store_explicit_dangerously_skip_permissions_false(self):
-        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
-            "name": "Safe Agent",
-            "dangerously_skip_permissions": False,
-        })
+        response = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={
+                "name": "Safe Agent",
+                "dangerously_skip_permissions": False,
+            },
+        )
         self.assertEqual(response.status_code, 200)
         self.assertFalse(_attrs(response)["dangerously_skip_permissions"])
 
     async def test_store_requires_name(self):
-        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
-            "agent_type": "software_engineer",
-        })
+        response = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={
+                "agent_type": "software_engineer",
+            },
+        )
         self.assertEqual(response.status_code, 422)
 
     async def test_store_flags_excludes_promoted_columns(self):
-        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
-            "name": "Flag Agent",
-            "flags": {"dangerously_skip_permissions": True, "plan_mode": True, "verbose": True},
-        })
+        response = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={
+                "name": "Flag Agent",
+                "flags": {"dangerously_skip_permissions": True, "plan_mode": True, "verbose": True},
+            },
+        )
         self.assertEqual(response.status_code, 200)
         # flags is stored (and serialized) as a raw JSON string
         flags = json.loads(_attrs(response)["flags"])
@@ -113,7 +141,9 @@ class TestAgents(HttpTestCase):
     # --- update ---
 
     async def _create_agent(self, **kwargs) -> dict:
-        resp = await self.post(f"/api/projects/{self.project_id}/agents", json={"name": "Agent", **kwargs})
+        resp = await self.post(
+            f"/api/projects/{self.project_id}/agents", json={"name": "Agent", **kwargs}
+        )
         return _attrs(resp)
 
     async def test_update_name(self):
@@ -124,7 +154,9 @@ class TestAgents(HttpTestCase):
 
     async def test_update_dangerously_skip_permissions(self):
         agent = await self._create_agent()
-        response = await self.client.patch(f"/api/agents/{agent['id']}", json={"dangerously_skip_permissions": False})
+        response = await self.client.patch(
+            f"/api/agents/{agent['id']}", json={"dangerously_skip_permissions": False}
+        )
         self.assertEqual(response.status_code, 200)
         self.assertFalse(_attrs(response)["dangerously_skip_permissions"])
 
@@ -173,76 +205,103 @@ class TestAgentTypeEnforcement(HttpTestCase):
         await super().asyncSetUp()
         await Agent.where("id", ">", 0).delete()
         await Project.where("id", ">", 0).delete()
-        response = await self.post("/api/projects", json={
-            "name": "test-project",
-            "path": "~/code/test-project",
-            "language": "Python",
-            "create_dir": True,
-        })
+        response = await self.post(
+            "/api/projects",
+            json={
+                "name": "test-project",
+                "path": "~/code/test-project",
+                "language": "Python",
+                "create_dir": True,
+            },
+        )
         self.project_id = response.json()["id"]
 
     async def test_invalid_type_rejected(self):
-        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
-            "name": "Bad Agent",
-            "agent_type": "hacker",
-        })
+        response = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={
+                "name": "Bad Agent",
+                "agent_type": "hacker",
+            },
+        )
         self.assertEqual(response.status_code, 422)
 
     async def test_se_has_system_prompt(self):
-        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
-            "name": "SE Agent",
-            "agent_type": "software_engineer",
-        })
+        response = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={
+                "name": "SE Agent",
+                "agent_type": "software_engineer",
+            },
+        )
         self.assertEqual(response.status_code, 200)
         system_prompt = _attrs(response)["system_prompt"]
         self.assertIsNotNone(system_prompt)
         self.assertGreater(len(system_prompt), 0)
 
     async def test_frontend_se_has_system_prompt(self):
-        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
-            "name": "Frontend Agent",
-            "agent_type": "software_engineer_frontend",
-        })
+        response = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={
+                "name": "Frontend Agent",
+                "agent_type": "software_engineer_frontend",
+            },
+        )
         self.assertEqual(response.status_code, 200)
         self.assertIn("Frontend", _attrs(response)["system_prompt"])
 
     async def test_reviewer_has_system_prompt(self):
-        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
-            "name": "Reviewer Agent",
-            "agent_type": "reviewer",
-        })
+        response = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={
+                "name": "Reviewer Agent",
+                "agent_type": "reviewer",
+            },
+        )
         self.assertEqual(response.status_code, 200)
         self.assertIn("Reviewer", _attrs(response)["system_prompt"])
 
     async def test_pm_defaults_plan_mode_off(self):
-        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
-            "name": "PM Agent",
-            "agent_type": "pm",
-        })
+        response = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={
+                "name": "PM Agent",
+                "agent_type": "pm",
+            },
+        )
         self.assertEqual(response.status_code, 200)
         self.assertFalse(_attrs(response)["plan_mode"])
 
     async def test_se_has_dangerously_skip_true(self):
-        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
-            "name": "SE Agent",
-            "agent_type": "software_engineer",
-        })
+        response = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={
+                "name": "SE Agent",
+                "agent_type": "software_engineer",
+            },
+        )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(_attrs(response)["dangerously_skip_permissions"])
 
     async def test_pm_agent_has_use_worktree_false(self):
-        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
-            "name": "PM Agent",
-            "agent_type": "pm",
-        })
+        response = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={
+                "name": "PM Agent",
+                "agent_type": "pm",
+            },
+        )
         self.assertEqual(response.status_code, 200)
         self.assertFalse(_attrs(response)["use_worktree"])
 
     async def test_se_agent_has_use_worktree_true(self):
-        response = await self.post(f"/api/projects/{self.project_id}/agents", json={
-            "name": "SE Agent",
-            "agent_type": "software_engineer",
-        })
+        response = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={
+                "name": "SE Agent",
+                "agent_type": "software_engineer",
+            },
+        )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(_attrs(response)["use_worktree"])
 
@@ -268,12 +327,15 @@ class TestAgentLimit(HttpTestCase):
         await Agent.where("id", ">", 0).delete()
         await Project.where("id", ">", 0).delete()
         await GlobalSettings.where("id", ">", 0).delete()
-        response = await self.post("/api/projects", json={
-            "name": "limit-test-project",
-            "path": "~/code/limit-test-project",
-            "language": "Python",
-            "create_dir": True,
-        })
+        response = await self.post(
+            "/api/projects",
+            json={
+                "name": "limit-test-project",
+                "path": "~/code/limit-test-project",
+                "language": "Python",
+                "create_dir": True,
+            },
+        )
         self.project_id = response.json()["id"]
         # Remove auto-created agents (e.g. default PM agent) so each test
         # starts with a clean 0-agent state and limit numbers are predictable.
@@ -307,7 +369,7 @@ class TestAgentLimit(HttpTestCase):
     async def test_deleted_agent_does_not_count_toward_limit(self):
         """Soft-deleted agents should not count against the limit."""
         r1 = await self.post(f"/api/projects/{self.project_id}/agents", json={"name": "Agent 1"})
-        r2 = await self.post(f"/api/projects/{self.project_id}/agents", json={"name": "Agent 2"})
+        await self.post(f"/api/projects/{self.project_id}/agents", json={"name": "Agent 2"})
         agent1_id = _attrs(r1)["id"]
 
         # Delete one agent

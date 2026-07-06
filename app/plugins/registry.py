@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
     from fastapi import FastAPI
     from fastapi_startkit.mcp import Tool
+
     from app.plugins.base import Plugin
 
 

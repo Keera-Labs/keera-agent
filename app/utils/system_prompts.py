@@ -10,9 +10,11 @@ def _prompts_dir() -> pathlib.Path:
     """
     try:
         from fastapi_startkit.application import app
+
         return app().base_path / "app" / "prompts"
     except Exception:
         return pathlib.Path(__file__).parent.parent / "prompts"
+
 
 # Fallback used only when the configured app URL cannot be resolved (e.g. the
 # config layer is not booted during isolated unit tests).
@@ -27,12 +29,14 @@ def _mcp_url() -> str:
     """
     try:
         from fastapi_startkit import Config
+
         base_url = Config.get("fastapi.app_url")
         if base_url:
             return f"{base_url.rstrip('/')}/mcp"
     except Exception:
         pass
     return _DEFAULT_MCP_URL
+
 
 # Keep the dict as a hard-coded fallback for environments where the prompts
 # directory cannot be found (e.g. during testing without assets).
@@ -57,6 +61,7 @@ def default_system_prompt(agent_type: str) -> str | None:
     if template_path.exists():
         try:
             from jinja2 import Environment, FileSystemLoader, select_autoescape
+
             env = Environment(
                 loader=FileSystemLoader(str(prompts_dir)),
                 autoescape=select_autoescape([]),  # plain text — no HTML escaping
