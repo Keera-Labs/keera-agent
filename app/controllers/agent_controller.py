@@ -227,6 +227,123 @@ async def spawn(request: Request, project_id: int):
     return AgentResource(agent)
 
 
+async def adopt_work(agent_id: int):
+    """Adopt an agent's worktree: merge its branch into the project's current
+    branch, then remove the worktree while KEEPING the branch.
+
+    The agent runs in a git worktree at <project.path>/.claude/worktrees/agent-{id}
+    on branch worktree-agent-{id}. We merge that branch into whatever branch the
+    main repo (project.path) currently has checked out, then drop the worktree
+    directory. The branch is intentionally preserved so the merged history stays
+    referenceable.
+    """
+    import subprocess
+
+    from app.controllers.agent_trigger_controller import discover_worktree_path
+    from app.models.Project import Project
+
+    agent = await Agent.find(agent_id)
+    if not agent:
+        return JSONResponse({"error": "Agent not found"}, status_code=404)
+
+    project = await Project.find(agent.project_id)
+    if not project:
+        return JSONResponse({"error": "Project not found"}, status_code=404)
+
+    cwd = os.path.expanduser(project.path)
+    branch_name = f"worktree-agent-{agent_id}"
+
+    worktree_path = discover_worktree_path(cwd, branch_name)
+    if not worktree_path:
+        return JSONResponse(
+            {"error": f"No active worktree found for branch {branch_name}"},
+            status_code=404,
+        )
+
+    # Pre-flight: refuse if the agent worktree has uncommitted or untracked
+    # changes. Only committed work is on the branch we merge, so removing the
+    # worktree would silently discard anything not committed. Bail before the
+    # merge so nothing is changed and no data is lost — the worktree is kept.
+    wt_status = subprocess.run(
+        ["git", "-C", worktree_path, "status", "--porcelain"],
+        capture_output=True,
+        text=True,
+    )
+    if wt_status.stdout.strip():
+        return JSONResponse(
+            {
+                "error": (
+                    "The agent worktree has uncommitted changes that would be "
+                    "lost. Commit or discard them in the worktree, then retry."
+                ),
+                "detail": wt_status.stdout.strip(),
+            },
+            status_code=409,
+        )
+
+    # Merge the agent branch into the current branch of the main repo. A branch
+    # checked out in a worktree cannot be checked out here, but merging its ref
+    # is fine since merge never touches the worktree's own working copy.
+    merge = subprocess.run(
+        ["git", "merge", "--no-edit", branch_name],
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+    )
+    if merge.returncode != 0:
+        detail = (merge.stderr or merge.stdout).strip()
+        # A real content conflict starts a merge (MERGE_HEAD exists) that must be
+        # aborted to unwind it. A refusal to even start — the main repo's working
+        # tree is dirty and the merge would overwrite local changes — leaves no
+        # merge in progress, so there is nothing to abort. Distinguish the two so
+        # the caller gets an actionable message; both are safe (no partial state).
+        merge_in_progress = (
+            subprocess.run(
+                ["git", "rev-parse", "-q", "--verify", "MERGE_HEAD"],
+                capture_output=True,
+                cwd=cwd,
+            ).returncode
+            == 0
+        )
+        if merge_in_progress:
+            subprocess.run(["git", "merge", "--abort"], capture_output=True, cwd=cwd)
+            error = "Merge conflict — resolve conflicts manually before adopting"
+        else:
+            error = (
+                "Cannot merge: the project has uncommitted local changes that "
+                "would be overwritten. Commit or stash them, then retry."
+            )
+        return JSONResponse({"error": error, "detail": detail}, status_code=409)
+
+    # Remove the worktree directory but keep the branch (no `git branch -D`).
+    # No --force: the pre-flight check confirmed the worktree is clean, so a
+    # plain remove succeeds and git still guards against destroying changes if
+    # the worktree turned dirty in the meantime.
+    remove = subprocess.run(
+        ["git", "worktree", "remove", worktree_path],
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+    )
+    if remove.returncode != 0:
+        return JSONResponse(
+            {
+                "error": "Merged, but failed to remove worktree",
+                "detail": (remove.stderr or remove.stdout).strip(),
+                "branch": branch_name,
+            },
+            status_code=500,
+        )
+
+    return JSONResponse(
+        {
+            "ok": True,
+            "branch": branch_name,
+            "worktree": worktree_path,
+        }
+    )
+
+
 async def output(request: Request, agent_id: int):
     """Return the recent terminal output lines for a given agent."""
     from app.models.Project import Project

@@ -144,6 +144,17 @@ export function useAgents(projectId: number | null) {
         },
     })
 
+    const adoptWork = useMutation({
+        mutationFn: async (agentId: number) => {
+            const res = await fetch(`/api/agents/${agentId}/adopt-work`, { method: 'POST' })
+            const json = await res.json().catch(() => ({}))
+            if (!res.ok) {
+                throw new Error((json as { error?: string }).error || 'Failed to adopt agent work')
+            }
+            return json as { ok: boolean; branch: string; worktree: string }
+        },
+    })
+
     const setDefault = async (agentId: number): Promise<boolean> => {
         const res = await fetch(`/api/projects/${projectId}/default-agent`, {
             method: 'POST',
@@ -195,6 +206,7 @@ export function useAgents(projectId: number | null) {
         create,
         remove,
         update,
+        adoptWork,
         setDefault,
         spawnViaMCP,
     }

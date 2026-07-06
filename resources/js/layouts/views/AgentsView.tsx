@@ -49,7 +49,7 @@ export function AgentsView() {
         setShowAddAgent,
     } = useAppLayout()
 
-    const { agents: projectAgents, remove: removeAgent } = useAgents(activeProject?.id ?? null)
+    const { agents: projectAgents, remove: removeAgent, adoptWork } = useAgents(activeProject?.id ?? null)
 
     // Derived
     const activeAgent = activeAgentId !== null
@@ -299,6 +299,35 @@ export function AgentsView() {
                                             </svg>
                                         </button>
                                     )}
+
+                                    {/* Adopt work button — merge branch into main, remove worktree, keep branch */}
+                                    <button
+                                        onClick={async e => {
+                                            e.stopPropagation()
+                                            if (adoptWork.isPending) return
+                                            if (!window.confirm(`Adopt ${agent.name}'s work?\n\nThis merges branch worktree-agent-${agent.id} into the current branch and removes the worktree (the branch is kept).`)) return
+                                            try {
+                                                await adoptWork.mutateAsync(agent.id)
+                                                window.alert(`Merged ${agent.name}'s work and removed its worktree.`)
+                                            } catch (err) {
+                                                window.alert(err instanceof Error ? err.message : 'Failed to adopt agent work')
+                                            }
+                                        }}
+                                        title="Adopt work — merge branch into current, remove worktree"
+                                        style={{
+                                            background: 'transparent', border: 'none',
+                                            color: color.textFaint, cursor: 'pointer',
+                                            padding: '3px', borderRadius: '4px',
+                                            display: 'flex', alignItems: 'center', flexShrink: 0,
+                                        }}
+                                        onMouseEnter={e => (e.currentTarget.style.color = '#16a34a')}
+                                        onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
+                                    >
+                                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                                            <path d="M5 3.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0zm0 2.122a2.25 2.25 0 1 0-1.5 0v5.256a2.251 2.251 0 1 0 1.5 0V5.372zM4.25 12.5a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5zM12.75 9a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5zm0 3a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5z"/>
+                                            <path d="M11.5 3.25a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5zm0 2.372V8a2.25 2.25 0 0 1-2.25 2.25H6.5a.75.75 0 0 1 0-1.5h2.75a.75.75 0 0 0 .75-.75V5.622a2.251 2.251 0 1 1 1.5 0z"/>
+                                        </svg>
+                                    </button>
 
                                     {/* Delete button */}
                                     <button

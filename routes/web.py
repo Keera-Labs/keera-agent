@@ -73,6 +73,7 @@ router.post("/api/projects/{project_id}/default-agent", agent_controller.set_def
 router.patch("/api/agents/{agent_id}", agent_controller.update)
 router.delete("/api/agents/{agent_id}", agent_controller.destroy)
 router.get("/api/agents/{agent_id}/output", agent_controller.output)
+router.post("/api/agents/{agent_id}/adopt-work", agent_controller.adopt_work)
 
 # Agent templates — GLOBAL (project_id NULL)
 router.get("/api/agent-templates", agent_template_controller.index)
