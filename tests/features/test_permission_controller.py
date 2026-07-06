@@ -25,9 +25,9 @@ class TestPermissionController(TestCase, DatabaseTransaction):
             permissions_deny=json.dumps(["Bash(rm)"]),
         )
         response = await self.get(f"/api/agents/{agent.id}/permissions")
-        response.assert_ok().assert_json(lambda j: (
-            j.where("allow", ["Bash(ls)"]).where("deny", ["Bash(rm)"]).etc()
-        ))
+        response.assert_ok().assert_json(
+            lambda j: j.where("allow", ["Bash(ls)"]).where("deny", ["Bash(rm)"]).etc()
+        )
 
     async def test_update_agent_permissions_round_trips_and_drops_blanks(self):
         agent = await AgentFactory.new().create(project_id=self.project.id)
@@ -35,9 +35,9 @@ class TestPermissionController(TestCase, DatabaseTransaction):
             f"/api/agents/{agent.id}/permissions",
             json={"allow": ["Bash(ls)", "", "  "], "deny": ["  Bash(rm)  "]},
         )
-        response.assert_ok().assert_json(lambda j: (
-            j.where("allow", ["Bash(ls)"]).where("deny", ["Bash(rm)"]).etc()
-        ))
+        response.assert_ok().assert_json(
+            lambda j: j.where("allow", ["Bash(ls)"]).where("deny", ["Bash(rm)"]).etc()
+        )
 
     async def test_update_agent_permissions_returns_404_for_missing_agent(self):
         response = await self.patch(

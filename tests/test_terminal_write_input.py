@@ -8,19 +8,36 @@ import asyncio
 import fcntl
 import os
 import pty
+import select
 import unittest
 
 from app.terminal.terminal import Terminal
 
 
-def _read_nonblocking(fd: int, n: int = 1024) -> bytes:
-    """Read up to n bytes from fd without blocking (returns b'' if nothing available)."""
+def _read_nonblocking(fd: int, n: int = 1024, timeout: float = 1.0) -> bytes:
+    """Read up to n bytes from fd, waiting up to `timeout` seconds for data to arrive.
+
+    Writing to a PTY and reading the echo/forwarded bytes back is asynchronous:
+    the kernel may not have delivered them by the time we read. We therefore wait
+    for readability (rather than racing with a bare non-blocking read, which is
+    flaky across platforms) and then drain whatever is immediately available.
+    """
     flags = fcntl.fcntl(fd, fcntl.F_GETFL)
     fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
     try:
-        return os.read(fd, n)
-    except (BlockingIOError, OSError):
-        return b""
+        out = b""
+        while len(out) < n:
+            ready, _, _ = select.select([fd], [], [], timeout if not out else 0.05)
+            if not ready:
+                break
+            try:
+                chunk = os.read(fd, n - len(out))
+            except (BlockingIOError, OSError):
+                break
+            if not chunk:
+                break
+            out += chunk
+        return out
     finally:
         fcntl.fcntl(fd, fcntl.F_SETFL, flags)  # restore
 
@@ -57,10 +74,8 @@ class TestWritePreservesSpaces(unittest.IsolatedAsyncioTestCase):
             message = b"Hello World this is a test message"
             await term.write(message)
             data = _read_nonblocking(master_fd, 512)
-            self.assertIn(b"Hello World", data,
-                          "space between 'Hello' and 'World' was dropped")
-            self.assertIn(b"this is a test", data,
-                          "spaces inside message were dropped")
+            self.assertIn(b"Hello World", data, "space between 'Hello' and 'World' was dropped")
+            self.assertIn(b"this is a test", data, "spaces inside message were dropped")
         finally:
             os.close(slave_fd)
             os.close(master_fd)
@@ -74,8 +89,7 @@ class TestWritePreservesSpaces(unittest.IsolatedAsyncioTestCase):
             data = _read_nonblocking(master_fd, 512)
             self.assertIn(b"Task complete.", data)
             self.assertIn(b"Please open a PR.", data)
-            self.assertIn(b"Task complete. Please", data,
-                          "space after period was dropped")
+            self.assertIn(b"Task complete. Please", data, "space after period was dropped")
         finally:
             os.close(slave_fd)
             os.close(master_fd)
@@ -90,13 +104,17 @@ class TestWritePreservesSpaces(unittest.IsolatedAsyncioTestCase):
         term, slave_fd, master_fd = _make_terminal_with_pty()
         try:
             import time
+
             message = b"This message has many spaces between its words"
             t0 = time.monotonic()
             await term.write(message)
             elapsed_ms = (time.monotonic() - t0) * 1000
-            self.assertLess(elapsed_ms, 20,
-                            f"write() took {elapsed_ms:.1f} ms — "
-                            f"suggests byte-by-byte sleeping is still happening")
+            self.assertLess(
+                elapsed_ms,
+                20,
+                f"write() took {elapsed_ms:.1f} ms — "
+                f"suggests byte-by-byte sleeping is still happening",
+            )
         finally:
             os.close(slave_fd)
             os.close(master_fd)

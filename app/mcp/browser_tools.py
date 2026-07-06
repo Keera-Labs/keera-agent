@@ -1,12 +1,11 @@
 """Playwright browser automation MCP tools."""
 
-import base64
 import asyncio
+import base64
 from typing import Any, Optional
 
+from fastapi_startkit.mcp import Response, Tool
 from pydantic import BaseModel, Field
-
-from fastapi_startkit.mcp import Tool, Response
 
 _browser: Any = None
 _page: Any = None
@@ -18,6 +17,7 @@ async def _get_page():
     async with _lock:
         if _browser is None:
             from playwright.async_api import async_playwright
+
             _pw = await async_playwright().start()
             _browser = await _pw.chromium.launch(headless=False)
             _page = await _browser.new_page()
@@ -27,6 +27,7 @@ async def _get_page():
 
 
 # ── browser_navigate ──────────────────────────────────────────────────────────
+
 
 class BrowserNavigateInput(BaseModel):
     url: str = Field(description="The full URL to navigate to (e.g. http://localhost:8000).")
@@ -50,6 +51,7 @@ class BrowserNavigateTool(Tool):
 
 # ── browser_click ─────────────────────────────────────────────────────────────
 
+
 class BrowserClickInput(BaseModel):
     selector: str = Field(description="CSS selector for the element to click.")
 
@@ -69,6 +71,7 @@ class BrowserClickTool(Tool):
 
 
 # ── browser_fill ──────────────────────────────────────────────────────────────
+
 
 class BrowserFillInput(BaseModel):
     selector: str = Field(description="CSS selector for the input element.")
@@ -92,6 +95,7 @@ class BrowserFillTool(Tool):
 
 # ── browser_assert_text ───────────────────────────────────────────────────────
 
+
 class BrowserAssertTextInput(BaseModel):
     selector: str = Field(description="CSS selector for the element to check.")
     text: str = Field(description="Expected text (substring match).")
@@ -99,7 +103,9 @@ class BrowserAssertTextInput(BaseModel):
 
 class BrowserAssertTextTool(Tool):
     name = "browser_assert_text"
-    description = "Assert that an element on the page contains the expected text. Returns PASS or FAIL."
+    description = (
+        "Assert that an element on the page contains the expected text. Returns PASS or FAIL."
+    )
 
     def schema(self):
         return BrowserAssertTextInput
@@ -115,15 +121,21 @@ class BrowserAssertTextTool(Tool):
             actual = (await element.inner_text()).strip()
             if expected in actual:
                 return Response.text(f"PASS: '{selector}' contains '{expected}'")
-            return Response.text(f"FAIL: '{selector}' has text '{actual}', expected to contain '{expected}'")
+            return Response.text(
+                f"FAIL: '{selector}' has text '{actual}', expected to contain '{expected}'"
+            )
         except Exception as exc:
             return Response.text(f"FAIL: {exc}")
 
 
 # ── browser_screenshot ────────────────────────────────────────────────────────
 
+
 class BrowserScreenshotInput(BaseModel):
-    selector: Optional[str] = Field(default=None, description="Optional CSS selector — screenshot only that element. Omit for full page.")
+    selector: Optional[str] = Field(
+        default=None,
+        description="Optional CSS selector — screenshot only that element. Omit for full page.",
+    )
 
 
 class BrowserScreenshotTool(Tool):
@@ -145,7 +157,9 @@ class BrowserScreenshotTool(Tool):
             png_bytes = await page.screenshot(full_page=True)
         b64 = base64.b64encode(png_bytes).decode()
         size_kb = len(png_bytes) // 1024
-        return Response.text(f"Screenshot captured ({size_kb} KB). base64_png={b64[:80]}... (truncated)")
+        return Response.text(
+            f"Screenshot captured ({size_kb} KB). base64_png={b64[:80]}... (truncated)"
+        )
 
 
 # ── tool list ─────────────────────────────────────────────────────────────────

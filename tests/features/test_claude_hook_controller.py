@@ -34,11 +34,13 @@ class TestClaudeHookController(TestCase, DatabaseTransaction):
     async def test_claude_stopped_marks_project_idle(self):
         """Claude stopping for a known project marks it claude_status=idle."""
         import os
+
         cwd = os.path.expanduser(self.project.path)
 
         await self.post("/api/claude-stopped", json={"cwd": cwd})
 
         from app.models.Project import Project
+
         refreshed = await Project.find(self.project.id)
         self.assertEqual(refreshed.claude_status, "idle")
 
@@ -49,6 +51,7 @@ class TestClaudeHookController(TestCase, DatabaseTransaction):
         `description` column) — so the PTY write uses a non-None value.
         """
         import os
+
         task = await TaskFactory.new().create(
             project_id=self.project.id,
             body="Implement the CSV export endpoint",
@@ -61,6 +64,7 @@ class TestClaudeHookController(TestCase, DatabaseTransaction):
 
         # Give the background asyncio.create_task a moment to run
         import asyncio
+
         await asyncio.sleep(0.1)
 
         refreshed = await Task.find(task.id)
@@ -75,6 +79,7 @@ class TestClaudeHookController(TestCase, DatabaseTransaction):
     async def test_claude_started_marks_first_pending_task_in_progress(self):
         """UserPromptSubmit hook should mark the first pending task in_progress."""
         import os
+
         task = await TaskFactory.new().create(project_id=self.project.id)
         cwd = os.path.expanduser(self.project.path)
 

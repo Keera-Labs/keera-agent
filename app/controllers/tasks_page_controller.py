@@ -9,10 +9,10 @@ from app.models.Task import Task
 
 def _slugify(name: str) -> str:
     s = name.lower()
-    s = re.sub(r'\s+', '-', s)
-    s = re.sub(r'[^a-z0-9-]', '', s)
-    s = re.sub(r'-+', '-', s)
-    return s.strip('-')
+    s = re.sub(r"\s+", "-", s)
+    s = re.sub(r"[^a-z0-9-]", "", s)
+    s = re.sub(r"-+", "-", s)
+    return s.strip("-")
 
 
 def _load_json(value) -> list:
@@ -20,6 +20,7 @@ def _load_json(value) -> list:
         return []
     try:
         import json
+
         return json.loads(value)
     except (ValueError, TypeError):
         return []
@@ -48,8 +49,11 @@ async def tasks_page(request: Request, project: str):
     if proj:
         raw = await Task.where("project_id", proj.id).get()
         tasks = [_serialize(t) for t in raw]
-    return Inertia.render("Tasks", {
-        "project": project,
-        "project_id": proj.id if proj else None,
-        "tasks": tasks,
-    })
+    return Inertia.render(
+        "Tasks",
+        {
+            "project": project,
+            "project_id": proj.id if proj else None,
+            "tasks": tasks,
+        },
+    )

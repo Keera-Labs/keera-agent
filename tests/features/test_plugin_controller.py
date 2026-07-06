@@ -66,6 +66,7 @@ class TestPluginController(TestCase):
         await self.post("/api/plugins/jira/activate")
 
         from app.models.Plugin import Plugin as PluginModel
+
         row = await PluginModel.where("slug", "jira").first()
         self.assertIsNotNone(row)
         self.assertTrue(row.active)
@@ -76,8 +77,10 @@ class TestPluginController(TestCase):
 
     async def test_toggle_fires_lifecycle_hooks(self):
         plugin = self._registry().get("jira")
-        with patch.object(type(plugin), "activate", new=AsyncMock()) as on_activate, \
-                patch.object(type(plugin), "deactivate", new=AsyncMock()) as on_deactivate:
+        with (
+            patch.object(type(plugin), "activate", new=AsyncMock()) as on_activate,
+            patch.object(type(plugin), "deactivate", new=AsyncMock()) as on_deactivate,
+        ):
             await self.post("/api/plugins/jira/activate")
             on_activate.assert_awaited_once()
             on_deactivate.assert_not_awaited()

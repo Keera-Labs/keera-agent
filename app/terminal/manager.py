@@ -1,4 +1,5 @@
 import uuid
+
 from fastapi_startkit.logging import Logger
 
 from app.terminal.terminal import Terminal

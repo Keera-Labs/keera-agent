@@ -1,26 +1,28 @@
 from fastapi_startkit.fastapi import Router
 
-from app.controllers import home_controller
-from app.controllers import tasks_page_controller
-from app.controllers import terminal_controller
-from app.controllers import project_controller
-from app.controllers import task_controller
-from app.controllers import workspace_controller
-from app.controllers import claude_hook_controller
-from app.controllers import command_controller
-from app.controllers import agent_message_controller
-from app.controllers import agent_permission_controller
-from app.controllers import default_permission_controller
-from app.controllers import agent_controller
-from app.controllers import agent_relay_controller
-from app.controllers import agent_trigger_controller
-from app.controllers import agent_template_controller
-from app.controllers import settings_controller
-from app.controllers import heartbeat_controller
-from app.controllers import global_settings_controller
-from app.controllers import ai_controller
-from app.controllers import broadcasting_controller
-from app.controllers import plugin_controller
+from app.controllers import (
+    agent_controller,
+    agent_message_controller,
+    agent_permission_controller,
+    agent_relay_controller,
+    agent_template_controller,
+    agent_trigger_controller,
+    ai_controller,
+    broadcasting_controller,
+    claude_hook_controller,
+    command_controller,
+    default_permission_controller,
+    global_settings_controller,
+    heartbeat_controller,
+    home_controller,
+    plugin_controller,
+    project_controller,
+    settings_controller,
+    task_controller,
+    tasks_page_controller,
+    terminal_controller,
+    workspace_controller,
+)
 from app.mcp.server import KeeraServer
 
 router = Router()
@@ -82,9 +84,17 @@ router.delete("/api/agent-templates/{template_id}", agent_template_controller.de
 # Agent templates — PROJECT-scoped (effective list + copy-on-write overrides)
 router.get("/api/projects/{project_id}/agent-templates", agent_template_controller.project_index)
 router.post("/api/projects/{project_id}/agent-templates", agent_template_controller.project_store)
-router.post("/api/projects/{project_id}/agent-templates/reset", agent_template_controller.project_reset)
-router.patch("/api/projects/{project_id}/agent-templates/{template_id}", agent_template_controller.project_update)
-router.delete("/api/projects/{project_id}/agent-templates/{template_id}", agent_template_controller.project_destroy)
+router.post(
+    "/api/projects/{project_id}/agent-templates/reset", agent_template_controller.project_reset
+)
+router.patch(
+    "/api/projects/{project_id}/agent-templates/{template_id}",
+    agent_template_controller.project_update,
+)
+router.delete(
+    "/api/projects/{project_id}/agent-templates/{template_id}",
+    agent_template_controller.project_destroy,
+)
 
 # Agent-to-agent relay
 router.post("/api/agent-relay", agent_relay_controller.relay)
@@ -117,11 +127,11 @@ router.post("/api/heartbeat/stop", heartbeat_controller.stop)
 router.get("/settings", settings_controller.settings)
 
 # AI chat route — before wildcard
-router.post('/api/ai/chat', ai_controller.chat)
+router.post("/api/ai/chat", ai_controller.chat)
 
 # Broadcasting page and API — before wildcard
-router.get('/broadcasting', broadcasting_controller.broadcasting_page)
-router.post('/api/broadcasting/ping', broadcasting_controller.ping)
+router.get("/broadcasting", broadcasting_controller.broadcasting_page)
+router.post("/api/broadcasting/ping", broadcasting_controller.ping)
 
 # Wildcard page routes — must come last
 router.get("/", home_controller.home)
@@ -130,4 +140,6 @@ router.get("/{project}/agents/{agent_id}", home_controller.agent_page)
 router.get("/{project}", home_controller.project_home)
 
 router.router.add_api_websocket_route("/{project}/ws", terminal_controller.terminal_ws)
-router.router.add_api_websocket_route("/{project}/command-ws/{command_id}", command_controller.command_ws)
+router.router.add_api_websocket_route(
+    "/{project}/command-ws/{command_id}", command_controller.command_ws
+)

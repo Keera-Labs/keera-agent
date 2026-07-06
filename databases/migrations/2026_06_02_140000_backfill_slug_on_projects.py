@@ -8,7 +8,7 @@ from app.models.Project import Project
 
 
 def _slugify(name: str) -> str:
-    return re.sub(r'[^a-z0-9-]', '', name.lower().replace(' ', '-'))
+    return re.sub(r"[^a-z0-9-]", "", name.lower().replace(" ", "-"))
 
 
 class BackfillSlugOnProjects(Migration):

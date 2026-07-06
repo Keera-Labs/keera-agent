@@ -18,7 +18,19 @@ dev = [
     # Proof-of-concept native desktop shell (desktop.py). Dev-only so it never
     # ships in the runtime dependency set.
     "pywebview>=5.0",
+    "ruff>=0.15.20",
 ]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+extend-exclude = ["dist", "dist-app", "storage"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+# The formatter enforces line length for code; E501 only flags long string
+# literals and comments it deliberately leaves intact, so we don't gate on it.
+ignore = ["E501"]

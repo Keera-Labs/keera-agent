@@ -14,7 +14,9 @@ class CreateAgentTemplates(Migration):
             table.string("model").default("claude-sonnet-4-6")
             table.text("permissions_allow").nullable()
             table.text("permissions_deny").nullable()
-            table.text("flags").nullable()  # JSON: {dangerously_skip_permissions, plan_mode, verbose, max_turns}
+            table.text(
+                "flags"
+            ).nullable()  # JSON: {dangerously_skip_permissions, plan_mode, verbose, max_turns}
             table.boolean("is_builtin").default(False)
             table.timestamps()
 

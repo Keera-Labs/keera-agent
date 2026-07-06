@@ -9,6 +9,7 @@ def _default_perms_path() -> str:
     if override:
         return override
     from fastapi_startkit.application import app
+
     return str(app().base_path / "storage" / "default_permissions.json")
 
 

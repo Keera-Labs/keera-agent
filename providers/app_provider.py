@@ -10,11 +10,12 @@ class AppProvider(Provider):
         self.app.bind("templates", templates)
 
     def boot(self) -> None:
-        from routes.web import router
-        from app.utils.hook_setup import ensure_hooks
+        from app.console.mcp_sync_command import McpSyncCommand
         from app.console.queue_work_command import QueueWorkCommand
         from app.console.seed_templates_command import SeedTemplatesCommand
-        from app.console.mcp_sync_command import McpSyncCommand
+        from app.utils.hook_setup import ensure_hooks
+        from routes.web import router
+
         self.app.fastapi.include_router(router.router)
         ensure_hooks()
         self.commands([QueueWorkCommand, SeedTemplatesCommand, McpSyncCommand])
@@ -22,6 +23,7 @@ class AppProvider(Provider):
         async def on_startup():
             """Ensure built-in templates are seeded."""
             from app.actions.seed_builtin_templates_action import SeedBuiltinTemplatesAction
+
             await SeedBuiltinTemplatesAction().execute()
 
         self.app.fastapi.add_event_handler("startup", on_startup)
@@ -29,7 +31,9 @@ class AppProvider(Provider):
         async def on_shutdown():
             import os
             import signal
+
             from app.controllers.command_controller import _processes
+
             for proc in list(_processes.values()):
                 try:
                     os.killpg(os.getpgid(proc.pid), signal.SIGTERM)

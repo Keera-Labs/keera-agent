@@ -1,13 +1,15 @@
-import re
 import asyncio
+import re
 
 from app.models.Agent import Agent
 
-_NO_CONV = re.compile(rb'No conversation found to continue', re.IGNORECASE)
-_ANSI = re.compile(rb'\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[^[]')
+_NO_CONV = re.compile(rb"No conversation found to continue", re.IGNORECASE)
+_ANSI = re.compile(rb"\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[^[]")
 
 
-def make_claude_session_monitor(agent_id, terminal, terminal_manager, session_id, build_cmd, after_restart=None):
+def make_claude_session_monitor(
+    agent_id, terminal, terminal_manager, session_id, build_cmd, after_restart=None
+):
     """
     Returns an on_output callback for WebsocketTerminal that:
       - Detects 'No conversation found to continue' and resets has_session=False (Part 1)
@@ -24,14 +26,16 @@ def make_claude_session_monitor(agent_id, terminal, terminal_manager, session_id
     async def on_output(data: bytes) -> None:
         nonlocal detected, confirmed
         buf.extend(data)
-        plain = _ANSI.sub(b'', bytes(buf))
+        plain = _ANSI.sub(b"", bytes(buf))
         if not detected and _NO_CONV.search(plain):
             detected = True
-            await Agent.where('id', agent_id).update({'has_session': False})
-            asyncio.create_task(_restart(agent_id, terminal, terminal_manager, session_id, build_cmd, after_restart))
+            await Agent.where("id", agent_id).update({"has_session": False})
+            asyncio.create_task(
+                _restart(agent_id, terminal, terminal_manager, session_id, build_cmd, after_restart)
+            )
         if not detected and not confirmed and len(plain.strip()) > 20:
             confirmed = True
-            await Agent.where('id', agent_id).update({'has_session': True})
+            await Agent.where("id", agent_id).update({"has_session": True})
 
     return on_output
 
@@ -48,6 +52,6 @@ async def _restart(agent_id, terminal, terminal_manager, session_id, build_cmd, 
     if agent:
         await terminal.write(build_cmd(agent).encode().rstrip(b"\r\n") + b"\r")
         await asyncio.sleep(2.0)
-        await Agent.where('id', agent_id).update({'has_session': True})
+        await Agent.where("id", agent_id).update({"has_session": True})
         if after_restart:
             await after_restart()

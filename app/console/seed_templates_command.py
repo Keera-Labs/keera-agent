@@ -1,4 +1,5 @@
 import asyncio
+
 from fastapi_startkit.console.command import Command
 
 
@@ -17,6 +18,7 @@ class SeedTemplatesCommand(Command):
 
     async def handle_async(self):
         from app.actions.seed_builtin_templates_action import SeedBuiltinTemplatesAction
+
         self.line("<info>Updating built-in templates...</info>")
         await SeedBuiltinTemplatesAction().execute()
         self.line("<info>Done.</info>")

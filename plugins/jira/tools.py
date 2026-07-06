@@ -4,9 +4,8 @@ import json
 from typing import Optional
 
 import httpx
-from pydantic import BaseModel, Field
-
 from fastapi_startkit.mcp import Response, Tool
+from pydantic import BaseModel, Field
 
 from plugins.jira.client import JiraClient, JiraConfigError
 
@@ -23,10 +22,16 @@ def _upstream_message(exc: httpx.HTTPStatusError) -> Response:
 
 
 class JiraSearchInput(BaseModel):
-    jql: str = Field(description="Jira Query Language expression, e.g. 'project = ENG AND status = \"In Progress\"'.")
+    jql: str = Field(
+        description="Jira Query Language expression, e.g. 'project = ENG AND status = \"In Progress\"'."
+    )
     max_results: int = Field(default=50, ge=1, le=100)
-    fields: Optional[list[str]] = Field(default=None, description="Issue fields to return. Omit for defaults.")
-    next_page_token: Optional[str] = Field(default=None, description="Token from a prior page's nextPageToken to fetch the next page.")
+    fields: Optional[list[str]] = Field(
+        default=None, description="Issue fields to return. Omit for defaults."
+    )
+    next_page_token: Optional[str] = Field(
+        default=None, description="Token from a prior page's nextPageToken to fetch the next page."
+    )
 
 
 class JiraSearchTool(Tool):
@@ -54,7 +59,7 @@ class JiraSearchTool(Tool):
 
 class JiraUpdateInput(BaseModel):
     issue_key: str = Field(description="The issue key, e.g. 'ENG-123'.")
-    fields: dict = Field(description="Fields to set, e.g. {\"summary\": \"New title\"}.")
+    fields: dict = Field(description='Fields to set, e.g. {"summary": "New title"}.')
 
 
 class JiraUpdateIssueTool(Tool):
@@ -109,9 +114,13 @@ class JiraCreateIssueInput(BaseModel):
     project_key: str = Field(description="The project key the issue belongs to, e.g. 'ENG'.")
     summary: str = Field(description="Issue summary / title.")
     description: Optional[str] = Field(default=None, description="Issue description as plain text.")
-    issue_type: str = Field(default="Task", description="Issue type name, e.g. 'Task', 'Bug', 'Story'.")
+    issue_type: str = Field(
+        default="Task", description="Issue type name, e.g. 'Task', 'Bug', 'Story'."
+    )
     assignee: Optional[str] = Field(default=None, description="Assignee accountId.")
-    extra_fields: Optional[dict] = Field(default=None, description="Additional issue fields merged into the request.")
+    extra_fields: Optional[dict] = Field(
+        default=None, description="Additional issue fields merged into the request."
+    )
 
 
 class JiraCreateIssueTool(Tool):

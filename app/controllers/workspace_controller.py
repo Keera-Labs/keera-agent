@@ -1,8 +1,8 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from app.models.Workspace import Workspace
 from app.models.Project import Project
+from app.models.Workspace import Workspace
 
 
 async def index(request: Request):
@@ -10,22 +10,24 @@ async def index(request: Request):
     result = []
     for w in workspaces:
         projects = await Project.where("workspace_id", w.id).get()
-        result.append({
-            "id": w.id,
-            "name": w.name,
-            "description": w.description,
-            "projects": [
-                {
-                    "id": p.id,
-                    "name": p.name,
-                    "slug": p.slug,
-                    "path": p.path,
-                    "language": p.language,
-                    "workspace_id": p.workspace_id,
-                }
-                for p in projects
-            ],
-        })
+        result.append(
+            {
+                "id": w.id,
+                "name": w.name,
+                "description": w.description,
+                "projects": [
+                    {
+                        "id": p.id,
+                        "name": p.name,
+                        "slug": p.slug,
+                        "path": p.path,
+                        "language": p.language,
+                        "workspace_id": p.workspace_id,
+                    }
+                    for p in projects
+                ],
+            }
+        )
     return JSONResponse(result)
 
 
@@ -41,7 +43,12 @@ async def store(request: Request):
     workspace = await Workspace.create({"name": name, "description": description})
 
     return JSONResponse(
-        {"id": workspace.id, "name": workspace.name, "description": workspace.description, "projects": []},
+        {
+            "id": workspace.id,
+            "name": workspace.name,
+            "description": workspace.description,
+            "projects": [],
+        },
         status_code=201,
     )
 
@@ -63,7 +70,9 @@ async def update(request: Request, workspace_id: int):
 
     await workspace.save()
 
-    return JSONResponse({"id": workspace.id, "name": workspace.name, "description": workspace.description})
+    return JSONResponse(
+        {"id": workspace.id, "name": workspace.name, "description": workspace.description}
+    )
 
 
 async def destroy(request: Request, workspace_id: int):

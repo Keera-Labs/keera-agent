@@ -99,15 +99,17 @@ async def store(request: Request, project_id: int):
     category = (body.get("category") or "General").strip()
     shortcut = (body.get("shortcut") or "").strip()
 
-    cmd = await Command.create({
-        "project_id": project_id,
-        "label": label,
-        "command": command,
-        "description": description,
-        "category": category,
-        "shortcut": shortcut,
-        "status": "stopped",
-    })
+    cmd = await Command.create(
+        {
+            "project_id": project_id,
+            "label": label,
+            "command": command,
+            "description": description,
+            "category": category,
+            "shortcut": shortcut,
+            "status": "stopped",
+        }
+    )
     return JSONResponse(_serialize(cmd), status_code=201)
 
 
@@ -221,7 +223,7 @@ async def destroy(request: Request, command_id: int):
 
 
 def _pty_set_size(master_fd: int, rows: int, cols: int) -> None:
-    size = struct.pack('HHHH', rows, cols, 0, 0)
+    size = struct.pack("HHHH", rows, cols, 0, 0)
     fcntl.ioctl(master_fd, termios.TIOCSWINSZ, size)
 
 
@@ -276,7 +278,7 @@ async def command_ws(websocket: WebSocket, project: str, command_id: int):
             while not stopped.is_set():
                 try:
                     item = await asyncio.wait_for(queue.get(), timeout=0.1)
-                    await websocket.send_bytes(len(item).to_bytes(4, 'big') + item)
+                    await websocket.send_bytes(len(item).to_bytes(4, "big") + item)
                 except asyncio.TimeoutError:
                     continue
                 except Exception:
@@ -291,18 +293,18 @@ async def command_ws(websocket: WebSocket, project: str, command_id: int):
         while not stopped.is_set():
             try:
                 msg = await websocket.receive()
-                if msg.get('type') == 'websocket.disconnect':
+                if msg.get("type") == "websocket.disconnect":
                     break
-                if msg.get('bytes'):
-                    data = msg['bytes']
+                if msg.get("bytes"):
+                    data = msg["bytes"]
                     if len(data) >= 4:
-                        length = int.from_bytes(data[:4], 'big')
-                        os.write(master_fd, data[4:4 + length])
-                elif msg.get('text'):
+                        length = int.from_bytes(data[:4], "big")
+                        os.write(master_fd, data[4 : 4 + length])
+                elif msg.get("text"):
                     try:
-                        data = json.loads(msg['text'])
-                        if data.get('type') == 'resize':
-                            _pty_set_size(master_fd, int(data['rows']), int(data['cols']))
+                        data = json.loads(msg["text"])
+                        if data.get("type") == "resize":
+                            _pty_set_size(master_fd, int(data["rows"]), int(data["cols"]))
                     except (json.JSONDecodeError, KeyError, ValueError):
                         pass
             except (WebSocketDisconnect, Exception):
