@@ -284,19 +284,42 @@ async def adopt_work(agent_id: int):
     # Merge the agent branch into the current branch of the main repo. A branch
     # checked out in a worktree cannot be checked out here, but merging its ref
     # is fine since merge never touches the worktree's own working copy.
+    #
+    # A clean (non-conflicting) merge auto-creates a merge commit, which needs a
+    # committer identity. The server's git may have none configured, so supply a
+    # deterministic one instead of failing — otherwise a successful merge would
+    # be reported as a spurious failure.
+    merge_env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": os.environ.get("GIT_AUTHOR_NAME", "Keera Agent"),
+        "GIT_AUTHOR_EMAIL": os.environ.get("GIT_AUTHOR_EMAIL", "agent@keera.local"),
+        "GIT_COMMITTER_NAME": os.environ.get("GIT_COMMITTER_NAME", "Keera Agent"),
+        "GIT_COMMITTER_EMAIL": os.environ.get("GIT_COMMITTER_EMAIL", "agent@keera.local"),
+    }
     merge = subprocess.run(
         ["git", "merge", "--no-edit", branch_name],
         capture_output=True,
         text=True,
         cwd=cwd,
+        env=merge_env,
     )
     if merge.returncode != 0:
         detail = (merge.stderr or merge.stdout).strip()
-        # A real content conflict starts a merge (MERGE_HEAD exists) that must be
-        # aborted to unwind it. A refusal to even start — the main repo's working
-        # tree is dirty and the merge would overwrite local changes — leaves no
-        # merge in progress, so there is nothing to abort. Distinguish the two so
-        # the caller gets an actionable message; both are safe (no partial state).
+        # Distinguish a real content conflict from a refusal to start (the main
+        # repo's working tree is dirty and the merge would overwrite local
+        # changes). Detect the conflict from unmerged entries in the index — the
+        # authoritative signal that git left paths conflicted — rather than
+        # relying only on MERGE_HEAD, whose presence varies across git versions
+        # and merge strategies. Either way no work is lost: a conflicted merge is
+        # aborted below, and a refused merge never changed anything.
+        has_unmerged = bool(
+            subprocess.run(
+                ["git", "ls-files", "--unmerged"],
+                capture_output=True,
+                text=True,
+                cwd=cwd,
+            ).stdout.strip()
+        )
         merge_in_progress = (
             subprocess.run(
                 ["git", "rev-parse", "-q", "--verify", "MERGE_HEAD"],
@@ -305,7 +328,7 @@ async def adopt_work(agent_id: int):
             ).returncode
             == 0
         )
-        if merge_in_progress:
+        if merge_in_progress or has_unmerged:
             subprocess.run(["git", "merge", "--abort"], capture_output=True, cwd=cwd)
             error = "Merge conflict — resolve conflicts manually before adopting"
         else:
