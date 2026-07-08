@@ -300,20 +300,20 @@ export function AgentsView() {
                                         </button>
                                     )}
 
-                                    {/* Adopt work button — merge branch into main, remove worktree, keep branch */}
+                                    {/* Adopt work button — remove worktree, check out the agent branch */}
                                     <button
                                         onClick={async e => {
                                             e.stopPropagation()
                                             if (adoptWork.isPending) return
-                                            if (!window.confirm(`Adopt ${agent.name}'s work?\n\nThis merges branch worktree-agent-${agent.id} into the current branch and removes the worktree (the branch is kept).`)) return
+                                            if (!window.confirm(`Adopt ${agent.name}'s work?\n\nThis removes the worktree and checks out branch worktree-agent-${agent.id} in the project (leaving it on that branch). Nothing is merged.`)) return
                                             try {
                                                 await adoptWork.mutateAsync(agent.id)
-                                                window.alert(`Merged ${agent.name}'s work and removed its worktree.`)
+                                                window.alert(`Removed ${agent.name}'s worktree and checked out its branch.`)
                                             } catch (err) {
                                                 window.alert(err instanceof Error ? err.message : 'Failed to adopt agent work')
                                             }
                                         }}
-                                        title="Adopt work — merge branch into current, remove worktree"
+                                        title="Adopt work — remove worktree, check out the agent branch"
                                         style={{
                                             background: 'transparent', border: 'none',
                                             color: color.textFaint, cursor: 'pointer',

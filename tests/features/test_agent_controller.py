@@ -1,9 +1,9 @@
 """
 Feature tests for agent_controller.adopt_work — POST /api/agents/:id/adopt-work.
 
-Adopting an agent's work merges its worktree branch (worktree-agent-{id}) into
-the project's current branch, then removes the worktree directory while keeping
-the branch.
+Adopting an agent's work removes its worktree, then checks out the worktree
+branch (worktree-agent-{id}) in the main repo — leaving the project ON that
+branch. It never merges and never deletes the branch.
 """
 
 import os
@@ -85,13 +85,23 @@ class TestAdoptWork(TestCase, DatabaseTransaction):
         response = await self.post(f"/api/agents/{self.agent.id}/adopt-work")
         response.assert_status(404)
 
-    async def test_adopt_work_merges_branch_and_removes_worktree(self):
+    def _current_branch(self):
+        return subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=self._tmpdir,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    async def test_adopt_work_removes_worktree_and_checks_out_branch(self):
         branch, wt_path = self._make_worktree_with_commit()
 
         response = await self.post(f"/api/agents/{self.agent.id}/adopt-work")
         response.assert_ok().assert_json(lambda j: j.where("ok", True).etc())
 
-        # The agent's file is now merged into the main repo.
+        # The main repo is now ON the agent branch.
+        self.assertEqual(self._current_branch(), branch)
+        # The agent's committed file is present because we checked out its branch.
         self.assertTrue(os.path.exists(os.path.join(self._tmpdir, "feature.txt")))
         # The worktree directory is gone.
         self.assertFalse(os.path.isdir(wt_path))
@@ -103,40 +113,13 @@ class TestAdoptWork(TestCase, DatabaseTransaction):
             text=True,
         )
         self.assertIn(branch, branch_list.stdout)
-
-    async def test_adopt_work_returns_409_on_merge_conflict(self):
-        branch, _ = self._make_worktree_with_commit(filename="README.md")
-        # Diverge the main branch so the README change conflicts.
-        with open(os.path.join(self._tmpdir, "README.md"), "w") as f:
-            f.write("conflicting main change\n")
-        _git(self._tmpdir, "commit", "-am", "diverge main")
-
-        response = await self.post(f"/api/agents/{self.agent.id}/adopt-work")
-        response.assert_status(409).assert_json(
-            lambda j: j.where("error", lambda v: "conflict" in v.lower()).etc()
-        )
-
-        # The failed merge was aborted — no merge is left in progress and no
-        # tracked file is stuck in a conflicted (unmerged) state.
+        # No merge ever ran.
         self.assertFalse(os.path.exists(os.path.join(self._tmpdir, ".git", "MERGE_HEAD")))
-        status = subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=self._tmpdir,
-            capture_output=True,
-            text=True,
-        )
-        unmerged = [
-            ln
-            for ln in status.stdout.splitlines()
-            if ln[:2].strip() in {"U", "AA", "DD", "UU", "AU", "UA", "DU", "UD"}
-        ]
-        self.assertEqual(unmerged, [])
 
     async def test_adopt_work_preserves_dirty_agent_worktree(self):
         """QA Req5 regression: an agent worktree with uncommitted/untracked
-        changes must NOT be destroyed. adopt_work bails with 409 before merging,
-        keeps the worktree, and leaves both the branch commit unmerged and the
-        uncommitted work intact."""
+        changes must NOT be destroyed. adopt_work bails with 409 before touching
+        anything, keeps the worktree, and leaves the main repo on its branch."""
         branch, wt_path = self._make_worktree_with_commit()
         # Uncommitted tracked edit + a brand-new untracked file in the worktree.
         with open(os.path.join(wt_path, "feature.txt"), "a") as f:
@@ -144,6 +127,7 @@ class TestAdoptWork(TestCase, DatabaseTransaction):
         with open(os.path.join(wt_path, "scratch.txt"), "w") as f:
             f.write("untracked work\n")
 
+        before_branch = self._current_branch()
         response = await self.post(f"/api/agents/{self.agent.id}/adopt-work")
         response.assert_status(409).assert_json(
             lambda j: j.where("error", lambda v: "worktree" in v.lower()).etc()
@@ -154,18 +138,20 @@ class TestAdoptWork(TestCase, DatabaseTransaction):
         with open(os.path.join(wt_path, "feature.txt")) as f:
             self.assertIn("uncommitted edit", f.read())
         self.assertTrue(os.path.exists(os.path.join(wt_path, "scratch.txt")))
-        # Nothing was merged into main — the branch commit did not land.
+        # Nothing changed in main — no checkout happened.
+        self.assertEqual(self._current_branch(), before_branch)
         self.assertFalse(os.path.exists(os.path.join(self._tmpdir, "feature.txt")))
-        self.assertFalse(os.path.exists(os.path.join(self._tmpdir, ".git", "MERGE_HEAD")))
 
-    async def test_adopt_work_returns_409_dirty_working_tree(self):
-        """A dirty main working tree that would be overwritten yields a distinct
-        dirty-tree message (not a conflict message), with no merge in progress."""
-        self._make_worktree_with_commit(filename="README.md")
-        # Uncommitted local change to a file the merge would touch.
+    async def test_adopt_work_returns_409_dirty_main_working_tree(self):
+        """A dirty main working tree blocks the checkout, so adopt_work bails
+        with 409 BEFORE removing the worktree — the worktree survives and no
+        checkout happens."""
+        branch, wt_path = self._make_worktree_with_commit()
+        # Uncommitted local change in the main repo.
         with open(os.path.join(self._tmpdir, "README.md"), "w") as f:
             f.write("uncommitted local edit\n")
 
+        before_branch = self._current_branch()
         response = await self.post(f"/api/agents/{self.agent.id}/adopt-work")
         response.assert_status(409).assert_json(
             lambda j: j.where(
@@ -173,7 +159,8 @@ class TestAdoptWork(TestCase, DatabaseTransaction):
             ).etc()
         )
 
-        # No merge was ever started, so nothing was aborted and the local edit survives.
-        self.assertFalse(os.path.exists(os.path.join(self._tmpdir, ".git", "MERGE_HEAD")))
+        # The worktree was NOT removed and the main repo did not switch branches.
+        self.assertTrue(os.path.isdir(wt_path))
+        self.assertEqual(self._current_branch(), before_branch)
         with open(os.path.join(self._tmpdir, "README.md")) as f:
             self.assertEqual(f.read(), "uncommitted local edit\n")
