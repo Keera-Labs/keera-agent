@@ -148,29 +148,25 @@ export function AgentsView() {
                                     ✕ all
                                 </button>
                             )}
-                            <button
-                                onClick={() => setShowAddAgent(true)}
-                                title="Add agent"
-                                style={{
-                                    background: 'transparent', border: `1px solid ${color.stroke}`,
-                                    borderRadius: '4px', color: color.textFaint,
-                                    fontSize: '13px', lineHeight: 1, padding: '1px 6px',
-                                    cursor: 'pointer',
-                                }}
-                                onMouseEnter={e => { e.currentTarget.style.borderColor = color.accent; e.currentTarget.style.color = color.accent }}
-                                onMouseLeave={e => { e.currentTarget.style.borderColor = color.stroke; e.currentTarget.style.color = color.textFaint }}
-                            >
-                                +
-                            </button>
+                            {projectAgents.length > 0 && (
+                                <button
+                                    onClick={() => setShowAddAgent(true)}
+                                    title="Add agent"
+                                    style={{
+                                        background: 'transparent', border: `1px solid ${color.stroke}`,
+                                        borderRadius: '4px', color: color.textFaint,
+                                        fontSize: '13px', lineHeight: 1, padding: '1px 6px',
+                                        cursor: 'pointer',
+                                    }}
+                                    onMouseEnter={e => { e.currentTarget.style.borderColor = color.accent; e.currentTarget.style.color = color.accent }}
+                                    onMouseLeave={e => { e.currentTarget.style.borderColor = color.stroke; e.currentTarget.style.color = color.textFaint }}
+                                >
+                                    +
+                                </button>
+                            )}
                         </div>
 
-                        {projectAgents.length === 0 ? (
-                            <div style={{ padding: '16px 14px' }}>
-                                <p style={{ fontSize: '12px', color: color.textFaint, margin: 0, lineHeight: 1.5 }}>
-                                    No agents yet. Create one to get started.
-                                </p>
-                            </div>
-                        ) : projectAgents.map(agent => {
+                        {projectAgents.map(agent => {
                             const isRunning = agentSessions.current.has(agent.id)
                             const isSelected = agent.id === activeAgentId
                             const agentItemBg = AGENT_TYPE_COLORS[agent.agent_type] ?? color.accent
