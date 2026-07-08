@@ -6,7 +6,7 @@ class AppProvider(Provider):
     provider_key = "keera"
 
     def register(self) -> None:
-        templates = Jinja2Templates(directory=str(self.app.base_path / "templates"))
+        templates = Jinja2Templates(directory=str(self.app.base_path / "resources" / "templates"))
         self.app.bind("templates", templates)
 
     def boot(self) -> None:
