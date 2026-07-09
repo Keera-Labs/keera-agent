@@ -13,10 +13,12 @@ class AppProvider(Provider):
         from app.console.mcp_sync_command import McpSyncCommand
         from app.console.queue_work_command import QueueWorkCommand
         from app.console.seed_templates_command import SeedTemplatesCommand
+        from app.exceptions.handlers import register_exception_handlers
         from app.utils.hook_setup import ensure_hooks
         from routes.web import router
 
         self.app.fastapi.include_router(router.router)
+        register_exception_handlers(self.app)
         ensure_hooks()
         self.commands([QueueWorkCommand, SeedTemplatesCommand, McpSyncCommand])
 
