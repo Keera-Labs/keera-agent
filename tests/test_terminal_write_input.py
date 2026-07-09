@@ -1,6 +1,8 @@
-"""Regression tests for Terminal.write() space-preservation.
+"""Regression tests for Terminal.write() space-preservation and full delivery.
 
-Terminal now has a single write() method that calls os.write() atomically.
+Terminal.write() drains the whole payload to the non-blocking PTY master fd,
+handling partial writes and EAGAIN (buffer full) by waiting for writability —
+so long messages are neither truncated nor lost, and a full buffer never raises.
 All relay-pattern logic (strip CR/LF, sleep 0.05 s, write \\r) lives in callers.
 """
 
@@ -9,6 +11,7 @@ import fcntl
 import os
 import pty
 import select
+import tty
 import unittest
 
 from app.terminal.terminal import Terminal
@@ -135,6 +138,94 @@ class TestWritePreservesSpaces(unittest.IsolatedAsyncioTestCase):
         finally:
             os.close(slave_fd)
             os.close(master_fd)
+
+
+async def _write_and_collect(term, master_fd, slave_fd, payload, timeout=10.0):
+    """Write payload through term (non-blocking master) while draining the slave
+    side inside the event loop via add_reader — no blocking threads that could
+    outlive the test. Returns the bytes received on the slave side."""
+    received = bytearray()
+    loop = asyncio.get_event_loop()
+    done = asyncio.Event()
+
+    # Slave must be non-blocking so on_readable() can drain in a tight loop and
+    # yield on EAGAIN instead of blocking the event loop.
+    flags = fcntl.fcntl(slave_fd, fcntl.F_GETFL)
+    fcntl.fcntl(slave_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+
+    def on_readable():
+        try:
+            while True:
+                chunk = os.read(slave_fd, 65536)
+                if not chunk:
+                    done.set()
+                    return
+                received.extend(chunk)
+                if len(received) >= len(payload):
+                    done.set()
+                    return
+        except BlockingIOError:
+            pass
+        except OSError:
+            done.set()
+
+    loop.add_reader(slave_fd, on_readable)
+    try:
+        await term.write(payload)
+        await asyncio.wait_for(done.wait(), timeout=timeout)
+    finally:
+        loop.remove_reader(slave_fd)
+    return bytes(received)
+
+
+class TestWriteHandlesFullBuffer(unittest.IsolatedAsyncioTestCase):
+    """A payload larger than the PTY buffer must be delivered in full — never
+    truncated (partial os.write dropped) and never crash on EAGAIN."""
+
+    async def test_large_write_is_fully_delivered(self):
+        master_fd, slave_fd = pty.openpty()
+        # Mirror production: the master fd is non-blocking (registered with
+        # loop.add_reader), so os.write raises BlockingIOError when full.
+        flags = fcntl.fcntl(master_fd, fcntl.F_GETFL)
+        fcntl.fcntl(master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+        # Raw slave: no echo, no CR/LF translation, so the bytes we read back
+        # equal the bytes written.
+        tty.setraw(slave_fd)
+
+        term = Terminal.__new__(Terminal)
+        term._proc = None
+        term.master_fd = master_fd
+
+        payload = b"".join(b"line-%06d\n" % i for i in range(20000))  # ~180 KB
+        try:
+            received = await _write_and_collect(term, master_fd, slave_fd, payload)
+        finally:
+            os.close(slave_fd)
+            os.close(master_fd)
+
+        self.assertEqual(len(received), len(payload), "payload was truncated")
+        self.assertEqual(received, payload, "payload bytes were corrupted/reordered")
+
+    async def test_full_buffer_does_not_raise(self):
+        """Writing more than the buffer can hold must not raise BlockingIOError
+        back to the caller — write() waits for drain space."""
+        master_fd, slave_fd = pty.openpty()
+        flags = fcntl.fcntl(master_fd, fcntl.F_GETFL)
+        fcntl.fcntl(master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+        tty.setraw(slave_fd)
+
+        term = Terminal.__new__(Terminal)
+        term._proc = None
+        term.master_fd = master_fd
+
+        payload = b"x" * 200000
+        try:
+            received = await _write_and_collect(term, master_fd, slave_fd, payload)
+        finally:
+            os.close(slave_fd)
+            os.close(master_fd)
+
+        self.assertEqual(len(received), len(payload))
 
 
 class TestColorEnv(unittest.TestCase):
