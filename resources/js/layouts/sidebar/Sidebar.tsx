@@ -1,3 +1,5 @@
+import ProjectCreateModal from "@/components/project/ProjectCreateModal"
+import { useAppLayout } from "@/layouts/context/AppLayoutContext"
 import { useLocalStorage } from "@/layouts/hooks/useLocalStorage"
 import useProjects from "@/queries/useProjects"
 import { color } from "@/tokens"
@@ -46,7 +48,6 @@ export default function Sidebar({
                                     taskCount,
                                     onAddAgent,
                                     activeId,
-                                    onAddProject,
                                     onMoveProject,
                                     onEditProject,
                                     claudeStatus,
@@ -58,7 +59,6 @@ export default function Sidebar({
     taskCount: number
     onAddAgent: () => void
     activeId: number | null
-    onAddProject: (workspaceId: number | null) => void
     onMoveProject: (project: Project) => void
     onEditProject: (project: Project) => void
     claudeStatus: Record<number, "running" | "done">
@@ -69,6 +69,7 @@ export default function Sidebar({
     const isSettingsPage = component === "Settings"
 
     const { projects } = useProjects()
+    const { workspaces, handleProjectCreated } = useAppLayout()
 
     const filteredProjects = filterWorkspaceId !== null
         ? projects.filter(p => Number(p.workspace_id) === filterWorkspaceId)
@@ -93,17 +94,23 @@ export default function Sidebar({
                     <span style={{ color: color.textFaint, fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em" }}>
                         Projects
                     </span>
-                    <button
-                        onClick={() => onAddProject(filterWorkspaceId)}
-                        title="Add project"
-                        style={{ background: "transparent", border: "none", cursor: "pointer", color: color.textFaint, padding: "0 2px", display: "flex", alignItems: "center" }}
-                        onMouseEnter={e => (e.currentTarget.style.color = color.textMuted)}
-                        onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
-                    >
-                        <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
-                        </svg>
-                    </button>
+                    <ProjectCreateModal
+                        workspaces={workspaces}
+                        defaultWorkspaceId={filterWorkspaceId}
+                        onCreated={handleProjectCreated}
+                        trigger={
+                            <button
+                                title="Add project"
+                                style={{ background: "transparent", border: "none", cursor: "pointer", color: color.textFaint, padding: "0 2px", display: "flex", alignItems: "center" }}
+                                onMouseEnter={e => (e.currentTarget.style.color = color.textMuted)}
+                                onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
+                            >
+                                <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
+                                </svg>
+                            </button>
+                        }
+                    />
                 </div>
 
                 <ul style={{ listStyle: "none", margin: 0, padding: "0 2px" }}>
@@ -125,25 +132,31 @@ export default function Sidebar({
                     ))}
                     {filteredProjects.length === 0 && (
                         <li>
-                            <button
-                                onClick={() => onAddProject(filterWorkspaceId)}
-                                style={{
-                                    margin: "2px 10px 6px", width: "calc(100% - 20px)",
-                                    background: "transparent", border: `1px dashed ${color.borderMuted}`,
-                                    borderRadius: "6px", color: color.textFaint, fontSize: "11px", padding: "6px",
-                                    cursor: "pointer", textAlign: "center", display: "block",
-                                }}
-                                onMouseEnter={e => {
-                                    e.currentTarget.style.color = color.textMuted
-                                    e.currentTarget.style.borderColor = color.textMuted
-                                }}
-                                onMouseLeave={e => {
-                                    e.currentTarget.style.color = color.textFaint
-                                    e.currentTarget.style.borderColor = color.borderMuted
-                                }}
-                            >
-                                + Add project
-                            </button>
+                            <ProjectCreateModal
+                                workspaces={workspaces}
+                                defaultWorkspaceId={filterWorkspaceId}
+                                onCreated={handleProjectCreated}
+                                trigger={
+                                    <button
+                                        style={{
+                                            margin: "2px 10px 6px", width: "calc(100% - 20px)",
+                                            background: "transparent", border: `1px dashed ${color.borderMuted}`,
+                                            borderRadius: "6px", color: color.textFaint, fontSize: "11px", padding: "6px",
+                                            cursor: "pointer", textAlign: "center", display: "block",
+                                        }}
+                                        onMouseEnter={e => {
+                                            e.currentTarget.style.color = color.textMuted
+                                            e.currentTarget.style.borderColor = color.textMuted
+                                        }}
+                                        onMouseLeave={e => {
+                                            e.currentTarget.style.color = color.textFaint
+                                            e.currentTarget.style.borderColor = color.borderMuted
+                                        }}
+                                    >
+                                        + Add project
+                                    </button>
+                                }
+                            />
                         </li>
                     )}
                 </ul>

@@ -23,8 +23,6 @@ export interface AppLayoutContextValue {
     // ── Modal state ───────────────────────────────────────────────────────────
     showWorkspaceModal: boolean
     setShowWorkspaceModal: (v: boolean) => void
-    addProjectWorkspaceId: number | null | undefined
-    setAddProjectWorkspaceId: (v: number | null | undefined) => void
     movingProject: Project | null
     setMovingProject: (p: Project | null) => void
     editingProject: Project | null
@@ -68,7 +66,6 @@ export interface AppLayoutContextValue {
     sessionStart: Record<number, Date>
 
     // ── Business handlers ─────────────────────────────────────────────────────
-    openAddProject: (workspaceId: number | null) => void
     handleMoveProject: (project: Project, newWorkspaceId: number | null) => Promise<void>
     handleProjectCreated: (project: Project) => void
     handleProjectDeleted: (projectId: number) => void
@@ -190,7 +187,6 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
 
     // ── Modal / UI state ──────────────────────────────────────────────────────
     const [showWorkspaceModal, setShowWorkspaceModal] = useState(false)
-    const [addProjectWorkspaceId, setAddProjectWorkspaceId] = useState<number | null | undefined>(undefined)
     const [movingProject, setMovingProject] = useState<Project | null>(null)
     const [editingProject, setEditingProject] = useState<Project | null>(null)
     const [showGlobalSettings, setShowGlobalSettings] = useState(false)
@@ -551,10 +547,6 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         router.visit(`/${project.slug}`)
     }
 
-    function openAddProject(workspaceId: number | null) {
-        setAddProjectWorkspaceId(workspaceId)
-    }
-
     async function handleMoveProject(project: Project, newWorkspaceId: number | null) {
         await fetch(`/api/projects/${project.id}`, {
             method: 'PATCH',
@@ -593,7 +585,6 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         workspaces, allProjects, activeProject, tasks,
         // Modal state
         showWorkspaceModal, setShowWorkspaceModal,
-        addProjectWorkspaceId, setAddProjectWorkspaceId,
         movingProject, setMovingProject,
         editingProject, setEditingProject,
         showGlobalSettings, setShowGlobalSettings,
@@ -612,7 +603,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         launchAgentSession, restartClaude, uploadImage,
         claudeStatus, setClaudeStatus, lastActivity, outputChars, sessionStart,
         // Business handlers
-        openAddProject, handleMoveProject, handleProjectCreated,
+        handleMoveProject, handleProjectCreated,
         handleProjectDeleted, handleProjectUpdated,
         handleWorkspaceCreated, handleWorkspaceDeleted,
         // Agent hook

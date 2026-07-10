@@ -47,7 +47,7 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
         claudeStatus,
         projectView, setProjectView,
         setShowAddAgent,
-        openAddProject, setMovingProject, setEditingProject,
+        setMovingProject, setEditingProject,
         setShowWorkspaceModal,
     } = useAppLayout()
 
@@ -73,7 +73,6 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
                     taskCount={tasks.length}
                     onAddAgent={() => setShowAddAgent(true)}
                     activeId={activeProject?.id ?? null}
-                    onAddProject={openAddProject}
                     onMoveProject={setMovingProject}
                     onEditProject={setEditingProject}
                     claudeStatus={claudeStatus}
