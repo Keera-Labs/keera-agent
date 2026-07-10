@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { router } from '@inertiajs/react'
 import { color } from '@/tokens'
 import type { Project } from '@/types/type'
+import useProjects from '@/queries/useProjects'
 
 const dotsStyle = `
 @keyframes bounce1 { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-4px)} }
@@ -33,12 +34,14 @@ export function DotsIndicator() {
     )
 }
 
-export function ProjectItem({ project, active, status, onMove, onEdit, onDelete }: {
+export function ProjectItem({ project, active, status, onMove, onEdit }: {
     project: Project; active: boolean; status?: 'running' | 'done';
     onMove: (p: Project) => void;
     onEdit: (p: Project) => void;
-    onDelete: (p: Project) => void;
 }) {
+
+    const { handleProjectDelete } = useProjects()
+
     const [hovered, setHovered] = useState(false)
     const [menuOpen, setMenuOpen] = useState(false)
     const menuRef = useRef<HTMLDivElement>(null)
@@ -171,7 +174,13 @@ export function ProjectItem({ project, active, status, onMove, onEdit, onDelete 
                         style={menuItemStyle(true)}
                         onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
                         onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                        onClick={e => { e.stopPropagation(); setMenuOpen(false); onDelete(project) }}
+                        onClick={e => {
+                            e.stopPropagation()
+                            setMenuOpen(false)
+                            if (window.confirm(`Remove "${project.name}" from Keera? This only removes it from the app — files on disk are not deleted.`)) {
+                                handleProjectDelete(project.id)
+                            }
+                        }}
                     >
                         <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0 }}>
                             <path d="M6.5 1.75a.25.25 0 01.25-.25h2.5a.25.25 0 01.25.25V3h-3V1.75zm4.5 0V3h2.25a.75.75 0 010 1.5H2.75a.75.75 0 010-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75zM4.496 6.675l.66 6.6a.25.25 0 00.249.225h5.19a.25.25 0 00.249-.225l.66-6.6a.75.75 0 011.492.149l-.66 6.6A1.748 1.748 0 0111.095 15H4.905a1.748 1.748 0 01-1.741-1.576l-.66-6.6a.75.75 0 111.492-.149z"/>
