@@ -1,3 +1,4 @@
+import asyncio
 import fcntl
 import os
 import pty as _pty
@@ -33,6 +34,7 @@ class Terminal:
         self._env = _with_color_env(env or os.environ.copy())
         self._proc: subprocess.Popen | None = None
         self.master_fd: int | None = None
+        self._write_lock: asyncio.Lock | None = None
 
     def start(self) -> None:
         master_fd, slave_fd = _pty.openpty()
@@ -71,7 +73,52 @@ class Terminal:
     async def write(self, data: bytes) -> None:
         if self.master_fd is None or not data:
             return
-        os.write(self.master_fd, data)
+
+        # The master fd is non-blocking (registered with loop.add_reader by the
+        # websocket bridge), so a single os.write() can (a) write fewer bytes
+        # than requested — silently dropping the tail — or (b) raise EAGAIN when
+        # the PTY buffer is full. Drain the whole payload, waiting for the fd to
+        # become writable between chunks. The lock serializes concurrent writers
+        # so an interleaved caller (e.g. the trailing submit "\r") can't splice
+        # bytes into the middle of another message.
+        lock = getattr(self, "_write_lock", None)
+        if lock is None:
+            lock = self._write_lock = asyncio.Lock()
+        async with lock:
+            await self._drain_write(data)
+
+    async def _drain_write(self, data: bytes) -> None:
+        fd = self.master_fd
+        if fd is None:
+            return
+        loop = asyncio.get_running_loop()
+        view = memoryview(data)
+        offset = 0
+        while offset < len(view):
+            try:
+                offset += os.write(fd, view[offset:])
+            except BlockingIOError:
+                await self._wait_writable(loop, fd)
+            except InterruptedError:
+                # Signal interrupted the syscall (EINTR) — retry the remainder.
+                continue
+            except OSError:
+                # fd closed or child gone — nothing more we can deliver.
+                return
+
+    @staticmethod
+    async def _wait_writable(loop: asyncio.AbstractEventLoop, fd: int) -> None:
+        future: asyncio.Future = loop.create_future()
+
+        def on_writable():
+            if not future.done():
+                future.set_result(None)
+
+        loop.add_writer(fd, on_writable)
+        try:
+            await future
+        finally:
+            loop.remove_writer(fd)
 
     def resize(self, cols: int, rows: int) -> None:
         self._cols = cols
