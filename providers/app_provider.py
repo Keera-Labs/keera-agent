@@ -6,17 +6,19 @@ class AppProvider(Provider):
     provider_key = "keera"
 
     def register(self) -> None:
-        templates = Jinja2Templates(directory=str(self.app.base_path / "templates"))
+        templates = Jinja2Templates(directory=str(self.app.base_path / "resources" / "templates"))
         self.app.bind("templates", templates)
 
     def boot(self) -> None:
         from app.console.mcp_sync_command import McpSyncCommand
         from app.console.queue_work_command import QueueWorkCommand
         from app.console.seed_templates_command import SeedTemplatesCommand
+        from app.exceptions.handlers import register_exception_handlers
         from app.utils.hook_setup import ensure_hooks
         from routes.web import router
 
         self.app.fastapi.include_router(router.router)
+        register_exception_handlers(self.app)
         ensure_hooks()
         self.commands([QueueWorkCommand, SeedTemplatesCommand, McpSyncCommand])
 

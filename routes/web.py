@@ -2,6 +2,7 @@ from fastapi_startkit.fastapi import Router
 
 from app.controllers import (
     agent_controller,
+    agent_dispatch_controller,
     agent_message_controller,
     agent_permission_controller,
     agent_relay_controller,
@@ -67,13 +68,13 @@ router.patch("/api/messages/{message_id}/read", agent_message_controller.mark_re
 
 router.get("/api/projects/{project_id}/agents", agent_controller.index)
 router.post("/api/projects/{project_id}/agents", agent_controller.store)
-router.post("/api/projects/{project_id}/agents/spawn", agent_controller.spawn)
+router.post("/api/projects/{project_id}/agents/spawn", agent_dispatch_controller.spawn)
 router.get("/api/projects/{project_id}/default-agent", agent_controller.get_default)
 router.post("/api/projects/{project_id}/default-agent", agent_controller.set_default)
 router.patch("/api/agents/{agent_id}", agent_controller.update)
 router.delete("/api/agents/{agent_id}", agent_controller.destroy)
 router.get("/api/agents/{agent_id}/output", agent_controller.output)
-router.post("/api/agents/{agent_id}/adopt-work", agent_controller.adopt_work)
+router.post("/api/agents/{agent_id}/adopt-work", agent_dispatch_controller.adopt_work)
 
 # Agent templates — GLOBAL (project_id NULL)
 router.get("/api/agent-templates", agent_template_controller.index)
