@@ -2,7 +2,7 @@
 
 A local-first AI agent manager built with FastAPI (Python) and React (TypeScript).
 
-![keera-agent dashboard — the persistent AppLayout showing the workspace/projects sidebar, the agents panel, and a live agent terminal](docs/images/screenshot.png)
+![keera-agent dashboard — the persistent AppLayout showing the workspace/projects sidebar, the agents panel, and a live agent terminal](docs/images/image.png)
 
 *The main dashboard: workspaces and projects on the left, the agents panel in the middle, and a live agent terminal on the right.*
 
