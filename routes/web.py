@@ -17,12 +17,10 @@ from app.controllers import (
     heartbeat_controller,
     home_controller,
     plugin_controller,
-    project_controller,
     settings_controller,
     task_controller,
     tasks_page_controller,
     terminal_controller,
-    workspace_controller,
 )
 from app.mcp.server import KeeraServer
 
@@ -30,20 +28,6 @@ router = Router()
 
 mcp_server = KeeraServer()
 router.router.include_router(mcp_server.router(prefix="/mcp"))
-
-# API endpoints — must be registered before the /{project} wildcard
-router.get("/api/workspaces", workspace_controller.index)
-router.post("/api/workspaces", workspace_controller.store)
-router.patch("/api/workspaces/{workspace_id}", workspace_controller.update)
-router.delete("/api/workspaces/{workspace_id}", workspace_controller.destroy)
-
-router.get("/api/projects", project_controller.index)
-router.get("/api/validate-path", project_controller.validate_path)
-router.post("/api/projects", project_controller.store)
-router.patch("/api/projects/{project_id}", project_controller.update)
-router.delete("/api/projects/{project_id}", project_controller.destroy)
-router.post("/api/projects/{project_id}/upload-image", project_controller.upload_image)
-router.post("/api/projects/{project_id}/open-directory", project_controller.open_directory)
 
 
 router.get("/api/projects/{project_id}/tasks", task_controller.index)

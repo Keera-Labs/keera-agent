@@ -1,8 +1,10 @@
 import AppLayout from '../layouts/AppLayout'
-import { ProjectLayout } from '../layouts/ProjectLayout'
+import { ProjectLayout } from "@/layouts/ProjectLayout"
 
 export default function Home() {
-    return null
+    return (
+        <div>Home</div>
+    )
 }
 
 // Nested persistent layouts: AppLayout (outer) wraps ProjectLayout (inner).
