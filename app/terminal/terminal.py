@@ -99,6 +99,9 @@ class Terminal:
                 offset += os.write(fd, view[offset:])
             except BlockingIOError:
                 await self._wait_writable(loop, fd)
+            except InterruptedError:
+                # Signal interrupted the syscall (EINTR) — retry the remainder.
+                continue
             except OSError:
                 # fd closed or child gone — nothing more we can deliver.
                 return
