@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { Workspace, Project } from '@/types/type'
+import Modal from '@/components/ui/Modal'
 
 const LANGUAGES = ['Python', 'TypeScript', 'JavaScript', 'Go', 'Rust', 'Other']
 
@@ -17,14 +18,14 @@ function friendlyError(code: string): string {
 }
 
 export default function ProjectCreateModal({
+    trigger,
     workspaces,
     defaultWorkspaceId,
-    onClose,
     onCreated,
 }: {
+    trigger: ReactNode
     workspaces: Workspace[]
     defaultWorkspaceId: number | null
-    onClose: () => void
     onCreated: (p: Project) => void
 }) {
     const [name, setName] = useState('')
@@ -37,7 +38,18 @@ export default function ProjectCreateModal({
     const [error, setError] = useState('')
     const [confirmCreate, setConfirmCreate] = useState<{ expanded: string } | null>(null)
 
-    async function submit(createDir = false) {
+    // Fresh form each time the modal opens (it stays mounted between opens).
+    function resetForm() {
+        setName('')
+        setPath('')
+        setLanguage('Python')
+        setWorkspaceId(defaultWorkspaceId ?? workspaces[0]?.id ?? null)
+        setProcessing(false)
+        setError('')
+        setConfirmCreate(null)
+    }
+
+    async function submit(close: () => void, createDir = false) {
         setError('')
         setProcessing(true)
         try {
@@ -55,7 +67,7 @@ export default function ProjectCreateModal({
             const json = await res.json() as Record<string, unknown>
             if (res.ok) {
                 onCreated(json as unknown as Project)
-                onClose()
+                close()
                 return
             }
             const code = (json.error ?? json.detail ?? '') as string
@@ -73,9 +85,13 @@ export default function ProjectCreateModal({
     }
 
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
-            <div className="bg-modal border border-stroke rounded-lg p-6 w-[340px] flex flex-col gap-3.5">
-                {confirmCreate ? (
+        <Modal
+            trigger={trigger}
+            ariaLabel="Add project"
+            onOpenChange={open => { if (open) resetForm() }}
+        >
+            {close => (
+                confirmCreate ? (
                     <>
                         <h2 className="m-0 text-zinc-900 text-[15px] font-semibold">Directory not found</h2>
                         <p className="m-0 text-zinc-700 text-[13px] leading-relaxed">
@@ -85,13 +101,13 @@ export default function ProjectCreateModal({
                         {error && <span className="text-danger text-xs">{error}</span>}
                         <div className="flex gap-2 justify-end">
                             <button type="button" onClick={() => setConfirmCreate(null)} className={cancelCls}>Back</button>
-                            <button type="button" disabled={processing} onClick={() => submit(true)} className={submitCls}>
+                            <button type="button" disabled={processing} onClick={() => submit(close, true)} className={submitCls}>
                                 {processing ? 'Creating…' : 'Create & Add'}
                             </button>
                         </div>
                     </>
                 ) : (
-                    <form onSubmit={e => { e.preventDefault(); void submit() }} className="flex flex-col gap-3.5">
+                    <form onSubmit={e => { e.preventDefault(); void submit(close) }} className="flex flex-col gap-3.5">
                         <h2 className="m-0 text-zinc-900 text-[15px] font-semibold">New Project</h2>
                         {error && <span className="text-danger text-xs">{error}</span>}
                         <label className="flex flex-col gap-1">
@@ -132,14 +148,14 @@ export default function ProjectCreateModal({
                             </select>
                         </label>
                         <div className="flex gap-2 justify-end">
-                            <button type="button" onClick={onClose} className={cancelCls}>Cancel</button>
+                            <button type="button" onClick={close} className={cancelCls}>Cancel</button>
                             <button type="submit" disabled={processing} className={submitCls}>
                                 {processing ? 'Checking…' : 'Add Project'}
                             </button>
                         </div>
                     </form>
-                )}
-            </div>
-        </div>
+                )
+            )}
+        </Modal>
     )
 }

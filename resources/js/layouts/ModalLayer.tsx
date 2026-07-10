@@ -1,6 +1,5 @@
 import { router } from '@inertiajs/react'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
-import ProjectCreateModal from '@/components/project/ProjectCreateModal'
 import AddWorkspaceModal from '@/components/AddWorkspaceModal'
 import AgentEditModal from '@/components/agent/AgentEditModal'
 import { EditProjectModal } from '@/components/modals/EditProjectModal'
@@ -22,10 +21,6 @@ export function ModalLayer() {
         showWorkspaceModal,
         setShowWorkspaceModal,
         handleWorkspaceCreated,
-        // Add project modal
-        addProjectWorkspaceId,
-        setAddProjectWorkspaceId,
-        handleProjectCreated,
         // Move project
         movingProject,
         setMovingProject,
@@ -69,16 +64,6 @@ export function ModalLayer() {
                 <AddWorkspaceModal
                     onClose={() => setShowWorkspaceModal(false)}
                     onCreated={() => handleWorkspaceCreated()}
-                />
-            )}
-
-            {/* Create project */}
-            {addProjectWorkspaceId !== undefined && (
-                <ProjectCreateModal
-                    workspaces={workspaces}
-                    defaultWorkspaceId={addProjectWorkspaceId}
-                    onClose={() => setAddProjectWorkspaceId(undefined)}
-                    onCreated={handleProjectCreated}
                 />
             )}
 
