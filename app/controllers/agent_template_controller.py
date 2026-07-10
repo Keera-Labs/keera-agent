@@ -1,5 +1,3 @@
-import json as _json
-
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
@@ -15,13 +13,9 @@ def _serialize(t: AgentTemplate) -> dict:
         "agent_type": t.agent_type,
         "system_prompt": t.system_prompt,
         "model": t.model,
-        "permissions_allow": _json.loads(t.permissions_allow)
-        if getattr(t, "permissions_allow", None)
-        else [],
-        "permissions_deny": _json.loads(t.permissions_deny)
-        if getattr(t, "permissions_deny", None)
-        else [],
-        "flags": _json.loads(t.flags) if getattr(t, "flags", None) else {},
+        "permissions_allow": getattr(t, "permissions_allow", None) or [],
+        "permissions_deny": getattr(t, "permissions_deny", None) or [],
+        "flags": getattr(t, "flags", None) or {},
         "dangerously_skip_permissions": bool(getattr(t, "dangerously_skip_permissions", True)),
         "plan_mode": bool(getattr(t, "plan_mode", False)),
         "is_builtin": bool(getattr(t, "is_builtin", False)),
@@ -61,11 +55,11 @@ def _apply_body(template: AgentTemplate, body: dict) -> None:
     if "model" in body:
         template.model = (body["model"] or "claude-opus-4-8").strip()
     if "flags" in body:
-        template.flags = _json.dumps(body["flags"] or {})
+        template.flags = body["flags"] or {}
     if "permissions_allow" in body:
-        template.permissions_allow = _json.dumps(body["permissions_allow"] or [])
+        template.permissions_allow = body["permissions_allow"] or []
     if "permissions_deny" in body:
-        template.permissions_deny = _json.dumps(body["permissions_deny"] or [])
+        template.permissions_deny = body["permissions_deny"] or []
     if "dangerously_skip_permissions" in body:
         template.dangerously_skip_permissions = bool(body["dangerously_skip_permissions"])
     if "plan_mode" in body:
@@ -79,9 +73,9 @@ def _new_template_fields(body: dict) -> dict:
         "agent_type": (body.get("agent_type") or "software_engineer").strip(),
         "model": (body.get("model") or "claude-opus-4-8").strip(),
         "system_prompt": (body.get("system_prompt") or "").strip() or None,
-        "flags": _json.dumps(body.get("flags") or {}),
-        "permissions_allow": _json.dumps(body.get("permissions_allow") or []),
-        "permissions_deny": _json.dumps(body.get("permissions_deny") or []),
+        "flags": body.get("flags") or {},
+        "permissions_allow": body.get("permissions_allow") or [],
+        "permissions_deny": body.get("permissions_deny") or [],
         "dangerously_skip_permissions": bool(body.get("dangerously_skip_permissions", True)),
         "plan_mode": bool(body.get("plan_mode", False)),
     }

@@ -15,10 +15,15 @@ class Agent(Model):
     plan_mode: bool
 
     def to_command(self, system_prompt_suffix: str = "") -> str:
-        try:
-            flags = json.loads(self.flags) if self.flags else {}
-        except (json.JSONDecodeError, TypeError):
-            flags = {}
+        # `flags` is a JSON-cast column, so the ORM returns a native dict.
+        # Tolerate a raw string too, in case an uncast value slips through.
+        if isinstance(self.flags, str):
+            try:
+                flags = json.loads(self.flags)
+            except (json.JSONDecodeError, ValueError):
+                flags = {}
+        else:
+            flags = self.flags or {}
 
         cmd = ClaudeCommand()
         if getattr(self, "use_worktree", True):
