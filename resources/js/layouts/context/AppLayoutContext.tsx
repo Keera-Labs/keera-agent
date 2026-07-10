@@ -73,7 +73,7 @@ export interface AppLayoutContextValue {
     handleWorkspaceCreated: () => void
     handleWorkspaceDeleted: () => void
 
-    // ── Agent hook (mutations used by ModalLayer and AgentsView) ─────────────
+    // ── Agent hook (mutations used by ModalLayer and AgentsIndex) ─────────────
     agentHook: ReturnType<typeof useAgents>
 
     // ── Agent templates ───────────────────────────────────────────────────────

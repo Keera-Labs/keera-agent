@@ -1,7 +1,9 @@
 import React from 'react'
 import { router, usePage } from '@inertiajs/react'
 import { useAppLayout } from './context/AppLayoutContext'
-import { AgentsView } from './views/AgentsView'
+import AgentsIndex from '@/pages/agents/Index'
+import { DashboardView } from './views/DashboardView'
+import { dashboardPlaceholder } from '@/pages/dashboard/placeholder'
 import { CommandsView } from './views/CommandsView'
 import { color } from '@/tokens'
 import type { ProjectView } from './sidebar/Sidebar'
@@ -34,6 +36,7 @@ export function ProjectLayout({ children }: { children: React.ReactNode }) {
         activeProject,
         claudeStatus,
         projectView, setProjectView,
+        activeAgentId,
     } = useAppLayout()
 
     const { component } = usePage()
@@ -84,10 +87,19 @@ export function ProjectLayout({ children }: { children: React.ReactNode }) {
             {/* ── Main content area: routes between views ── */}
             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
-                {/* Agents view — always rendered to keep terminal sessions alive */}
-                <div style={{ flex: 1, overflow: 'hidden', display: activeView === 'agents' ? 'flex' : 'none' }}>
-                    <AgentsView />
+                {/* Agents view — always rendered to keep terminal sessions alive.
+                    Shown only when drilled into an agent; the wrapper stays mounted
+                    (display-toggled) so terminals never unmount and blank out. */}
+                <div style={{ flex: 1, overflow: 'hidden', display: activeView === 'agents' && activeAgentId !== null ? 'flex' : 'none' }}>
+                    <AgentsIndex />
                 </div>
+
+                {/* Dashboard overview — shown on the agents tab when no agent is selected */}
+                {activeView === 'agents' && activeAgentId === null && (
+                    <div style={{ flex: 1, overflow: 'auto' }}>
+                        <DashboardView data={dashboardPlaceholder} />
+                    </div>
+                )}
 
                 {/* Commands view */}
                 {activeView === 'commands' && activeProject && (
