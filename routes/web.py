@@ -17,12 +17,10 @@ from app.controllers import (
     heartbeat_controller,
     home_controller,
     plugin_controller,
-    project_controller,
     settings_controller,
     task_controller,
     tasks_page_controller,
     terminal_controller,
-    workspace_controller,
 )
 from app.mcp.server import KeeraServer
 

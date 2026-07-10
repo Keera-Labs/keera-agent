@@ -15,8 +15,8 @@ class AppProvider(Provider):
         from app.console.seed_templates_command import SeedTemplatesCommand
         from app.exceptions.handlers import register_exception_handlers
         from app.utils.hook_setup import ensure_hooks
-        from routes.web import router as web_router
         from routes.api import router as api_router
+        from routes.web import router as web_router
 
         self.app.fastapi.include_router(web_router.router)
         self.app.fastapi.include_router(api_router.router)

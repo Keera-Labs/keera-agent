@@ -1,6 +1,5 @@
+from controllers import project_controller, workspace_controller
 from fastapi_startkit.fastapi import Router
-
-from controllers import workspace_controller, project_controller
 
 router = Router()
 
