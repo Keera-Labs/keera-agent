@@ -34,8 +34,11 @@ export function ProjectLayout({ children }: { children: React.ReactNode }) {
         activeProject,
         claudeStatus,
         projectView, setProjectView,
-        activeAgentId,
+        sessions, agentSessions,
     } = useAppLayout()
+
+    // Live PTY sessions across all projects (PM + agent terminals).
+    const runningCount = sessions.current.size + agentSessions.current.size
 
     const { component } = usePage()
     const isTasksPage = component === 'Tasks'
@@ -79,6 +82,16 @@ export function ProjectLayout({ children }: { children: React.ReactNode }) {
                             <ClaudeStatusBadge status={claudeStatus[activeProject.id]} />
                         </div>
                     </>
+                )}
+
+                {/* Global running indicator — far right */}
+                {runningCount > 0 && (
+                    <div className="flex items-center gap-2 pr-3" style={{ marginLeft: 'auto' }}>
+                        <DotsIndicator />
+                        <span style={{ color: color.warningBright, fontSize: '12.5px', fontWeight: 600, fontFamily: '"JetBrains Mono", monospace' }}>
+                            {runningCount} running
+                        </span>
+                    </div>
                 )}
             </div>
 
