@@ -1,10 +1,8 @@
 from fastapi_startkit.fastapi import Router
 
-from app.controllers import dashboard_controller, project_controller, workspace_controller
+from app.controllers import project_controller, workspace_controller
 
 router = Router()
-
-router.get("/api/dashboard", dashboard_controller.index)
 
 router.get("/api/workspaces", workspace_controller.index)
 router.post("/api/workspaces", workspace_controller.store)

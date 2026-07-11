@@ -1,7 +1,6 @@
 import datetime
 
 from fastapi import Request
-from fastapi.responses import JSONResponse
 from fastapi_startkit.inertia.inertia import Inertia
 
 from app.controllers.home_controller import _shared_props
@@ -199,12 +198,6 @@ async def _build_dashboard(projects, workspace_name: str) -> dict:
         "workingNow": working_now,
         "projects": project_payloads,
     }
-
-
-async def index(request: Request):
-    """JSON dashboard aggregate. ``?workspace_id=`` scopes to one workspace."""
-    projects, workspace_name = await _resolve_scope(request.query_params.get("workspace_id"))
-    return JSONResponse(await _build_dashboard(projects, workspace_name))
 
 
 async def page(request: Request):
