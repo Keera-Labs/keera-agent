@@ -6,7 +6,7 @@ import { TasksView } from '@/layouts/views/TasksView'
 import { CreateTaskModal } from '@/components/modals/CreateTaskModal'
 import { TaskDetailModal } from '@/components/modals/TaskDetailModal'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
-import useProjects from '@/queries/useProjects'
+import useProjects from '@/hooks/useProjects'
 import type { Task } from '@/types/type'
 
 // Self-contained tasks page. Data is delivered as Inertia props by

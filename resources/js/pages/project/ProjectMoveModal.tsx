@@ -3,7 +3,7 @@ import { color } from '@/tokens'
 import type { Project, Workspace } from '@/types/type'
 import Modal from '@/components/ui/Modal'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
-import useProjects from '@/queries/useProjects'
+import useProjects from '@/hooks/useProjects'
 
 // Trigger-based "move project to workspace" modal (see ProjectCreateModal / PR #198).
 

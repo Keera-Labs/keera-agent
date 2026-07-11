@@ -1,6 +1,6 @@
 import ProjectCreateModal from "@/components/project/ProjectCreateModal"
-import { useLocalStorage } from "@/layouts/hooks/useLocalStorage"
-import useProjects from "@/queries/useProjects"
+import { useLocalStorage } from "@/hooks/useLocalStorage"
+import useProjects from "@/hooks/useProjects"
 import { color } from "@/tokens"
 import type { Project } from "@/types/type"
 import { router, usePage } from "@inertiajs/react"

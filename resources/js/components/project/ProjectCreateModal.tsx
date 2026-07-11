@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import type { Project } from '@/types/type'
 import Modal from '@/components/ui/Modal'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
-import useProjects from '@/queries/useProjects'
+import useProjects from '@/hooks/useProjects'
 
 const LANGUAGES = ['Python', 'TypeScript', 'JavaScript', 'Go', 'Rust', 'Other']
 

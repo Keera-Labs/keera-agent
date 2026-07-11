@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { color } from '@/tokens'
-import { type ProjectAgent, type AgentFlags, normalizeAgent } from '@/layouts/hooks/agents'
+import { type ProjectAgent, type AgentFlags, normalizeAgent } from '@/hooks/agents'
 import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS } from '@/types/agent'
 import { labelStyle, inputStyle, cancelBtnStyle, submitBtnStyle, flagRowStyle, toggleStyle } from '@/components/ui/styles'
 

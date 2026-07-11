@@ -1,4 +1,4 @@
-import { useWorkspace } from "@/layouts/hooks/workspace"
+import { useWorkspace } from "@/hooks/workspace"
 import { useAppLayout } from "@/layouts/context/AppLayoutContext"
 import { color } from "@/tokens"
 import { useEffect, useRef, useState } from "react"
