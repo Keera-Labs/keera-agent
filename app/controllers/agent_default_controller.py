@@ -13,7 +13,7 @@ async def _set_project_default(project_id: int, agent_id: int | None) -> None:
     await project.save()
 
 
-async def get_default(request: Request, project_id: int):
+async def show(request: Request, project_id: int):
     """Return the default agent for a project."""
     from app.models.Project import Project
 
@@ -31,7 +31,7 @@ async def get_default(request: Request, project_id: int):
     return AgentResource(agent)
 
 
-async def set_default(request: Request, project_id: int):
+async def store(request: Request, project_id: int):
     """Set the default agent for a project."""
     body = await request.json()
     agent_id = body.get("agent_id")
