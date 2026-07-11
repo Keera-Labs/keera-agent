@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { color } from '@/tokens'
 import type { Project } from '@/types/type'
 import Modal from '@/components/ui/Modal'
-import { useAppLayout } from '@/layouts/context/AppLayoutContext'
+import useProjects from '@/queries/useProjects'
 import { ProjectTemplatesModal } from '@/components/modals/ProjectTemplatesModal'
 
 const inputStyle: React.CSSProperties = {
@@ -104,7 +104,7 @@ export function ProjectEditModal({
     trigger: ReactNode
     onOpenChange?: (open: boolean) => void
 }) {
-    const { handleProjectUpdated } = useAppLayout()
+    const { handleProjectUpdated } = useProjects()
     return (
         <Modal
             trigger={trigger}

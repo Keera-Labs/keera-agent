@@ -2,12 +2,11 @@ import { type ReactNode } from 'react'
 import { color } from '@/tokens'
 import type { Project } from '@/types/type'
 import Modal from '@/components/ui/Modal'
-import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import useProjects from '@/queries/useProjects'
 
-// Trigger-based delete confirmation. Delegates to the layout's handleProjectDeleted
-// so the deleted project's terminal sessions are torn down, and invalidates the
-// projects query so the sidebar list (fed by useProjects) drops it immediately.
+// Trigger-based delete confirmation. Delegates to useProjects' handleProjectDeleted
+// so the deleted project's terminal sessions are torn down and the layout's
+// project list (which feeds the sidebar) is refreshed, dropping it immediately.
 
 export function ProjectDeleteModal({
     project, trigger, onOpenChange,
@@ -16,8 +15,7 @@ export function ProjectDeleteModal({
     trigger: ReactNode
     onOpenChange?: (open: boolean) => void
 }) {
-    const { handleProjectDeleted } = useAppLayout()
-    const { invalidate } = useProjects()
+    const { handleProjectDeleted } = useProjects()
 
     return (
         <Modal trigger={trigger} ariaLabel="Delete project" onOpenChange={onOpenChange}>
@@ -36,7 +34,7 @@ export function ProjectDeleteModal({
                         >Cancel</button>
                         <button
                             type="button"
-                            onClick={() => { handleProjectDeleted(project.id); invalidate(); close() }}
+                            onClick={() => { handleProjectDeleted(project.id); close() }}
                             style={{ background: '#da3633', border: `1px solid ${color.danger}`, borderRadius: '6px', color: '#fff', fontSize: '12px', padding: '6px 14px', cursor: 'pointer' }}
                         >Delete</button>
                     </div>

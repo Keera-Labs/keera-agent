@@ -1,5 +1,6 @@
 import { router } from '@inertiajs/react'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
+import useProjects from '@/queries/useProjects'
 import AddWorkspaceModal from '@/components/AddWorkspaceModal'
 import AgentEditModal from '@/components/agent/AgentEditModal'
 import { GlobalSettingsModal } from '@/components/modals/GlobalSettingsModal'
@@ -9,9 +10,9 @@ import { AgentAddModal } from '@/components/modals/AgentAddModal'
 import type { ProjectAgent } from '@/layouts/hooks/agents'
 
 export function ModalLayer() {
+    const { allProjects } = useProjects()
     const {
         // Data
-        allProjects,
         activeProject,
         // Workspace modal
         showWorkspaceModal,

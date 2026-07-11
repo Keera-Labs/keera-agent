@@ -64,12 +64,12 @@ export default function Sidebar({
     const { component } = usePage()
     const isSettingsPage = component === "Settings"
 
-    const { projects } = useProjects()
-    const { workspaces, handleProjectCreated } = useAppLayout()
+    const { allProjects, handleProjectCreated } = useProjects()
+    const { workspaces } = useAppLayout()
 
     const filteredProjects = filterWorkspaceId !== null
-        ? projects.filter(p => Number(p.workspace_id) === filterWorkspaceId)
-        : projects
+        ? allProjects.filter(p => Number(p.workspace_id) === filterWorkspaceId)
+        : allProjects
 
     return (
         <aside style={{
