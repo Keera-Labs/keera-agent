@@ -20,24 +20,6 @@ def _default_permissions() -> tuple[str, str]:
 
 
 async def index(request: Request, project_id: int):
-    from app.actions.agent_create_action import AgentCreateAction
-    from app.models.Project import Project
-
-    agents = await Agent.where("project_id", project_id).where_null("deleted_at").exists()
-
-    if not agents:
-        agent = await AgentCreateAction(
-            project_id=project_id,
-            request=AgentStoreRequest(
-                name="PM",
-                agent_type="pm",
-                description="Project manager agent that coordinates work across the team.",
-                dangerously_skip_permissions=True,
-            ),
-        ).execute()
-
-        await Project.where("id", project_id).update({"default_agent_id": agent.id})
-
     agents = await Agent.where("project_id", project_id).where_null("deleted_at").get()
 
     return AgentResource.collection(agents)
