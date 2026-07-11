@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { FitAddon } from '@xterm/addon-fit'
 import { color } from '@/tokens'
 import type { Project } from '@/types/type'
@@ -101,6 +101,7 @@ const cmdPulseStyle = `@keyframes cmd-pulse { 0%,100%{opacity:1} 50%{opacity:0.4
 export function CommandsView({ project }: { project: Project }) {
     const projectId = project.id
     const [commands, setCommands] = useState<Command[]>([])
+    const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading')
     const [showForm, setShowForm] = useState(false)
     const [label, setLabel] = useState('')
     const [cmd, setCmd] = useState('')
@@ -114,12 +115,25 @@ export function CommandsView({ project }: { project: Project }) {
     const cmdSessions = useRef<Map<number, Session>>(new Map())
     const cmdContainerRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
 
-    useEffect(() => {
-        fetch(`/api/projects/${projectId}/commands`)
-            .then(r => r.json())
-            .then(setCommands)
-            .catch(() => {})
+    const loadCommands = useCallback(async (signal?: AbortSignal) => {
+        setLoadState('loading')
+        try {
+            const r = await fetch(`/api/projects/${projectId}/commands`, { signal })
+            if (!r.ok) throw new Error(`HTTP ${r.status}`)
+            const data = await r.json()
+            setCommands(Array.isArray(data) ? data : [])
+            setLoadState('ready')
+        } catch (err) {
+            if ((err as Error)?.name === 'AbortError') return
+            setLoadState('error')
+        }
     }, [projectId])
+
+    useEffect(() => {
+        const controller = new AbortController()
+        loadCommands(controller.signal)
+        return () => controller.abort()
+    }, [loadCommands])
 
     useEffect(() => {
         return () => {
@@ -362,7 +376,43 @@ export function CommandsView({ project }: { project: Project }) {
                     borderRight: hasOutput ? `1px solid ${color.border}` : 'none',
                     display: 'flex', flexDirection: 'column',
                 }}>
-                    {commands.length === 0 ? (
+                    {loadState === 'error' ? (
+                        <div style={{
+                            flex: 1, display: 'flex', flexDirection: 'column',
+                            alignItems: 'center', justifyContent: 'center', gap: '12px',
+                            padding: '40px 24px', textAlign: 'center',
+                        }}>
+                            <div style={{
+                                width: '48px', height: '48px', borderRadius: '50%',
+                                background: color.dangerCanvas, border: `1px solid ${color.danger}`,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>
+                                <svg width="22" height="22" viewBox="0 0 16 16" fill={color.danger}>
+                                    <path d="M8.982 1.566a1.13 1.13 0 00-1.964 0L.165 13.233c-.457.778.091 1.767.982 1.767h13.706c.891 0 1.438-.99.982-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 01-1.1 0L7.1 5.995A.905.905 0 018 5zm.002 6a1 1 0 110 2 1 1 0 010-2z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <p style={{ margin: '0 0 4px', color: color.textSecondary, fontSize: '13px', fontWeight: 500 }}>
+                                    Couldn’t load commands
+                                </p>
+                                <p style={{ margin: 0, color: color.textFaint, fontSize: '12px', lineHeight: 1.5 }}>
+                                    The request failed. Check your connection<br/>and try again.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => loadCommands()}
+                                style={{
+                                    background: 'transparent', border: `1px dashed ${color.borderMuted}`,
+                                    borderRadius: '6px', color: color.textMuted, fontSize: '12px',
+                                    padding: '6px 14px', cursor: 'pointer',
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.borderColor = color.accent; e.currentTarget.style.color = color.accent }}
+                                onMouseLeave={e => { e.currentTarget.style.borderColor = color.borderMuted; e.currentTarget.style.color = color.textMuted }}
+                            >
+                                Retry
+                            </button>
+                        </div>
+                    ) : commands.length === 0 ? (
                         <div style={{
                             flex: 1, display: 'flex', flexDirection: 'column',
                             alignItems: 'center', justifyContent: 'center', gap: '12px',
