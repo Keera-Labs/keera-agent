@@ -5,8 +5,8 @@ import Modal from '@/components/ui/Modal'
 import useProjects from '@/queries/useProjects'
 
 // Trigger-based delete confirmation. Delegates to useProjects' handleProjectDeleted
-// so the deleted project's terminal sessions are torn down and the layout's
-// project list (which feeds the sidebar) is refreshed, dropping it immediately.
+// so the deleted project's terminal sessions are torn down and useProjects' own
+// query (which feeds the sidebar) is invalidated, dropping it immediately.
 
 export function ProjectDeleteModal({
     project, trigger, onOpenChange,

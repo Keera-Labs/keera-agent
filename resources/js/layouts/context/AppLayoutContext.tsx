@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import type React from 'react'
 import { usePage } from '@inertiajs/react'
+import { useQueryClient } from '@tanstack/react-query'
 import { FitAddon } from '@xterm/addon-fit'
 import type { Project, Workspace, Task } from '@/types/type'
 import type { ProjectAgent } from '@/layouts/hooks/agents'
@@ -10,13 +11,16 @@ import { makeTerminal } from '@/layouts/hooks/useTerminalSessions'
 import type { Session } from '@/layouts/hooks/useTerminalSessions'
 import type { ProjectView } from '@/layouts/sidebar/Sidebar'
 import { useTasks } from '@/layouts/hooks/tasks'
+import useProjects, { PROJECTS_QUERY_KEY } from '@/queries/useProjects'
 
 // ─── Context value interface ──────────────────────────────────────────────────
 
 export interface AppLayoutContextValue {
     // ── Data ─────────────────────────────────────────────────────────────────
+    // Project data is owned by useProjects (single source); the layout only
+    // derives activeProject from it. Consumers that need the full list call
+    // useProjects() directly.
     workspaces: Workspace[]
-    projects: Project[]
     activeProject: Project | null
     tasks: Task[]
 
@@ -63,8 +67,9 @@ export interface AppLayoutContextValue {
     sessionStart: Record<number, Date>
 
     // ── Business handlers ─────────────────────────────────────────────────────
-    // Refreshes the layout-owned workspaces/projects state. The project mutation
-    // handlers live in useProjects and drive this after each change.
+    // Refreshes the layout-owned workspaces and invalidates the projects query
+    // (workspace changes can reassign projects). Project mutations refresh
+    // themselves via useProjects' own query.
     refreshData: () => Promise<void>
     handleWorkspaceCreated: () => void
     handleWorkspaceDeleted: () => void
@@ -84,7 +89,9 @@ export interface AppLayoutContextValue {
 
 // ─── Context + dumb provider ──────────────────────────────────────────────────
 
-const AppLayoutContext = createContext<AppLayoutContextValue | null>(null)
+// Exported so useProjects can read the layout's PTY session refs (nullable) for
+// delete teardown without the throw-on-missing behaviour of useAppLayout.
+export const AppLayoutContext = createContext<AppLayoutContextValue | null>(null)
 
 export function AppLayoutProvider({
     value,
@@ -162,23 +169,23 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         tasks?: Task[]
         global_settings?: { max_agents_per_project?: number }
         workspaces?: Workspace[]
-        projects?: Project[]
     }>()
     const projectName = props.project
     const agentIdFromUrl = props.agent_id
+    const queryClient = useQueryClient()
 
-    // ── Data — seeded from Inertia props (fast initial paint), refreshed via
-    //    targeted fetch after mutations (no router.reload, no PTY disruption)
+    // ── Data — workspaces are layout-owned (seeded from Inertia props, refreshed
+    //    via targeted fetch). Projects are owned by useProjects; the layout only
+    //    reads that single source to derive activeProject and seed claudeStatus.
     const [workspaces, setWorkspaces] = useState<Workspace[]>(() => props.workspaces ?? [])
-    const [projects, setProjects] = useState<Project[]>(() => props.projects ?? [])
+    const { projects } = useProjects()
 
     async function refreshData() {
-        const [wsRes, prRes] = await Promise.all([
-            fetch('/api/workspaces').then(r => r.json()),
-            fetch('/api/projects').then(r => r.json()),
-        ])
+        const wsRes = await fetch('/api/workspaces').then(r => r.json())
         setWorkspaces(wsRes)
-        setProjects(prRes)
+        // Workspace changes can reassign projects (e.g. deleting a workspace
+        // unassigns its projects), so refresh useProjects' query too.
+        queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY })
     }
 
     // ── Modal / UI state ──────────────────────────────────────────────────────
@@ -543,7 +550,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
 
     const value: AppLayoutContextValue = {
         // Data
-        workspaces, projects, activeProject, tasks,
+        workspaces, activeProject, tasks,
         // Modal state
         showWorkspaceModal, setShowWorkspaceModal,
         showGlobalSettings, setShowGlobalSettings,
