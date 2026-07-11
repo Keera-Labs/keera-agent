@@ -461,6 +461,11 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         }
 
         requestAnimationFrame(() => {
+            // A concurrent trigger (the select-all-agents effect and the detail page
+            // can both fire in the same tick) may have created this session between
+            // the has() guard above and this frame — never open a second PTY.
+            if (agentSessions.current.has(agentId)) return
+
             const term = makeTerminal()
             const fitAddon = new FitAddon()
             term.loadAddon(fitAddon)
