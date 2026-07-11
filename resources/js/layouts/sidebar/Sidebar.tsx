@@ -1,5 +1,4 @@
 import ProjectCreateModal from "@/components/project/ProjectCreateModal"
-import { useAppLayout } from "@/layouts/context/AppLayoutContext"
 import { useLocalStorage } from "@/layouts/hooks/useLocalStorage"
 import useProjects from "@/queries/useProjects"
 import { color } from "@/tokens"
@@ -64,8 +63,7 @@ export default function Sidebar({
     const { component } = usePage()
     const isSettingsPage = component === "Settings"
 
-    const { projects, handleProjectCreated } = useProjects()
-    const { workspaces } = useAppLayout()
+    const { projects } = useProjects()
 
     const filteredProjects = filterWorkspaceId !== null
         ? projects.filter(p => Number(p.workspace_id) === filterWorkspaceId)
@@ -91,9 +89,7 @@ export default function Sidebar({
                         Projects
                     </span>
                     <ProjectCreateModal
-                        workspaces={workspaces}
                         defaultWorkspaceId={filterWorkspaceId}
-                        onCreated={handleProjectCreated}
                         trigger={
                             <button
                                 title="Add project"
@@ -127,9 +123,7 @@ export default function Sidebar({
                     {filteredProjects.length === 0 && (
                         <li>
                             <ProjectCreateModal
-                                workspaces={workspaces}
                                 defaultWorkspaceId={filterWorkspaceId}
-                                onCreated={handleProjectCreated}
                                 trigger={
                                     <button
                                         style={{
