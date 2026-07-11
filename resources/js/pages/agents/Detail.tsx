@@ -45,6 +45,7 @@ export default function AgentDetail() {
         agentSessions,
         agentContainerRefs,
         agentTerminalSlot,
+        launchAgentSession,
         isDraggingOver,
         setIsDraggingOver,
         uploadImage,
@@ -83,6 +84,13 @@ export default function AgentDetail() {
             }
             sess.fitAddon.fit()
             sess.term.focus()
+        } else {
+            // No session yet. The context "start all agents" effect fires during the
+            // Inertia navigation transition — before this slot is registered — so it
+            // can attach to the off-screen holder or no-op and never retry. Now that
+            // the slot is mounted, establish the active agent's session directly in
+            // it. launchAgentSession is idempotent, so this can't open a second PTY.
+            launchAgentSession(activeAgentId, true)
         }
         const parkedId = activeAgentId
         return () => {
