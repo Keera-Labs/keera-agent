@@ -106,6 +106,12 @@ class Terminal:
                 # fd closed or child gone — nothing more we can deliver.
                 return
 
+    async def send(self, message: str) -> None:
+        text_bytes = message.encode().rstrip(b"\r\n")
+        await self.write(text_bytes)
+        await asyncio.sleep(0.05)
+        await self.write(b"\r")
+
     @staticmethod
     async def _wait_writable(loop: asyncio.AbstractEventLoop, fd: int) -> None:
         future: asyncio.Future = loop.create_future()
