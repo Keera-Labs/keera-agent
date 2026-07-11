@@ -218,7 +218,7 @@ async def destroy(request: Request, command_id: int):
 
     _output.pop(command_id, None)
     _runs.pop(command_id, None)
-    await cmd.delete()
+    await Command.where("id", command_id).delete()
     return JSONResponse({}, status_code=204)
 
 
