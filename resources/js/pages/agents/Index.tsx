@@ -5,6 +5,7 @@ import { useAgents } from '@/layouts/hooks/agents'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import { DotsIndicator } from '@/layouts/sidebar/Project'
 import { ProjectOverview } from './ProjectOverview'
+import { AgentsListPanel } from './AgentsListPanel'
 
 // ─── Claude status badge ──────────────────────────────────────────────────────
 
@@ -70,6 +71,11 @@ export default function AgentsIndex() {
             {/* ─── Project overview dashboard (shown when no agent is drilled into) ── */}
             {activeProject && !showTerminal && (
                 <ProjectOverview project={activeProject} />
+            )}
+
+            {/* ─── Agents list — left panel of the agent-execution view ─────────── */}
+            {activeProject && showTerminal && (
+                <AgentsListPanel project={activeProject} />
             )}
 
             {/* ─── Chat / Terminal Panel — kept mounted to preserve live sessions ─── */}
