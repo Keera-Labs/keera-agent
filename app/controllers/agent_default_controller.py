@@ -8,10 +8,9 @@ from app.resources.agent_resource import AgentResource
 async def _set_project_default(project_id: int, agent_id: int | None) -> None:
     from app.models.Project import Project
 
-    project = await Project.find(project_id)
-    if project:
-        project.default_agent_id = agent_id
-        await project.save()
+    project = await Project.find_or_fail(project_id)
+    project.default_agent_id = agent_id
+    await project.save()
 
 
 async def get_default(request: Request, project_id: int):
@@ -39,8 +38,8 @@ async def set_default(request: Request, project_id: int):
     if not agent_id:
         return JSONResponse({"error": "agent_id is required"}, status_code=422)
 
-    agent = await Agent.find(agent_id)
-    if not agent or agent.project_id != project_id:
+    agent = await Agent.find_or_fail(agent_id)
+    if agent.project_id != project_id:
         return JSONResponse({"error": "Agent not found in this project"}, status_code=404)
 
     await _set_project_default(project_id, agent_id)
