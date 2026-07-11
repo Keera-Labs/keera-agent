@@ -2,6 +2,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from app.models.Agent import Agent
+from app.requests.agent_default_request import DefaultAgentStoreRequest
 from app.resources.agent_resource import AgentResource
 
 
@@ -31,16 +32,11 @@ async def show(request: Request, project_id: int):
     return AgentResource(agent)
 
 
-async def store(request: Request, project_id: int):
+async def store(body: DefaultAgentStoreRequest, project_id: int):
     """Set the default agent for a project."""
-    body = await request.json()
-    agent_id = body.get("agent_id")
-    if not agent_id:
-        return JSONResponse({"error": "agent_id is required"}, status_code=422)
-
-    agent = await Agent.find_or_fail(agent_id)
+    agent = await Agent.find_or_fail(body.agent_id)
     if agent.project_id != project_id:
         return JSONResponse({"error": "Agent not found in this project"}, status_code=404)
 
-    await _set_project_default(project_id, agent_id)
+    await _set_project_default(project_id, body.agent_id)
     return AgentResource(agent)
