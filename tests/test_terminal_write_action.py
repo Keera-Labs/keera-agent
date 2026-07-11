@@ -9,6 +9,7 @@ message and appends a single CR so the target treats it as one submitted line.
 
 import os
 import pty
+import select
 import tty
 import unittest
 
@@ -17,6 +18,26 @@ from fastapi_startkit.application import app
 from app.actions.terminal_write_action import TerminalWriteAction
 from app.terminal.terminal import Terminal
 from tests.test_case import TestCase
+
+
+def _read_until(fd: int, expected: int, timeout: float = 2.0) -> bytes:
+    """Drain fd until `expected` bytes arrive or the timeout elapses.
+
+    send() writes the message text and the trailing CR as two separate os.write
+    calls, and PTY delivery to the slave is asynchronous — a single os.read can
+    return just the first chunk. Loop on select() so the test observes the full
+    payload deterministically instead of racing the kernel (flaky on CI).
+    """
+    out = b""
+    while len(out) < expected:
+        ready, _, _ = select.select([fd], [], [], timeout)
+        if not ready:
+            break
+        chunk = os.read(fd, expected - len(out))
+        if not chunk:
+            break
+        out += chunk
+    return out
 
 
 class _RecordingTerminal:
@@ -120,14 +141,15 @@ class TestTerminalSend(unittest.IsolatedAsyncioTestCase):
         term._proc = None
         term.master_fd = master_fd
         term._write_lock = None
+        expected = b"deploy now\r"
         try:
             await term.send("deploy now\r\n")
-            received = os.read(slave_fd, 1024)
+            received = _read_until(slave_fd, len(expected))
         finally:
             os.close(slave_fd)
             os.close(master_fd)
 
-        self.assertEqual(received, b"deploy now\r")
+        self.assertEqual(received, expected)
 
     async def test_send_preserves_inner_spaces(self):
         master_fd, slave_fd = pty.openpty()
@@ -136,14 +158,15 @@ class TestTerminalSend(unittest.IsolatedAsyncioTestCase):
         term._proc = None
         term.master_fd = master_fd
         term._write_lock = None
+        expected = b"Hello World this is one line\r"
         try:
             await term.send("Hello World this is one line")
-            received = os.read(slave_fd, 1024)
+            received = _read_until(slave_fd, len(expected))
         finally:
             os.close(slave_fd)
             os.close(master_fd)
 
-        self.assertEqual(received, b"Hello World this is one line\r")
+        self.assertEqual(received, expected)
 
 
 if __name__ == "__main__":
