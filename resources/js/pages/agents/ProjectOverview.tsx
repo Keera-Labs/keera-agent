@@ -27,10 +27,10 @@ function HeaderPill({ children }: { children: React.ReactNode }) {
 
 export function ProjectOverview({ project }: { project: Project }) {
     const {
-        workspaces, agentSessions, launchAgentSession,
+        workspaces, agentSessions, agentContainerRefs, activeAgentId, launchAgentSession,
         setActiveAgentId, setEditingAgent, setShowAddAgent,
     } = useAppLayout()
-    const { agents, adoptWork } = useAgents(project.id)
+    const { agents, adoptWork, remove: removeAgent } = useAgents(project.id)
 
     const workspaceName = workspaces.find(w => w.id === project.workspace_id)?.name ?? null
     const activeCount = agents.filter(a => agentSessions.current.has(a.id)).length
@@ -160,6 +160,21 @@ export function ProjectOverview({ project }: { project: Project }) {
                                     } catch (err) {
                                         window.alert(err instanceof Error ? err.message : 'Failed to adopt agent work')
                                     }
+                                }}
+                                onRemove={async () => {
+                                    const session = agentSessions.current.get(agent.id)
+                                    if (session) {
+                                        session.observer.disconnect()
+                                        session.term.dispose()
+                                        session.ws.close()
+                                        agentSessions.current.delete(agent.id)
+                                    }
+                                    agentContainerRefs.current.delete(agent.id)
+                                    if (activeAgentId === agent.id) {
+                                        const remaining = agents.filter(a => a.id !== agent.id)
+                                        setActiveAgentId(remaining.length > 0 ? remaining[0].id : null)
+                                    }
+                                    await removeAgent.mutateAsync(agent.id)
                                 }}
                             />
                         ))}
