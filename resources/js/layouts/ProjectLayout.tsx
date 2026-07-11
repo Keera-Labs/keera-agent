@@ -2,8 +2,7 @@ import React from 'react'
 import { router, usePage } from '@inertiajs/react'
 import { useAppLayout } from './context/AppLayoutContext'
 import AgentsIndex from '@/pages/agents/Index'
-import { DashboardView } from './views/DashboardView'
-import { dashboardPlaceholder } from '@/pages/dashboard/placeholder'
+import Dashboard from '@/pages/dashboard/Index'
 import { CommandsView } from './views/CommandsView'
 import { color } from '@/tokens'
 import type { ProjectView } from './sidebar/Sidebar'
@@ -97,7 +96,7 @@ export function ProjectLayout({ children }: { children: React.ReactNode }) {
                 {/* Dashboard overview — shown on the agents tab when no agent is selected */}
                 {activeView === 'agents' && activeAgentId === null && (
                     <div style={{ flex: 1, overflow: 'auto' }}>
-                        <DashboardView data={dashboardPlaceholder} />
+                        <Dashboard />
                     </div>
                 )}
 
