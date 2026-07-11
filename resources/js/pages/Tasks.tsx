@@ -17,7 +17,7 @@ import type { Task } from '@/types/type'
 export default function Tasks() {
     const { props } = usePage<{ project: string; project_id: number | null; tasks: Task[] }>()
     const { workspaces } = useAppLayout()
-    const { allProjects } = useProjects()
+    const { projects } = useProjects()
 
     const tasks = props.tasks ?? []
     const [showCreate, setShowCreate] = useState(false)
@@ -67,7 +67,7 @@ export default function Tasks() {
                 <CreateTaskModal
                     onClose={() => setShowCreate(false)}
                     onCreated={createTask}
-                    projects={allProjects}
+                    projects={projects}
                     workspaces={workspaces}
                     defaultProjectId={props.project_id}
                 />

@@ -3,14 +3,14 @@ import type { Project } from "@/types/type"
 import { useAppLayout } from "@/layouts/context/AppLayoutContext"
 
 // Single source for project data and mutations. It surfaces the layout-owned
-// project list (allProjects) and the create/move/update/delete handlers used by
+// project list (projects) and the create/move/update/delete handlers used by
 // the sidebar and the project modals. The handlers are deliberately
 // layout-coupled: they refresh the persistent layout's own state via
 // refreshData and tear down a deleted project's terminal sessions, and they
 // avoid any TanStack query cache — a cache refetch would re-trigger the
 // terminal-launch effect and disturb live PTYs.
 export default function useProjects() {
-    const { allProjects, refreshData, agentHook, agentSessions, agentContainerRefs } = useAppLayout()
+    const { projects, refreshData, agentHook, agentSessions, agentContainerRefs } = useAppLayout()
     const projectName = usePage<{ project?: string }>().props.project
 
     function handleProjectCreated(project: Project) {
@@ -32,7 +32,7 @@ export default function useProjects() {
     }
 
     function handleProjectDeleted(projectId: number) {
-        const project = allProjects.find(p => p.id === projectId)
+        const project = projects.find(p => p.id === projectId)
         // Clean up agent sessions for the deleted project
         for (const agent of agentHook.agents) {
             const session = agentSessions.current.get(agent.id)
@@ -50,7 +50,7 @@ export default function useProjects() {
     }
 
     return {
-        allProjects,
+        projects,
         handleProjectCreated,
         handleMoveProject,
         handleProjectUpdated,

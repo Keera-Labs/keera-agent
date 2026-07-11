@@ -16,7 +16,7 @@ import { useTasks } from '@/layouts/hooks/tasks'
 export interface AppLayoutContextValue {
     // ── Data ─────────────────────────────────────────────────────────────────
     workspaces: Workspace[]
-    allProjects: Project[]
+    projects: Project[]
     activeProject: Project | null
     tasks: Task[]
 
@@ -170,7 +170,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     // ── Data — seeded from Inertia props (fast initial paint), refreshed via
     //    targeted fetch after mutations (no router.reload, no PTY disruption)
     const [workspaces, setWorkspaces] = useState<Workspace[]>(() => props.workspaces ?? [])
-    const [allProjects, setAllProjects] = useState<Project[]>(() => props.projects ?? [])
+    const [projects, setProjects] = useState<Project[]>(() => props.projects ?? [])
 
     async function refreshData() {
         const [wsRes, prRes] = await Promise.all([
@@ -178,7 +178,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
             fetch('/api/projects').then(r => r.json()),
         ])
         setWorkspaces(wsRes)
-        setAllProjects(prRes)
+        setProjects(prRes)
     }
 
     // ── Modal / UI state ──────────────────────────────────────────────────────
@@ -224,7 +224,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     const agentTerminalSlot = useRef<HTMLDivElement | null>(null)
 
     // ── Derived data ──────────────────────────────────────────────────────────
-    const activeProject = allProjects.find(p => p.slug === projectName) ?? allProjects[0] ?? null
+    const activeProject = projects.find(p => p.slug === projectName) ?? projects[0] ?? null
 
     const taskHook = useTasks(activeProject?.id ?? null)
     const agentHook = useAgents(activeProject?.id ?? null)
@@ -247,12 +247,12 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     // Seed claudeStatus from fetched project data on first load
     useEffect(() => {
         const initial: Record<number, 'running' | 'done'> = {}
-        for (const p of allProjects) {
+        for (const p of projects) {
             if (p.claude_status === 'running') initial[p.id] = 'running'
             else if (p.claude_status === 'idle') initial[p.id] = 'done'
         }
         setClaudeStatus(prev => ({ ...initial, ...prev }))
-    }, [allProjects.length])
+    }, [projects.length])
 
     // When agents load and URL has an agent_id, set the active agent
     useEffect(() => {
@@ -543,7 +543,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
 
     const value: AppLayoutContextValue = {
         // Data
-        workspaces, allProjects, activeProject, tasks,
+        workspaces, projects, activeProject, tasks,
         // Modal state
         showWorkspaceModal, setShowWorkspaceModal,
         showGlobalSettings, setShowGlobalSettings,

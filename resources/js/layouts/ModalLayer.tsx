@@ -10,7 +10,7 @@ import { AgentAddModal } from '@/components/modals/AgentAddModal'
 import type { ProjectAgent } from '@/layouts/hooks/agents'
 
 export function ModalLayer() {
-    const { allProjects } = useProjects()
+    const { projects } = useProjects()
     const {
         // Data
         activeProject,
@@ -97,7 +97,7 @@ export function ModalLayer() {
             {/* Project search */}
             {showProjectSearch && (
                 <ProjectSearchModal
-                    projects={allProjects}
+                    projects={projects}
                     onClose={() => setShowProjectSearch(false)}
                     onSelect={project => router.visit(`/${project.slug}`)}
                 />

@@ -18,7 +18,7 @@ export default function AgentsIndex() {
         agentContainerRefs,
         agentSessions,
     } = useAppLayout()
-    const { allProjects } = useProjects()
+    const { projects } = useProjects()
 
     const { agents: projectAgents } = useAgents(activeProject?.id ?? null)
 
@@ -41,7 +41,7 @@ export default function AgentsIndex() {
             }}>
                 <div style={{ position: 'relative', width: '100%', height: '100%' }}>
                     {/* PM session containers (one per project) */}
-                    {allProjects.map(project => (
+                    {projects.map(project => (
                         <div
                             key={project.id}
                             ref={el => { containerRefs.current.set(project.id, el) }}
