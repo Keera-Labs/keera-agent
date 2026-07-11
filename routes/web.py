@@ -2,6 +2,7 @@ from fastapi_startkit.fastapi import Router
 
 from app.controllers import (
     agent_controller,
+    agent_default_controller,
     agent_dispatch_controller,
     agent_message_controller,
     agent_permission_controller,
@@ -54,8 +55,8 @@ router.patch("/api/messages/{message_id}/read", agent_message_controller.mark_re
 router.get("/api/projects/{project_id}/agents", agent_controller.index)
 router.post("/api/projects/{project_id}/agents", agent_controller.store)
 router.post("/api/projects/{project_id}/agents/spawn", agent_dispatch_controller.spawn)
-router.get("/api/projects/{project_id}/default-agent", agent_controller.get_default)
-router.post("/api/projects/{project_id}/default-agent", agent_controller.set_default)
+router.get("/api/projects/{project_id}/default-agent", agent_default_controller.show)
+router.post("/api/projects/{project_id}/default-agent", agent_default_controller.store)
 router.patch("/api/agents/{agent_id}", agent_controller.update)
 router.delete("/api/agents/{agent_id}", agent_controller.destroy)
 router.get("/api/agents/{agent_id}/output", agent_controller.output)
