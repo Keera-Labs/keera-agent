@@ -1,5 +1,6 @@
 import { useAgents } from '@/layouts/hooks/agents'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
+import useProjects from '@/queries/useProjects'
 import { ProjectOverview } from './ProjectOverview'
 
 // ─── Agents view (rendered by the persistent ProjectLayout) ───────────────────
@@ -12,12 +13,12 @@ import { ProjectOverview } from './ProjectOverview'
 export default function AgentsIndex() {
     const {
         activeProject,
-        allProjects,
         activeAgentId,
         containerRefs,
         agentContainerRefs,
         agentSessions,
     } = useAppLayout()
+    const { projects } = useProjects()
 
     const { agents: projectAgents } = useAgents(activeProject?.id ?? null)
 
@@ -40,7 +41,7 @@ export default function AgentsIndex() {
             }}>
                 <div style={{ position: 'relative', width: '100%', height: '100%' }}>
                     {/* PM session containers (one per project) */}
-                    {allProjects.map(project => (
+                    {projects.map(project => (
                         <div
                             key={project.id}
                             ref={el => { containerRefs.current.set(project.id, el) }}

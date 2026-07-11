@@ -64,8 +64,8 @@ export default function Sidebar({
     const { component } = usePage()
     const isSettingsPage = component === "Settings"
 
-    const { projects } = useProjects()
-    const { workspaces, handleProjectCreated } = useAppLayout()
+    const { projects, handleProjectCreated } = useProjects()
+    const { workspaces } = useAppLayout()
 
     const filteredProjects = filterWorkspaceId !== null
         ? projects.filter(p => Number(p.workspace_id) === filterWorkspaceId)

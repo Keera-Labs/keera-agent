@@ -2,12 +2,11 @@ import { type ReactNode } from 'react'
 import { color } from '@/tokens'
 import type { Project } from '@/types/type'
 import Modal from '@/components/ui/Modal'
-import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import useProjects from '@/queries/useProjects'
 
-// Trigger-based delete confirmation. Delegates to the layout's handleProjectDeleted
-// so the deleted project's terminal sessions are torn down, and invalidates the
-// projects query so the sidebar list (fed by useProjects) drops it immediately.
+// Trigger-based delete confirmation. Delegates to useProjects' handleProjectDeleted
+// so the deleted project's terminal sessions are torn down and useProjects' own
+// query (which feeds the sidebar) is invalidated, dropping it immediately.
 
 export function ProjectDeleteModal({
     project, trigger, onOpenChange,
@@ -16,8 +15,7 @@ export function ProjectDeleteModal({
     trigger: ReactNode
     onOpenChange?: (open: boolean) => void
 }) {
-    const { handleProjectDeleted } = useAppLayout()
-    const { invalidate } = useProjects()
+    const { handleProjectDeleted, deleting } = useProjects()
 
     return (
         <Modal trigger={trigger} ariaLabel="Delete project" onOpenChange={onOpenChange}>
@@ -35,10 +33,10 @@ export function ProjectDeleteModal({
                             style={{ background: 'transparent', border: `1px solid ${color.stroke}`, borderRadius: '6px', color: color.textSecondary, fontSize: '12px', padding: '6px 14px', cursor: 'pointer' }}
                         >Cancel</button>
                         <button
-                            type="button"
-                            onClick={() => { handleProjectDeleted(project.id); invalidate(); close() }}
-                            style={{ background: '#da3633', border: `1px solid ${color.danger}`, borderRadius: '6px', color: '#fff', fontSize: '12px', padding: '6px 14px', cursor: 'pointer' }}
-                        >Delete</button>
+                            type="button" disabled={deleting}
+                            onClick={async () => { try { await handleProjectDeleted(project.id); close() } catch { /* keep the modal open on failure */ } }}
+                            style={{ background: '#da3633', border: `1px solid ${color.danger}`, borderRadius: '6px', color: '#fff', fontSize: '12px', padding: '6px 14px', cursor: deleting ? 'default' : 'pointer', opacity: deleting ? 0.7 : 1 }}
+                        >{deleting ? 'Deleting…' : 'Delete'}</button>
                     </div>
                 </>
             )}

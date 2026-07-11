@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import type React from 'react'
-import { router, usePage } from '@inertiajs/react'
+import { usePage } from '@inertiajs/react'
+import { useQueryClient } from '@tanstack/react-query'
 import { FitAddon } from '@xterm/addon-fit'
 import type { Project, Workspace, Task } from '@/types/type'
 import type { ProjectAgent } from '@/layouts/hooks/agents'
@@ -10,13 +11,16 @@ import { makeTerminal } from '@/layouts/hooks/useTerminalSessions'
 import type { Session } from '@/layouts/hooks/useTerminalSessions'
 import type { ProjectView } from '@/layouts/sidebar/Sidebar'
 import { useTasks } from '@/layouts/hooks/tasks'
+import useProjects, { PROJECTS_QUERY_KEY } from '@/queries/useProjects'
 
 // ─── Context value interface ──────────────────────────────────────────────────
 
 export interface AppLayoutContextValue {
     // ── Data ─────────────────────────────────────────────────────────────────
+    // Project data is owned by useProjects (single source); the layout only
+    // derives activeProject from it. Consumers that need the full list call
+    // useProjects() directly.
     workspaces: Workspace[]
-    allProjects: Project[]
     activeProject: Project | null
     tasks: Task[]
 
@@ -63,10 +67,10 @@ export interface AppLayoutContextValue {
     sessionStart: Record<number, Date>
 
     // ── Business handlers ─────────────────────────────────────────────────────
-    handleMoveProject: (project: Project, newWorkspaceId: number | null) => Promise<void>
-    handleProjectCreated: (project: Project) => void
-    handleProjectDeleted: (projectId: number) => void
-    handleProjectUpdated: (updated: Project) => void
+    // Refreshes the layout-owned workspaces and invalidates the projects query
+    // (workspace changes can reassign projects). Project mutations refresh
+    // themselves via useProjects' own query.
+    refreshData: () => Promise<void>
     handleWorkspaceCreated: () => void
     handleWorkspaceDeleted: () => void
 
@@ -85,7 +89,9 @@ export interface AppLayoutContextValue {
 
 // ─── Context + dumb provider ──────────────────────────────────────────────────
 
-const AppLayoutContext = createContext<AppLayoutContextValue | null>(null)
+// Exported so useProjects can read the layout's PTY session refs (nullable) for
+// delete teardown without the throw-on-missing behaviour of useAppLayout.
+export const AppLayoutContext = createContext<AppLayoutContextValue | null>(null)
 
 export function AppLayoutProvider({
     value,
@@ -163,23 +169,23 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         tasks?: Task[]
         global_settings?: { max_agents_per_project?: number }
         workspaces?: Workspace[]
-        projects?: Project[]
     }>()
     const projectName = props.project
     const agentIdFromUrl = props.agent_id
+    const queryClient = useQueryClient()
 
-    // ── Data — seeded from Inertia props (fast initial paint), refreshed via
-    //    targeted fetch after mutations (no router.reload, no PTY disruption)
+    // ── Data — workspaces are layout-owned (seeded from Inertia props, refreshed
+    //    via targeted fetch). Projects are owned by useProjects; the layout only
+    //    reads that single source to derive activeProject and seed claudeStatus.
     const [workspaces, setWorkspaces] = useState<Workspace[]>(() => props.workspaces ?? [])
-    const [allProjects, setAllProjects] = useState<Project[]>(() => props.projects ?? [])
+    const { projects } = useProjects()
 
     async function refreshData() {
-        const [wsRes, prRes] = await Promise.all([
-            fetch('/api/workspaces').then(r => r.json()),
-            fetch('/api/projects').then(r => r.json()),
-        ])
+        const wsRes = await fetch('/api/workspaces').then(r => r.json())
         setWorkspaces(wsRes)
-        setAllProjects(prRes)
+        // Workspace changes can reassign projects (e.g. deleting a workspace
+        // unassigns its projects), so refresh useProjects' query too.
+        queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY })
     }
 
     // ── Modal / UI state ──────────────────────────────────────────────────────
@@ -225,7 +231,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     const agentTerminalSlot = useRef<HTMLDivElement | null>(null)
 
     // ── Derived data ──────────────────────────────────────────────────────────
-    const activeProject = allProjects.find(p => p.slug === projectName) ?? allProjects[0] ?? null
+    const activeProject = projects.find(p => p.slug === projectName) ?? projects[0] ?? null
 
     const taskHook = useTasks(activeProject?.id ?? null)
     const agentHook = useAgents(activeProject?.id ?? null)
@@ -248,12 +254,12 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     // Seed claudeStatus from fetched project data on first load
     useEffect(() => {
         const initial: Record<number, 'running' | 'done'> = {}
-        for (const p of allProjects) {
+        for (const p of projects) {
             if (p.claude_status === 'running') initial[p.id] = 'running'
             else if (p.claude_status === 'idle') initial[p.id] = 'done'
         }
         setClaudeStatus(prev => ({ ...initial, ...prev }))
-    }, [allProjects.length])
+    }, [projects.length])
 
     // When agents load and URL has an agent_id, set the active agent
     useEffect(() => {
@@ -545,47 +551,11 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     async function handleWorkspaceCreated() { await refreshData() }
     async function handleWorkspaceDeleted() { await refreshData() }
 
-    function handleProjectCreated(project: Project) {
-        refreshData()
-        router.visit(`/${project.slug}`)
-    }
-
-    async function handleMoveProject(project: Project, newWorkspaceId: number | null) {
-        await fetch(`/api/projects/${project.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ workspace_id: newWorkspaceId }),
-        })
-        await refreshData()
-    }
-
-    async function handleProjectUpdated(_updated: Project) {
-        await refreshData()
-    }
-
-    function handleProjectDeleted(projectId: number) {
-        const project = allProjects.find(p => p.id === projectId)
-        // Clean up agent sessions for the deleted project
-        for (const agent of agentHook.agents) {
-            const session = agentSessions.current.get(agent.id)
-            if (session) {
-                session.observer.disconnect()
-                session.term.dispose()
-                session.ws.close()
-                agentSessions.current.delete(agent.id)
-            }
-            agentContainerRefs.current.delete(agent.id)
-        }
-        fetch(`/api/projects/${projectId}`, { method: 'DELETE' })
-            .then(() => refreshData())
-        if (project && projectName === project.slug) router.visit('/')
-    }
-
     // ── Context value ─────────────────────────────────────────────────────────
 
     const value: AppLayoutContextValue = {
         // Data
-        workspaces, allProjects, activeProject, tasks,
+        workspaces, activeProject, tasks,
         // Modal state
         showWorkspaceModal, setShowWorkspaceModal,
         showGlobalSettings, setShowGlobalSettings,
@@ -603,8 +573,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         launchAgentSession, restartClaude, uploadImage,
         claudeStatus, setClaudeStatus, lastActivity, outputChars, sessionStart,
         // Business handlers
-        handleMoveProject, handleProjectCreated,
-        handleProjectDeleted, handleProjectUpdated,
+        refreshData,
         handleWorkspaceCreated, handleWorkspaceDeleted,
         // Agent hook
         agentHook,
