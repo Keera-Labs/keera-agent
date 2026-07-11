@@ -2,7 +2,9 @@ import datetime
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from fastapi_startkit.inertia.inertia import Inertia
 
+from app.controllers.home_controller import _shared_props
 from app.models.Agent import Agent
 from app.models.AgentRelayMessage import AgentRelayMessage
 from app.models.Project import Project
@@ -85,13 +87,12 @@ def _agent_state(agent: Agent, has_pending: bool) -> str:
     return "done"
 
 
-async def index(request: Request):
-    """Aggregate real agent/project activity for the workspace dashboard.
+async def _resolve_scope(workspace_id_raw: str | None) -> tuple[list, str]:
+    """Resolve the project set + label for a dashboard render.
 
-    Optional ``?workspace_id=`` scopes to one workspace; without it the view
-    aggregates every project.
+    A ``workspace_id`` scopes to one workspace; anything else (missing or
+    invalid) aggregates every project under the "All Projects" label.
     """
-    workspace_id_raw = request.query_params.get("workspace_id")
     workspace = None
     if workspace_id_raw:
         try:
@@ -101,11 +102,14 @@ async def index(request: Request):
 
     if workspace:
         projects = await Project.where("workspace_id", workspace.id).order_by("id", "asc").get()
-        workspace_name = workspace.name
-    else:
-        projects = await Project.order_by("id", "asc").get()
-        workspace_name = "All Projects"
+        return projects, workspace.name
 
+    projects = await Project.order_by("id", "asc").get()
+    return projects, "All Projects"
+
+
+async def _build_dashboard(projects, workspace_name: str) -> dict:
+    """Aggregate agent/project activity into the dashboard payload dict."""
     project_payloads = []
     working_now = []
     totals = {"active": 0, "waiting": 0, "queued": 0}
@@ -170,6 +174,7 @@ async def index(request: Request):
             {
                 "id": project.id,
                 "name": project.name,
+                "slug": project.slug,
                 "online": online,
                 "agents": avatars,
                 "extraAgents": max(0, len(agents) - MAX_PROJECT_AVATARS),
@@ -181,18 +186,35 @@ async def index(request: Request):
             }
         )
 
-    return JSONResponse(
-        {
-            "workspaceName": workspace_name,
-            "agentCount": agent_count,
-            "projectCount": len(projects),
-            "stats": {
-                "projects": len(projects),
-                "active": totals["active"],
-                "waiting": totals["waiting"],
-                "queued": totals["queued"],
-            },
-            "workingNow": working_now,
-            "projects": project_payloads,
-        }
-    )
+    return {
+        "workspaceName": workspace_name,
+        "agentCount": agent_count,
+        "projectCount": len(projects),
+        "stats": {
+            "projects": len(projects),
+            "active": totals["active"],
+            "waiting": totals["waiting"],
+            "queued": totals["queued"],
+        },
+        "workingNow": working_now,
+        "projects": project_payloads,
+    }
+
+
+async def index(request: Request):
+    """JSON dashboard aggregate. ``?workspace_id=`` scopes to one workspace."""
+    projects, workspace_name = await _resolve_scope(request.query_params.get("workspace_id"))
+    return JSONResponse(await _build_dashboard(projects, workspace_name))
+
+
+async def page(request: Request):
+    """Root "/" — render the Dashboard as a first-class Inertia page.
+
+    A static snapshot: props are computed at request time only (the frontend no
+    longer polls). The dashboard payload is nested under ``dashboard`` so it
+    doesn't collide with the flat ``projects`` list the persistent AppLayout
+    reads for its sidebar.
+    """
+    projects, workspace_name = await _resolve_scope(None)
+    dashboard = await _build_dashboard(projects, workspace_name)
+    return Inertia.render("Dashboard", {**await _shared_props(), "dashboard": dashboard})
