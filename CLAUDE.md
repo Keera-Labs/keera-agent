@@ -87,6 +87,12 @@ bash bin/build.sh --no-build  # skip Vite, just sync files
 - `storage/keera.db` — SQLite database file (gitignored)
 - `dist/` — output of `bin/build.sh`; self-contained deployable with patched `.env` and built assets
 
+### Frontend structure
+- `resources/js/components/` holds **only** reusable, cross-page components (used by two or more pages).
+- Page-specific components live co-located with their page under `resources/js/pages/<page>/`, not in `components/`.
+- Canonical example: the Dashboard's sub-components (`StatCard`, `ProjectCard`, `DashboardBody`, etc.) live in `resources/js/pages/dashboard/` alongside the `pages/Dashboard.tsx` entry (see PR #204).
+- Case-sensitivity note: a page entry (`pages/Dashboard.tsx`) and its folder (`pages/dashboard/`) differ only in case, so import the folder's barrel via an explicit `@/pages/dashboard/index` path — a bare `@/pages/dashboard` resolves to the entry file on case-insensitive filesystems.
+
 ### Adding a new resource
 1. Create `databases/migrations/YYYY_MM_DD_HHMMSS_create_<table>.py` with `up`/`down` async methods
 2. Create `app/models/<Model>.py` with `__table__`
