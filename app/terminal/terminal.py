@@ -20,12 +20,12 @@ def _with_color_env(env: dict) -> dict:
 
 class Terminal:
     def __init__(
-        self,
-        shell: str | None = None,
-        cwd: str | None = None,
-        cols: int = 80,
-        rows: int = 24,
-        env: dict | None = None,
+            self,
+            shell: str | None = None,
+            cwd: str | None = None,
+            cols: int = 80,
+            rows: int = 24,
+            env: dict | None = None,
     ):
         self._shell = shell or os.environ.get("SHELL", "/bin/bash")
         self._cwd = cwd or os.path.expanduser("~")
@@ -105,6 +105,12 @@ class Terminal:
             except OSError:
                 # fd closed or child gone — nothing more we can deliver.
                 return
+
+    async def send(self, message: str) -> None:
+        text_bytes = message.encode().rstrip(b"\r\n")
+        await self.write(text_bytes)
+        await asyncio.sleep(0.05)
+        await self.write(b"\r")
 
     @staticmethod
     async def _wait_writable(loop: asyncio.AbstractEventLoop, fd: int) -> None:

@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import json
 import os
 import subprocess
 import time
@@ -9,6 +10,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi_startkit.application import app
 
+from app.actions.terminal_write_action import TerminalWriteAction
 from app.controllers.terminal_controller import claude_ready
 from app.models.Agent import Agent
 from app.models.Project import Project
@@ -156,9 +158,9 @@ def discover_worktree_path(cwd: str, branch_name: str) -> str | None:
     current_path: str | None = None
     for line in result.stdout.splitlines():
         if line.startswith("worktree "):
-            current_path = line[len("worktree ") :].strip()
+            current_path = line[len("worktree "):].strip()
         elif line.startswith("branch "):
-            ref = line[len("branch ") :].strip()
+            ref = line[len("branch "):].strip()
             if ref == f"refs/heads/{branch_name}" or ref == branch_name:
                 return current_path
     return None
@@ -230,25 +232,24 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     Parts 1 & 3 are handled by make_claude_session_monitor via WebsocketTerminal(ws=None).
     Part 2 – Reset has_session=False if the process exits in < _MIN_SESSION_LIFETIME seconds.
     """
-    from app.models.Agent import Agent as _Agent
     from app.utils.hook_setup import BASE_URL as base_url
 
     # Remove any stale worktree/branch from a prior session to avoid git conflicts
     _cleanup_stale_worktree(agent, cwd)
 
     session_id = str(uuid.uuid4())
-    await _Agent.where("id", agent.id).update({"session_id": session_id})
+    await Agent.where("id", agent.id).update({"session_id": session_id})
     await _mark_agent_working(agent.id, initial_message)
 
     terminal_manager: TerminalManager = app().make("terminal")
     terminal_manager.create(cwd=cwd, session_id=session_id)
     terminal = terminal_manager.get(session_id)
 
-    # Give shell time to start, then launch claude
+    # Give the shell time to start, then launch claude
     await asyncio.sleep(0.5)
 
     siblings = (
-        await _Agent.where("project_id", agent.project_id)
+        await Agent.where("project_id", agent.project_id)
         .where("id", "!=", agent.id)
         .where_null("deleted_at")
         .get()
@@ -257,7 +258,7 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     relay_instructions = _build_relay_instructions(agent, cwd, base_url, siblings)
 
     # Re-fetch agent so to_command() uses the current has_session value from DB
-    fresh_agent = await _Agent.find(agent.id)
+    fresh_agent = await Agent.find(agent.id)
 
     def _build_cmd_with_identity(a):
         """Build claude command with agent identity injected into system prompt."""
@@ -295,20 +296,17 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     ready_event = claude_ready.setdefault(session_id, asyncio.Event())
     await asyncio.sleep(1.5)
     ready_event.set()
-    contextual_message = f"{relay_instructions}\n\n---\n{initial_message}"
-    await terminal_manager.write(session_id, contextual_message.encode().rstrip(b"\r\n"))
-    await asyncio.sleep(0.05)
-    await terminal_manager.write(session_id, b"\r")
+
+    await TerminalWriteAction.prepare(session_id, relay_instructions).execute()
+    await TerminalWriteAction.prepare(session_id, initial_message).execute()
 
     # Notify the frontend if it's already connected
     conn_manager: ConnectionManager = app().make("connections")
     ws_bridge = conn_manager.find_by_cwd(cwd)
     if ws_bridge:
-        import json as _json
-
         try:
             await ws_bridge.write(
-                _json.dumps(
+                json.dumps(
                     {
                         "type": "agent_triggered",
                         "agent_id": agent.id,
@@ -330,6 +328,6 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
 
     # Part 2: Reset has_session if process exited too quickly — it never established a real session
     if elapsed < _MIN_SESSION_LIFETIME:
-        await _Agent.where("id", agent.id).update({"has_session": False, "session_id": None})
+        await Agent.where("id", agent.id).update({"has_session": False, "session_id": None})
     else:
-        await _Agent.where("id", agent.id).update({"session_id": None})
+        await Agent.where("id", agent.id).update({"session_id": None})

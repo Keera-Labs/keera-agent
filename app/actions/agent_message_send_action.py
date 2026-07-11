@@ -1,6 +1,7 @@
 import asyncio
 import os
 
+from app.actions.terminal_write_action import TerminalWriteAction
 from app.models.Agent import Agent
 from app.models.AgentRelayMessage import AgentRelayMessage
 
@@ -18,11 +19,7 @@ class AgentMessageSendAction:
     async def execute(self) -> tuple[int, bool]:
         """Create a relay message, inject immediately if receiver is connected,
         or spawn headlessly if idle. Returns (message_id, delivered)."""
-        from fastapi_startkit.application import app
-
         from app.models.Project import Project
-        from app.terminal.connection_manager import ConnectionManager
-        from app.terminal.manager import TerminalManager
 
         msg = await AgentRelayMessage.create(
             {
@@ -34,29 +31,13 @@ class AgentMessageSendAction:
         )
 
         text = f"[Message from Agent '{self.from_agent.name}']: {self.content}"
+        status = await TerminalWriteAction.prepare(self.to_agent.session_id, text).execute()
 
-        # WebSocket-connected agent
-        conn_manager: ConnectionManager = app().make("connections")
-        bridge = conn_manager.get(self.to_agent.session_id) if self.to_agent.session_id else None
-        if bridge:
-            text_bytes = text.encode().rstrip(b"\r\n")
-            await bridge.write(text_bytes)
-            await asyncio.sleep(0.05)
-            await bridge.write(b"\r")
+        if status:
             await AgentRelayMessage.where("id", msg.id).update({"status": "delivered"})
             return msg.id, True
 
-        # Headless agent already running
-        terminal_manager: TerminalManager = app().make("terminal")
-        if self.to_agent.session_id and terminal_manager.find(self.to_agent.session_id):
-            text_bytes = text.encode().rstrip(b"\r\n")
-            await terminal_manager.write(self.to_agent.session_id, text_bytes)
-            await asyncio.sleep(0.05)
-            await terminal_manager.write(self.to_agent.session_id, b"\r")
-            await AgentRelayMessage.where("id", msg.id).update({"status": "delivered"})
-            return msg.id, True
-
-        # Receiver idle — spawn headlessly with the message as its initial task
+        # Receivers idle — spawn headlessly with the message as its initial task
         project = await Project.find(self.to_agent.project_id)
         if project:
             from app.controllers.agent_trigger_controller import _spawn_headless_agent

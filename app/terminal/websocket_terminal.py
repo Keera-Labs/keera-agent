@@ -20,6 +20,10 @@ class WebsocketTerminal:
         self._on_output = on_output
         self._stopped = asyncio.Event()
 
+    @property
+    def terminal(self) -> Terminal:
+        return self._terminal
+
     async def run(
         self,
         auto_send: bytes | None = None,
