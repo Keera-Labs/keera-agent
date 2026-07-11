@@ -15,7 +15,7 @@ export function ProjectDeleteModal({
     trigger: ReactNode
     onOpenChange?: (open: boolean) => void
 }) {
-    const { handleProjectDeleted } = useProjects()
+    const { handleProjectDeleted, deleting } = useProjects()
 
     return (
         <Modal trigger={trigger} ariaLabel="Delete project" onOpenChange={onOpenChange}>
@@ -33,10 +33,10 @@ export function ProjectDeleteModal({
                             style={{ background: 'transparent', border: `1px solid ${color.stroke}`, borderRadius: '6px', color: color.textSecondary, fontSize: '12px', padding: '6px 14px', cursor: 'pointer' }}
                         >Cancel</button>
                         <button
-                            type="button"
-                            onClick={() => { handleProjectDeleted(project.id); close() }}
-                            style={{ background: '#da3633', border: `1px solid ${color.danger}`, borderRadius: '6px', color: '#fff', fontSize: '12px', padding: '6px 14px', cursor: 'pointer' }}
-                        >Delete</button>
+                            type="button" disabled={deleting}
+                            onClick={async () => { try { await handleProjectDeleted(project.id); close() } catch { /* keep the modal open on failure */ } }}
+                            style={{ background: '#da3633', border: `1px solid ${color.danger}`, borderRadius: '6px', color: '#fff', fontSize: '12px', padding: '6px 14px', cursor: deleting ? 'default' : 'pointer', opacity: deleting ? 0.7 : 1 }}
+                        >{deleting ? 'Deleting…' : 'Delete'}</button>
                     </div>
                 </>
             )}
