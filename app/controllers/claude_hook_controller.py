@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import json
 import os
 
@@ -107,6 +108,12 @@ async def _handle_claude_stopped(project, project_cwd: str) -> None:
         except Exception:
             pass
 
+    # Claude finished its turn for this project — any agent that was actively
+    # running is now idle at its prompt (waiting for the next input).
+    await Agent.where("project_id", project.id).where("status", "running").update(
+        {"status": "waiting", "current_activity": None}
+    )
+
     # Check for pending tasks and dispatch the next one
     next_task = await Task.where("project_id", project.id).where("status", "pending").first()
     if next_task:
@@ -123,6 +130,14 @@ async def _handle_claude_stopped(project, project_cwd: str) -> None:
             await asyncio.sleep(0.05)
             await terminal_manager.write(active_agent.session_id, b"\r")
             await Project.where("id", project.id).update({"claude_status": "running"})
+            now = datetime.datetime.now().isoformat(sep=" ", timespec="seconds")
+            await Agent.where("id", active_agent.id).update(
+                {
+                    "status": "running",
+                    "started_at": now,
+                    "current_activity": (next_task.body or next_task.title)[:140],
+                }
+            )
 
             bridge = _find_project_bridge(project_cwd)
             if bridge:

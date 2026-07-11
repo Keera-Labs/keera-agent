@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import os
 import subprocess
 import time
@@ -18,6 +19,28 @@ from app.terminal.websocket_terminal import WebsocketTerminal
 
 # Minimum lifetime (seconds) for a Claude process to count as a successful session
 _MIN_SESSION_LIFETIME = 5.0
+
+
+def _activity_summary(message: str) -> str:
+    """First non-empty line of an injected message, trimmed for the dashboard."""
+    for line in (message or "").splitlines():
+        stripped = line.strip()
+        if stripped:
+            return stripped[:140]
+    return "Working…"
+
+
+async def _mark_agent_working(agent_id: int, message: str) -> None:
+    """Record that an agent just started actively working — powers the dashboard's
+    running state, current-activity text, and elapsed timer."""
+    now = datetime.datetime.now().isoformat(sep=" ", timespec="seconds")
+    await Agent.where("id", agent_id).update(
+        {
+            "status": "running",
+            "started_at": now,
+            "current_activity": _activity_summary(message),
+        }
+    )
 
 
 async def _inject_when_ready(session_id: str, message: str, timeout: float = 30.0) -> None:
@@ -60,6 +83,7 @@ async def trigger(request: Request, agent_id: int):
     terminal_manager: TerminalManager = app().make("terminal")
     if session_id and terminal_manager.find(session_id):
         asyncio.create_task(_inject_when_ready(session_id, message))
+        await _mark_agent_working(agent_id, message)
         return JSONResponse({"status": "injected", "message": "Message queued for running agent"})
 
     # No PTY running — spawn a headless terminal and run claude interactively
@@ -214,6 +238,7 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
 
     session_id = str(uuid.uuid4())
     await _Agent.where("id", agent.id).update({"session_id": session_id})
+    await _mark_agent_working(agent.id, initial_message)
 
     terminal_manager: TerminalManager = app().make("terminal")
     terminal_manager.create(cwd=cwd, session_id=session_id)
