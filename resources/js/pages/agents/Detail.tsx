@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { router } from '@inertiajs/react'
 import AppLayout from '@/layouts/AppLayout'
 import { ProjectLayout } from '@/layouts/ProjectLayout'
 import { color } from '@/tokens'
@@ -9,6 +8,7 @@ import { useAgents } from '@/layouts/hooks/agents'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import { DotsIndicator } from '@/layouts/sidebar/Project'
 import { AgentsListPanel } from './AgentsListPanel'
+import { ProjectOverview } from './ProjectOverview'
 
 // ─── Claude status badge ──────────────────────────────────────────────────────
 
@@ -99,6 +99,11 @@ export default function AgentDetail() {
 
     if (!activeProject) return null
 
+    // Back / no-selection: render the overview in place. Navigating to /{slug}
+    // would 302 to the default agent and bounce straight back here, so the page
+    // owns the overview too (the URL stays on the agent route — harmless).
+    if (activeAgentId === null) return <ProjectOverview project={activeProject} />
+
     return (
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
             {/* Agents list — left */}
@@ -124,7 +129,7 @@ export default function AgentDetail() {
                     borderBottom: `1px solid ${color.stroke}`, background: '#fff',
                 }}>
                     <button
-                        onClick={() => { setActiveAgentId(null); router.visit(`/${activeProject.slug}`) }}
+                        onClick={() => setActiveAgentId(null)}
                         title="Back"
                         style={{
                             background: 'transparent', border: 'none', color: color.textFaint, cursor: 'pointer',
