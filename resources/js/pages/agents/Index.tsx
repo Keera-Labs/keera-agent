@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type MouseEvent, type ReactNode } from 'react'
 import { router } from '@inertiajs/react'
 import { color } from '@/tokens'
 import { agentColor } from '@/utils/agentColor'
@@ -24,6 +24,36 @@ function ClaudeStatusBadge({ status }: { status?: 'running' | 'done' }) {
             <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: color.success }} />
             <span style={{ color: color.success, fontSize: '11px', fontFamily: '"JetBrains Mono", monospace' }}>done</span>
         </span>
+    )
+}
+
+// ─── Agent-card action icon button ────────────────────────────────────────────
+
+function CardIconButton({
+    title, onClick, hoverColor = color.textPrimary, children,
+}: {
+    title: string
+    onClick: (e: MouseEvent) => void
+    hoverColor?: string
+    children: ReactNode
+}) {
+    return (
+        <button
+            type="button"
+            title={title}
+            onClick={e => { e.stopPropagation(); onClick(e) }}
+            style={{
+                background: 'transparent', border: 'none',
+                color: color.textFaint, cursor: 'pointer',
+                padding: '5px', borderRadius: '6px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0, transition: 'color 0.1s, background 0.1s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = hoverColor; e.currentTarget.style.background = color.bgCanvas }}
+            onMouseLeave={e => { e.currentTarget.style.color = color.textFaint; e.currentTarget.style.background = 'transparent' }}
+        >
+            {children}
+        </button>
     )
 }
 
@@ -174,6 +204,7 @@ export default function AgentsIndex() {
                             const isRunning = agentSessions.current.has(agent.id)
                             const isSelected = agent.id === activeAgentId
                             const agentItemBg = AGENT_TYPE_COLORS[agent.agent_type] ?? color.accent
+                            const statusColor = isRunning ? '#16a34a' : color.warningBright
                             return (
                                 <div
                                     key={agent.id}
@@ -185,180 +216,136 @@ export default function AgentsIndex() {
                                         }
                                     }}
                                     style={{
-                                        display: 'flex', alignItems: 'center', gap: '10px',
-                                        padding: '9px 12px', margin: '0 8px 2px', borderRadius: '8px',
-                                        cursor: 'pointer', transition: 'background 0.1s',
-                                        background: isSelected ? color.accentSubtle : 'transparent',
-                                        border: `1px solid ${isSelected ? '#b6d0f7' : 'transparent'}`,
+                                        display: 'flex', flexDirection: 'column', gap: '8px',
+                                        padding: '10px 12px', margin: '0 8px 6px', borderRadius: '10px',
+                                        cursor: 'pointer', transition: 'background 0.1s, border-color 0.1s',
+                                        background: isSelected ? color.accentSubtle : '#fff',
+                                        border: `1px solid ${isSelected ? '#b6d0f7' : color.stroke}`,
                                     }}
                                     onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = color.bgCanvas }}
-                                    onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
+                                    onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = '#fff' }}
                                 >
-                                    {/* Avatar with online indicator */}
-                                    <div style={{ position: 'relative', flexShrink: 0 }}>
-                                        <div style={{
-                                            width: '32px', height: '32px', borderRadius: '8px',
-                                            background: agentItemBg, display: 'flex',
-                                            alignItems: 'center', justifyContent: 'center',
-                                            fontSize: '11px', fontWeight: 700, color: '#fff',
-                                            boxShadow: isSelected ? `0 0 0 2px ${'#fff'}, 0 0 0 3px ${agentItemBg}` : 'none',
-                                        }}>
-                                            {agent.name.slice(0, 2).toUpperCase()}
+                                    {/* Avatar + name + status */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <div style={{ position: 'relative', flexShrink: 0 }}>
+                                            <div style={{
+                                                width: '32px', height: '32px', borderRadius: '8px',
+                                                background: agentItemBg, display: 'flex',
+                                                alignItems: 'center', justifyContent: 'center',
+                                                fontSize: '11px', fontWeight: 700, color: '#fff',
+                                            }}>
+                                                {agent.name.slice(0, 2).toUpperCase()}
+                                            </div>
+                                            {isRunning && (
+                                                <span style={{
+                                                    position: 'absolute', bottom: '-2px', right: '-2px',
+                                                    width: '10px', height: '10px', borderRadius: '50%',
+                                                    background: '#22c55e', border: '2px solid #fff',
+                                                    display: 'block',
+                                                }} />
+                                            )}
                                         </div>
-                                        {isRunning && (
-                                            <span style={{
-                                                position: 'absolute', bottom: '-2px', right: '-2px',
-                                                width: '10px', height: '10px', borderRadius: '50%',
-                                                background: '#22c55e', border: '2px solid #fff',
-                                                display: 'block',
-                                            }} />
-                                        )}
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{
+                                                fontSize: '13px', fontWeight: isSelected ? 600 : 500,
+                                                color: isSelected ? color.accent : color.textPrimary,
+                                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                            }}>
+                                                {agent.name}
+                                            </div>
+                                            <div style={{
+                                                display: 'flex', alignItems: 'center', gap: '5px',
+                                                fontSize: '11px', marginTop: '2px', color: statusColor,
+                                            }}>
+                                                <span style={{
+                                                    width: '6px', height: '6px', borderRadius: '50%',
+                                                    background: statusColor, flexShrink: 0,
+                                                }} />
+                                                {isRunning ? 'Active' : 'Waiting'}
+                                            </div>
+                                        </div>
                                     </div>
 
-                                    {/* Name + status */}
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{
-                                            fontSize: '13px', fontWeight: isSelected ? 600 : 500,
-                                            color: isSelected ? color.accent : color.textPrimary,
-                                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                        }}>
-                                            {agent.name}
-                                        </div>
-                                        <div style={{ fontSize: '11px', color: isRunning ? '#16a34a' : color.textFaint, marginTop: '1px' }}>
-                                            {isRunning ? '● Active' : AGENT_TYPE_LABELS[agent.agent_type] ?? agent.agent_type}
-                                        </div>
-                                    </div>
-
-                                    {/* Restart button */}
-                                    <button
-                                        onClick={e => {
-                                            e.stopPropagation()
-                                            const session = agentSessions.current.get(agent.id)
-                                            if (session) {
-                                                session.observer.disconnect()
-                                                session.term.dispose()
-                                                session.ws.close()
-                                                agentSessions.current.delete(agent.id)
-                                            }
-                                            setTimeout(() => launchAgentSession(agent.id, true), 300)
-                                            setActiveAgentId(agent.id)
-                                        }}
-                                        title={isRunning ? 'Restart agent' : 'Start agent'}
-                                        style={{
-                                            background: 'transparent', border: 'none',
-                                            color: isRunning ? '#ca8a04' : color.textFaint,
-                                            cursor: 'pointer',
-                                            padding: '3px', borderRadius: '4px',
-                                            display: 'flex', alignItems: 'center', flexShrink: 0,
-                                        }}
-                                        onMouseEnter={e => (e.currentTarget.style.color = '#ca8a04')}
-                                        onMouseLeave={e => (e.currentTarget.style.color = isRunning ? '#ca8a04' : color.textFaint)}
-                                    >
-                                        <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
-                                            <path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
-                                            <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
-                                        </svg>
-                                    </button>
-
-                                    {/* Settings/edit button */}
-                                    <button
-                                        onClick={e => { e.stopPropagation(); setEditingAgent(agent) }}
-                                        title="Edit agent"
-                                        style={{
-                                            background: 'transparent', border: 'none',
-                                            color: color.textFaint, cursor: 'pointer',
-                                            padding: '3px', borderRadius: '4px',
-                                            display: 'flex', alignItems: 'center', flexShrink: 0,
-                                        }}
-                                        onMouseEnter={e => (e.currentTarget.style.color = color.textPrimary)}
-                                        onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
-                                    >
-                                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                                            <path d="M8 9.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
-                                            <path fillRule="evenodd" d="M8 0a8 8 0 100 16A8 8 0 008 0zM1.5 8a6.5 6.5 0 1113 0 6.5 6.5 0 01-13 0z"/>
-                                        </svg>
-                                    </button>
-
-                                    {/* Run button (when idle) */}
-                                    {!isRunning && (
-                                        <button
-                                            onClick={e => { e.stopPropagation(); setActiveAgentId(agent.id) }}
-                                            title="Run"
-                                            style={{
-                                                background: 'transparent', border: 'none',
-                                                color: color.textFaint, cursor: 'pointer',
-                                                padding: '3px', borderRadius: '4px',
-                                                display: 'flex', alignItems: 'center',
-                                                flexShrink: 0,
+                                    {/* Action icons — restart · record/edit · branch · close */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                        <CardIconButton
+                                            title={isRunning ? 'Restart agent' : 'Start agent'}
+                                            hoverColor="#ca8a04"
+                                            onClick={() => {
+                                                const session = agentSessions.current.get(agent.id)
+                                                if (session) {
+                                                    session.observer.disconnect()
+                                                    session.term.dispose()
+                                                    session.ws.close()
+                                                    agentSessions.current.delete(agent.id)
+                                                }
+                                                setTimeout(() => launchAgentSession(agent.id, true), 300)
+                                                setActiveAgentId(agent.id)
                                             }}
-                                            onMouseEnter={e => (e.currentTarget.style.color = '#16a34a')}
-                                            onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
                                         >
-                                            <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
-                                                <path d="M3 2l11 6-11 6V2z"/>
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M23 4v6h-6" />
+                                                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
                                             </svg>
-                                        </button>
-                                    )}
+                                        </CardIconButton>
 
-                                    {/* Adopt work button — remove worktree, check out the agent branch */}
-                                    <button
-                                        onClick={async e => {
-                                            e.stopPropagation()
-                                            if (adoptWork.isPending) return
-                                            if (!window.confirm(`Adopt ${agent.name}'s work?\n\nThis removes the worktree and checks out branch worktree-agent-${agent.id} in the project (leaving it on that branch). Nothing is merged.`)) return
-                                            try {
-                                                await adoptWork.mutateAsync(agent.id)
-                                                window.alert(`Removed ${agent.name}'s worktree and checked out its branch.`)
-                                            } catch (err) {
-                                                window.alert(err instanceof Error ? err.message : 'Failed to adopt agent work')
-                                            }
-                                        }}
-                                        title="Adopt work — remove worktree, check out the agent branch"
-                                        style={{
-                                            background: 'transparent', border: 'none',
-                                            color: color.textFaint, cursor: 'pointer',
-                                            padding: '3px', borderRadius: '4px',
-                                            display: 'flex', alignItems: 'center', flexShrink: 0,
-                                        }}
-                                        onMouseEnter={e => (e.currentTarget.style.color = '#16a34a')}
-                                        onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
-                                    >
-                                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                                            <path d="M5 3.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0zm0 2.122a2.25 2.25 0 1 0-1.5 0v5.256a2.251 2.251 0 1 0 1.5 0V5.372zM4.25 12.5a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5zM12.75 9a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5zm0 3a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5z"/>
-                                            <path d="M11.5 3.25a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5zm0 2.372V8a2.25 2.25 0 0 1-2.25 2.25H6.5a.75.75 0 0 1 0-1.5h2.75a.75.75 0 0 0 .75-.75V5.622a2.251 2.251 0 1 1 1.5 0z"/>
-                                        </svg>
-                                    </button>
+                                        <CardIconButton
+                                            title="Edit agent"
+                                            onClick={() => setEditingAgent(agent)}
+                                        >
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                                <circle cx="12" cy="12" r="8" />
+                                                <circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none" />
+                                            </svg>
+                                        </CardIconButton>
 
-                                    {/* Delete button */}
-                                    <button
-                                        onClick={async e => {
-                                            e.stopPropagation()
-                                            const session = agentSessions.current.get(agent.id)
-                                            if (session) {
-                                                session.observer.disconnect()
-                                                session.term.dispose()
-                                                session.ws.close()
-                                                agentSessions.current.delete(agent.id)
-                                            }
-                                            agentContainerRefs.current.delete(agent.id)
-                                            if (activeAgentId === agent.id) {
-                                                const remaining = projectAgents.filter(a => a.id !== agent.id)
-                                                setActiveAgentId(remaining.length > 0 ? remaining[0].id : null)
-                                            }
-                                            await removeAgent.mutateAsync(agent.id)
-                                        }}
-                                        title="Remove"
-                                        style={{
-                                            background: 'transparent', border: 'none',
-                                            color: color.textFaint, cursor: 'pointer',
-                                            padding: '3px 5px', borderRadius: '4px',
-                                            fontSize: '15px', lineHeight: 1, flexShrink: 0,
-                                        }}
-                                        onMouseEnter={e => (e.currentTarget.style.color = color.danger)}
-                                        onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
-                                    >
-                                        ×
-                                    </button>
+                                        <CardIconButton
+                                            title="Adopt work — remove worktree, check out the agent branch"
+                                            hoverColor="#16a34a"
+                                            onClick={async () => {
+                                                if (adoptWork.isPending) return
+                                                if (!window.confirm(`Adopt ${agent.name}'s work?\n\nThis removes the worktree and checks out branch worktree-agent-${agent.id} in the project (leaving it on that branch). Nothing is merged.`)) return
+                                                try {
+                                                    await adoptWork.mutateAsync(agent.id)
+                                                    window.alert(`Removed ${agent.name}'s worktree and checked out its branch.`)
+                                                } catch (err) {
+                                                    window.alert(err instanceof Error ? err.message : 'Failed to adopt agent work')
+                                                }
+                                            }}
+                                        >
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                                                <line x1="6" y1="3" x2="6" y2="15" />
+                                                <circle cx="18" cy="6" r="3" />
+                                                <circle cx="6" cy="18" r="3" />
+                                                <path d="M18 9a9 9 0 0 1-9 9" />
+                                            </svg>
+                                        </CardIconButton>
+
+                                        <CardIconButton
+                                            title="Remove agent"
+                                            hoverColor={color.danger}
+                                            onClick={async () => {
+                                                const session = agentSessions.current.get(agent.id)
+                                                if (session) {
+                                                    session.observer.disconnect()
+                                                    session.term.dispose()
+                                                    session.ws.close()
+                                                    agentSessions.current.delete(agent.id)
+                                                }
+                                                agentContainerRefs.current.delete(agent.id)
+                                                if (activeAgentId === agent.id) {
+                                                    const remaining = projectAgents.filter(a => a.id !== agent.id)
+                                                    setActiveAgentId(remaining.length > 0 ? remaining[0].id : null)
+                                                }
+                                                await removeAgent.mutateAsync(agent.id)
+                                            }}
+                                        >
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                                                <line x1="6" y1="6" x2="18" y2="18" />
+                                                <line x1="18" y1="6" x2="6" y2="18" />
+                                            </svg>
+                                        </CardIconButton>
+                                    </div>
                                 </div>
                             )
                         })}
