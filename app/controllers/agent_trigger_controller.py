@@ -158,9 +158,9 @@ def discover_worktree_path(cwd: str, branch_name: str) -> str | None:
     current_path: str | None = None
     for line in result.stdout.splitlines():
         if line.startswith("worktree "):
-            current_path = line[len("worktree "):].strip()
+            current_path = line[len("worktree ") :].strip()
         elif line.startswith("branch "):
-            ref = line[len("branch "):].strip()
+            ref = line[len("branch ") :].strip()
             if ref == f"refs/heads/{branch_name}" or ref == branch_name:
                 return current_path
     return None

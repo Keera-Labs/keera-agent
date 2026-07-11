@@ -20,12 +20,12 @@ def _with_color_env(env: dict) -> dict:
 
 class Terminal:
     def __init__(
-            self,
-            shell: str | None = None,
-            cwd: str | None = None,
-            cols: int = 80,
-            rows: int = 24,
-            env: dict | None = None,
+        self,
+        shell: str | None = None,
+        cwd: str | None = None,
+        cols: int = 80,
+        rows: int = 24,
+        env: dict | None = None,
     ):
         self._shell = shell or os.environ.get("SHELL", "/bin/bash")
         self._cwd = cwd or os.path.expanduser("~")
