@@ -5,6 +5,7 @@ import { color } from '@/tokens'
 import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS } from '@/types/agent'
 import { agentColor } from '@/utils/agentColor'
 import { useAgents } from '@/layouts/hooks/agents'
+import { attachTerminal } from '@/layouts/hooks/useTerminalSessions'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import { DotsIndicator } from '@/layouts/sidebar/Project'
 import { AgentsListPanel } from './AgentsListPanel'
@@ -77,11 +78,13 @@ export default function AgentDetail() {
         if (activeAgentId === null || !slot) return
         const sess = agentSessions.current.get(activeAgentId)
         if (sess) {
-            if (!slot.querySelector('.xterm')) {
-                sess.term.open(slot)
-                sess.observer.disconnect()
-                sess.observer.observe(slot)
-            }
+            // Move the live terminal into the visible slot. term.open() can't
+            // re-parent an already-open terminal, so attachTerminal relocates its
+            // root element when the session already exists (e.g. it was launched
+            // into the off-screen holder during the navigation transition).
+            attachTerminal(sess.term, slot)
+            sess.observer.disconnect()
+            sess.observer.observe(slot)
             sess.fitAddon.fit()
             sess.term.focus()
         } else {
@@ -94,10 +97,13 @@ export default function AgentDetail() {
         }
         const parkedId = activeAgentId
         return () => {
+            // Park the terminal back in its off-screen holder before the slot
+            // unmounts. Without this the terminal's DOM dies with the slot and the
+            // surviving session has no element to re-attach on return — a blank page.
             const s = agentSessions.current.get(parkedId)
             const holder = agentContainerRefs.current.get(parkedId)
-            if (s && holder && !holder.querySelector('.xterm')) {
-                s.term.open(holder)
+            if (s && holder) {
+                attachTerminal(s.term, holder)
                 // Stop observing the visible slot; the (possibly hidden) holder
                 // isn't observed — a refit runs when the term re-attaches to a slot.
                 s.observer.disconnect()
