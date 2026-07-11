@@ -100,6 +100,8 @@ bash bin/build.sh --no-build  # skip Vite, just sync files
 4. Wire routes in `routes/web.py` (API routes before the `/{project}` wildcard)
 5. Run `uv run python artisan db:migrate`
 
+**Controller method naming:** Name controller methods with resourceful RESTful action verbs — `index` (list), `show` (single), `store` (create), `update` (edit), `destroy` (delete), plus `create`/`edit` for form endpoints. Prefer these over ad-hoc verb-noun names: a GET/POST pair for a sub-resource should read as `show`/`store` (or `index`/`update`) on its own controller, not `get_default`/`set_default` on an unrelated one. When a resource grows its own verbs, give it its own `<resource>_controller.py`.
+
 ### Testing
 Tests are async unittest and hit a real DB (no mocks).
 
