@@ -42,6 +42,9 @@ export function ProjectLayout({ children }: { children: React.ReactNode }) {
 
     const { component } = usePage()
     const isTasksPage = component === 'Tasks'
+    // The agent detail page owns the visible agent view; AgentsIndex then only
+    // acts as the hidden terminal holder, so hide its wrapper (keep it mounted).
+    const isAgentDetail = component === 'agents/Detail'
     const activeView: ProjectView = isTasksPage ? 'tasks' : projectView
 
     return (
@@ -100,9 +103,10 @@ export function ProjectLayout({ children }: { children: React.ReactNode }) {
 
                 {/* Agents view — always rendered to keep terminal sessions alive.
                     The wrapper stays mounted (display-toggled) so terminals never
-                    unmount and blank out; it renders the project's PM terminal when
-                    no agent is drilled into (see AgentsIndex). */}
-                <div style={{ flex: 1, overflow: 'hidden', display: activeView === 'agents' ? 'flex' : 'none' }}>
+                    unmount and blank out. It shows the overview when no agent is
+                    drilled in; on the agent detail page it's hidden and only holds
+                    the parked terminal containers (the page renders the live view). */}
+                <div style={{ flex: 1, overflow: 'hidden', display: activeView === 'agents' && !isAgentDetail ? 'flex' : 'none' }}>
                     <AgentsIndex />
                 </div>
 

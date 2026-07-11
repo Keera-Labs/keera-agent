@@ -50,6 +50,9 @@ export interface AppLayoutContextValue {
     containerRefs: React.MutableRefObject<Map<number, HTMLDivElement | null>>
     agentContainerRefs: React.MutableRefObject<Map<number, HTMLDivElement | null>>
     fileInputRef: React.MutableRefObject<HTMLInputElement | null>
+    // Where the active agent's live terminal should render — set by the agent
+    // detail page (pages/agents/Detail) so its xterm re-parents into the page.
+    agentTerminalSlot: React.MutableRefObject<HTMLDivElement | null>
     launchAgentSession: (agentId: number, focus?: boolean) => void
     restartClaude: () => void
     uploadImage: (file: File) => void
@@ -219,6 +222,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     const agentSessions = useRef<Map<number, Session>>(new Map())
     const agentContainerRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const agentTerminalSlot = useRef<HTMLDivElement | null>(null)
 
     // ── Derived data ──────────────────────────────────────────────────────────
     const activeProject = allProjects.find(p => p.slug === projectName) ?? allProjects[0] ?? null
@@ -442,7 +446,10 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
 
     function launchAgentSession(agentId: number, focus: boolean = true) {
         if (!activeProject) return
-        const container = agentContainerRefs.current.get(agentId)
+        // Attach to the agent detail page's slot when it's the active agent and
+        // the page is mounted; otherwise the persistent holder container.
+        const container = (agentId === activeAgentId ? agentTerminalSlot.current : null)
+            ?? agentContainerRefs.current.get(agentId)
         if (!container) return
 
         if (agentSessions.current.has(agentId)) {
@@ -587,7 +594,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         activeAgentId, setActiveAgentId,
         isDraggingOver, setIsDraggingOver,
         // Terminal state
-        sessions, agentSessions, containerRefs, agentContainerRefs, fileInputRef,
+        sessions, agentSessions, containerRefs, agentContainerRefs, fileInputRef, agentTerminalSlot,
         launchAgentSession, restartClaude, uploadImage,
         claudeStatus, setClaudeStatus, lastActivity, outputChars, sessionStart,
         // Business handlers
