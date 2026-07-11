@@ -138,7 +138,13 @@ export function ProjectOverview({ project }: { project: Project }) {
                                     branch: PLACEHOLDER,
                                     usage: PLACEHOLDER,
                                 }}
-                                onOpen={() => router.visit(`/${project.slug}/agents/${agent.id}`)}
+                                onOpen={() => {
+                                    // Drill in directly — the URL-driven effect only fires on an
+                                    // agent_id change, so re-opening the agent you just backed out
+                                    // of (URL unchanged) would otherwise be a no-op.
+                                    setActiveAgentId(agent.id)
+                                    router.visit(`/${project.slug}/agents/${agent.id}`)
+                                }}
                                 onEdit={() => setEditingAgent(agent)}
                                 onRestart={() => {
                                     const session = agentSessions.current.get(agent.id)
