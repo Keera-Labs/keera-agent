@@ -79,9 +79,7 @@ class TestDashboardPage(TestCase, DatabaseTransaction):
         """Per-project counts cover _build_dashboard's active/waiting/queued/done
         bucketing, including the relay-pending → queued signal."""
         workspace = await Workspace.create({"name": "Buckets WS"})
-        project = await ProjectFactory.new().create(
-            workspace_id=workspace.id, name="Buckets Proj"
-        )
+        project = await ProjectFactory.new().create(workspace_id=workspace.id, name="Buckets Proj")
 
         running = await self._agent(project.id, name="Runner", status="running")
         await self._agent(project.id, name="Waiter", status="waiting")
