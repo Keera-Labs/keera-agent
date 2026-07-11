@@ -157,7 +157,10 @@ class TestDashboardPage(TestCase, DatabaseTransaction):
         response.assert_ok()
         dashboard = response.json()["props"]["dashboard"]
 
-        self.assertIn("Root Snapshot Proj", [p["name"] for p in dashboard["projects"]])
+        card = next(p for p in dashboard["projects"] if p["name"] == "Root Snapshot Proj")
+        # slug is exposed so the frontend can link each card to /{slug}.
+        self.assertEqual(card["slug"], project.slug)
+
         working = [w for w in dashboard["workingNow"] if w["project"] == "Root Snapshot Proj"]
         self.assertEqual(len(working), 1)
         self.assertEqual(working[0]["name"], "Root Builder")

@@ -174,6 +174,7 @@ async def _build_dashboard(projects, workspace_name: str) -> dict:
             {
                 "id": project.id,
                 "name": project.name,
+                "slug": project.slug,
                 "online": online,
                 "agents": avatars,
                 "extraAgents": max(0, len(agents) - MAX_PROJECT_AVATARS),
