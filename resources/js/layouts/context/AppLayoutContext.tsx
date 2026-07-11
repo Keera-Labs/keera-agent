@@ -23,16 +23,10 @@ export interface AppLayoutContextValue {
     // ── Modal state ───────────────────────────────────────────────────────────
     showWorkspaceModal: boolean
     setShowWorkspaceModal: (v: boolean) => void
-    movingProject: Project | null
-    setMovingProject: (p: Project | null) => void
-    editingProject: Project | null
-    setEditingProject: (p: Project | null) => void
     showGlobalSettings: boolean
     setShowGlobalSettings: (v: boolean) => void
     showDefaultPermissions: boolean
     setShowDefaultPermissions: (v: boolean) => void
-    deletingProject: Project | null
-    setDeletingProject: (p: Project | null) => void
     deletingWorkspace: Workspace | null
     setDeletingWorkspace: (w: Workspace | null) => void
     showAddAgent: boolean
@@ -187,11 +181,8 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
 
     // ── Modal / UI state ──────────────────────────────────────────────────────
     const [showWorkspaceModal, setShowWorkspaceModal] = useState(false)
-    const [movingProject, setMovingProject] = useState<Project | null>(null)
-    const [editingProject, setEditingProject] = useState<Project | null>(null)
     const [showGlobalSettings, setShowGlobalSettings] = useState(false)
     const [showDefaultPermissions, setShowDefaultPermissions] = useState(false)
-    const [deletingProject, setDeletingProject] = useState<Project | null>(null)
     const [deletingWorkspace, setDeletingWorkspace] = useState<Workspace | null>(null)
 
     // ── Terminal / Claude status state (driven by WebSocket events) ───────────
@@ -585,11 +576,8 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         workspaces, allProjects, activeProject, tasks,
         // Modal state
         showWorkspaceModal, setShowWorkspaceModal,
-        movingProject, setMovingProject,
-        editingProject, setEditingProject,
         showGlobalSettings, setShowGlobalSettings,
         showDefaultPermissions, setShowDefaultPermissions,
-        deletingProject, setDeletingProject,
         deletingWorkspace, setDeletingWorkspace,
         showAddAgent, setShowAddAgent,
         editingAgent, setEditingAgent,

@@ -2,7 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import { router } from '@inertiajs/react'
 import { color } from '@/tokens'
 import type { Project } from '@/types/type'
-import useProjects from '@/queries/useProjects'
+import { ProjectEditModal } from '@/pages/project/ProjectEditModal'
+import { ProjectMoveModal } from '@/pages/project/ProjectMoveModal'
+import { ProjectDeleteModal } from '@/pages/project/ProjectDeleteModal'
 
 const dotsStyle = `
 @keyframes bounce1 { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-4px)} }
@@ -34,14 +36,9 @@ export function DotsIndicator() {
     )
 }
 
-export function ProjectItem({ project, active, status, onMove, onEdit }: {
+export function ProjectItem({ project, active, status }: {
     project: Project; active: boolean; status?: 'running' | 'done';
-    onMove: (p: Project) => void;
-    onEdit: (p: Project) => void;
 }) {
-
-    const { handleProjectDelete } = useProjects()
-
     const [hovered, setHovered] = useState(false)
     const [menuOpen, setMenuOpen] = useState(false)
     const menuRef = useRef<HTMLDivElement>(null)
@@ -62,6 +59,9 @@ export function ProjectItem({ project, active, status, onMove, onEdit }: {
         background: 'transparent', border: 'none', width: '100%', textAlign: 'left',
         whiteSpace: 'nowrap',
     })
+
+    // Close the popover menu once a triggered modal finishes (opens or closes).
+    const closeMenu = (open: boolean) => { if (!open) setMenuOpen(false) }
 
     return (
         <div
@@ -134,31 +134,44 @@ export function ProjectItem({ project, active, status, onMove, onEdit }: {
                     position: 'absolute', right: '0', top: '100%', zIndex: 200,
                     background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
                     borderRadius: '6px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                    minWidth: '170px', padding: '4px 0', overflow: 'hidden',
+                    minWidth: '170px', padding: '4px 0',
                 }}>
+                    <ProjectEditModal
+                        project={project}
+                        onOpenChange={closeMenu}
+                        trigger={
+                            <button
+                                type="button"
+                                style={menuItemStyle()}
+                                onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
+                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                            >
+                                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0 }}>
+                                    <path d="M8 0a8.2 8.2 0 01.701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.103-.303c.644-.176 1.392.021 1.82.63.27.385.506.792.704 1.218.315.675.111 1.422-.364 1.891l-.814.806c-.049.048-.098.147-.088.294.016.257.016.515 0 .772-.01.147.038.246.087.294l.814.806c.475.469.679 1.216.364 1.891a7.977 7.977 0 01-.704 1.217c-.428.61-1.176.807-1.82.63l-1.103-.303c-.066-.019-.176-.011-.299.071a5.909 5.909 0 01-.668.386c-.133.066-.194.158-.211.224l-.29 1.106c-.168.646-.715 1.196-1.458 1.26a8.006 8.006 0 01-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106c-.018-.066-.079-.158-.212-.224a5.738 5.738 0 01-.668-.386c-.123-.082-.233-.09-.299-.071l-1.103.303c-.644.176-1.392-.021-1.82-.63a8.12 8.12 0 01-.704-1.218c-.315-.675-.111-1.422.363-1.891l.815-.806c.05-.048.098-.147.088-.294a6.214 6.214 0 010-.772c.01-.147-.038-.246-.088-.294l-.815-.806C.635 6.045.431 5.298.746 4.623a7.92 7.92 0 01.704-1.217c.428-.61 1.176-.807 1.82-.63l1.102.302c.067.019.177.011.3-.071a5.659 5.659 0 01.668-.386c.133-.066.194-.158.211-.224l.29-1.106C6.156.421 6.703-.129 7.445.031 7.645.015 7.825 0 8 0zm1.5 8a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/>
+                                </svg>
+                                Edit project
+                            </button>
+                        }
+                    />
+                    <ProjectMoveModal
+                        project={project}
+                        onOpenChange={closeMenu}
+                        trigger={
+                            <button
+                                type="button"
+                                style={menuItemStyle()}
+                                onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
+                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                            >
+                                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0 }}>
+                                    <path d="M7.47 1.97a.75.75 0 011.06 0l4.5 4.5a.75.75 0 010 1.06l-4.5 4.5a.75.75 0 11-1.06-1.06L11.44 7H3a.75.75 0 010-1.5h8.44L7.47 3.03a.75.75 0 010-1.06z"/>
+                                </svg>
+                                Move to workspace
+                            </button>
+                        }
+                    />
                     <button
-                        style={menuItemStyle()}
-                        onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                        onClick={e => { e.stopPropagation(); setMenuOpen(false); onEdit(project) }}
-                    >
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0 }}>
-                            <path d="M8 0a8.2 8.2 0 01.701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.103-.303c.644-.176 1.392.021 1.82.63.27.385.506.792.704 1.218.315.675.111 1.422-.364 1.891l-.814.806c-.049.048-.098.147-.088.294.016.257.016.515 0 .772-.01.147.038.246.087.294l.814.806c.475.469.679 1.216.364 1.891a7.977 7.977 0 01-.704 1.217c-.428.61-1.176.807-1.82.63l-1.103-.303c-.066-.019-.176-.011-.299.071a5.909 5.909 0 01-.668.386c-.133.066-.194.158-.211.224l-.29 1.106c-.168.646-.715 1.196-1.458 1.26a8.006 8.006 0 01-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106c-.018-.066-.079-.158-.212-.224a5.738 5.738 0 01-.668-.386c-.123-.082-.233-.09-.299-.071l-1.103.303c-.644.176-1.392-.021-1.82-.63a8.12 8.12 0 01-.704-1.218c-.315-.675-.111-1.422.363-1.891l.815-.806c.05-.048.098-.147.088-.294a6.214 6.214 0 010-.772c.01-.147-.038-.246-.088-.294l-.815-.806C.635 6.045.431 5.298.746 4.623a7.92 7.92 0 01.704-1.217c.428-.61 1.176-.807 1.82-.63l1.102.302c.067.019.177.011.3-.071a5.659 5.659 0 01.668-.386c.133-.066.194-.158.211-.224l.29-1.106C6.156.421 6.703-.129 7.445.031 7.645.015 7.825 0 8 0zm1.5 8a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/>
-                        </svg>
-                        Edit project
-                    </button>
-                    <button
-                        style={menuItemStyle()}
-                        onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                        onClick={e => { e.stopPropagation(); setMenuOpen(false); onMove(project) }}
-                    >
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0 }}>
-                            <path d="M7.47 1.97a.75.75 0 011.06 0l4.5 4.5a.75.75 0 010 1.06l-4.5 4.5a.75.75 0 11-1.06-1.06L11.44 7H3a.75.75 0 010-1.5h8.44L7.47 3.03a.75.75 0 010-1.06z"/>
-                        </svg>
-                        Move to workspace
-                    </button>
-                    <button
+                        type="button"
                         style={menuItemStyle()}
                         onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
                         onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
@@ -170,23 +183,23 @@ export function ProjectItem({ project, active, status, onMove, onEdit }: {
                         Open in directory
                     </button>
                     <div style={{ height: '1px', background: color.border, margin: '4px 0' }} />
-                    <button
-                        style={menuItemStyle(true)}
-                        onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                        onClick={e => {
-                            e.stopPropagation()
-                            setMenuOpen(false)
-                            if (window.confirm(`Remove "${project.name}" from Keera? This only removes it from the app — files on disk are not deleted.`)) {
-                                handleProjectDelete(project.id)
-                            }
-                        }}
-                    >
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0 }}>
-                            <path d="M6.5 1.75a.25.25 0 01.25-.25h2.5a.25.25 0 01.25.25V3h-3V1.75zm4.5 0V3h2.25a.75.75 0 010 1.5H2.75a.75.75 0 010-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75zM4.496 6.675l.66 6.6a.25.25 0 00.249.225h5.19a.25.25 0 00.249-.225l.66-6.6a.75.75 0 011.492.149l-.66 6.6A1.748 1.748 0 0111.095 15H4.905a1.748 1.748 0 01-1.741-1.576l-.66-6.6a.75.75 0 111.492-.149z"/>
-                        </svg>
-                        Delete project
-                    </button>
+                    <ProjectDeleteModal
+                        project={project}
+                        onOpenChange={closeMenu}
+                        trigger={
+                            <button
+                                type="button"
+                                style={menuItemStyle(true)}
+                                onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
+                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                            >
+                                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0 }}>
+                                    <path d="M6.5 1.75a.25.25 0 01.25-.25h2.5a.25.25 0 01.25.25V3h-3V1.75zm4.5 0V3h2.25a.75.75 0 010 1.5H2.75a.75.75 0 010-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75zM4.496 6.675l.66 6.6a.25.25 0 00.249.225h5.19a.25.25 0 00.249-.225l.66-6.6a.75.75 0 011.492.149l-.66 6.6A1.748 1.748 0 0111.095 15H4.905a1.748 1.748 0 01-1.741-1.576l-.66-6.6a.75.75 0 111.492-.149z"/>
+                                </svg>
+                                Delete project
+                            </button>
+                        }
+                    />
                 </div>
             )}
         </div>

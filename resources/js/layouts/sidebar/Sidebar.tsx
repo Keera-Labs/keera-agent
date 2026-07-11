@@ -48,8 +48,6 @@ export default function Sidebar({
                                     taskCount,
                                     onAddAgent,
                                     activeId,
-                                    onMoveProject,
-                                    onEditProject,
                                     claudeStatus,
                                     onCreateWorkspace,
                                 }: {
@@ -59,8 +57,6 @@ export default function Sidebar({
     taskCount: number
     onAddAgent: () => void
     activeId: number | null
-    onMoveProject: (project: Project) => void
-    onEditProject: (project: Project) => void
     claudeStatus: Record<number, "running" | "done">
     onCreateWorkspace: () => void
 }) {
@@ -125,8 +121,6 @@ export default function Sidebar({
                                 project={project}
                                 active={project.id === activeId}
                                 status={claudeStatus[project.id]}
-                                onMove={onMoveProject}
-                                onEdit={onEditProject}
                             />
                         </li>
                     ))}

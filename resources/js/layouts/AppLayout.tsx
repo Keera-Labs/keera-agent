@@ -23,10 +23,7 @@ export { ProjectPermissionsModal } from "@/components/modals/ProjectPermissionsM
 export { DefaultPermissionsModal } from "@/components/modals/DefaultPermissionsModal"
 export { GlobalSettingsModal } from "@/components/modals/GlobalSettingsModal"
 export { ProjectSearchModal } from "@/components/modals/ProjectSearchModal"
-export { ConfirmDeleteProjectModal } from "@/components/modals/ConfirmDeleteProjectModal"
 export { ConfirmDeleteWorkspaceModal } from "@/components/modals/ConfirmDeleteWorkspaceModal"
-export { MoveProjectModal } from "@/components/modals/MoveProjectModal"
-export { EditProjectModal } from "@/components/modals/EditProjectModal"
 export { CreateTaskModal } from "@/components/modals/CreateTaskModal"
 export { TaskDetailModal } from "@/components/modals/TaskDetailModal"
 export { AgentAddModal } from "@/components/modals/AgentAddModal"
@@ -47,7 +44,6 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
         claudeStatus,
         projectView, setProjectView,
         setShowAddAgent,
-        setMovingProject, setEditingProject,
         setShowWorkspaceModal,
     } = useAppLayout()
 
@@ -73,8 +69,6 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
                     taskCount={tasks.length}
                     onAddAgent={() => setShowAddAgent(true)}
                     activeId={activeProject?.id ?? null}
-                    onMoveProject={setMovingProject}
-                    onEditProject={setEditingProject}
                     claudeStatus={claudeStatus}
                     onCreateWorkspace={() => setShowWorkspaceModal(true)}
                 />
