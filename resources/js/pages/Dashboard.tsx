@@ -1,9 +1,9 @@
 import { usePage } from '@inertiajs/react'
 import AppLayout from '@/layouts/AppLayout'
-import { CenteredMessage, DashboardBody } from '@/components/Dashboard'
-import type { DashboardData } from '@/components/Dashboard'
+import { CenteredMessage, DashboardBody } from '@/pages/dashboard/index'
+import type { DashboardData } from '@/pages/dashboard/index'
 
-export type * from '@/components/Dashboard/types'
+export type * from '@/pages/dashboard/types'
 
 // Workspace overview served at "/" via Inertia props.
 export default function Dashboard() {
