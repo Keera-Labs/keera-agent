@@ -90,4 +90,4 @@ async def project_home(request: Request, project: str):
 
 async def agent_page(request: Request, project: str, agent_id: int):
     """Render the main UI with active project + agent context."""
-    return Inertia.render("Home", await _shared_props(project=project, agent_id=agent_id))
+    return Inertia.render("agents/Detail", await _shared_props(project=project, agent_id=agent_id))
