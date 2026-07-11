@@ -110,8 +110,10 @@ async def _handle_claude_stopped(project, project_cwd: str) -> None:
 
     # Claude finished its turn for this project — any agent that was actively
     # running is now idle at its prompt (waiting for the next input).
-    await Agent.where("project_id", project.id).where("status", "running").update(
-        {"status": "waiting", "current_activity": None}
+    await (
+        Agent.where("project_id", project.id)
+        .where("status", "running")
+        .update({"status": "waiting", "current_activity": None})
     )
 
     # Check for pending tasks and dispatch the next one
