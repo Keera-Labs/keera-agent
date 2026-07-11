@@ -1,14 +1,50 @@
+import { router, usePage } from '@inertiajs/react'
+import AppLayout from '@/layouts/AppLayout'
 import { color } from '@/tokens'
 import { AGENT_TYPE_COLORS } from '@/types/agent'
 import { agentColor } from '@/utils/agentColor'
 import { DotsIndicator } from '@/layouts/sidebar/Project'
-import { useAppLayout } from '@/layouts/context/AppLayoutContext'
-import { useDashboard } from '@/layouts/hooks/dashboard'
-import type {
-    DashboardData,
-    DashboardWorkingAgent,
-    DashboardProject,
-} from '@/layouts/hooks/dashboard'
+
+// ─── Prop contract (served by the "/" page route as Inertia.render("Dashboard", {dashboard})) ─
+
+export interface DashboardWorkingAgent {
+    id: number
+    name: string
+    initials: string
+    agentType: string
+    role: string
+    description: string
+    project: string
+    elapsed: string
+}
+
+export interface DashboardProjectAgent {
+    initials: string
+    agentType: string
+}
+
+export interface DashboardProject {
+    id: number
+    name: string
+    slug: string
+    online: boolean
+    agents: DashboardProjectAgent[]
+    extraAgents: number
+    activeCount: number
+    waitingCount: number
+    queuedCount: number
+    doneCount: number
+    lastActivity: string
+}
+
+export interface DashboardData {
+    workspaceName: string
+    agentCount: number
+    projectCount: number
+    stats: { projects: number; active: number; waiting: number; queued: number }
+    workingNow: DashboardWorkingAgent[]
+    projects: DashboardProject[]
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -121,13 +157,21 @@ function WorkingAgentCard({ agent }: { agent: DashboardWorkingAgent }) {
 function ProjectCard({ project }: { project: DashboardProject }) {
     const summary = projectStatusSummary(project)
     return (
-        <div style={{
-            background: color.bgSurface,
-            border: `1px solid ${color.border}`,
-            borderRadius: '8px',
-            padding: '14px',
-            display: 'flex', flexDirection: 'column', gap: '12px',
-        }}>
+        <button
+            type="button"
+            onClick={() => router.visit(`/${project.slug}`)}
+            title={`Open ${project.name}`}
+            style={{
+                textAlign: 'left', font: 'inherit', cursor: 'pointer', width: '100%',
+                background: color.bgSurface,
+                border: `1px solid ${color.border}`,
+                borderRadius: '8px',
+                padding: '14px',
+                display: 'flex', flexDirection: 'column', gap: '12px',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = color.accent }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = color.border }}
+        >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <FolderIcon />
                 <span style={{
@@ -174,7 +218,7 @@ function ProjectCard({ project }: { project: DashboardProject }) {
                 </span>
                 <span style={{ flexShrink: 0 }}>{project.lastActivity}</span>
             </div>
-        </div>
+        </button>
     )
 }
 
@@ -274,15 +318,16 @@ function DashboardBody({ data }: { data: DashboardData }) {
     )
 }
 
-// ─── Dashboard page (workspace overview — rendered inline by ProjectLayout) ────
+// ─── Dashboard page (workspace overview served at "/" via Inertia props) ───────
 
 export default function Dashboard() {
-    const { activeProject } = useAppLayout()
-    const { data, isLoading, isError } = useDashboard(activeProject?.workspace_id ?? null)
+    const { dashboard } = usePage<{ dashboard: DashboardData }>().props
 
-    if (isError) return <CenteredMessage text="Failed to load the dashboard." />
-    if (!data) return <CenteredMessage text={isLoading ? 'Loading dashboard…' : 'No data yet.'} />
-    if (data.projectCount === 0) return <CenteredMessage text="No projects yet. Create one to get started." />
+    if (dashboard.projectCount === 0) {
+        return <CenteredMessage text="No projects yet. Create one to get started." />
+    }
 
-    return <DashboardBody data={data} />
+    return <DashboardBody data={dashboard} />
 }
+
+Dashboard.layout = [AppLayout]

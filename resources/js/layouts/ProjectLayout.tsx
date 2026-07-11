@@ -2,7 +2,6 @@ import React from 'react'
 import { router, usePage } from '@inertiajs/react'
 import { useAppLayout } from './context/AppLayoutContext'
 import AgentsIndex from '@/pages/agents/Index'
-import Dashboard from '@/pages/dashboard/Index'
 import { CommandsView } from './views/CommandsView'
 import { color } from '@/tokens'
 import type { ProjectView } from './sidebar/Sidebar'
@@ -87,18 +86,12 @@ export function ProjectLayout({ children }: { children: React.ReactNode }) {
             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
                 {/* Agents view — always rendered to keep terminal sessions alive.
-                    Shown only when drilled into an agent; the wrapper stays mounted
-                    (display-toggled) so terminals never unmount and blank out. */}
-                <div style={{ flex: 1, overflow: 'hidden', display: activeView === 'agents' && activeAgentId !== null ? 'flex' : 'none' }}>
+                    The wrapper stays mounted (display-toggled) so terminals never
+                    unmount and blank out; it renders the project's PM terminal when
+                    no agent is drilled into (see AgentsIndex). */}
+                <div style={{ flex: 1, overflow: 'hidden', display: activeView === 'agents' ? 'flex' : 'none' }}>
                     <AgentsIndex />
                 </div>
-
-                {/* Dashboard overview — shown on the agents tab when no agent is selected */}
-                {activeView === 'agents' && activeAgentId === null && (
-                    <div style={{ flex: 1, overflow: 'auto' }}>
-                        <Dashboard />
-                    </div>
-                )}
 
                 {/* Commands view */}
                 {activeView === 'commands' && activeProject && (
