@@ -1,6 +1,6 @@
 import { router } from '@inertiajs/react'
 import { color } from '@/tokens'
-import { useAgents } from '@/layouts/hooks/agents'
+import { useAgents } from '@/queries/agents'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import type { Project } from '@/types/type'
 import { AgentCard } from './AgentCard'

@@ -7,7 +7,7 @@ import { GlobalSettingsModal } from '@/components/modals/GlobalSettingsModal'
 import { ProjectSearchModal } from '@/components/modals/ProjectSearchModal'
 import { ConfirmDeleteWorkspaceModal } from '@/components/modals/ConfirmDeleteWorkspaceModal'
 import { AgentAddModal } from '@/components/modals/AgentAddModal'
-import type { ProjectAgent } from '@/layouts/hooks/agents'
+import type { ProjectAgent } from '@/queries/agents'
 
 export function ModalLayer() {
     const { projects } = useProjects()

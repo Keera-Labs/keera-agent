@@ -1,6 +1,6 @@
 import type { MouseEvent, ReactNode } from 'react'
 import { color } from '@/tokens'
-import type { ProjectAgent } from '@/layouts/hooks/agents'
+import type { ProjectAgent } from '@/queries/agents'
 import { agentAvatarColor, agentInitials, agentRoleLabel, PLACEHOLDER } from './presentation'
 
 // ─── Footer action icon button (carried over from PR #207) ────────────────────

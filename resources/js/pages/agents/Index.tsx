@@ -1,4 +1,4 @@
-import { useAgents } from '@/layouts/hooks/agents'
+import { useAgents } from '@/queries/agents'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import useProjects from '@/queries/useProjects'
 import { ProjectOverview } from './ProjectOverview'
