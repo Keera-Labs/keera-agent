@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { color } from '@/tokens'
+import { MODELS } from '@/types/agent'
 import PluginsTab from './views/PluginsTab'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -310,9 +311,7 @@ function TemplatesTab() {
                             <span style={labelStyle}>Model</span>
                             <select value={tplModel} disabled={!canEdit} onChange={e => setTplModel(e.target.value)}
                                 style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' as const, opacity: canEdit ? 1 : 0.55 }}>
-                                <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
-                                <option value="claude-opus-4-8">Claude Opus 4.8</option>
-                                <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+                                {MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                             </select>
                         </label>
 

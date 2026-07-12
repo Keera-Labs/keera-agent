@@ -1,15 +1,9 @@
 import { useEffect, useState } from 'react'
 import { color } from '@/tokens'
 import type { AgentTemplate, AgentFlags } from '@/types/agent'
-import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS } from '@/types/agent'
+import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, MODELS } from '@/types/agent'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import { labelStyle, inputStyle, cancelBtnStyle, submitBtnStyle, flagRowStyle, toggleStyle } from '@/components/ui/styles'
-
-const MODELS = [
-    { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
-    { value: 'claude-opus-4-8', label: 'Claude Opus 4.8' },
-    { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
-]
 
 /**
  * Per-project agent-template manager. The list is the project's EFFECTIVE
