@@ -55,51 +55,15 @@ patch_env() {
 patch_env "KEERA_APP_URL"  "http://127.0.0.1:4545" "$DIST/.env"
 patch_env "KEERA_APP_RELOAD" "false"               "$DIST/.env"
 
-# Patch (or create) .claude/settings.json in dist to point hooks + MCP at KEERA_APP_URL
-DIST_APP_URL=$(grep '^KEERA_APP_URL=' "$DIST/.env" | head -1 | cut -d= -f2)
-DIST_SETTINGS="$DIST/.claude/settings.json"
-mkdir -p "$DIST/.claude"
-python3 - "$DIST_SETTINGS" "$DIST_APP_URL" <<'PYEOF'
-import json, sys, os, shutil
-
-STOP_PATH  = "/api/claude-stopped"
-START_PATH = "/api/claude-started"
-
-def upsert_hook(hook_list, path_fragment, new_url):
-    for grp in hook_list:
-        for h in grp.get("hooks", []):
-            if h.get("type") == "http" and path_fragment in h.get("url", ""):
-                h["url"] = new_url
-                return
-    hook_list.append({"hooks": [{"type": "http", "url": new_url}]})
-
-path, app_url = sys.argv[1], sys.argv[2]
-s = {}
-if os.path.exists(path):
-    shutil.copy2(path, path + ".bak")
-    try:
-        with open(path) as f:
-            s = json.load(f)
-    except (json.JSONDecodeError, OSError):
-        s = {}
-
-hooks = s.setdefault("hooks", {})
-upsert_hook(hooks.setdefault("Stop", []),             STOP_PATH,  f"{app_url}/api/claude-stopped")
-upsert_hook(hooks.setdefault("UserPromptSubmit", []), START_PATH, f"{app_url}/api/claude-started")
-s.setdefault("mcpServers", {})["keera-agent"] = {"type": "http", "url": f"{app_url}/mcp"}
-
-with open(path, "w") as f:
-    json.dump(s, f, indent=2)
-    f.write("\n")
-PYEOF
-echo "    patched .claude/settings.json hooks + MCP server → ${DIST_APP_URL}"
-
 # Remove the vite hot file so built assets are used instead of the dev server
 rm -f "$DIST/public/hot"
 
 echo "==> Installing Python dependencies..."
 cd "$DIST"
 uv sync --frozen
+
+echo "==> Writing Claude hooks into dist/.claude/settings.json..."
+uv run python artisan claude:hook
 
 echo "==> Running migrations..."
 uv run python artisan db:migrate

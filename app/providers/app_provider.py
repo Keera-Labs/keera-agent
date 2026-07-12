@@ -10,11 +10,11 @@ class AppProvider(Provider):
         self.app.bind("templates", templates)
 
     def boot(self) -> None:
+        from app.console.claude_hook_command import ClaudeHookCommand
         from app.console.mcp_sync_command import McpSyncCommand
         from app.console.queue_work_command import QueueWorkCommand
         from app.console.seed_templates_command import SeedTemplatesCommand
         from app.exceptions.handlers import register_exception_handlers
-        from app.utils.hook_setup import ensure_hooks
         from routes.api import router as api_router
         from routes.web import router as web_router
 
@@ -22,8 +22,7 @@ class AppProvider(Provider):
         self.app.fastapi.include_router(api_router.router)
 
         register_exception_handlers(self.app)
-        ensure_hooks()
-        self.commands([QueueWorkCommand, SeedTemplatesCommand, McpSyncCommand])
+        self.commands([QueueWorkCommand, SeedTemplatesCommand, McpSyncCommand, ClaudeHookCommand])
 
         async def on_startup():
             """Ensure built-in templates are seeded."""
