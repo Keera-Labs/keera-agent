@@ -68,6 +68,29 @@ below and prints a note if run against the in-memory broker:
 uv run python artisan queue:work
 ```
 
+### Check the queue is alive
+
+`app/tasks.py` ships a `heartbeat` task that returns a liveness payload
+(`status`, an incrementing `sequence`, and a UTC `timestamp`). Fire it on demand
+to confirm the queue runs end to end:
+
+```bash
+uv run python -c "
+import asyncio
+from app.providers.queue_provider import broker
+from app.tasks import heartbeat
+
+async def main():
+    await broker.startup()
+    task = await heartbeat.kiq()
+    print((await task.wait_result()).return_value)
+    await broker.shutdown()
+
+asyncio.run(main())
+"
+# -> {'status': 'alive', 'sequence': 1, 'timestamp': '...'}
+```
+
 ### Upgrading to a networked broker (e.g. Redis)
 
 For durable, cross-process queuing, change the **one broker line** in
