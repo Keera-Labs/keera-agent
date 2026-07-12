@@ -11,6 +11,7 @@ class AppProvider(Provider):
 
     def boot(self) -> None:
         from app.console.mcp_sync_command import McpSyncCommand
+        from app.console.queue_schedule_command import QueueScheduleCommand
         from app.console.queue_work_command import QueueWorkCommand
         from app.console.seed_templates_command import SeedTemplatesCommand
         from app.exceptions.handlers import register_exception_handlers
@@ -23,7 +24,9 @@ class AppProvider(Provider):
 
         register_exception_handlers(self.app)
         ensure_hooks()
-        self.commands([QueueWorkCommand, SeedTemplatesCommand, McpSyncCommand])
+        self.commands(
+            [QueueWorkCommand, QueueScheduleCommand, SeedTemplatesCommand, McpSyncCommand]
+        )
 
         async def on_startup():
             """Ensure built-in templates are seeded."""

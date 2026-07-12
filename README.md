@@ -91,6 +91,28 @@ asyncio.run(main())
 # -> {'status': 'alive', 'sequence': 1, 'timestamp': '...'}
 ```
 
+### Run the heartbeat on a schedule (cron)
+
+The `heartbeat` task carries a cron `schedule` label, so the taskiq scheduler
+fires it periodically. Start the scheduler:
+
+```bash
+uv run python artisan queue:schedule
+# equivalent: uv run taskiq scheduler app.providers.queue_provider:scheduler app.tasks
+```
+
+Each tick logs a line like `queue heartbeat {'status': 'alive', 'sequence': N, ...}`.
+The cron defaults to every minute; override it with `KEERA_QUEUE_HEARTBEAT_CRON`
+(standard 5-field cron):
+
+```bash
+KEERA_QUEUE_HEARTBEAT_CRON="*/5 * * * *" uv run python artisan queue:schedule
+```
+
+Under the default in-memory broker the **scheduler process dispatches the task
+each tick and runs it in-process** — no separate worker needed. After the Redis
+upgrade below, the scheduler instead feeds the task to `queue:work` workers.
+
 ### Upgrading to a networked broker (e.g. Redis)
 
 For durable, cross-process queuing, change the **one broker line** in

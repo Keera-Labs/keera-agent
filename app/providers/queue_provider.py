@@ -1,5 +1,6 @@
 from fastapi_startkit.providers import Provider
-from taskiq import InMemoryBroker
+from taskiq import InMemoryBroker, TaskiqScheduler
+from taskiq.schedule_sources import LabelScheduleSource
 
 # Single broker instance shared by the web process (which dispatches jobs with
 # ``.kiq``) and the ``queue:work`` worker (which executes them). InMemoryBroker
@@ -14,6 +15,12 @@ from taskiq import InMemoryBroker
 #     from config.queue import QueueConfig
 #     broker = RedisStreamBroker(url=QueueConfig().redis_url)
 broker = InMemoryBroker()
+
+# Scheduler for cron/interval tasks (see the ``schedule`` labels in app/tasks.py).
+# Run it with ``uv run python artisan queue:schedule``. Under InMemoryBroker the
+# scheduler process dispatches each due task and executes it in-process; with a
+# networked broker the same scheduler feeds separate ``queue:work`` workers.
+scheduler = TaskiqScheduler(broker, sources=[LabelScheduleSource(broker)])
 
 
 class QueueProvider(Provider):
