@@ -36,11 +36,13 @@ def _upsert_hook(hook_list: list, path_fragment: str, new_url: str) -> bool:
     return True
 
 
-def ensure_claude_settings(directory: str, base_url: str, project_path: str | None = None) -> None:
+def ensure_claude_settings(directory: str, base_url: str, project_path: str | None = None) -> bool:
     """
     Merge Stop hook, UserPromptSubmit hook, and MCP server entry into
     <directory>/.claude/settings.json.  Existing unrelated settings are
     preserved.  Keera-managed hook URLs are updated in-place if they changed.
+
+    Returns True if the file was written, False if it was already current.
     """
     settings_path = os.path.join(directory, ".claude", "settings.json")
     os.makedirs(os.path.dirname(settings_path), exist_ok=True)
@@ -84,11 +86,17 @@ def ensure_claude_settings(directory: str, base_url: str, project_path: str | No
         atomic_write_json(settings_path, settings)
         print(f"[keera] Claude settings updated in {directory}/.claude/settings.json")
 
+    return changed
+
 
 BASE_URL = env("KEERA_APP_URL", "http://127.0.0.1:4545")
 
 
+def app_base_dir() -> str:
+    """Absolute path to the keera-agent application root (three levels up)."""
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
 def ensure_hooks() -> None:
     """Register hooks + MCP in the keera-agent app directory at startup."""
-    app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    ensure_claude_settings(app_dir, BASE_URL)
+    ensure_claude_settings(app_base_dir(), BASE_URL)
