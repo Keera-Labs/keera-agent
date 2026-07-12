@@ -15,6 +15,7 @@ class Task(Model):
     testing_methods: list
     validation_steps: list
     priority: str | None
+    complexity: str | None
     status: str | None
     completed_at: str | None
     created_at: str | None
