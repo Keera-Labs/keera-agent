@@ -1,39 +1,48 @@
+import asyncio
 import os
 
-from cleo.helpers import option
 from fastapi_startkit.console.command import Command
 
 
 class ClaudeHookCommand(Command):
     """
-    Write the Claude Stop hook + MCP entry into a .claude/settings.json from env.
+    Re-sync the Claude Stop hook + MCP entry into the app's own .claude/settings.json
+    and every project's, from KEERA_APP_URL.
 
     claude:hook
     """
 
     name = "claude:hook"
-    description = "Write Claude hooks into .claude/settings.json from KEERA_APP_URL."
-    options = [
-        option(
-            "dir",
-            "d",
-            "Target directory whose .claude/settings.json to write (default: app root).",
-            flag=False,
-            default=None,
-        )
-    ]
+    description = "Re-sync .claude/settings.json (Claude hooks) into the app and every project from KEERA_APP_URL."
 
     def handle(self):
+        return asyncio.run(self.handle_async())
+
+    async def handle_async(self):
+        from app.models.Project import Project
         from app.utils.hook_setup import BASE_URL, app_base_dir, ensure_claude_settings
 
-        directory = self.option("dir") or app_base_dir()
-        directory = os.path.abspath(os.path.expanduser(directory))
+        self.line(f"<info>Syncing .claude/settings.json from</info> {BASE_URL}")
+
+        # The keera-agent app's own directory — this is what dist/build.sh relies on.
+        ensure_claude_settings(app_base_dir(), BASE_URL)
+
+        projects = await Project.all()
+        updated = skipped = unchanged = 0
+        for project in projects:
+            expanded = os.path.expanduser(project.path)
+            if not os.path.isdir(expanded):
+                self.line(
+                    f"<comment>skip</comment> {project.name}: directory not found ({expanded})"
+                )
+                skipped += 1
+                continue
+            if ensure_claude_settings(expanded, BASE_URL):
+                self.line(f"<info>updated</info> {project.name} ({expanded})")
+                updated += 1
+            else:
+                unchanged += 1
 
         self.line(
-            f"<info>Writing Claude hooks into</info> {directory}/.claude/settings.json "
-            f"<info>from</info> {BASE_URL}"
+            f"<info>Done.</info> {updated} updated, {unchanged} already current, {skipped} skipped."
         )
-        if ensure_claude_settings(directory, BASE_URL):
-            self.line("<info>updated.</info>")
-        else:
-            self.line("<comment>already current.</comment>")
