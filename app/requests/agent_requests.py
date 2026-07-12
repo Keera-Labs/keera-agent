@@ -1,8 +1,9 @@
 from typing import Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 from app.constant.agent_types import ALLOWED_AGENT_TYPES
+from app.constant.complexity import TaskComplexity, model_for_complexity
 
 
 class AgentStoreRequest(BaseModel):
@@ -18,8 +19,10 @@ class AgentStoreRequest(BaseModel):
     plan_mode: Optional[bool] = None  # None → defaults to False (only on when explicitly set)
     task_id: Optional[int] = None
     orchestrator_id: Optional[int] = None
-    # Transient field: initial message to send after agent creation (not stored)
+    # Transient fields (not stored): initial message to send after creation, and
+    # the task complexity used to pick the model.
     message: Optional[str] = None
+    complexity: Optional[TaskComplexity] = None
 
     @field_validator("name", "model")
     @classmethod
@@ -28,6 +31,14 @@ class AgentStoreRequest(BaseModel):
         if not v:
             raise ValueError(f"{info.field_name} must not be empty")
         return v
+
+    @model_validator(mode="after")
+    def _complexity_selects_model(self):
+        # Complexity is the intent: when supplied it wins over any explicit
+        # `model`. When absent, the explicit `model` (or its default) is kept.
+        if self.complexity is not None:
+            self.model = model_for_complexity(self.complexity)
+        return self
 
     @field_validator("agent_type")
     @classmethod

@@ -19,6 +19,7 @@ from app.mcp.tools import (
     UpdateTaskStatusTool,
     UpdateTaskTool,
 )
+from app.models.Agent import Agent
 from app.models.Task import Task
 from databases.factories.agent_factory import AgentFactory
 from databases.factories.project_factory import ProjectFactory
@@ -605,3 +606,49 @@ class TestMcpToolNames(TestCase):
         pm_prompt = _SYSTEM_PROMPTS_FALLBACK.get("pm", "")
         self.assertIn("send_message_to_agent", pm_prompt)
         self.assertNotIn("relay_to_agent", pm_prompt)
+
+
+class TestSpawnAgentComplexity(TestCase, DatabaseTransaction):
+    """spawn_agent selects the model from task complexity."""
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        self.project = await ProjectFactory.new().create()
+        self.tool = SpawnAgentTool()
+
+    async def _spawn(self, **kwargs) -> Agent:
+        base = {"project_path": self.project.path, "name": "Worker"}
+        base.update(kwargs)
+        text = _text(await self.tool.handle(base))
+        agent_id = int(text.split("ID: ")[1].split(")")[0])
+        return await Agent.find(agent_id)
+
+    async def test_easy_selects_sonnet(self):
+        agent = await self._spawn(complexity="easy")
+        self.assertEqual(agent.model, "claude-sonnet-5")
+
+    async def test_medium_selects_sonnet(self):
+        agent = await self._spawn(complexity="medium")
+        self.assertEqual(agent.model, "claude-sonnet-5")
+
+    async def test_hard_selects_opus(self):
+        agent = await self._spawn(complexity="hard")
+        self.assertEqual(agent.model, "claude-opus-4-8")
+
+    async def test_complexity_overrides_explicit_model(self):
+        agent = await self._spawn(complexity="hard", model="claude-sonnet-5")
+        self.assertEqual(agent.model, "claude-opus-4-8")
+
+    async def test_omitted_complexity_honors_explicit_model(self):
+        agent = await self._spawn(model="claude-sonnet-5")
+        self.assertEqual(agent.model, "claude-sonnet-5")
+
+    async def test_omitted_complexity_uses_default_model(self):
+        agent = await self._spawn()
+        self.assertEqual(agent.model, "claude-opus-4-8")
+
+    async def test_invalid_complexity_rejected(self):
+        response = await self.tool.handle(
+            {"project_path": self.project.path, "name": "Worker", "complexity": "trivial"}
+        )
+        self.assertIn("Error", _text(response))

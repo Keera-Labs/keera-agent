@@ -5,7 +5,7 @@ import os
 from typing import Optional, Union
 
 from fastapi_startkit.mcp import Response, Tool
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from app.models.Project import Project
 from app.models.Task import Task
@@ -491,6 +491,16 @@ class SpawnAgentInput(BaseModel):
     model: Optional[str] = Field(
         default=None, description="Claude model to use. Defaults to claude-opus-4-8."
     )
+    complexity: Optional[str] = Field(
+        default=None,
+        pattern="^(easy|medium|hard)$",
+        description=(
+            "Task complexity (easy|medium|hard). When set, the model is chosen "
+            "automatically from it — easy/medium → claude-sonnet-5, hard → "
+            "claude-opus-4-8 — and OVERRIDES any explicit `model`. Omit to keep "
+            "the explicit `model` (or the default claude-opus-4-8)."
+        ),
+    )
     task_id: Optional[int] = Field(
         default=None, description="ID of the task this agent is working on."
     )
@@ -568,6 +578,9 @@ class SpawnAgentTool(Tool):
                     name=name,
                     agent_type=arguments.get("agent_type", "software_engineer"),
                     model=arguments.get("model") or "claude-opus-4-8",
+                    # When complexity is supplied the request model validator
+                    # overrides `model` with the complexity-mapped model.
+                    complexity=arguments.get("complexity"),
                     description=f"{name} agent",
                     # system_prompt is intentionally not forwarded: spawned agents
                     # always use their role-based default prompt and a caller must
@@ -577,6 +590,8 @@ class SpawnAgentTool(Tool):
                     orchestrator_id=arguments.get("from_agent_id"),
                 ),
             ).execute()
+        except ValidationError as e:
+            return Response.text(f"Error: invalid arguments — {e}")
         except ValueError as e:
             return Response.text(f"Error: {e}")
 
