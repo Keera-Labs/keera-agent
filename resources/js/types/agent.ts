@@ -1,4 +1,4 @@
-import type { AgentFlags } from '@/layouts/hooks/agents'
+import type { AgentFlags } from '@/queries/agents'
 
 export type { AgentFlags }
 

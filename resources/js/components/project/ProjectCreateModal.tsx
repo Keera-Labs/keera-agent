@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from 'react'
-import type { Workspace, Project } from '@/types/type'
+import type { Project } from '@/types/type'
 import Modal from '@/components/ui/Modal'
+import { useAppLayout } from '@/layouts/context/AppLayoutContext'
+import useProjects from '@/queries/useProjects'
 
 const LANGUAGES = ['Python', 'TypeScript', 'JavaScript', 'Go', 'Rust', 'Other']
 
@@ -19,15 +21,13 @@ function friendlyError(code: string): string {
 
 export default function ProjectCreateModal({
     trigger,
-    workspaces,
     defaultWorkspaceId,
-    onCreated,
 }: {
     trigger: ReactNode
-    workspaces: Workspace[]
     defaultWorkspaceId: number | null
-    onCreated: (p: Project) => void
 }) {
+    const { workspaces } = useAppLayout()
+    const { handleProjectCreated } = useProjects()
     const [name, setName] = useState('')
     const [path, setPath] = useState('')
     const [language, setLanguage] = useState('Python')
@@ -66,7 +66,7 @@ export default function ProjectCreateModal({
             })
             const json = await res.json() as Record<string, unknown>
             if (res.ok) {
-                onCreated(json as unknown as Project)
+                handleProjectCreated(json as unknown as Project)
                 close()
                 return
             }
