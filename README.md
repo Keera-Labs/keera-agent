@@ -44,6 +44,51 @@ uv run python artisan db:migrate
 npm run dev
 ```
 
+## Background tasks (queue)
+
+The app uses [TaskIQ](https://taskiq-python.github.io/) for async background jobs.
+It ships with an **in-memory broker** (`app/providers/queue_provider.py`), so there
+is nothing extra to install or run — no Redis, no Docker.
+
+Define a task in `app/tasks.py` and dispatch it (fire-and-forget) from a controller
+or action:
+
+```python
+from app.tasks import example_task
+
+task = await example_task.kiq("world")
+result = await task.wait_result()   # -> "processed world"
+```
+
+With the in-memory broker, `.kiq(...)` runs the task **in the dispatching process**,
+so a standalone worker isn't needed. `queue:work` is provided for the upgrade path
+below and prints a note if run against the in-memory broker:
+
+```bash
+uv run python artisan queue:work
+```
+
+### Upgrading to a networked broker (e.g. Redis)
+
+For durable, cross-process queuing, change the **one broker line** in
+`app/providers/queue_provider.py` and set `KEERA_QUEUE_REDIS_URL`:
+
+```python
+# app/providers/queue_provider.py
+from taskiq_redis import RedisStreamBroker
+from config.queue import QueueConfig
+
+broker = RedisStreamBroker(url=QueueConfig().redis_url)
+```
+
+Then add the driver, run Redis, and start the worker:
+
+```bash
+uv add taskiq-redis
+docker run -p 6379:6379 redis
+uv run python artisan queue:work        # or: uv run taskiq worker app.providers.queue_provider:broker app.tasks
+```
+
 ## Testing
 
 ```bash

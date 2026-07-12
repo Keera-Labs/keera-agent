@@ -14,6 +14,7 @@ from fastapi_startkit.vite import ViteProvider
 
 from app.providers.app_provider import AppProvider
 from app.providers.plugin_provider import PluginProvider
+from app.providers.queue_provider import QueueProvider
 from app.providers.terminal_provider import TerminalProvider
 from config.database import DatabaseConfig
 from config.fastapi import FastAPIConfig
@@ -26,6 +27,7 @@ app = Application(
         LogProvider,
         (DatabaseProvider, DatabaseConfig),
         (FastAPIProvider, FastAPIConfig),
+        QueueProvider,
         McpProvider,
         AISkillProvider,
         (StorageProvider, StorageConfig),
