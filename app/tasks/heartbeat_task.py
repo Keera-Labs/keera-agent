@@ -6,7 +6,7 @@ from fastapi_startkit.environment import env
 
 from app.providers.queue_provider import broker
 
-logger = logging.getLogger("app.tasks")
+logger = logging.getLogger(__name__)
 
 # Cron expression for the periodic heartbeat, overridable via env. Default fires
 # once a minute (the finest granularity cron supports).
@@ -16,20 +16,6 @@ HEARTBEAT_CRON = env("KEERA_QUEUE_HEARTBEAT_CRON", "* * * * *")
 # run in the dispatching process, so this counter increments per dispatch and
 # makes successive heartbeats distinguishable.
 _heartbeat_sequence = itertools.count(1)
-
-
-@broker.task
-async def example_task(name: str) -> str:
-    """Example background job.
-
-    Dispatch it (fire-and-forget) from a controller or action with::
-
-        from app.tasks import example_task
-
-        task = await example_task.kiq("world")
-        result = await task.wait_result()  # -> "processed world"
-    """
-    return f"processed {name}"
 
 
 @broker.task(schedule=[{"cron": HEARTBEAT_CRON}])
