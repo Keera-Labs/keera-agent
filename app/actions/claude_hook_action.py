@@ -1,11 +1,12 @@
 import json
 import os
+from urllib.parse import urlparse
 
 from fastapi_startkit import Config
 
 from app.utils.json_utils import atomic_write_json
 
-# URL path fragments that identify keera-managed Claude hooks.
+# URL paths that identify keera-managed Claude hooks.
 _STOP_PATH = "/api/claude-stopped"
 _START_PATH = "/api/claude-started"
 
@@ -73,11 +74,11 @@ class ClaudeHookAction:
         return {}
 
     @staticmethod
-    def _upsert_hook(hook_list: list, path_fragment: str, new_url: str) -> bool:
-        """Update an existing keera hook's URL in place, else append one. True if changed."""
+    def _upsert_hook(hook_list: list, path: str, new_url: str) -> bool:
+        """Update an existing keera hook (matched by URL path) in place, else append. True if changed."""
         for group in hook_list:
             for h in group.get("hooks", []):
-                if h.get("type") == "http" and path_fragment in h.get("url", ""):
+                if urlparse(h.get("url", "")).path == path:
                     if h["url"] == new_url:
                         return False
                     h["url"] = new_url

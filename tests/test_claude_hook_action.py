@@ -65,3 +65,16 @@ class TestClaudeHookAction(TestCase):
     async def test_does_not_write_mcp_servers(self):
         ClaudeHookAction.prepare(self.dir, base_url=BASE).execute()
         self.assertNotIn("mcpServers", self._read())
+
+    async def test_preserves_unrelated_stop_hooks(self):
+        os.makedirs(os.path.dirname(self.settings_path))
+        with open(self.settings_path, "w") as f:
+            json.dump(
+                {"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "echo hi"}]}]}}, f
+            )
+
+        ClaudeHookAction.prepare(self.dir, base_url=BASE).execute()
+
+        stop = self._stop_hooks(self._read())
+        self.assertIn("echo hi", [h.get("command") for h in stop])
+        self.assertIn(f"{BASE}/api/claude-stopped", [h.get("url") for h in stop])
