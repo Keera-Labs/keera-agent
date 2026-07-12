@@ -19,13 +19,14 @@ class ClaudeHookCommand(Command):
         return asyncio.run(self.handle_async())
 
     async def handle_async(self):
+        from app.actions.claude_hook_action import ClaudeHookAction
         from app.models.Project import Project
-        from app.utils.hook_setup import BASE_URL, app_base_dir, ensure_claude_settings
+        from app.utils.hook_setup import BASE_URL, app_base_dir
 
         self.line(f"<info>Syncing .claude/settings.json from</info> {BASE_URL}")
 
         # The keera-agent app's own directory — this is what dist/build.sh relies on.
-        ensure_claude_settings(app_base_dir(), BASE_URL)
+        ClaudeHookAction.prepare(app_base_dir()).execute()
 
         projects = await Project.all()
         updated = skipped = unchanged = 0
@@ -37,7 +38,7 @@ class ClaudeHookCommand(Command):
                 )
                 skipped += 1
                 continue
-            if ensure_claude_settings(expanded, BASE_URL):
+            if ClaudeHookAction.prepare(expanded).execute():
                 self.line(f"<info>updated</info> {project.name} ({expanded})")
                 updated += 1
             else:
