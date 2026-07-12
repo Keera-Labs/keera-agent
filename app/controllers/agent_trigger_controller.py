@@ -232,7 +232,9 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     Parts 1 & 3 are handled by make_claude_session_monitor via WebsocketTerminal(ws=None).
     Part 2 – Reset has_session=False if the process exits in < _MIN_SESSION_LIFETIME seconds.
     """
-    from app.utils.hook_setup import BASE_URL as base_url
+    from fastapi_startkit import Config
+
+    base_url = Config.get("fastapi.app_url")
 
     # Remove any stale worktree/branch from a prior session to avoid git conflicts
     _cleanup_stale_worktree(agent, cwd)

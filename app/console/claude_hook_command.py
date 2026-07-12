@@ -6,27 +6,31 @@ from fastapi_startkit.console.command import Command
 
 class ClaudeHookCommand(Command):
     """
-    Re-sync the Claude Stop hook + MCP entry into the app's own .claude/settings.json
-    and every project's, from KEERA_APP_URL.
+    Re-sync the Claude hooks into the app's own .claude/settings.json and every
+    project's, from the configured app_url.
 
     claude:hook
     """
 
     name = "claude:hook"
-    description = "Re-sync .claude/settings.json (Claude hooks) into the app and every project from KEERA_APP_URL."
+    description = "Re-sync Claude hooks in .claude/settings.json into the app and every project."
 
     def handle(self):
         return asyncio.run(self.handle_async())
 
     async def handle_async(self):
+        from fastapi_startkit import Config
+        from fastapi_startkit.application import app
+
         from app.actions.claude_hook_action import ClaudeHookAction
         from app.models.Project import Project
-        from app.utils.hook_setup import BASE_URL, app_base_dir
 
-        self.line(f"<info>Syncing .claude/settings.json from</info> {BASE_URL}")
+        self.line(
+            f"<info>Syncing .claude/settings.json from</info> {Config.get('fastapi.app_url')}"
+        )
 
         # The keera-agent app's own directory — this is what dist/build.sh relies on.
-        ClaudeHookAction.prepare(app_base_dir()).execute()
+        ClaudeHookAction.prepare(str(app().base_path)).execute()
 
         projects = await Project.all()
         updated = skipped = unchanged = 0

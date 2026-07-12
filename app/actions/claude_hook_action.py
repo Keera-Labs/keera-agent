@@ -1,7 +1,8 @@
 import json
 import os
 
-from app.utils.hook_setup import BASE_URL
+from fastapi_startkit import Config
+
 from app.utils.json_utils import atomic_write_json
 
 # URL path fragments that identify keera-managed Claude hooks.
@@ -10,29 +11,31 @@ _START_PATH = "/api/claude-started"
 
 
 class ClaudeHookAction:
-    """Upsert keera-managed Claude hooks + MCP entry into a directory's .claude/settings.json.
+    """Upsert keera-managed Claude hooks into a directory's .claude/settings.json.
 
-    Writes the Stop hook, the UserPromptSubmit hook, and the keera-agent MCP
-    server entry, with URLs derived from the app URL. All other settings keys
-    are preserved and keera-managed hook URLs are updated in place, so the write
-    is idempotent. execute() returns True only when the file actually changed.
+    Writes the Stop and UserPromptSubmit hooks, with URLs derived from the
+    configured app_url. All other settings keys are preserved and keera-managed
+    hook URLs are updated in place, so the write is idempotent. execute() returns
+    True only when the file actually changed.
+
+    MCP server registration is intentionally out of scope — that lives in
+    .mcp.json via McpSettingWriteAction (the mcp:sync command).
 
     Directory-scoped (not project-id-scoped like McpSettingWriteAction) because
     the same writer serves both project directories and the app's own root.
     """
 
-    def __init__(
-        self, directory: str, base_url: str | None = None, project_path: str | None = None
-    ):
+    def __init__(self, directory: str, base_url: str | None = None):
         self.directory = directory
-        self.base_url = base_url or BASE_URL
-        self.project_path = project_path
+        self.base_url = base_url
 
     @staticmethod
-    def prepare(directory: str, base_url: str | None = None, project_path: str | None = None):
-        return ClaudeHookAction(directory, base_url=base_url, project_path=project_path)
+    def prepare(directory: str, base_url: str | None = None):
+        return ClaudeHookAction(directory, base_url=base_url)
 
     def execute(self) -> bool:
+        base_url = self.base_url or Config.get("fastapi.app_url")
+
         settings_path = os.path.join(self.directory, ".claude", "settings.json")
         os.makedirs(os.path.dirname(settings_path), exist_ok=True)
 
@@ -41,23 +44,11 @@ class ClaudeHookAction:
         hooks: dict = settings.setdefault("hooks", {})
         changed = False
         changed |= self._upsert_hook(
-            hooks.setdefault("Stop", []), _STOP_PATH, f"{self.base_url}{_STOP_PATH}"
+            hooks.setdefault("Stop", []), _STOP_PATH, f"{base_url}{_STOP_PATH}"
         )
         changed |= self._upsert_hook(
-            hooks.setdefault("UserPromptSubmit", []), _START_PATH, f"{self.base_url}{_START_PATH}"
+            hooks.setdefault("UserPromptSubmit", []), _START_PATH, f"{base_url}{_START_PATH}"
         )
-
-        # Register MCP server with X-Project-Path so the server scopes to the
-        # project root; project_path overrides directory for agent subdirs.
-        mcp_servers: dict = settings.setdefault("mcpServers", {})
-        desired_mcp = {
-            "type": "http",
-            "url": f"{self.base_url}/mcp",
-            "headers": {"X-Project-Path": self.project_path or self.directory},
-        }
-        if mcp_servers.get("keera-agent") != desired_mcp:
-            mcp_servers["keera-agent"] = desired_mcp
-            changed = True
 
         if settings.get("defaultMode") != "acceptEdits":
             settings["defaultMode"] = "acceptEdits"
