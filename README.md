@@ -44,6 +44,96 @@ uv run python artisan db:migrate
 npm run dev
 ```
 
+## Background tasks (queue)
+
+The app uses [TaskIQ](https://taskiq-python.github.io/) for async background jobs.
+It ships with an **in-memory broker** (`app/providers/queue_provider.py`), so there
+is nothing extra to install or run — no Redis, no Docker.
+
+Define a task in `app/tasks.py` and dispatch it (fire-and-forget) from a controller
+or action:
+
+```python
+from app.tasks import example_task
+
+task = await example_task.kiq("world")
+result = await task.wait_result()   # -> "processed world"
+```
+
+With the in-memory broker, `.kiq(...)` runs the task **in the dispatching process**,
+so a standalone worker isn't needed. `queue:work` is provided for the upgrade path
+below and prints a note if run against the in-memory broker:
+
+```bash
+uv run python artisan queue:work
+```
+
+### Check the queue is alive
+
+`app/tasks.py` ships a `heartbeat` task that returns a liveness payload
+(`status`, an incrementing `sequence`, and a UTC `timestamp`). Fire it on demand
+to confirm the queue runs end to end:
+
+```bash
+uv run python -c "
+import asyncio
+from app.providers.queue_provider import broker
+from app.tasks import heartbeat
+
+async def main():
+    await broker.startup()
+    task = await heartbeat.kiq()
+    print((await task.wait_result()).return_value)
+    await broker.shutdown()
+
+asyncio.run(main())
+"
+# -> {'status': 'alive', 'sequence': 1, 'timestamp': '...'}
+```
+
+### Run the heartbeat on a schedule (cron)
+
+The `heartbeat` task carries a cron `schedule` label, so the taskiq scheduler
+fires it periodically. Start the scheduler:
+
+```bash
+uv run python artisan queue:schedule
+# equivalent: uv run taskiq scheduler app.providers.queue_provider:scheduler app.tasks
+```
+
+Each tick logs a line like `queue heartbeat {'status': 'alive', 'sequence': N, ...}`.
+The cron defaults to every minute; override it with `KEERA_QUEUE_HEARTBEAT_CRON`
+(standard 5-field cron):
+
+```bash
+KEERA_QUEUE_HEARTBEAT_CRON="*/5 * * * *" uv run python artisan queue:schedule
+```
+
+Under the default in-memory broker the **scheduler process dispatches the task
+each tick and runs it in-process** — no separate worker needed. After the Redis
+upgrade below, the scheduler instead feeds the task to `queue:work` workers.
+
+### Upgrading to a networked broker (e.g. Redis)
+
+For durable, cross-process queuing, change the **one broker line** in
+`app/providers/queue_provider.py` and set `KEERA_QUEUE_REDIS_URL`:
+
+```python
+# app/providers/queue_provider.py
+from taskiq_redis import RedisStreamBroker
+from config.queue import QueueConfig
+
+broker = RedisStreamBroker(url=QueueConfig().redis_url)
+```
+
+Then add the driver, run Redis, and start the worker:
+
+```bash
+uv add taskiq-redis
+docker run -p 6379:6379 redis
+uv run python artisan queue:work        # or: uv run taskiq worker app.providers.queue_provider:broker app.tasks
+```
+
 ## Testing
 
 ```bash

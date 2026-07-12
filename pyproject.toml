@@ -7,6 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
     "fastapi-startkit[database,fastapi,sqlite,vite]>=0.45.0",
     "playwright>=1.60.0",
+    "taskiq>=0.12.4",
 ]
 
 [dependency-groups]
