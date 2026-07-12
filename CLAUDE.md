@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Branching strategy
+
+- `dev` is the integration branch — **all pull requests target `dev`, not `main`.**
+- `main` is the stable/release branch; `dev` is periodically merged into `main` to cut a release.
+- Cut feature/task branches off `dev` and open their PRs back into `dev`.
+
 ## Commands
 
 **Install dependencies:**
