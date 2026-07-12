@@ -232,9 +232,9 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     Parts 1 & 3 are handled by make_claude_session_monitor via WebsocketTerminal(ws=None).
     Part 2 – Reset has_session=False if the process exits in < _MIN_SESSION_LIFETIME seconds.
     """
-    from fastapi_startkit import Config
+    from fastapi_startkit.environment import env
 
-    base_url = Config.get("fastapi.app_url")
+    base_url = env("KEERA_APP_URL", "http://127.0.0.1:4545")
 
     # Remove any stale worktree/branch from a prior session to avoid git conflicts
     _cleanup_stale_worktree(agent, cwd)
