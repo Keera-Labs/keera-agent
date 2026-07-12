@@ -1,5 +1,5 @@
 import ProjectCreateModal from "@/components/project/ProjectCreateModal"
-import { useLocalStorage } from "@/hooks/useLocalStorage"
+import { useAppLayout } from "@/layouts/context/AppLayoutContext"
 import useProjects from "@/queries/useProjects"
 import { color } from "@/tokens"
 import type { Project } from "@/types/type"
@@ -59,7 +59,7 @@ export default function Sidebar({
     claudeStatus: Record<number, "running" | "done">
     onCreateWorkspace: () => void
 }) {
-    const [filterWorkspaceId, setFilterWorkspaceId] = useLocalStorage<number | null>("keera:selectedWorkspaceId", null)
+    const { selectedWorkspaceId: filterWorkspaceId, setSelectedWorkspaceId: setFilterWorkspaceId } = useAppLayout()
     const { component } = usePage()
     const isSettingsPage = component === "Settings"
 

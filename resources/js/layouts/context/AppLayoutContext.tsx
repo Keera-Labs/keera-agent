@@ -9,6 +9,7 @@ import { useAgents, normalizeAgent } from '@/queries/agents'
 import type { AgentTemplate } from '@/types/agent'
 import { makeTerminal } from '@/hooks/useTerminalSessions'
 import type { Session } from '@/hooks/useTerminalSessions'
+import { useLocalStorage } from '@/hooks/useLocalStorage'
 import type { ProjectView } from '@/layouts/sidebar/Sidebar'
 import { useTasks } from '@/queries/tasks'
 import useProjects, { PROJECTS_QUERY_KEY } from '@/queries/useProjects'
@@ -41,6 +42,11 @@ export interface AppLayoutContextValue {
     setShowProjectSearch: (v: boolean) => void
 
     // ── View state ────────────────────────────────────────────────────────────
+    // Sidebar workspace filter — shared here (not per-component useLocalStorage)
+    // so the sidebar and dashboard read one reactive source and stay in sync
+    // within a tab. null = "All Projects".
+    selectedWorkspaceId: number | null
+    setSelectedWorkspaceId: (id: number | null) => void
     projectView: ProjectView
     setProjectView: (v: ProjectView) => void
     activeAgentId: number | null
@@ -201,6 +207,8 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     const [outputChars, setOutputChars] = useState<Record<number, number>>({})
 
     // ── View state ────────────────────────────────────────────────────────────
+    const [selectedWorkspaceId, setSelectedWorkspaceId] =
+        useLocalStorage<number | null>('keera:selectedWorkspaceId', null)
     const [projectView, setProjectView] = useState<ProjectView>('agents')
     const [isDraggingOver, setIsDraggingOver] = useState(false)
     const [agentTemplates, setAgentTemplates] = useState<AgentTemplate[]>([])
@@ -565,6 +573,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         editingAgent, setEditingAgent,
         showProjectSearch, setShowProjectSearch,
         // View state
+        selectedWorkspaceId, setSelectedWorkspaceId,
         projectView, setProjectView,
         activeAgentId, setActiveAgentId,
         isDraggingOver, setIsDraggingOver,
