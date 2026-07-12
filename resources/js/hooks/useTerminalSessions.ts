@@ -35,6 +35,21 @@ export function makeTerminal() {
     })
 }
 
+// Attach a terminal to a container, re-parenting it if it is already open.
+// xterm's Terminal.open() only mounts on its FIRST call and is a no-op afterwards
+// — it never moves an already-open terminal to a new parent. The persistent-layout
+// design shuttles a live terminal between its off-screen holder and the visible
+// agent-detail slot, so re-parenting must move the terminal's root element itself;
+// relying on open() alone silently leaves the terminal in its old parent (blank
+// slot) or lets its DOM die with an unmounting container.
+export function attachTerminal(term: Terminal, container: HTMLElement) {
+    if (term.element) {
+        if (term.element.parentElement !== container) container.appendChild(term.element)
+    } else {
+        term.open(container)
+    }
+}
+
 export interface UseTerminalSessionsParams {
     activeProject: Project | null
     projectAgents: ProjectAgent[]
