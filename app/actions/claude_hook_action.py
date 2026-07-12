@@ -26,16 +26,15 @@ class ClaudeHookAction:
     the same writer serves both project directories and the app's own root.
     """
 
-    def __init__(self, directory: str, base_url: str | None = None):
+    def __init__(self, directory: str):
         self.directory = directory
-        self.base_url = base_url
 
     @staticmethod
-    def prepare(directory: str, base_url: str | None = None):
-        return ClaudeHookAction(directory, base_url=base_url)
+    def prepare(directory: str):
+        return ClaudeHookAction(directory)
 
     def execute(self) -> bool:
-        base_url = self.base_url or Config.get("fastapi.app_url")
+        base_url = Config.get("fastapi.app_url")
 
         settings_path = os.path.join(self.directory, ".claude", "settings.json")
         os.makedirs(os.path.dirname(settings_path), exist_ok=True)
