@@ -16,7 +16,7 @@ from taskiq.schedule_sources import LabelScheduleSource
 #     broker = RedisStreamBroker(url=QueueConfig().redis_url)
 broker = InMemoryBroker()
 
-# Scheduler for cron/interval tasks (see the ``schedule`` labels in app/tasks.py).
+# Scheduler for cron/interval tasks (see the ``schedule`` labels in app/tasks/).
 # Run it with ``uv run python artisan queue:schedule``. Under InMemoryBroker the
 # scheduler process dispatches each due task and executes it in-process; with a
 # networked broker the same scheduler feeds separate ``queue:work`` workers.
@@ -24,6 +24,12 @@ scheduler = TaskiqScheduler(broker, sources=[LabelScheduleSource(broker)])
 
 
 class QueueProvider(Provider):
+    # Registered bare (no (QueueProvider, QueueConfig) tuple) on purpose: taskiq
+    # requires the broker at module scope so ``@broker.task`` decorators and the
+    # scheduler/worker CLIs can import it by path, so a provider instance can't
+    # consume ``self.resolve_config(QueueConfig)`` — the resolved config would be
+    # unused. QueueConfig is read only on the Redis upgrade path; that is where
+    # the (QueueProvider, QueueConfig) tuple + resolve_config wiring is added.
     provider_key = "queue"
 
     def register(self) -> None:
