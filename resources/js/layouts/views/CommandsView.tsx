@@ -118,8 +118,16 @@ export function CommandsView({ project }: { project: Project }) {
     const loadCommands = useCallback(async (signal?: AbortSignal) => {
         setLoadState('loading')
         try {
-            const r = await fetch(`/api/projects/${projectId}/commands`, { signal })
-            if (!r.ok) throw new Error(`HTTP ${r.status}`)
+            const r = await fetch(`/api/projects/${projectId}/commands`, {
+                signal,
+                headers: { Accept: 'application/json' },
+            })
+            // The route is typed `{project_id:int}`; a malformed id makes it miss
+            // and 303-redirect to the SPA shell (HTML). fetch follows that, so r.ok
+            // is true — guard on redirect/content-type so an HTML body surfaces as a
+            // clear load failure instead of an opaque r.json() parse error.
+            const isJson = r.headers.get('content-type')?.includes('application/json')
+            if (!r.ok || r.redirected || !isJson) throw new Error(`Unexpected response (${r.status})`)
             const data = await r.json()
             setCommands(Array.isArray(data) ? data : [])
             setLoadState('ready')
