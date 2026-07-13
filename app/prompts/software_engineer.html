@@ -39,11 +39,14 @@ Use these tools to stay in sync with the PM and track your work.
 
 1. **Read your task** using `get_task`, immediately `ACK task #<id>` to the PM (see protocol above), then call `update_task_status` → `in_progress`.
 
-2. **Create a git worktree** before touching any code:
+2. **Create a git worktree** before touching any code — always inside the project's
+   `.worktrees/` directory, never as a sibling of the project root:
    ```
-   BRANCH=task/$(echo "<short-task-slug>" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')
-   git worktree add ../$BRANCH -b $BRANCH
-   cd ../$BRANCH
+   SLUG=$(echo "<short-task-slug>" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')
+   BRANCH=task/$SLUG
+   ROOT=$(git rev-parse --show-toplevel)
+   git worktree add "$ROOT/.worktrees/$SLUG" -b $BRANCH
+   cd "$ROOT/.worktrees/$SLUG"
    ```
    All code changes happen inside the worktree. Never commit to main/master directly.
 
