@@ -1,12 +1,10 @@
 import json
 
-from fastapi_startkit.fastapi.testing import HttpTestCase
-
 from app.controllers.global_settings_controller import write_global_setting
 from app.models.Agent import Agent
 from app.models.GlobalSettings import GlobalSettings
 from app.models.Project import Project
-from bootstrap.application import app
+from tests.test_case import TestCase
 
 
 def _attrs(response) -> dict:
@@ -14,10 +12,7 @@ def _attrs(response) -> dict:
     return response.json()["data"]["attributes"]
 
 
-class TestAgents(HttpTestCase):
-    def get_application(self):
-        return app
-
+class TestAgents(TestCase):
     async def asyncSetUp(self):
         await super().asyncSetUp()
         await Agent.where("id", ">", 0).delete()
@@ -205,10 +200,7 @@ class TestAgents(HttpTestCase):
         self.assertIn("plan_mode", found["attributes"])
 
 
-class TestAgentTypeEnforcement(HttpTestCase):
-    def get_application(self):
-        return app
-
+class TestAgentTypeEnforcement(TestCase):
     async def asyncSetUp(self):
         await super().asyncSetUp()
         await Agent.where("id", ">", 0).delete()
@@ -332,11 +324,8 @@ class TestAgentTypeEnforcement(HttpTestCase):
         self.assertFalse(pm_agent["attributes"]["plan_mode"])
 
 
-class TestAgentLimit(HttpTestCase):
+class TestAgentLimit(TestCase):
     """Tests for max_agents_per_project enforcement."""
-
-    def get_application(self):
-        return app
 
     async def asyncSetUp(self):
         await super().asyncSetUp()
@@ -420,11 +409,8 @@ class TestAgentLimit(HttpTestCase):
         self.assertEqual(r3.status_code, 200)
 
 
-class TestGlobalSettings(HttpTestCase):
+class TestGlobalSettings(TestCase):
     """Tests for the /api/global-settings endpoints."""
-
-    def get_application(self):
-        return app
 
     async def asyncSetUp(self):
         await super().asyncSetUp()
