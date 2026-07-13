@@ -21,8 +21,6 @@ class AgentStoreRequest(BaseModel):
     orchestrator_id: Optional[int] = None
     # Transient field (not stored): initial message to send after creation.
     message: Optional[str] = None
-    # Required: the task complexity drives the model. It is the intent, so it
-    # always wins over any explicit `model`.
     complexity: TaskComplexity
 
     @field_validator("name", "model")

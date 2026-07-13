@@ -1,5 +1,7 @@
 from fastapi_startkit.masoniteorm import Model
 
+from app.constant.complexity import TaskComplexity
+
 TERMINAL_STATUSES = {"completed", "cancelled"}
 
 
@@ -15,7 +17,7 @@ class Task(Model):
     testing_methods: list
     validation_steps: list
     priority: str | None
-    complexity: str | None
+    complexity: TaskComplexity
     status: str | None
     completed_at: str | None
     created_at: str | None
