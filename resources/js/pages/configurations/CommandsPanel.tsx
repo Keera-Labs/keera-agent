@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { FitAddon } from '@xterm/addon-fit'
+import { Plus, Terminal, X } from 'lucide-react'
 import { color } from '@/tokens'
 import { makeTerminal } from '@/hooks/useTerminalSessions'
 import type { Session } from '@/hooks/useTerminalSessions'
@@ -9,15 +10,6 @@ import { CommandRow } from './CommandRow'
 import type { Command } from './types'
 
 const cmdPulseStyle = `@keyframes cmd-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`
-
-// Terminal/command icon reused across the header and empty state.
-function TerminalIcon({ size, fill }: { size: number; fill: string }) {
-    return (
-        <svg width={size} height={size} viewBox="0 0 16 16" fill={fill}>
-            <path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25V2.75zm1.75-.25a.25.25 0 00-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V2.75a.25.25 0 00-.25-.25H1.75zM3.5 6.25a.75.75 0 000 1.5h.268l-.01.034L2.76 10.5a.75.75 0 001.44.42l.04-.138H6.76l.04.138a.75.75 0 001.44-.42L7.242 7.784l-.01-.034H7.5a.75.75 0 000-1.5h-4zm.751 1.5H6.25l-.609 2.099H4.86L4.251 7.75zm5.5-1.5a.75.75 0 000 1.5h3.5a.75.75 0 000-1.5h-3.5zm0 3a.75.75 0 000 1.5h3.5a.75.75 0 000-1.5h-3.5z"/>
-        </svg>
-    )
-}
 
 // Project-scoped Commands panel: create/edit/delete shell commands and run them
 // in an interactive PTY terminal streamed over the command WebSocket. Initial
@@ -186,7 +178,7 @@ export function CommandsPanel({
                 display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0,
                 background: color.bgCanvas,
             }}>
-                <TerminalIcon size={13} fill={color.textMuted} />
+                <Terminal size={13} color={color.textMuted} />
                 <span style={{ color: color.textPrimary, fontSize: '13px', fontWeight: 600, flex: 1 }}>Commands</span>
                 {runningCount > 0 && (
                     <span style={{
@@ -210,9 +202,7 @@ export function CommandsPanel({
                 >
                     {showForm ? '× Cancel' : (
                         <>
-                            <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
-                                <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
-                            </svg>
+                            <Plus size={10} />
                             New command
                         </>
                     )}
@@ -246,7 +236,7 @@ export function CommandsPanel({
                                 background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                             }}>
-                                <TerminalIcon size={22} fill={color.textFaint} />
+                                <Terminal size={22} color={color.textFaint} />
                             </div>
                             <div>
                                 <p style={{ margin: '0 0 4px', color: color.textSecondary, fontSize: '13px', fontWeight: 500 }}>
@@ -296,9 +286,7 @@ export function CommandsPanel({
                                 onMouseEnter={e => { e.currentTarget.style.color = color.textMuted; e.currentTarget.style.background = color.bgSurface }}
                                 onMouseLeave={e => { e.currentTarget.style.color = color.textFaint; e.currentTarget.style.background = 'transparent' }}
                             >
-                                <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
-                                    <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
-                                </svg>
+                                <Plus size={10} />
                                 Add command
                             </button>
                         </div>
@@ -334,12 +322,13 @@ export function CommandsPanel({
                                     onClick={() => setOutputCmd(null)}
                                     style={{
                                         background: 'transparent', border: 'none',
-                                        color: color.textFaint, fontSize: '18px', cursor: 'pointer',
+                                        color: color.textFaint, cursor: 'pointer',
                                         padding: '0 2px', lineHeight: 1, borderRadius: '4px',
+                                        display: 'flex', alignItems: 'center',
                                     }}
                                     onMouseEnter={e => (e.currentTarget.style.color = color.textSecondary)}
                                     onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
-                                >×</button>
+                                ><X size={14} /></button>
                             </div>
                             {/* SHELL section */}
                             <div>
