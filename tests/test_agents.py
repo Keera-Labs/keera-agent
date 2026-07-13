@@ -365,18 +365,33 @@ class TestAgentLimit(HttpTestCase):
 
     async def test_create_agents_up_to_limit(self):
         """Should succeed creating agents up to the configured limit."""
-        r1 = await self.post(f"/api/projects/{self.project_id}/agents", json={"name": "Agent 1", "complexity": "medium"})
+        r1 = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={"name": "Agent 1", "complexity": "medium"},
+        )
         self.assertEqual(r1.status_code, 200)
 
-        r2 = await self.post(f"/api/projects/{self.project_id}/agents", json={"name": "Agent 2", "complexity": "medium"})
+        r2 = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={"name": "Agent 2", "complexity": "medium"},
+        )
         self.assertEqual(r2.status_code, 200)
 
     async def test_create_agent_beyond_limit_returns_422(self):
         """Creating an agent when the project is at the limit returns 422."""
-        await self.post(f"/api/projects/{self.project_id}/agents", json={"name": "Agent 1", "complexity": "medium"})
-        await self.post(f"/api/projects/{self.project_id}/agents", json={"name": "Agent 2", "complexity": "medium"})
+        await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={"name": "Agent 1", "complexity": "medium"},
+        )
+        await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={"name": "Agent 2", "complexity": "medium"},
+        )
 
-        r3 = await self.post(f"/api/projects/{self.project_id}/agents", json={"name": "Agent 3", "complexity": "medium"})
+        r3 = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={"name": "Agent 3", "complexity": "medium"},
+        )
         self.assertEqual(r3.status_code, 422)
         body = r3.json()
         self.assertIn("error", body)
@@ -384,15 +399,24 @@ class TestAgentLimit(HttpTestCase):
 
     async def test_deleted_agent_does_not_count_toward_limit(self):
         """Soft-deleted agents should not count against the limit."""
-        r1 = await self.post(f"/api/projects/{self.project_id}/agents", json={"name": "Agent 1", "complexity": "medium"})
-        await self.post(f"/api/projects/{self.project_id}/agents", json={"name": "Agent 2", "complexity": "medium"})
+        r1 = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={"name": "Agent 1", "complexity": "medium"},
+        )
+        await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={"name": "Agent 2", "complexity": "medium"},
+        )
         agent1_id = _attrs(r1)["id"]
 
         # Delete one agent
         await self.client.delete(f"/api/agents/{agent1_id}")
 
         # Now we should be able to create another agent
-        r3 = await self.post(f"/api/projects/{self.project_id}/agents", json={"name": "Agent 3", "complexity": "medium"})
+        r3 = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={"name": "Agent 3", "complexity": "medium"},
+        )
         self.assertEqual(r3.status_code, 200)
 
 
