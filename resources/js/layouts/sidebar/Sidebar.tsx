@@ -1,6 +1,6 @@
 import ProjectCreateModal from "@/components/project/ProjectCreateModal"
-import { useAppLayout } from "@/layouts/context/AppLayoutContext"
 import useProjects from "@/queries/useProjects"
+import { useWorkspaceStore } from "@/stores/workspaceStore"
 import { color } from "@/tokens"
 import type { Project } from "@/types/type"
 import { router, usePage } from "@inertiajs/react"
@@ -59,7 +59,8 @@ export default function Sidebar({
     claudeStatus: Record<number, "running" | "done">
     onCreateWorkspace: () => void
 }) {
-    const { selectedWorkspaceId: filterWorkspaceId, setSelectedWorkspaceId: setFilterWorkspaceId } = useAppLayout()
+    const filterWorkspaceId = useWorkspaceStore(s => s.currentWorkspaceId)
+    const setFilterWorkspaceId = useWorkspaceStore(s => s.setCurrentWorkspaceId)
     const { component } = usePage()
     const isSettingsPage = component === "Settings"
 

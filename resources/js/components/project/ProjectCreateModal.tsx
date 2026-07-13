@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from 'react'
 import type { Project } from '@/types/type'
 import Modal from '@/components/ui/Modal'
-import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import useProjects from '@/queries/useProjects'
+import useWorkspaces from '@/queries/useWorkspaces'
 
 const LANGUAGES = ['Python', 'TypeScript', 'JavaScript', 'Go', 'Rust', 'Other']
 
@@ -26,7 +26,7 @@ export default function ProjectCreateModal({
     trigger: ReactNode
     defaultWorkspaceId: number | null
 }) {
-    const { workspaces } = useAppLayout()
+    const { workspaces } = useWorkspaces()
     const { handleProjectCreated } = useProjects()
     const [name, setName] = useState('')
     const [path, setPath] = useState('')

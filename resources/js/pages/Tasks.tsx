@@ -5,8 +5,8 @@ import { ProjectLayout } from '@/layouts/ProjectLayout'
 import { TasksView } from '@/layouts/views/TasksView'
 import { CreateTaskModal } from '@/components/modals/CreateTaskModal'
 import { TaskDetailModal } from '@/components/modals/TaskDetailModal'
-import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import useProjects from '@/queries/useProjects'
+import useWorkspaces from '@/queries/useWorkspaces'
 import type { Task } from '@/types/type'
 
 // Self-contained tasks page. Data is delivered as Inertia props by
@@ -16,7 +16,7 @@ import type { Task } from '@/types/type'
 // create-task project picker; they are not task state.)
 export default function Tasks() {
     const { props } = usePage<{ project: string; project_id: number | null; tasks: Task[] }>()
-    const { workspaces } = useAppLayout()
+    const { workspaces } = useWorkspaces()
     const { projects } = useProjects()
 
     const tasks = props.tasks ?? []

@@ -1,4 +1,5 @@
 import { useWorkspace } from "@/queries/workspace"
+import useWorkspaces from "@/queries/useWorkspaces"
 import { useAppLayout } from "@/layouts/context/AppLayoutContext"
 import { color } from "@/tokens"
 import { useEffect, useRef, useState } from "react"
@@ -12,7 +13,8 @@ export function WorkspacePicker({
     onSelect: (id: number | null) => void
     onCreateWorkspace: () => void
 }) {
-    const { workspaces, handleWorkspaceDeleted } = useAppLayout()
+    const { handleWorkspaceDeleted } = useAppLayout()
+    const { workspaces } = useWorkspaces()
     const { destroy } = useWorkspace()
     const [open, setOpen] = useState(false)
     const ref = useRef<HTMLDivElement>(null)
