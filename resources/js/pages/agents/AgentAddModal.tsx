@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { color } from '@/tokens'
 import Modal from '@/components/ui/Modal'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
+import { useProjectStore } from '@/stores/projectStore'
 import type { ProjectAgent, AgentFlags } from '@/queries/agents'
 import { normalizeAgent } from '@/queries/agents'
 import type { AgentTemplate } from '@/types/agent'
@@ -311,7 +312,8 @@ export function AgentAddModal({ trigger, onOpenChange }: {
     trigger: ReactNode
     onOpenChange?: (open: boolean) => void
 }) {
-    const { activeProject, agentTemplates, agentHook, maxAgentsPerProject } = useAppLayout()
+    const { agentTemplates, agentHook, maxAgentsPerProject } = useAppLayout()
+    const activeProject = useProjectStore(s => s.activeProject)
 
     if (activeProject?.id == null) return <>{trigger}</>
 

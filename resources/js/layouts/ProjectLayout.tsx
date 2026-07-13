@@ -5,6 +5,7 @@ import AgentsIndex from '@/pages/agents/Index'
 import { color } from '@/tokens'
 import type { ProjectView } from './sidebar/Sidebar'
 import { DotsIndicator } from './sidebar/Project'
+import { useProjectStore } from '@/stores/projectStore'
 
 // ─── Claude status badge ───────────────────────────────────────────────────────
 
@@ -30,11 +31,11 @@ function ClaudeStatusBadge({ status }: { status?: 'running' | 'done' }) {
 
 export function ProjectLayout({ children }: { children: React.ReactNode }) {
     const {
-        activeProject,
         claudeStatus,
         projectView, setProjectView,
         sessions, agentSessions,
     } = useAppLayout()
+    const activeProject = useProjectStore(s => s.activeProject)
 
     // Live PTY sessions across all projects (PM + agent terminals).
     const runningCount = sessions.current.size + agentSessions.current.size

@@ -3,7 +3,7 @@ import type React from 'react'
 import { usePage } from '@inertiajs/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { FitAddon } from '@xterm/addon-fit'
-import type { Project, Workspace, Task } from '@/types/type'
+import type { Workspace, Task } from '@/types/type'
 import { useAgents, normalizeAgent } from '@/queries/agents'
 import type { AgentTemplate } from '@/types/agent'
 import { makeTerminal } from '@/hooks/useTerminalSessions'
@@ -12,15 +12,15 @@ import type { ProjectView } from '@/layouts/sidebar/Sidebar'
 import { useTasks } from '@/queries/tasks'
 import useProjects, { PROJECTS_QUERY_KEY } from '@/queries/useProjects'
 import { WORKSPACES_QUERY_KEY } from '@/queries/useWorkspaces'
+import { useProjectStore } from '@/stores/projectStore'
 
 // ─── Context value interface ──────────────────────────────────────────────────
 
 export interface AppLayoutContextValue {
     // ── Data ─────────────────────────────────────────────────────────────────
     // Project and workspace lists are owned by their own React Query hooks
-    // (useProjects / useWorkspaces); the layout only derives activeProject.
-    // Consumers that need a full list call those hooks directly.
-    activeProject: Project | null
+    // (useProjects / useWorkspaces); the layout derives activeProject and pushes
+    // it into useProjectStore. Consumers read it from that store directly.
     tasks: Task[]
 
     // ── Modal state ───────────────────────────────────────────────────────────
@@ -220,6 +220,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
 
     // ── Derived data ──────────────────────────────────────────────────────────
     const activeProject = projects.find(p => p.slug === projectName) ?? projects[0] ?? null
+    useProjectStore.getState().setActiveProject(activeProject)
 
     const taskHook = useTasks(activeProject?.id ?? null)
     const agentHook = useAgents(activeProject?.id ?? null)
@@ -543,7 +544,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
 
     const value: AppLayoutContextValue = {
         // Data
-        activeProject, tasks,
+        tasks,
         // Modal state
         showWorkspaceModal, setShowWorkspaceModal,
         showGlobalSettings, setShowGlobalSettings,

@@ -8,6 +8,7 @@ import { agentColor } from '@/utils/agentColor'
 import { useAgents } from '@/queries/agents'
 import { attachTerminal } from '@/hooks/useTerminalSessions'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
+import { useProjectStore } from '@/stores/projectStore'
 import { DotsIndicator } from '@/layouts/sidebar/Project'
 import { AgentsListPanel } from './AgentsListPanel'
 import { ProjectOverview } from './ProjectOverview'
@@ -41,7 +42,6 @@ function ClaudeStatusBadge({ status }: { status?: 'running' | 'done' }) {
 
 export default function AgentDetail() {
     const {
-        activeProject,
         activeAgentId,
         setActiveAgentId,
         agentSessions,
@@ -54,6 +54,7 @@ export default function AgentDetail() {
         fileInputRef,
         claudeStatus,
     } = useAppLayout()
+    const activeProject = useProjectStore(s => s.activeProject)
 
     const { agents: projectAgents } = useAgents(activeProject?.id ?? null)
 
