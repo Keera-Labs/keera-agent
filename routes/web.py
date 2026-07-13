@@ -13,6 +13,7 @@ from app.controllers import (
     broadcasting_controller,
     claude_hook_controller,
     command_controller,
+    configurations_page_controller,
     dashboard_controller,
     default_permission_controller,
     global_settings_controller,
@@ -123,6 +124,7 @@ router.post("/api/broadcasting/ping", broadcasting_controller.ping)
 
 # Wildcard page routes — must come last
 router.get("/", dashboard_controller.page)
+router.get("/{project}/configurations", configurations_page_controller.index)
 router.get("/{project}/tasks", tasks_page_controller.tasks_page)
 router.get("/{project}/agents/{agent_id}", home_controller.agent_page)
 router.get("/{project}", home_controller.project_home)

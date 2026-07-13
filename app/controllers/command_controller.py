@@ -74,18 +74,26 @@ def _stream_output(cmd_id: int, proc: subprocess.Popen, start_ts: float):
     runs_buf.appendleft(run_record)
 
 
-async def index(request: Request, project_id: int):
+async def commands_for_project(project_id: int) -> list[dict]:
+    """Serialized commands for a project, reconciling stale 'running' rows.
+
+    A command left "running" with no live process (server restarted mid-run) is
+    corrected to "stopped" so the UI never shows a phantom process. Shared by the
+    JSON `index` endpoint and the Configurations page controller.
+    """
     commands = await Command.where("project_id", project_id).get()
-    # Reconcile DB status with live processes
     result = []
     for c in commands:
         if c.status == "running" and c.id not in _processes:
-            # Process died while server was down — mark stopped
             c.status = "stopped"
             c.pid = None
             await c.save()
         result.append(_serialize(c))
-    return JSONResponse(result)
+    return result
+
+
+async def index(request: Request, project_id: int):
+    return JSONResponse(await commands_for_project(project_id))
 
 
 async def store(request: Request, project_id: int):

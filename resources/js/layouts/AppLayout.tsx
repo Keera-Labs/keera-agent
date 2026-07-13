@@ -47,7 +47,8 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
 
     const { component } = usePage()
     const isTasksPage = component === "Tasks"
-    const activeView: ProjectView = isTasksPage ? "tasks" : projectView
+    const isConfigPage = component === "Configurations"
+    const activeView: ProjectView = isTasksPage ? "tasks" : isConfigPage ? "commands" : projectView
 
     return (
         <div className="flex flex-col w-full h-screen overflow-hidden" style={{ background: color.bgCanvas }}>
@@ -57,12 +58,11 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
                     activeProject={activeProject}
                     projectView={activeView}
                     onChangeView={(view) => {
-                        if (view === "tasks" && activeProject) {
-                            router.visit(`/${activeProject.slug}/tasks`)
-                            return
-                        }
-                        setProjectView(view)
-                        if (isTasksPage) router.visit(`/${activeProject?.slug}`)
+                        if (!activeProject) { setProjectView(view); return }
+                        if (view === "tasks") { router.visit(`/${activeProject.slug}/tasks`); return }
+                        if (view === "commands") { router.visit(`/${activeProject.slug}/configurations`); return }
+                        setProjectView("agents")
+                        if (isTasksPage || isConfigPage) router.visit(`/${activeProject.slug}`)
                     }}
                     taskCount={tasks.length}
                     activeId={activeProject?.id ?? null}
