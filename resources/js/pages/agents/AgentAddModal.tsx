@@ -5,7 +5,7 @@ import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import type { ProjectAgent, AgentFlags } from '@/queries/agents'
 import { normalizeAgent } from '@/queries/agents'
 import type { AgentTemplate } from '@/types/agent'
-import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, MODELS } from '@/types/agent'
+import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS } from '@/types/agent'
 import { labelStyle, inputStyle, cancelBtnStyle, submitBtnStyle, flagRowStyle, toggleStyle } from '@/components/ui/styles'
 
 /**
@@ -31,7 +31,7 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
     const [agentType, setAgentType] = useState<string>('software_engineer')
     const [description, setDescription] = useState(() => findBuiltinForType(templates, 'software_engineer')?.description ?? '')
     const [systemPrompt, setSystemPrompt] = useState(() => findBuiltinForType(templates, 'software_engineer')?.system_prompt ?? '')
-    const [model, setModel] = useState('claude-opus-4-8')
+    const [complexity, setComplexity] = useState('medium')
     const [flags, setFlags] = useState<AgentFlags>({})
     const [planMode, setPlanMode] = useState(false)
     const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null)
@@ -59,14 +59,12 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
             setAgentType('software_engineer')
             setDescription('')
             setSystemPrompt('')
-            setModel('claude-opus-4-8')
             setFlags({})
             setPlanMode(false)
             return
         }
         setSelectedTemplateId(tpl.id)
         setAgentType(tpl.agent_type)
-        setModel(tpl.model)
         setFlags(tpl.flags ?? {})
         setPlanMode(!!tpl.plan_mode)
         setDescription(tpl.description ?? '')
@@ -85,7 +83,7 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
             const res = await fetch(`/api/projects/${projectId}/agents`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, agent_type: agentType, description, system_prompt: systemPrompt, model, flags, plan_mode: planMode }),
+                body: JSON.stringify({ name, agent_type: agentType, description, system_prompt: systemPrompt, complexity, flags, plan_mode: planMode }),
             })
             const data = await res.json()
             if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
@@ -189,9 +187,11 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
             </label>
 
             <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <span style={labelStyle}>Model</span>
-                <select value={model} onChange={e => setModel(e.target.value)} style={inputStyle}>
-                    {MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                <span style={labelStyle}>Complexity</span>
+                <select value={complexity} onChange={e => setComplexity(e.target.value)} style={inputStyle}>
+                    <option value="easy">Easy</option>
+                    <option value="medium">Medium</option>
+                    <option value="hard">Hard</option>
                 </select>
             </label>
 

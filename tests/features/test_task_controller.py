@@ -76,6 +76,32 @@ class TestTaskController(TestCase, DatabaseTransaction):
         response = await self.post(self.tasks_url, json={})
         response.assert_status(422)
 
+    async def test_store_accepts_valid_complexity(self):
+        response = await self.post(self.tasks_url, json={"title": "Hard one", "complexity": "hard"})
+        response.assert_ok().assert_json(_data_attrs(lambda a: a.where("complexity", "hard").etc()))
+
+    async def test_store_rejects_invalid_complexity(self):
+        response = await self.post(self.tasks_url, json={"title": "Bad", "complexity": "trivial"})
+        response.assert_status(422)
+
+    async def test_store_defaults_complexity_to_null(self):
+        response = await self.post(self.tasks_url, json={"title": "No complexity"})
+        response.assert_ok().assert_json(
+            _data_attrs(lambda a: a.where("complexity", lambda v: v is None).etc())
+        )
+
+    async def test_update_sets_complexity(self):
+        task = await TaskFactory.new().create(project_id=self.project.id)
+
+        response = await self.patch(f"/api/tasks/{task.id}", json={"complexity": "easy"})
+        response.assert_ok().assert_json(_data_attrs(lambda a: a.where("complexity", "easy").etc()))
+
+    async def test_update_rejects_invalid_complexity(self):
+        task = await TaskFactory.new().create(project_id=self.project.id)
+
+        response = await self.patch(f"/api/tasks/{task.id}", json={"complexity": "nope"})
+        response.assert_status(422)
+
     # --- index ---
 
     async def test_index_returns_active_tasks_as_lists(self):
