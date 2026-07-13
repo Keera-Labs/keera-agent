@@ -1,5 +1,4 @@
 import { useState, useRef } from 'react'
-import { color } from '@/tokens'
 
 export function TagInput({
     tags,
@@ -41,31 +40,23 @@ export function TagInput({
     return (
         <div
             onClick={() => inputRef.current?.focus()}
-            style={{
-                display: 'flex', flexWrap: 'wrap', gap: '5px', alignItems: 'center',
-                background: color.bgBase, border: `1px solid ${color.borderMuted}`, borderRadius: '6px',
-                padding: '6px 8px', minHeight: '38px', cursor: 'text',
-                opacity: disabled ? 0.5 : 1,
-            }}
+            className={`flex flex-wrap gap-[5px] items-center bg-canvas border border-stroke rounded py-1.5 px-2 min-h-[38px] cursor-text ${disabled ? 'opacity-50' : 'opacity-100'}`}
         >
             {tags.map((tag, i) => (
-                <span key={i} style={{
-                    display: 'inline-flex', alignItems: 'center', gap: '4px',
-                    background: tagColor + '22', border: `1px solid ${tagColor}55`,
-                    borderRadius: '4px', padding: '2px 6px',
-                    fontFamily: '"JetBrains Mono", monospace', fontSize: '11px',
-                    color: tagColor, lineHeight: '1.4',
-                }}>
+                <span key={i}
+                    className="inline-flex items-center gap-1 border rounded-sm py-0.5 px-1.5 font-mono text-[11px] leading-[1.4]"
+                    style={{
+                        background: tagColor + '22', borderColor: `${tagColor}55`,
+                        color: tagColor,
+                    }}
+                >
                     {tag}
                     {!disabled && (
                         <button
                             type="button"
                             onClick={e => { e.stopPropagation(); removeTag(i) }}
-                            style={{
-                                background: 'none', border: 'none', cursor: 'pointer',
-                                color: tagColor, padding: '0', lineHeight: 1, fontSize: '12px',
-                                display: 'flex', alignItems: 'center', opacity: 0.7,
-                            }}
+                            className="bg-transparent border-0 cursor-pointer p-0 leading-none text-[12px] flex items-center opacity-70"
+                            style={{ color: tagColor }}
                         >×</button>
                     )}
                 </span>
@@ -78,15 +69,11 @@ export function TagInput({
                     onKeyDown={handleKeyDown}
                     onBlur={() => { if (input.trim()) addTag(input) }}
                     placeholder={tags.length === 0 ? placeholder : ''}
-                    style={{
-                        background: 'none', border: 'none', outline: 'none', padding: '2px 0',
-                        fontFamily: '"JetBrains Mono", monospace', fontSize: '11px',
-                        color: color.textPrimary, minWidth: '120px', flex: 1,
-                    }}
+                    className="bg-transparent border-0 outline-none py-0.5 px-0 font-mono text-[11px] text-zinc-900 min-w-[120px] flex-1"
                 />
             )}
             {disabled && tags.length === 0 && (
-                <span style={{ color: color.textFaint, fontSize: '11px', fontFamily: '"JetBrains Mono", monospace' }}>
+                <span className="text-zinc-400 text-[11px] font-mono">
                     Loading…
                 </span>
             )}
