@@ -12,6 +12,7 @@ import { useProjectStore } from '@/stores/projectStore'
 import { DotsIndicator } from '@/layouts/sidebar/Project'
 import { AgentsListPanel } from './AgentsListPanel'
 import { ProjectOverview } from './ProjectOverview'
+import { agentRoleLabel } from './presentation'
 
 // ─── Claude status badge ──────────────────────────────────────────────────────
 
@@ -140,8 +141,8 @@ export default function AgentDetail() {
             >
                 {/* Header */}
                 <div style={{
-                    height: '48px', flexShrink: 0, display: 'flex', alignItems: 'center',
-                    paddingLeft: '16px', paddingRight: '14px', gap: '10px',
+                    minHeight: '48px', flexShrink: 0, display: 'flex', alignItems: 'center',
+                    paddingLeft: '16px', paddingRight: '14px', paddingTop: '7px', paddingBottom: '7px', gap: '10px',
                     borderBottom: `1px solid ${color.stroke}`, background: '#fff',
                 }}>
                     <button
@@ -165,16 +166,23 @@ export default function AgentDetail() {
                         {displayName.charAt(0).toUpperCase()}
                     </div>
 
-                    <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ color: color.textPrimary, fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {displayName}
-                        </span>
-                        <span style={{
-                            fontSize: '10px', fontWeight: 600, padding: '2px 7px', borderRadius: '10px', letterSpacing: '0.04em',
-                            background: `${agentBg}18`, border: `1px solid ${agentBg}40`, color: agentBg, flexShrink: 0,
-                        }}>
-                            {activeAgent ? (AGENT_TYPE_LABELS[activeAgent.agent_type] ?? activeAgent.agent_type).toUpperCase() : 'AGENT'}
-                        </span>
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '1px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ color: color.textPrimary, fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {displayName}
+                            </span>
+                            <span style={{
+                                fontSize: '10px', fontWeight: 600, padding: '2px 7px', borderRadius: '10px', letterSpacing: '0.04em',
+                                background: `${agentBg}18`, border: `1px solid ${agentBg}40`, color: agentBg, flexShrink: 0,
+                            }}>
+                                {activeAgent ? (AGENT_TYPE_LABELS[activeAgent.agent_type] ?? activeAgent.agent_type).toUpperCase() : 'AGENT'}
+                            </span>
+                        </div>
+                        {activeAgent && (
+                            <span style={{ color: color.textMuted, fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {activeAgent.model ? `${agentRoleLabel(activeAgent)} · ${activeAgent.model}` : agentRoleLabel(activeAgent)}
+                            </span>
+                        )}
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
