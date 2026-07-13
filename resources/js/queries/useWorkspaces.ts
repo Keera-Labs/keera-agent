@@ -20,10 +20,6 @@ export default function useWorkspaces() {
         staleTime: 1000 * 30,
     })
 
-    return { workspaces: query.data ?? [] }
-}
-
-export function useWorkspace() {
     const createForm = useForm({ name: '', description: '' })
     const updateHttp = useHttp({})
     const destroyHttp = useHttp({})
@@ -43,6 +39,7 @@ export function useWorkspace() {
     }
 
     return {
+        workspaces: query.data ?? [],
         creating: createForm.processing,
         createErrors: createForm.errors,
         updating: updateHttp.processing,
