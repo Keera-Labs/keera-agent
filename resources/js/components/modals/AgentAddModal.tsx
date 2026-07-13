@@ -29,7 +29,7 @@ export function AgentAddModal({ projectId, onClose, onCreated, templates, agentC
     const [agentType, setAgentType] = useState<string>('software_engineer')
     const [description, setDescription] = useState(() => findBuiltinForType(templates, 'software_engineer')?.description ?? '')
     const [systemPrompt, setSystemPrompt] = useState(() => findBuiltinForType(templates, 'software_engineer')?.system_prompt ?? '')
-    const [model, setModel] = useState('claude-opus-4-8')
+    const [complexity, setComplexity] = useState('medium')
     const [flags, setFlags] = useState<AgentFlags>({})
     const [planMode, setPlanMode] = useState(false)
     const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null)
@@ -57,14 +57,12 @@ export function AgentAddModal({ projectId, onClose, onCreated, templates, agentC
             setAgentType('software_engineer')
             setDescription('')
             setSystemPrompt('')
-            setModel('claude-opus-4-8')
             setFlags({})
             setPlanMode(false)
             return
         }
         setSelectedTemplateId(tpl.id)
         setAgentType(tpl.agent_type)
-        setModel(tpl.model)
         setFlags(tpl.flags ?? {})
         setPlanMode(!!tpl.plan_mode)
         setDescription(tpl.description ?? '')
@@ -83,7 +81,7 @@ export function AgentAddModal({ projectId, onClose, onCreated, templates, agentC
             const res = await fetch(`/api/projects/${projectId}/agents`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, agent_type: agentType, description, system_prompt: systemPrompt, model, flags, plan_mode: planMode }),
+                body: JSON.stringify({ name, agent_type: agentType, description, system_prompt: systemPrompt, complexity, flags, plan_mode: planMode }),
             })
             const data = await res.json()
             if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
@@ -196,11 +194,11 @@ export function AgentAddModal({ projectId, onClose, onCreated, templates, agentC
                     </label>
 
                     <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <span style={labelStyle}>Model</span>
-                        <select value={model} onChange={e => setModel(e.target.value)} style={inputStyle}>
-                            <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
-                            <option value="claude-opus-4-8">Claude Opus 4.8</option>
-                            <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+                        <span style={labelStyle}>Complexity</span>
+                        <select value={complexity} onChange={e => setComplexity(e.target.value)} style={inputStyle}>
+                            <option value="easy">Easy — Claude Sonnet 5</option>
+                            <option value="medium">Medium — Claude Sonnet 5</option>
+                            <option value="hard">Hard — Claude Opus 4.8</option>
                         </select>
                     </label>
 

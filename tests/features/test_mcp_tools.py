@@ -508,6 +508,7 @@ class TestSpawnAgentTool(TestCase, DatabaseTransaction):
             "project_path": self.project.path,
             "name": "Spawned Engineer",
             "agent_type": "software_engineer",
+            "complexity": "medium",
         }
         base.update(kwargs)
         # Never include a message: that would kick off a headless Claude process.
@@ -639,16 +640,17 @@ class TestSpawnAgentComplexity(TestCase, DatabaseTransaction):
         agent = await self._spawn(complexity="hard", model="claude-sonnet-5")
         self.assertEqual(agent.model, "claude-opus-4-8")
 
-    async def test_omitted_complexity_honors_explicit_model(self):
-        agent = await self._spawn(model="claude-sonnet-5")
-        self.assertEqual(agent.model, "claude-sonnet-5")
+    async def test_omitted_complexity_raises(self):
+        from pydantic import ValidationError
 
-    async def test_omitted_complexity_uses_default_model(self):
-        agent = await self._spawn()
-        self.assertEqual(agent.model, "claude-opus-4-8")
+        # complexity is required; the validation error is not swallowed.
+        with self.assertRaises(ValidationError):
+            await self.tool.handle({"project_path": self.project.path, "name": "Worker"})
 
-    async def test_invalid_complexity_rejected(self):
-        response = await self.tool.handle(
-            {"project_path": self.project.path, "name": "Worker", "complexity": "trivial"}
-        )
-        self.assertIn("Error", _text(response))
+    async def test_invalid_complexity_raises(self):
+        from pydantic import ValidationError
+
+        with self.assertRaises(ValidationError):
+            await self.tool.handle(
+                {"project_path": self.project.path, "name": "Worker", "complexity": "trivial"}
+            )

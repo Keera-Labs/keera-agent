@@ -1,5 +1,7 @@
 import enum
 
+DEFAULT_MODEL = "claude-opus-4-8"
+
 
 class TaskComplexity(str, enum.Enum):
     """Task complexity levels used to pick the AI model for an assignment."""
@@ -8,23 +10,21 @@ class TaskComplexity(str, enum.Enum):
     MEDIUM = "medium"
     HARD = "hard"
 
+    def model(self) -> str:
+        match self:
+            case TaskComplexity.EASY | TaskComplexity.MEDIUM:
+                return "claude-sonnet-5"
+            case TaskComplexity.HARD:
+                return "claude-opus-4-8"
 
-DEFAULT_MODEL = "claude-opus-4-8"
+    @classmethod
+    def model_for(cls, value) -> str:
+        """Model mapped to a complexity value.
 
-COMPLEXITY_MODEL_MAP = {
-    TaskComplexity.EASY: "claude-sonnet-5",
-    TaskComplexity.MEDIUM: "claude-sonnet-5",
-    TaskComplexity.HARD: "claude-opus-4-8",
-}
-
-
-def model_for_complexity(complexity) -> str:
-    """Return the AI model mapped to a task's complexity.
-
-    Missing or unrecognised complexity falls back to the default model so
-    callers always receive a usable model id.
-    """
-    try:
-        return COMPLEXITY_MODEL_MAP[TaskComplexity(complexity)]
-    except (ValueError, KeyError):
-        return DEFAULT_MODEL
+        Missing or unrecognised values fall back to the default model so callers
+        always receive a usable model id.
+        """
+        try:
+            return cls(value).model()
+        except ValueError:
+            return DEFAULT_MODEL
