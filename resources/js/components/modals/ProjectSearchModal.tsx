@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { Folder, Search, X } from 'lucide-react'
 import { color } from '@/tokens'
 import type { Project } from '@/types/type'
 import { inputStyle } from '@/components/ui/styles'
@@ -46,9 +47,7 @@ export function ProjectSearchModal({ projects, onClose, onSelect }: {
             >
                 {/* Search input */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px', borderBottom: `1px solid ${color.border}` }}>
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill={color.textMuted} style={{ flexShrink: 0 }}>
-                        <path d="M10.68 11.74a6 6 0 01-7.922-8.982 6 6 0 018.982 7.922l3.04 3.04a.749.749 0 11-1.06 1.06l-3.04-3.04zm-5.68.26a4.5 4.5 0 100-9 4.5 4.5 0 000 9z"/>
-                    </svg>
+                    <Search size={14} color={color.textMuted} style={{ flexShrink: 0 }}/>
                     <input
                         ref={inputRef}
                         value={query}
@@ -59,7 +58,7 @@ export function ProjectSearchModal({ projects, onClose, onSelect }: {
                     />
                     {query && (
                         <button onClick={() => setQuery('')} style={{ background: 'transparent', border: 'none', color: color.textMuted, cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}>
-                            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z"/></svg>
+                            <X size={12}/>
                         </button>
                     )}
                 </div>
@@ -81,9 +80,7 @@ export function ProjectSearchModal({ projects, onClose, onSelect }: {
                                 transition: 'background 0.1s',
                             }}
                         >
-                            <svg width="13" height="13" viewBox="0 0 16 16" fill={color.textMuted} style={{ flexShrink: 0 }}>
-                                <path d="M1.75 1A1.75 1.75 0 000 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0016 13.25v-8.5A1.75 1.75 0 0014.25 3H7.5L6.066 1.566A.25.25 0 005.89 1.5H1.75zm0 1.5h3.89l1.433 1.434a.25.25 0 00.177.066H14.25a.25.25 0 01.25.25v8.5a.25.25 0 01-.25.25H1.75a.25.25 0 01-.25-.25V2.75a.25.25 0 01.25-.25z"/>
-                            </svg>
+                            <Folder size={13} color={color.textMuted} style={{ flexShrink: 0 }}/>
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: '13px', fontWeight: 500, color: color.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {project.name}

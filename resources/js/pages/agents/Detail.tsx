@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
+import { ArrowLeft, Image } from 'lucide-react'
 import AppLayout from '@/layouts/AppLayout'
 import { ProjectLayout } from '@/layouts/ProjectLayout'
 import { color } from '@/tokens'
@@ -152,9 +153,7 @@ export default function AgentDetail() {
                         onMouseEnter={e => { e.currentTarget.style.color = color.textPrimary; e.currentTarget.style.background = color.bgCanvas }}
                         onMouseLeave={e => { e.currentTarget.style.color = color.textFaint; e.currentTarget.style.background = 'transparent' }}
                     >
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M7.78 12.53a.75.75 0 01-1.06 0L2.47 8.28a.75.75 0 010-1.06l4.25-4.25a.75.75 0 011.06 1.06L4.81 7h7.44a.75.75 0 010 1.5H4.81l2.97 2.97a.75.75 0 010 1.06z"/>
-                        </svg>
+                        <ArrowLeft size={14}/>
                     </button>
 
                     <div style={{
@@ -190,9 +189,7 @@ export default function AgentDetail() {
                         display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
                     }}>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-                            <svg width="36" height="36" viewBox="0 0 16 16" fill={color.accent} opacity="0.8">
-                                <path d="M1.75 2.5a.25.25 0 00-.25.25v10.5c0 .138.112.25.25.25h.94l.03-.013 4.013-4.013a1.75 1.75 0 012.474 0L13.62 13.5h.63a.25.25 0 00.25-.25V2.75a.25.25 0 00-.25-.25H1.75zM0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25V2.75zm9.5 3.5a1 1 0 11-2 0 1 1 0 012 0z"/>
-                            </svg>
+                            <Image size={36} color={color.accent} opacity={0.8}/>
                             <span style={{ color: color.accent, fontSize: '13px', fontFamily: '"JetBrains Mono", monospace' }}>
                                 Drop image to attach
                             </span>
