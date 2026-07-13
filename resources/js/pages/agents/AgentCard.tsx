@@ -1,4 +1,5 @@
 import type { MouseEvent, ReactNode } from 'react'
+import { RotateCw, CircleDot, GitMerge, ArrowRight } from 'lucide-react'
 import { color } from '@/tokens'
 import type { ProjectAgent } from '@/queries/agents'
 import { AgentEditModal } from './AgentEditModal'
@@ -160,10 +161,7 @@ export function AgentCard({
                     hoverColor="#ca8a04"
                     onClick={onRestart}
                 >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M23 4v6h-6" />
-                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                    </svg>
+                    <RotateCw size={14}/>
                 </CardIconButton>
 
                 <AgentEditModal
@@ -182,10 +180,7 @@ export function AgentCard({
                             onMouseEnter={e => { e.currentTarget.style.color = color.textPrimary; e.currentTarget.style.borderColor = color.textPrimary; e.currentTarget.style.background = color.bgCanvas }}
                             onMouseLeave={e => { e.currentTarget.style.color = color.textMuted; e.currentTarget.style.borderColor = color.stroke; e.currentTarget.style.background = 'transparent' }}
                         >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                                <circle cx="12" cy="12" r="8" />
-                                <circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none" />
-                            </svg>
+                            <CircleDot size={14}/>
                         </button>
                     }
                 />
@@ -195,12 +190,7 @@ export function AgentCard({
                     hoverColor="#16a34a"
                     onClick={() => { if (!adoptPending) onAdopt() }}
                 >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="6" y1="3" x2="6" y2="15" />
-                        <circle cx="18" cy="6" r="3" />
-                        <circle cx="6" cy="18" r="3" />
-                        <path d="M18 9a9 9 0 0 1-9 9" />
-                    </svg>
+                    <GitMerge size={14}/>
                 </CardIconButton>
 
                 <button
@@ -216,9 +206,7 @@ export function AgentCard({
                     onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
                 >
                     Open
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M8.22 2.97a.75.75 0 011.06 0l4.25 4.25a.75.75 0 010 1.06l-4.25 4.25a.75.75 0 01-1.06-1.06l2.97-2.97H3a.75.75 0 010-1.5h8.19L8.22 4.03a.75.75 0 010-1.06z"/>
-                    </svg>
+                    <ArrowRight size={14}/>
                 </button>
             </div>
         </article>

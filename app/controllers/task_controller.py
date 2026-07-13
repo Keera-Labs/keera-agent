@@ -1,6 +1,6 @@
 import datetime
 
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi_startkit.jsonapi import ResourceCollection
 
 from app.models.Task import TERMINAL_STATUSES, Task
@@ -62,4 +62,6 @@ async def destroy(task_id: int):
         return JSONResponse({"error": "not found"}, status_code=404)
 
     await Task.where("id", task_id).delete()
-    return JSONResponse({}, status_code=204)
+    # 204 must carry no body — a JSON body here triggers a server-side
+    # "Response content longer than Content-Length" RuntimeError on every delete.
+    return Response(status_code=204)
