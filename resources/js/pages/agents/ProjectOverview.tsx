@@ -1,6 +1,7 @@
 import { router } from '@inertiajs/react'
 import { color } from '@/tokens'
 import { useAgents } from '@/queries/agents'
+import useWorkspaces from '@/queries/useWorkspaces'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import type { Project } from '@/types/type'
 import { AgentCard } from './AgentCard'
@@ -27,9 +28,10 @@ function HeaderPill({ children }: { children: React.ReactNode }) {
 
 export function ProjectOverview({ project }: { project: Project }) {
     const {
-        workspaces, agentSessions, launchAgentSession,
+        agentSessions, launchAgentSession,
         setActiveAgentId, setEditingAgent, setShowAddAgent,
     } = useAppLayout()
+    const { workspaces } = useWorkspaces()
     const { agents, adoptWork } = useAgents(project.id)
 
     const workspaceName = workspaces.find(w => w.id === project.workspace_id)?.name ?? null

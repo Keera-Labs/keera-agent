@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useWorkspace } from '@/queries/workspace'
+import useWorkspaces from '@/queries/useWorkspaces'
 
 const inputCls = 'bg-canvas border border-stroke rounded-md text-zinc-900 placeholder:text-zinc-500 text-[13px] px-2.5 py-1.5 font-mono outline-none w-full'
 const labelSpanCls = 'text-zinc-600 text-[11px] uppercase tracking-[0.05em]'
@@ -7,7 +7,7 @@ const cancelCls = 'bg-transparent border border-stroke rounded-md text-zinc-700 
 const submitCls = 'bg-success border border-success rounded-md text-white text-xs px-3.5 py-1.5 cursor-pointer disabled:opacity-50'
 
 export default function AddWorkspaceModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-    const { create, creating } = useWorkspace()
+    const { create, creating } = useWorkspaces()
     const [name, setName] = useState('')
     const [description, setDescription] = useState('')
     const [error, setError] = useState('')
