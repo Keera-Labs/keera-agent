@@ -3,7 +3,7 @@ import { color } from '@/tokens'
 import type { ProjectAgent, AgentFlags } from '@/queries/agents'
 import { normalizeAgent } from '@/queries/agents'
 import type { AgentTemplate } from '@/types/agent'
-import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS } from '@/types/agent'
+import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, MODELS } from '@/types/agent'
 import { labelStyle, inputStyle, cancelBtnStyle, submitBtnStyle, flagRowStyle, toggleStyle } from '@/components/ui/styles'
 
 /**
@@ -198,9 +198,7 @@ export function AgentAddModal({ projectId, onClose, onCreated, templates, agentC
                     <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <span style={labelStyle}>Model</span>
                         <select value={model} onChange={e => setModel(e.target.value)} style={inputStyle}>
-                            <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
-                            <option value="claude-opus-4-8">Claude Opus 4.8</option>
-                            <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+                            {MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                         </select>
                     </label>
 

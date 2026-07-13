@@ -3,7 +3,7 @@ import { router, usePage } from '@inertiajs/react'
 import { color } from '@/tokens'
 import type { AgentTemplate } from '@/types/agent'
 import type { AgentFlags } from '@/queries/agents'
-import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS } from '@/types/agent'
+import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, MODELS } from '@/types/agent'
 import { labelStyle, inputStyle, cancelBtnStyle, submitBtnStyle, flagRowStyle, toggleStyle } from '@/components/ui/styles'
 import { TagInput } from '@/components/ui/TagInput'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
@@ -308,9 +308,7 @@ export function GlobalSettingsModal({
                                         <span style={labelStyle}>Model</span>
                                         <select value={tplModel} disabled={!canEdit} onChange={e => setTplModel(e.target.value)}
                                             style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' as const, opacity: canEdit ? 1 : 0.55 }}>
-                                            <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
-                                            <option value="claude-opus-4-8">Claude Opus 4.8</option>
-                                            <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+                                            {MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                                         </select>
                                     </label>
 
