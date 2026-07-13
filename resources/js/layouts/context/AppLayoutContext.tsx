@@ -12,15 +12,14 @@ import type { ProjectView } from '@/layouts/sidebar/Sidebar'
 import { useTasks } from '@/queries/tasks'
 import useProjects, { PROJECTS_QUERY_KEY } from '@/queries/useProjects'
 import { WORKSPACES_QUERY_KEY } from '@/queries/useWorkspaces'
-import { useProjectStore } from '@/stores/projectStore'
 
 // ─── Context value interface ──────────────────────────────────────────────────
 
 export interface AppLayoutContextValue {
     // ── Data ─────────────────────────────────────────────────────────────────
     // Project and workspace lists are owned by their own React Query hooks
-    // (useProjects / useWorkspaces); the layout derives activeProject and pushes
-    // it into useProjectStore. Consumers read it from that store directly.
+    // (useProjects / useWorkspaces). useProjects derives activeProject and pushes
+    // it into useProjectStore; consumers read it from that store directly.
     tasks: Task[]
 
     // ── Modal state ───────────────────────────────────────────────────────────
@@ -158,18 +157,18 @@ function playSound(type: 'done' | 'input') {
 
 export function AppLayoutStateProvider({ children }: { children: React.ReactNode }) {
     const { props } = usePage<{
-        project?: string
         agent_id?: number
         tasks?: Task[]
         global_settings?: { max_agents_per_project?: number }
     }>()
-    const projectName = props.project
     const agentIdFromUrl = props.agent_id
     const queryClient = useQueryClient()
 
-    // Projects and workspaces are owned by their own React Query hooks; the
-    // layout only reads projects to derive activeProject and seed claudeStatus.
-    const { projects } = useProjects()
+    // Projects and workspaces are owned by their own React Query hooks. useProjects
+    // derives activeProject (from the route + fetched list) and pushes it into
+    // useProjectStore itself; the layout just reads it back for its own needs
+    // (terminal sessions, task/agent hooks) and to seed claudeStatus.
+    const { projects, activeProject } = useProjects()
 
     async function refreshData() {
         // Workspace changes can reassign projects (e.g. deleting a workspace
@@ -219,9 +218,6 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     const agentTerminalSlot = useRef<HTMLDivElement | null>(null)
 
     // ── Derived data ──────────────────────────────────────────────────────────
-    const activeProject = projects.find(p => p.slug === projectName) ?? projects[0] ?? null
-    useProjectStore.getState().setActiveProject(activeProject)
-
     const taskHook = useTasks(activeProject?.id ?? null)
     const agentHook = useAgents(activeProject?.id ?? null)
     const tasks = taskHook.tasks

@@ -1,8 +1,9 @@
 import { router, usePage } from "@inertiajs/react"
-import { useContext } from "react"
+import { useContext, useEffect } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import type { Project } from "@/types/type"
 import { AppLayoutContext } from "@/layouts/context/AppLayoutContext"
+import { useProjectStore } from "@/stores/projectStore"
 
 export const PROJECTS_QUERY_KEY = ["projects"] as const
 
@@ -24,6 +25,18 @@ export default function useProjects() {
         staleTime: 1000 * 30,
     })
     const projects = query.data ?? []
+    const activeProject = projects.find(p => p.slug === projectName) ?? projects[0] ?? null
+
+    // Push the derived active project into the shared store whenever the
+    // fetched project list or route changes. Guarded on id so re-renders that
+    // resolve to the project already in the store are a no-op — this hook is
+    // called from several components, and without the guard each of them would
+    // re-set the same value on every render.
+    useEffect(() => {
+        if (useProjectStore.getState().activeProject?.id !== activeProject?.id) {
+            useProjectStore.getState().setActiveProject(activeProject)
+        }
+    }, [activeProject])
 
     const invalidate = () => queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY })
 
@@ -88,6 +101,7 @@ export default function useProjects() {
 
     return {
         projects,
+        activeProject,
         deleting: deleteMutation.isPending,
         handleProjectCreated,
         handleMoveProject,
