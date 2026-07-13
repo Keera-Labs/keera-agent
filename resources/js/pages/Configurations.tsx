@@ -1,7 +1,6 @@
 import { usePage } from '@inertiajs/react'
 import AppLayout from '@/layouts/AppLayout'
 import { ProjectLayout } from '@/layouts/ProjectLayout'
-import { color } from '@/tokens'
 import { CommandsPanel } from '@/pages/configurations/index'
 import type { Command } from '@/pages/configurations/index'
 
@@ -15,8 +14,8 @@ export default function Configurations() {
 
     if (props.project_id === null) {
         return (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ color: color.textFaint, fontSize: '13px' }}>Project not found</span>
+            <div className="flex-1 flex items-center justify-center">
+                <span className="text-zinc-400 text-[13px]">Project not found</span>
             </div>
         )
     }
