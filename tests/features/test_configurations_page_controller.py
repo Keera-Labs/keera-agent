@@ -37,34 +37,34 @@ class TestConfigurationsPageController(TestCase, DatabaseTransaction):
     async def test_page_renders_project_and_commands_props(self):
         command = await self._create_command()
 
-        response = await self.get(
-            f"/{self.project.slug}/configurations", headers=INERTIA_HEADERS
-        )
+        response = await self.get(f"/{self.project.slug}/configurations", headers=INERTIA_HEADERS)
 
         response.assert_ok().assert_json(
             lambda j: j.has(
                 "props",
-                lambda p: p.where("project", self.project.slug)
-                .where("project_id", self.project.id)
-                .has(
-                    "commands",
-                    1,
-                    lambda cs: cs.first(
-                        lambda c: c.where("id", command.id)
-                        .where("label", "Dev Server")
-                        .where("command", "npm run dev")
-                        .where("status", "stopped")
-                        .etc()
-                    ),
-                )
-                .etc(),
+                lambda p: (
+                    p.where("project", self.project.slug)
+                    .where("project_id", self.project.id)
+                    .has(
+                        "commands",
+                        1,
+                        lambda cs: cs.first(
+                            lambda c: (
+                                c.where("id", command.id)
+                                .where("label", "Dev Server")
+                                .where("command", "npm run dev")
+                                .where("status", "stopped")
+                                .etc()
+                            )
+                        ),
+                    )
+                    .etc()
+                ),
             ).etc()
         )
 
     async def test_page_with_no_commands_returns_empty_list(self):
-        response = await self.get(
-            f"/{self.project.slug}/configurations", headers=INERTIA_HEADERS
-        )
+        response = await self.get(f"/{self.project.slug}/configurations", headers=INERTIA_HEADERS)
         response.assert_ok().assert_json(
             lambda j: j.has("props", lambda p: p.where("commands", []).etc()).etc()
         )
@@ -73,9 +73,7 @@ class TestConfigurationsPageController(TestCase, DatabaseTransaction):
         """A command left 'running' with no live process is corrected on load."""
         command = await self._create_command(status="running", pid=424242)
 
-        response = await self.get(
-            f"/{self.project.slug}/configurations", headers=INERTIA_HEADERS
-        )
+        response = await self.get(f"/{self.project.slug}/configurations", headers=INERTIA_HEADERS)
 
         response.assert_ok().assert_json(
             lambda j: j.has(
