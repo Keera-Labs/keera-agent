@@ -1,4 +1,4 @@
-import { useWorkspace } from "@/queries/workspace"
+import { useWorkspace } from "@/queries/useWorkspace"
 import useWorkspaces from "@/queries/useWorkspaces"
 import { useAppLayout } from "@/layouts/context/AppLayoutContext"
 import { color } from "@/tokens"
