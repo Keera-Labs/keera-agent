@@ -7,6 +7,7 @@ import { router, usePage } from "@inertiajs/react"
 import type React from "react"
 import { ProjectItem } from "./Project"
 import { WorkspacePicker } from "./WorkSpace"
+import { AgentAddModal } from "@/pages/agents/AgentAddModal"
 
 export type ProjectView = "agents" | "commands" | "tasks"
 
@@ -45,7 +46,6 @@ export default function Sidebar({
                                     projectView,
                                     onChangeView,
                                     taskCount,
-                                    onAddAgent,
                                     activeId,
                                     claudeStatus,
                                     onCreateWorkspace,
@@ -54,7 +54,6 @@ export default function Sidebar({
     projectView: ProjectView
     onChangeView: (v: ProjectView) => void
     taskCount: number
-    onAddAgent: () => void
     activeId: number | null
     claudeStatus: Record<number, "running" | "done">
     onCreateWorkspace: () => void
@@ -273,30 +272,35 @@ export default function Sidebar({
                     <span>Settings</span>
                 </button>
 
-                {/* New Agent button — always shown, disabled when no project */}
-                <button
-                    onClick={activeProject ? onAddAgent : undefined}
-                    disabled={!activeProject}
-                    style={{
-                        width: "100%", padding: "8px 12px",
-                        background: activeProject ? color.accentEmphasis : color.bgSurface,
-                        border: activeProject ? "none" : `1px solid ${color.stroke}`,
-                        borderRadius: "7px",
-                        color: activeProject ? "#fff" : color.textFaint,
-                        fontSize: "13px", fontWeight: 600,
-                        cursor: activeProject ? "pointer" : "default",
-                        display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
-                        transition: "opacity 0.1s",
-                        opacity: activeProject ? 1 : 0.5,
-                    }}
-                    onMouseEnter={e => { if (activeProject) e.currentTarget.style.opacity = "0.88" }}
-                    onMouseLeave={e => { if (activeProject) e.currentTarget.style.opacity = "1" }}
-                >
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
-                    </svg>
-                    + New Agent
-                </button>
+                {/* New Agent button — always shown, disabled when no project.
+                    AgentAddModal owns the open state and, when there is no active
+                    project, renders this button inert (no modal). */}
+                <AgentAddModal
+                    trigger={
+                        <button
+                            disabled={!activeProject}
+                            style={{
+                                width: "100%", padding: "8px 12px",
+                                background: activeProject ? color.accentEmphasis : color.bgSurface,
+                                border: activeProject ? "none" : `1px solid ${color.stroke}`,
+                                borderRadius: "7px",
+                                color: activeProject ? "#fff" : color.textFaint,
+                                fontSize: "13px", fontWeight: 600,
+                                cursor: activeProject ? "pointer" : "default",
+                                display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
+                                transition: "opacity 0.1s",
+                                opacity: activeProject ? 1 : 0.5,
+                            }}
+                            onMouseEnter={e => { if (activeProject) e.currentTarget.style.opacity = "0.88" }}
+                            onMouseLeave={e => { if (activeProject) e.currentTarget.style.opacity = "1" }}
+                        >
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
+                            </svg>
+                            + New Agent
+                        </button>
+                    }
+                />
             </div>
         </aside>
     )

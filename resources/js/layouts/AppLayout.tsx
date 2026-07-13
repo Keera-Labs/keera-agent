@@ -26,7 +26,6 @@ export { ProjectSearchModal } from "@/components/modals/ProjectSearchModal"
 export { ConfirmDeleteWorkspaceModal } from "@/components/modals/ConfirmDeleteWorkspaceModal"
 export { CreateTaskModal } from "@/components/modals/CreateTaskModal"
 export { TaskDetailModal } from "@/components/modals/TaskDetailModal"
-export { AgentAddModal } from "@/components/modals/AgentAddModal"
 
 // ─── Persistent layout ────────────────────────────────────────────────────────
 
@@ -43,7 +42,6 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
         activeProject, tasks,
         claudeStatus,
         projectView, setProjectView,
-        setShowAddAgent,
         setShowWorkspaceModal,
     } = useAppLayout()
 
@@ -67,7 +65,6 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
                         if (isTasksPage) router.visit(`/${activeProject?.slug}`)
                     }}
                     taskCount={tasks.length}
-                    onAddAgent={() => setShowAddAgent(true)}
                     activeId={activeProject?.id ?? null}
                     claudeStatus={claudeStatus}
                     onCreateWorkspace={() => setShowWorkspaceModal(true)}
