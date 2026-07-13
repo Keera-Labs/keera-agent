@@ -42,8 +42,7 @@ async def spawn(request: Request, body: AgentStoreRequest, project_id: int):
         if message:
             from app.controllers.agent_trigger_controller import _spawn_headless_agent
 
-            conn_key = f"{cwd}:agent:{agent.id}"
-            asyncio.create_task(_spawn_headless_agent(agent, project, cwd, conn_key, message))
+            asyncio.create_task(_spawn_headless_agent(agent, project, cwd, message))
 
     return AgentResource(agent)
 
