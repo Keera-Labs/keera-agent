@@ -26,13 +26,6 @@ export default function useProjects() {
     })
     const projects = query.data ?? []
 
-    // Resolves the project for a route slug and publishes it to the shared
-    // store. This hook only owns `projects`; it doesn't decide on its own which
-    // one is "active" — useProjects() is called from several components, so
-    // this is exposed as an explicit action and only the one component that
-    // bootstraps app state (AppLayoutContext) calls it, synchronously during
-    // its render rather than in a useEffect. Guarded on id so calling it again
-    // with an already-current slug is a no-op.
     function setActiveProject(slug?: string) {
         const active = projects.find(p => p.slug === slug) ?? projects[0] ?? null
         if (useProjectStore.getState().activeProject?.id !== active?.id) {
