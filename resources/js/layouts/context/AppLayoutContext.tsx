@@ -12,15 +12,15 @@ import type { Session } from '@/hooks/useTerminalSessions'
 import type { ProjectView } from '@/layouts/sidebar/Sidebar'
 import { useTasks } from '@/queries/tasks'
 import useProjects, { PROJECTS_QUERY_KEY } from '@/queries/useProjects'
+import { WORKSPACES_QUERY_KEY } from '@/queries/useWorkspaces'
 
 // ─── Context value interface ──────────────────────────────────────────────────
 
 export interface AppLayoutContextValue {
     // ── Data ─────────────────────────────────────────────────────────────────
-    // Project data is owned by useProjects (single source); the layout only
-    // derives activeProject from it. Consumers that need the full list call
-    // useProjects() directly.
-    workspaces: Workspace[]
+    // Project and workspace lists are owned by their own React Query hooks
+    // (useProjects / useWorkspaces); the layout only derives activeProject.
+    // Consumers that need a full list call those hooks directly.
     activeProject: Project | null
     tasks: Task[]
 
@@ -67,9 +67,8 @@ export interface AppLayoutContextValue {
     sessionStart: Record<number, Date>
 
     // ── Business handlers ─────────────────────────────────────────────────────
-    // Refreshes the layout-owned workspaces and invalidates the projects query
-    // (workspace changes can reassign projects). Project mutations refresh
-    // themselves via useProjects' own query.
+    // Invalidates the workspaces and projects queries (workspace changes can
+    // reassign projects). Project mutations refresh themselves via useProjects.
     refreshData: () => Promise<void>
     handleWorkspaceCreated: () => void
     handleWorkspaceDeleted: () => void
@@ -168,23 +167,19 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         agent_id?: number
         tasks?: Task[]
         global_settings?: { max_agents_per_project?: number }
-        workspaces?: Workspace[]
     }>()
     const projectName = props.project
     const agentIdFromUrl = props.agent_id
     const queryClient = useQueryClient()
 
-    // ── Data — workspaces are layout-owned (seeded from Inertia props, refreshed
-    //    via targeted fetch). Projects are owned by useProjects; the layout only
-    //    reads that single source to derive activeProject and seed claudeStatus.
-    const [workspaces, setWorkspaces] = useState<Workspace[]>(() => props.workspaces ?? [])
+    // Projects and workspaces are owned by their own React Query hooks; the
+    // layout only reads projects to derive activeProject and seed claudeStatus.
     const { projects } = useProjects()
 
     async function refreshData() {
-        const wsRes = await fetch('/api/workspaces').then(r => r.json())
-        setWorkspaces(wsRes)
         // Workspace changes can reassign projects (e.g. deleting a workspace
-        // unassigns its projects), so refresh useProjects' query too.
+        // unassigns its projects), so refresh both queries.
+        queryClient.invalidateQueries({ queryKey: WORKSPACES_QUERY_KEY })
         queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY })
     }
 
@@ -555,7 +550,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
 
     const value: AppLayoutContextValue = {
         // Data
-        workspaces, activeProject, tasks,
+        activeProject, tasks,
         // Modal state
         showWorkspaceModal, setShowWorkspaceModal,
         showGlobalSettings, setShowGlobalSettings,
