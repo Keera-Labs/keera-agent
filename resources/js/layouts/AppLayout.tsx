@@ -5,6 +5,7 @@ import "@xterm/xterm/css/xterm.css"
 import { AppLayoutStateProvider, useAppLayout } from "./context/AppLayoutContext"
 import { ModalLayer } from "./ModalLayer"
 import Sidebar, { type ProjectView } from "./sidebar/Sidebar"
+import { useProjectStore } from "@/stores/projectStore"
 
 // ─── Phase 1 re-exports ───────────────────────────────────────────────────────
 export { agentColor } from "@/utils/agentColor"
@@ -39,11 +40,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
 function AppLayoutShell({ children }: { children: React.ReactNode }) {
     const {
-        activeProject, tasks,
+        tasks,
         claudeStatus,
         projectView, setProjectView,
         setShowWorkspaceModal,
     } = useAppLayout()
+    const activeProject = useProjectStore(s => s.activeProject)
 
     const { component } = usePage()
     const isTasksPage = component === "Tasks"

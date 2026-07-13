@@ -1,5 +1,6 @@
 import { useAgents } from '@/queries/agents'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
+import { useProjectStore } from '@/stores/projectStore'
 import useProjects from '@/queries/useProjects'
 import { ProjectOverview } from './ProjectOverview'
 
@@ -12,12 +13,12 @@ import { ProjectOverview } from './ProjectOverview'
 
 export default function AgentsIndex() {
     const {
-        activeProject,
         activeAgentId,
         containerRefs,
         agentContainerRefs,
         agentSessions,
     } = useAppLayout()
+    const activeProject = useProjectStore(s => s.activeProject)
     const { projects } = useProjects()
 
     const { agents: projectAgents } = useAgents(activeProject?.id ?? null)
