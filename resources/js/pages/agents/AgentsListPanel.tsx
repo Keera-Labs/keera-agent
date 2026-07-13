@@ -24,13 +24,7 @@ function CardIconButton({
             type="button"
             title={title}
             onClick={e => { e.stopPropagation(); onClick(e) }}
-            style={{
-                background: 'transparent', border: 'none',
-                color: color.textFaint, cursor: 'pointer',
-                padding: '5px', borderRadius: '6px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexShrink: 0, transition: 'color 0.1s, background 0.1s',
-            }}
+            className="bg-transparent border-0 text-zinc-400 cursor-pointer p-[5px] rounded flex items-center justify-center shrink-0 transition-[color,background] duration-100"
             onMouseEnter={e => { e.currentTarget.style.color = hoverColor; e.currentTarget.style.background = color.bgCanvas }}
             onMouseLeave={e => { e.currentTarget.style.color = color.textFaint; e.currentTarget.style.background = 'transparent' }}
         >
@@ -52,17 +46,10 @@ export function AgentsListPanel({ project }: { project: Project }) {
     const { agents: projectAgents, remove: removeAgent, adoptWork } = useAgents(project.id)
 
     return (
-        <div style={{
-            width: '230px', flexShrink: 0, background: '#fff',
-            borderRight: `1px solid ${color.stroke}`,
-            display: 'flex', flexDirection: 'column', overflowY: 'auto',
-        }}>
+        <div className="w-[230px] shrink-0 bg-white border-r border-stroke flex flex-col overflow-y-auto">
             {/* Section header + bulk controls */}
-            <div style={{ padding: '12px 14px 6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{
-                    fontSize: '10px', fontWeight: 700, textTransform: 'uppercase',
-                    letterSpacing: '0.08em', color: color.textFaint, flex: 1,
-                }}>
+            <div className="pt-3 px-3.5 pb-1.5 flex items-center gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-zinc-400 flex-1">
                     Agents
                 </span>
 
@@ -76,14 +63,7 @@ export function AgentsListPanel({ project }: { project: Project }) {
                             })
                         }}
                         title="Start all agents"
-                        style={{
-                            background: 'transparent', border: `1px solid ${color.stroke}`,
-                            borderRadius: '4px', color: color.textFaint,
-                            fontSize: '10px', lineHeight: 1, padding: '2px 6px',
-                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px',
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = '#16a34a'; e.currentTarget.style.color = '#16a34a' }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = color.stroke; e.currentTarget.style.color = color.textFaint }}
+                        className="bg-transparent border border-stroke rounded-sm text-zinc-400 text-[10px] leading-none py-0.5 px-1.5 cursor-pointer flex items-center gap-[3px] hover:border-[#16a34a] hover:text-[#16a34a]"
                     >
                         <Play size={8} fill="currentColor"/>
                         All
@@ -119,14 +99,7 @@ export function AgentsListPanel({ project }: { project: Project }) {
                     trigger={
                         <button
                             title="Add agent"
-                            style={{
-                                background: 'transparent', border: `1px solid ${color.stroke}`,
-                                borderRadius: '4px', color: color.textFaint,
-                                fontSize: '13px', lineHeight: 1, padding: '1px 6px',
-                                cursor: 'pointer',
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.borderColor = color.accent; e.currentTarget.style.color = color.accent }}
-                            onMouseLeave={e => { e.currentTarget.style.borderColor = color.stroke; e.currentTarget.style.color = color.textFaint }}
+                            className="bg-transparent border border-stroke rounded-sm text-zinc-400 text-[13px] leading-none py-px px-1.5 cursor-pointer hover:border-accent hover:text-accent"
                         >
                             +
                         </button>
@@ -135,8 +108,8 @@ export function AgentsListPanel({ project }: { project: Project }) {
             </div>
 
             {projectAgents.length === 0 ? (
-                <div style={{ padding: '16px 14px' }}>
-                    <p style={{ fontSize: '12px', color: color.textFaint, margin: 0, lineHeight: 1.5 }}>
+                <div className="py-4 px-3.5">
+                    <p className="text-[12px] text-zinc-400 m-0 leading-normal">
                         No agents yet. Create one to get started.
                     </p>
                 </div>
@@ -153,59 +126,36 @@ export function AgentsListPanel({ project }: { project: Project }) {
                             setActiveAgentId(agent.id)
                             router.visit(`/${project.slug}/agents/${agent.id}`)
                         }}
-                        style={{
-                            display: 'flex', flexDirection: 'column', gap: '8px',
-                            padding: '10px 12px', margin: '0 8px 6px', borderRadius: '10px',
-                            cursor: 'pointer', transition: 'background 0.1s, border-color 0.1s',
-                            background: isSelected ? color.accentSubtle : '#fff',
-                            border: `1px solid ${isSelected ? '#b6d0f7' : color.stroke}`,
-                        }}
+                        className={`flex flex-col gap-2 py-2.5 px-3 mt-0 mx-2 mb-1.5 rounded-lg cursor-pointer transition-[background,border-color] duration-100 border ${isSelected ? 'bg-blue-50 border-[#b6d0f7]' : 'bg-white border-stroke'}`}
                         onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = color.bgCanvas }}
                         onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = '#fff' }}
                     >
                         {/* Avatar + name + status */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <div style={{ position: 'relative', flexShrink: 0 }}>
-                                <div style={{
-                                    width: '32px', height: '32px', borderRadius: '8px',
-                                    background: agentAvatarColor(agent), display: 'flex',
-                                    alignItems: 'center', justifyContent: 'center',
-                                    fontSize: '11px', fontWeight: 700, color: '#fff',
-                                }}>
+                        <div className="flex items-center gap-2.5">
+                            <div className="relative shrink-0">
+                                <div
+                                    className="w-8 h-8 rounded-md flex items-center justify-center text-[11px] font-bold text-white"
+                                    style={{ background: agentAvatarColor(agent) }}
+                                >
                                     {agentInitials(agent.name)}
                                 </div>
                                 {isRunning && (
-                                    <span style={{
-                                        position: 'absolute', bottom: '-2px', right: '-2px',
-                                        width: '10px', height: '10px', borderRadius: '50%',
-                                        background: '#22c55e', border: '2px solid #fff',
-                                        display: 'block',
-                                    }} />
+                                    <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#22c55e] border-2 border-white block" />
                                 )}
                             </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{
-                                    fontSize: '13px', fontWeight: isSelected ? 600 : 500,
-                                    color: isSelected ? color.accent : color.textPrimary,
-                                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                }}>
+                            <div className="flex-1 min-w-0">
+                                <div className={`text-[13px] truncate ${isSelected ? 'font-semibold text-accent' : 'font-medium text-zinc-900'}`}>
                                     {agent.name}
                                 </div>
-                                <div style={{
-                                    display: 'flex', alignItems: 'center', gap: '5px',
-                                    fontSize: '11px', marginTop: '2px', color: statusColor,
-                                }}>
-                                    <span style={{
-                                        width: '6px', height: '6px', borderRadius: '50%',
-                                        background: statusColor, flexShrink: 0,
-                                    }} />
+                                <div className="flex items-center gap-[5px] text-[11px] mt-0.5" style={{ color: statusColor }}>
+                                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: statusColor }} />
                                     {isRunning ? 'Active' : 'Waiting'}
                                 </div>
                             </div>
                         </div>
 
                         {/* Action icons — restart · record/edit · branch · close */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                        <div className="flex items-center gap-0.5">
                             <CardIconButton
                                 title={isRunning ? 'Restart agent' : 'Start agent'}
                                 hoverColor="#ca8a04"
@@ -226,22 +176,14 @@ export function AgentsListPanel({ project }: { project: Project }) {
 
                             {/* Stop propagation so opening the edit modal doesn't also
                                 drill into the agent via the row's onClick. */}
-                            <span style={{ display: 'inline-flex' }} onClick={e => e.stopPropagation()}>
+                            <span className="inline-flex" onClick={e => e.stopPropagation()}>
                                 <AgentEditModal
                                     agent={agent}
                                     trigger={
                                         <button
                                             type="button"
                                             title="Edit agent"
-                                            style={{
-                                                background: 'transparent', border: 'none',
-                                                color: color.textFaint, cursor: 'pointer',
-                                                padding: '5px', borderRadius: '6px',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                flexShrink: 0, transition: 'color 0.1s, background 0.1s',
-                                            }}
-                                            onMouseEnter={e => { e.currentTarget.style.color = color.textPrimary; e.currentTarget.style.background = color.bgCanvas }}
-                                            onMouseLeave={e => { e.currentTarget.style.color = color.textFaint; e.currentTarget.style.background = 'transparent' }}
+                                            className="bg-transparent border-0 text-zinc-400 cursor-pointer p-[5px] rounded flex items-center justify-center shrink-0 transition-[color,background] duration-100 hover:text-zinc-900 hover:bg-canvas"
                                         >
                                             <CircleDot size={14}/>
                                         </button>

@@ -9,18 +9,11 @@ import { AgentCard } from './AgentCard'
 import { AgentAddModal } from './AgentAddModal'
 import { PLACEHOLDER } from './presentation'
 
-const PAGE_BG = '#f7f7f5'
-
 // ─── Header status pill (light, bordered) ─────────────────────────────────────
 
 function HeaderPill({ children }: { children: React.ReactNode }) {
     return (
-        <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: '6px',
-            background: color.bgSurface, border: `1px solid ${color.stroke}`,
-            borderRadius: '999px', padding: '5px 12px',
-            fontSize: '12.5px', color: color.textSecondary, whiteSpace: 'nowrap',
-        }}>
+        <span className="inline-flex items-center gap-1.5 bg-surface border border-stroke rounded-full py-[5px] px-3 text-[12.5px] text-zinc-700 whitespace-nowrap">
             {children}
         </span>
     )
@@ -40,42 +33,36 @@ export function ProjectOverview({ project }: { project: Project }) {
     const activeCount = agents.filter(a => agentSessions.current.has(a.id)).length
 
     return (
-        <div style={{ flex: 1, overflowY: 'auto', background: PAGE_BG }}>
-            <div style={{ maxWidth: '1180px', padding: '26px 34px 40px' }}>
+        <div className="flex-1 overflow-y-auto bg-[#f7f7f5]">
+            <div className="max-w-[1180px] pt-[26px] px-[34px] pb-10">
 
                 {/* Breadcrumb */}
-                <div style={{ fontSize: '13px', marginBottom: '14px' }}>
+                <div className="text-[13px] mb-3.5">
                     {workspaceName && (
                         <>
-                            <span style={{ color: color.textMuted }}>{workspaceName}</span>
-                            <span style={{ color: color.textFaint, margin: '0 7px' }}>/</span>
+                            <span className="text-zinc-500">{workspaceName}</span>
+                            <span className="text-zinc-400 my-0 mx-[7px]">/</span>
                         </>
                     )}
-                    <span style={{ color: color.textPrimary, fontWeight: 600 }}>{project.name}</span>
+                    <span className="text-zinc-900 font-semibold">{project.name}</span>
                 </div>
 
                 {/* Header row: title + description + pills, and New Agent button */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '20px' }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                        <h1 style={{
-                            margin: 0, fontSize: '30px', fontWeight: 800,
-                            letterSpacing: '-0.02em', color: color.textPrimary,
-                        }}>
+                <div className="flex items-start gap-5">
+                    <div className="flex-1 min-w-0">
+                        <h1 className="m-0 text-[30px] font-extrabold tracking-[-0.02em] text-zinc-900">
                             {project.name}
                         </h1>
 
                         {/* Project description — omitted cleanly when the backend has none */}
                         {project.system_prompt && (
-                            <p style={{
-                                margin: '8px 0 0', fontSize: '15px', lineHeight: 1.5,
-                                color: color.textMuted, maxWidth: '680px',
-                            }}>
+                            <p className="mt-2 mb-0 mx-0 text-[15px] leading-normal text-zinc-500 max-w-[680px]">
                                 {project.system_prompt}
                             </p>
                         )}
 
                         {/* Status pills */}
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '16px' }}>
+                        <div className="flex flex-wrap gap-2 mt-4">
                             <HeaderPill>
                                 <Check size={13} color={color.success}/>
                                 {activeCount} active
@@ -92,14 +79,7 @@ export function ProjectOverview({ project }: { project: Project }) {
                         trigger={
                             <button
                                 type="button"
-                                style={{
-                                    flexShrink: 0, display: 'flex', alignItems: 'center', gap: '7px',
-                                    background: '#111318', border: 'none', borderRadius: '10px',
-                                    color: '#fff', fontSize: '13.5px', fontWeight: 600,
-                                    padding: '10px 16px', cursor: 'pointer', transition: 'opacity 0.1s',
-                                }}
-                                onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
-                                onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+                                className="shrink-0 flex items-center gap-[7px] bg-[#111318] border-0 rounded-lg text-white text-[13.5px] font-semibold py-2.5 px-4 cursor-pointer transition-opacity duration-100 hover:opacity-[0.88]"
                             >
                                 <Plus size={13}/>
                                 New Agent
@@ -110,19 +90,13 @@ export function ProjectOverview({ project }: { project: Project }) {
 
                 {/* Agent cards grid */}
                 {agents.length === 0 ? (
-                    <div style={{
-                        marginTop: '28px', padding: '48px', textAlign: 'center',
-                        background: color.bgSurface, border: `1px dashed ${color.stroke}`, borderRadius: '16px',
-                    }}>
-                        <p style={{ margin: 0, fontSize: '14px', color: color.textMuted }}>
+                    <div className="mt-7 p-12 text-center bg-surface border border-dashed border-stroke rounded-[16px]">
+                        <p className="m-0 text-[14px] text-zinc-500">
                             No agents yet. Create one to get started.
                         </p>
                     </div>
                 ) : (
-                    <div style={{
-                        marginTop: '26px', display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: '22px',
-                    }}>
+                    <div className="mt-[26px] grid grid-cols-[repeat(auto-fill,minmax(420px,1fr))] gap-[22px]">
                         {agents.map(agent => (
                             <AgentCard
                                 key={agent.id}
