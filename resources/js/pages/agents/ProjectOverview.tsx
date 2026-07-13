@@ -5,6 +5,7 @@ import useWorkspaces from '@/queries/useWorkspaces'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import type { Project } from '@/types/type'
 import { AgentCard } from './AgentCard'
+import { AgentAddModal } from './AgentAddModal'
 import { PLACEHOLDER } from './presentation'
 
 const PAGE_BG = '#f7f7f5'
@@ -29,7 +30,7 @@ function HeaderPill({ children }: { children: React.ReactNode }) {
 export function ProjectOverview({ project }: { project: Project }) {
     const {
         agentSessions, launchAgentSession,
-        setActiveAgentId, setEditingAgent, setShowAddAgent,
+        setActiveAgentId,
     } = useAppLayout()
     const { workspaces } = useWorkspaces()
     const { agents, adoptWork } = useAgents(project.id)
@@ -93,23 +94,26 @@ export function ProjectOverview({ project }: { project: Project }) {
                         </div>
                     </div>
 
-                    <button
-                        type="button"
-                        onClick={() => setShowAddAgent(true)}
-                        style={{
-                            flexShrink: 0, display: 'flex', alignItems: 'center', gap: '7px',
-                            background: '#111318', border: 'none', borderRadius: '10px',
-                            color: '#fff', fontSize: '13.5px', fontWeight: 600,
-                            padding: '10px 16px', cursor: 'pointer', transition: 'opacity 0.1s',
-                        }}
-                        onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
-                        onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
-                    >
-                        <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
-                        </svg>
-                        New Agent
-                    </button>
+                    <AgentAddModal
+                        trigger={
+                            <button
+                                type="button"
+                                style={{
+                                    flexShrink: 0, display: 'flex', alignItems: 'center', gap: '7px',
+                                    background: '#111318', border: 'none', borderRadius: '10px',
+                                    color: '#fff', fontSize: '13.5px', fontWeight: 600,
+                                    padding: '10px 16px', cursor: 'pointer', transition: 'opacity 0.1s',
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
+                                onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+                            >
+                                <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
+                                </svg>
+                                New Agent
+                            </button>
+                        }
+                    />
                 </div>
 
                 {/* Agent cards grid */}
@@ -147,7 +151,6 @@ export function ProjectOverview({ project }: { project: Project }) {
                                     setActiveAgentId(agent.id)
                                     router.visit(`/${project.slug}/agents/${agent.id}`)
                                 }}
-                                onEdit={() => setEditingAgent(agent)}
                                 onRestart={() => {
                                     const session = agentSessions.current.get(agent.id)
                                     if (session) {

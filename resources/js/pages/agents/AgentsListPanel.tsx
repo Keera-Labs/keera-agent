@@ -4,6 +4,8 @@ import { color } from '@/tokens'
 import { useAgents } from '@/queries/agents'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import type { Project } from '@/types/type'
+import { AgentAddModal } from './AgentAddModal'
+import { AgentEditModal } from './AgentEditModal'
 import { agentAvatarColor, agentInitials } from './presentation'
 
 // ─── Compact action icon button (carried over from PR #207) ───────────────────
@@ -44,7 +46,7 @@ export function AgentsListPanel({ project }: { project: Project }) {
     const {
         activeAgentId, setActiveAgentId,
         agentSessions, agentContainerRefs,
-        launchAgentSession, setEditingAgent, setShowAddAgent,
+        launchAgentSession,
     } = useAppLayout()
     const { agents: projectAgents, remove: removeAgent, adoptWork } = useAgents(project.id)
 
@@ -114,20 +116,23 @@ export function AgentsListPanel({ project }: { project: Project }) {
                 )}
 
                 {/* Add agent */}
-                <button
-                    onClick={() => setShowAddAgent(true)}
-                    title="Add agent"
-                    style={{
-                        background: 'transparent', border: `1px solid ${color.stroke}`,
-                        borderRadius: '4px', color: color.textFaint,
-                        fontSize: '13px', lineHeight: 1, padding: '1px 6px',
-                        cursor: 'pointer',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = color.accent; e.currentTarget.style.color = color.accent }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = color.stroke; e.currentTarget.style.color = color.textFaint }}
-                >
-                    +
-                </button>
+                <AgentAddModal
+                    trigger={
+                        <button
+                            title="Add agent"
+                            style={{
+                                background: 'transparent', border: `1px solid ${color.stroke}`,
+                                borderRadius: '4px', color: color.textFaint,
+                                fontSize: '13px', lineHeight: 1, padding: '1px 6px',
+                                cursor: 'pointer',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = color.accent; e.currentTarget.style.color = color.accent }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = color.stroke; e.currentTarget.style.color = color.textFaint }}
+                        >
+                            +
+                        </button>
+                    }
+                />
             </div>
 
             {projectAgents.length === 0 ? (
@@ -223,15 +228,33 @@ export function AgentsListPanel({ project }: { project: Project }) {
                                 </svg>
                             </CardIconButton>
 
-                            <CardIconButton
-                                title="Edit agent"
-                                onClick={() => setEditingAgent(agent)}
-                            >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                                    <circle cx="12" cy="12" r="8" />
-                                    <circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none" />
-                                </svg>
-                            </CardIconButton>
+                            {/* Stop propagation so opening the edit modal doesn't also
+                                drill into the agent via the row's onClick. */}
+                            <span style={{ display: 'inline-flex' }} onClick={e => e.stopPropagation()}>
+                                <AgentEditModal
+                                    agent={agent}
+                                    trigger={
+                                        <button
+                                            type="button"
+                                            title="Edit agent"
+                                            style={{
+                                                background: 'transparent', border: 'none',
+                                                color: color.textFaint, cursor: 'pointer',
+                                                padding: '5px', borderRadius: '6px',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                flexShrink: 0, transition: 'color 0.1s, background 0.1s',
+                                            }}
+                                            onMouseEnter={e => { e.currentTarget.style.color = color.textPrimary; e.currentTarget.style.background = color.bgCanvas }}
+                                            onMouseLeave={e => { e.currentTarget.style.color = color.textFaint; e.currentTarget.style.background = 'transparent' }}
+                                        >
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                                <circle cx="12" cy="12" r="8" />
+                                                <circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none" />
+                                            </svg>
+                                        </button>
+                                    }
+                                />
+                            </span>
 
                             <CardIconButton
                                 title="Adopt work — remove worktree, check out the agent branch"

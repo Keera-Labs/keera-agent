@@ -4,7 +4,6 @@ import { usePage } from '@inertiajs/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { FitAddon } from '@xterm/addon-fit'
 import type { Project, Workspace, Task } from '@/types/type'
-import type { ProjectAgent } from '@/queries/agents'
 import { useAgents, normalizeAgent } from '@/queries/agents'
 import type { AgentTemplate } from '@/types/agent'
 import { makeTerminal } from '@/hooks/useTerminalSessions'
@@ -33,10 +32,6 @@ export interface AppLayoutContextValue {
     setShowDefaultPermissions: (v: boolean) => void
     deletingWorkspace: Workspace | null
     setDeletingWorkspace: (w: Workspace | null) => void
-    showAddAgent: boolean
-    setShowAddAgent: (v: boolean) => void
-    editingAgent: ProjectAgent | null
-    setEditingAgent: (a: ProjectAgent | null) => void
     showProjectSearch: boolean
     setShowProjectSearch: (v: boolean) => void
 
@@ -199,7 +194,6 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     const [projectView, setProjectView] = useState<ProjectView>('agents')
     const [isDraggingOver, setIsDraggingOver] = useState(false)
     const [agentTemplates, setAgentTemplates] = useState<AgentTemplate[]>([])
-    const [showAddAgent, setShowAddAgent] = useState(false)
 
     // Initialise from Inertia props; updated immediately after a successful
     // PATCH /api/global-settings save so UI shows the new value without waiting
@@ -215,7 +209,6 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     // Raw selection — may refer to an agent from a previous project after switching.
     const [_activeAgentId, setActiveAgentId] = useState<number | null>(null)
     const [showProjectSearch, setShowProjectSearch] = useState(false)
-    const [editingAgent, setEditingAgent] = useState<ProjectAgent | null>(null)
 
     // ── Refs ──────────────────────────────────────────────────────────────────
     const sessions = useRef<Map<number, Session>>(new Map())
@@ -556,8 +549,6 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         showGlobalSettings, setShowGlobalSettings,
         showDefaultPermissions, setShowDefaultPermissions,
         deletingWorkspace, setDeletingWorkspace,
-        showAddAgent, setShowAddAgent,
-        editingAgent, setEditingAgent,
         showProjectSearch, setShowProjectSearch,
         // View state
         projectView, setProjectView,
