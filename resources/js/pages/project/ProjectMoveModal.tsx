@@ -2,8 +2,8 @@ import { useState, type ReactNode } from 'react'
 import { color } from '@/tokens'
 import type { Project, Workspace } from '@/types/type'
 import Modal from '@/components/ui/Modal'
-import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import useProjects from '@/queries/useProjects'
+import useWorkspaces from '@/queries/useWorkspaces'
 
 // Trigger-based "move project to workspace" modal (see ProjectCreateModal / PR #198).
 
@@ -75,7 +75,7 @@ export function ProjectMoveModal({
     trigger: ReactNode
     onOpenChange?: (open: boolean) => void
 }) {
-    const { workspaces } = useAppLayout()
+    const { workspaces } = useWorkspaces()
     const { handleMoveProject } = useProjects()
     return (
         <Modal trigger={trigger} ariaLabel="Move project" onOpenChange={onOpenChange}>

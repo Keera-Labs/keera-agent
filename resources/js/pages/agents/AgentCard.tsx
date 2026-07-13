@@ -1,6 +1,7 @@
 import type { MouseEvent, ReactNode } from 'react'
 import { color } from '@/tokens'
 import type { ProjectAgent } from '@/queries/agents'
+import { AgentEditModal } from './AgentEditModal'
 import { agentAvatarColor, agentInitials, agentRoleLabel, PLACEHOLDER } from './presentation'
 
 // ─── Footer action icon button (carried over from PR #207) ────────────────────
@@ -86,7 +87,7 @@ export interface AgentCardStats {
 
 export function AgentCard({
     agent, running, statusLine, stats, adoptPending,
-    onOpen, onRestart, onEdit, onAdopt,
+    onOpen, onRestart, onAdopt,
 }: {
     agent: ProjectAgent
     running: boolean
@@ -95,7 +96,6 @@ export function AgentCard({
     adoptPending: boolean
     onOpen: () => void
     onRestart: () => void
-    onEdit: () => void
     onAdopt: () => void
 }) {
     const divider = { height: '1px', background: color.stroke, border: 'none', margin: 0 }
@@ -166,12 +166,29 @@ export function AgentCard({
                     </svg>
                 </CardIconButton>
 
-                <CardIconButton title="Edit agent" onClick={onEdit}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                        <circle cx="12" cy="12" r="8" />
-                        <circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none" />
-                    </svg>
-                </CardIconButton>
+                <AgentEditModal
+                    agent={agent}
+                    trigger={
+                        <button
+                            type="button"
+                            title="Edit agent"
+                            style={{
+                                background: 'transparent', border: `1px solid ${color.stroke}`,
+                                color: color.textMuted, cursor: 'pointer',
+                                width: '30px', height: '30px', borderRadius: '8px',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                flexShrink: 0, transition: 'color 0.1s, background 0.1s, border-color 0.1s',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.color = color.textPrimary; e.currentTarget.style.borderColor = color.textPrimary; e.currentTarget.style.background = color.bgCanvas }}
+                            onMouseLeave={e => { e.currentTarget.style.color = color.textMuted; e.currentTarget.style.borderColor = color.stroke; e.currentTarget.style.background = 'transparent' }}
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                <circle cx="12" cy="12" r="8" />
+                                <circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none" />
+                            </svg>
+                        </button>
+                    }
+                />
 
                 <CardIconButton
                     title="Adopt work — remove worktree, check out the agent branch"
