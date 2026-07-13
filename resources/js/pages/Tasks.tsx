@@ -5,8 +5,8 @@ import { ProjectLayout } from '@/layouts/ProjectLayout'
 import { TasksView } from '@/layouts/views/TasksView'
 import { CreateTaskModal } from '@/components/modals/CreateTaskModal'
 import { TaskDetailModal } from '@/components/modals/TaskDetailModal'
-import useProjects from '@/queries/useProjects'
-import useWorkspaces from '@/queries/useWorkspaces'
+import useProjects from '@/queries/projectsQuery'
+import useWorkspaces from '@/queries/workspacesQuery'
 import type { Task } from '@/types/type'
 
 // Self-contained tasks page. Data is delivered as Inertia props by

@@ -5,6 +5,7 @@ import "@xterm/xterm/css/xterm.css"
 import { AppLayoutStateProvider, useAppLayout } from "./context/AppLayoutContext"
 import { ModalLayer } from "./ModalLayer"
 import Sidebar, { type ProjectView } from "./sidebar/Sidebar"
+import { useProjectStore } from "@/stores/projectStore"
 
 // ─── Phase 1 re-exports ───────────────────────────────────────────────────────
 export { agentColor } from "@/utils/agentColor"
@@ -13,7 +14,7 @@ export type { AgentTemplate } from "@/types/agent"
 export { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS } from "@/types/agent"
 export { STATUS_CYCLE, STATUS_COLORS, STATUS_LABELS } from "@/types/task"
 export { useAudio } from "@/hooks/useAudio"
-export { useAgentTemplates } from "@/queries/useAgentTemplates"
+export { useAgentTemplates } from "@/queries/agentTemplatesQuery"
 export { makeTerminal, useTerminalSessions } from "@/hooks/useTerminalSessions"
 export type { Session } from "@/hooks/useTerminalSessions"
 export { TagInput } from "@/components/ui/TagInput"
@@ -26,7 +27,6 @@ export { ProjectSearchModal } from "@/components/modals/ProjectSearchModal"
 export { ConfirmDeleteWorkspaceModal } from "@/components/modals/ConfirmDeleteWorkspaceModal"
 export { CreateTaskModal } from "@/components/modals/CreateTaskModal"
 export { TaskDetailModal } from "@/components/modals/TaskDetailModal"
-export { AgentAddModal } from "@/components/modals/AgentAddModal"
 
 // ─── Persistent layout ────────────────────────────────────────────────────────
 
@@ -40,16 +40,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
 function AppLayoutShell({ children }: { children: React.ReactNode }) {
     const {
-        activeProject, tasks,
+        tasks,
         claudeStatus,
         projectView, setProjectView,
-        setShowAddAgent,
         setShowWorkspaceModal,
     } = useAppLayout()
+    const activeProject = useProjectStore(s => s.activeProject)
 
     const { component } = usePage()
     const isTasksPage = component === "Tasks"
-    const activeView: ProjectView = isTasksPage ? "tasks" : projectView
+    const isConfigPage = component === "Configurations"
+    const activeView: ProjectView = isTasksPage ? "tasks" : isConfigPage ? "commands" : projectView
 
     return (
         <div className="flex flex-col w-full h-screen overflow-hidden" style={{ background: color.bgCanvas }}>
@@ -59,15 +60,13 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
                     activeProject={activeProject}
                     projectView={activeView}
                     onChangeView={(view) => {
-                        if (view === "tasks" && activeProject) {
-                            router.visit(`/${activeProject.slug}/tasks`)
-                            return
-                        }
-                        setProjectView(view)
-                        if (isTasksPage) router.visit(`/${activeProject?.slug}`)
+                        if (!activeProject) { setProjectView(view); return }
+                        if (view === "tasks") { router.visit(`/${activeProject.slug}/tasks`); return }
+                        if (view === "commands") { router.visit(`/${activeProject.slug}/configurations`); return }
+                        setProjectView("agents")
+                        if (isTasksPage || isConfigPage) router.visit(`/${activeProject.slug}`)
                     }}
                     taskCount={tasks.length}
-                    onAddAgent={() => setShowAddAgent(true)}
                     activeId={activeProject?.id ?? null}
                     claudeStatus={claudeStatus}
                     onCreateWorkspace={() => setShowWorkspaceModal(true)}

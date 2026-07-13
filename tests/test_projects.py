@@ -1,13 +1,8 @@
-from fastapi_startkit.fastapi.testing import HttpTestCase
-
 from app.models.Project import Project
-from bootstrap.application import app
+from tests.test_case import TestCase
 
 
-class TestProjects(HttpTestCase):
-    def get_application(self):
-        return app
-
+class TestProjects(TestCase):
     async def asyncSetUp(self):
         await super().asyncSetUp()
         await Project.where("id", ">", 0).delete()

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ChevronDown, X } from 'lucide-react'
 import { color } from '@/tokens'
 import type { Task } from '@/types/type'
 import { STATUS_CYCLE, STATUS_COLORS, STATUS_LABELS } from '@/types/task'
@@ -17,12 +18,10 @@ function PlanningSection({ label, items, color: dotColor }: { label: string; ite
                     padding: 0, display: 'flex', alignItems: 'center', gap: '4px',
                 }}
             >
-                <svg
-                    width="8" height="8" viewBox="0 0 16 16" fill={dotColor}
+                <ChevronDown
+                    size={8} color={dotColor}
                     style={{ transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }}
-                >
-                    <path d="M4.427 7.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 7H4.604a.25.25 0 00-.177.427z"/>
-                </svg>
+                />
                 <span style={{ fontSize: '10px', color: dotColor, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     {label} ({items.length})
                 </span>
@@ -185,7 +184,7 @@ export function TasksView({
                                                 onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = color.danger }}
                                                 onMouseLeave={e => { e.currentTarget.style.opacity = '0'; e.currentTarget.style.color = color.textFaint }}
                                             >
-                                                ×
+                                                <X size={12}/>
                                             </button>
                                         </div>
 

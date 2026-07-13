@@ -3,25 +3,26 @@ import type React from 'react'
 import { usePage } from '@inertiajs/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { FitAddon } from '@xterm/addon-fit'
-import type { Project, Workspace, Task } from '@/types/type'
-import type { ProjectAgent } from '@/queries/agents'
-import { useAgents, normalizeAgent } from '@/queries/agents'
+import type { Workspace, Task } from '@/types/type'
+import { useAgents, normalizeAgent } from '@/queries/agentQuery'
 import type { AgentTemplate } from '@/types/agent'
 import { makeTerminal } from '@/hooks/useTerminalSessions'
 import type { Session } from '@/hooks/useTerminalSessions'
 import type { ProjectView } from '@/layouts/sidebar/Sidebar'
-import { useTasks } from '@/queries/tasks'
-import useProjects, { PROJECTS_QUERY_KEY } from '@/queries/useProjects'
-import { WORKSPACES_QUERY_KEY } from '@/queries/useWorkspaces'
+import { useTasks } from '@/queries/taskQuery'
+import useProjects, { PROJECTS_QUERY_KEY } from '@/queries/projectsQuery'
+import { WORKSPACES_QUERY_KEY } from '@/queries/workspacesQuery'
+import { useProjectStore } from '@/stores/projectStore'
 
 // ─── Context value interface ──────────────────────────────────────────────────
 
 export interface AppLayoutContextValue {
     // ── Data ─────────────────────────────────────────────────────────────────
     // Project and workspace lists are owned by their own React Query hooks
-    // (useProjects / useWorkspaces); the layout only derives activeProject.
-    // Consumers that need a full list call those hooks directly.
-    activeProject: Project | null
+    // (useProjects / useWorkspaces). useProjects only fetches/manages the list;
+    // ProjectLayout resolves the route slug into an active project and pushes
+    // it into useProjectStore. Every consumer, including this provider, reads
+    // it back from that store.
     tasks: Task[]
 
     // ── Modal state ───────────────────────────────────────────────────────────
@@ -33,10 +34,6 @@ export interface AppLayoutContextValue {
     setShowDefaultPermissions: (v: boolean) => void
     deletingWorkspace: Workspace | null
     setDeletingWorkspace: (w: Workspace | null) => void
-    showAddAgent: boolean
-    setShowAddAgent: (v: boolean) => void
-    editingAgent: ProjectAgent | null
-    setEditingAgent: (a: ProjectAgent | null) => void
     showProjectSearch: boolean
     setShowProjectSearch: (v: boolean) => void
 
@@ -163,18 +160,19 @@ function playSound(type: 'done' | 'input') {
 
 export function AppLayoutStateProvider({ children }: { children: React.ReactNode }) {
     const { props } = usePage<{
-        project?: string
         agent_id?: number
         tasks?: Task[]
         global_settings?: { max_agents_per_project?: number }
     }>()
-    const projectName = props.project
     const agentIdFromUrl = props.agent_id
     const queryClient = useQueryClient()
 
-    // Projects and workspaces are owned by their own React Query hooks; the
-    // layout only reads projects to derive activeProject and seed claudeStatus.
+    // useProjects only fetches/manages the projects list; it doesn't resolve
+    // which one is "active" here — that's ProjectLayout's job, since it's the
+    // component that actually has a project route to read (usePage().props.project).
+    // `projects` itself is still needed here to seed claudeStatus below.
     const { projects } = useProjects()
+    const activeProject = useProjectStore(s => s.activeProject)
 
     async function refreshData() {
         // Workspace changes can reassign projects (e.g. deleting a workspace
@@ -199,7 +197,6 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     const [projectView, setProjectView] = useState<ProjectView>('agents')
     const [isDraggingOver, setIsDraggingOver] = useState(false)
     const [agentTemplates, setAgentTemplates] = useState<AgentTemplate[]>([])
-    const [showAddAgent, setShowAddAgent] = useState(false)
 
     // Initialise from Inertia props; updated immediately after a successful
     // PATCH /api/global-settings save so UI shows the new value without waiting
@@ -215,7 +212,6 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     // Raw selection — may refer to an agent from a previous project after switching.
     const [_activeAgentId, setActiveAgentId] = useState<number | null>(null)
     const [showProjectSearch, setShowProjectSearch] = useState(false)
-    const [editingAgent, setEditingAgent] = useState<ProjectAgent | null>(null)
 
     // ── Refs ──────────────────────────────────────────────────────────────────
     const sessions = useRef<Map<number, Session>>(new Map())
@@ -226,8 +222,6 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     const agentTerminalSlot = useRef<HTMLDivElement | null>(null)
 
     // ── Derived data ──────────────────────────────────────────────────────────
-    const activeProject = projects.find(p => p.slug === projectName) ?? projects[0] ?? null
-
     const taskHook = useTasks(activeProject?.id ?? null)
     const agentHook = useAgents(activeProject?.id ?? null)
     const tasks = taskHook.tasks
@@ -550,14 +544,12 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
 
     const value: AppLayoutContextValue = {
         // Data
-        activeProject, tasks,
+        tasks,
         // Modal state
         showWorkspaceModal, setShowWorkspaceModal,
         showGlobalSettings, setShowGlobalSettings,
         showDefaultPermissions, setShowDefaultPermissions,
         deletingWorkspace, setDeletingWorkspace,
-        showAddAgent, setShowAddAgent,
-        editingAgent, setEditingAgent,
         showProjectSearch, setShowProjectSearch,
         // View state
         projectView, setProjectView,

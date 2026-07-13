@@ -3,6 +3,7 @@ import { useContext } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import type { Project } from "@/types/type"
 import { AppLayoutContext } from "@/layouts/context/AppLayoutContext"
+import { useProjectStore } from "@/stores/projectStore"
 
 export const PROJECTS_QUERY_KEY = ["projects"] as const
 
@@ -24,6 +25,13 @@ export default function useProjects() {
         staleTime: 1000 * 30,
     })
     const projects = query.data ?? []
+
+    function setActiveProject(slug?: string) {
+        const active = projects.find(p => p.slug === slug) ?? projects[0] ?? null
+        if (useProjectStore.getState().activeProject?.id !== active?.id) {
+            useProjectStore.getState().setActiveProject(active)
+        }
+    }
 
     const invalidate = () => queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY })
 
@@ -88,6 +96,7 @@ export default function useProjects() {
 
     return {
         projects,
+        setActiveProject,
         deleting: deleteMutation.isPending,
         handleProjectCreated,
         handleMoveProject,

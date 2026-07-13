@@ -13,7 +13,7 @@ from collections import deque
 from datetime import datetime, timezone
 
 from fastapi import Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from app.models.Command import Command
 from app.models.Project import Project
@@ -74,18 +74,26 @@ def _stream_output(cmd_id: int, proc: subprocess.Popen, start_ts: float):
     runs_buf.appendleft(run_record)
 
 
-async def index(request: Request, project_id: int):
+async def commands_for_project(project_id: int) -> list[dict]:
+    """Serialized commands for a project, reconciling stale 'running' rows.
+
+    A command left "running" with no live process (server restarted mid-run) is
+    corrected to "stopped" so the UI never shows a phantom process. Shared by the
+    JSON `index` endpoint and the Configurations page controller.
+    """
     commands = await Command.where("project_id", project_id).get()
-    # Reconcile DB status with live processes
     result = []
     for c in commands:
         if c.status == "running" and c.id not in _processes:
-            # Process died while server was down — mark stopped
             c.status = "stopped"
             c.pid = None
             await c.save()
         result.append(_serialize(c))
-    return JSONResponse(result)
+    return result
+
+
+async def index(request: Request, project_id: int):
+    return JSONResponse(await commands_for_project(project_id))
 
 
 async def store(request: Request, project_id: int):
@@ -219,7 +227,9 @@ async def destroy(request: Request, command_id: int):
     _output.pop(command_id, None)
     _runs.pop(command_id, None)
     await Command.where("id", command_id).delete()
-    return JSONResponse({}, status_code=204)
+    # 204 must carry no body — a JSON body here triggers a server-side
+    # "Response content longer than Content-Length" RuntimeError on every delete.
+    return Response(status_code=204)
 
 
 def _pty_set_size(master_fd: int, rows: int, cols: int) -> None:

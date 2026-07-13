@@ -491,6 +491,14 @@ class SpawnAgentInput(BaseModel):
     model: Optional[str] = Field(
         default=None, description="Claude model to use. Defaults to claude-opus-4-8."
     )
+    complexity: str = Field(
+        pattern="^(easy|medium|hard)$",
+        description=(
+            "Task complexity (easy|medium|hard). REQUIRED — it selects the model "
+            "automatically (easy/medium → claude-sonnet-5, hard → claude-opus-4-8) "
+            "and OVERRIDES any explicit `model`."
+        ),
+    )
     task_id: Optional[int] = Field(
         default=None, description="ID of the task this agent is working on."
     )
@@ -561,22 +569,25 @@ class SpawnAgentTool(Tool):
                 f"Error: agent limit ({limit}) reached for project '{project.name}'. Delete an agent first."
             )
 
+        # Build the request outside the try so a validation error (e.g. a missing
+        # or invalid complexity) surfaces instead of being swallowed as an
+        # "Error:" string — only the limit ValueError from execute() is caught.
+        request = AgentStoreRequest(
+            name=name,
+            agent_type=arguments.get("agent_type", "software_engineer"),
+            model=arguments.get("model") or "claude-opus-4-8",
+            # complexity is required and its model validator overrides `model`.
+            complexity=arguments.get("complexity"),
+            description=f"{name} agent",
+            # system_prompt is intentionally not forwarded: spawned agents
+            # always use their role-based default prompt and a caller must
+            # not be able to override an agent's role at spawn time.
+            system_prompt=None,
+            task_id=arguments.get("task_id"),
+            orchestrator_id=arguments.get("from_agent_id"),
+        )
         try:
-            agent = await AgentCreateAction(
-                project_id=project.id,
-                request=AgentStoreRequest(
-                    name=name,
-                    agent_type=arguments.get("agent_type", "software_engineer"),
-                    model=arguments.get("model") or "claude-opus-4-8",
-                    description=f"{name} agent",
-                    # system_prompt is intentionally not forwarded: spawned agents
-                    # always use their role-based default prompt and a caller must
-                    # not be able to override an agent's role at spawn time.
-                    system_prompt=None,
-                    task_id=arguments.get("task_id"),
-                    orchestrator_id=arguments.get("from_agent_id"),
-                ),
-            ).execute()
+            agent = await AgentCreateAction(project_id=project.id, request=request).execute()
         except ValueError as e:
             return Response.text(f"Error: {e}")
 
