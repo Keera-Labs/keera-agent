@@ -1,5 +1,4 @@
-import { useWorkspace } from "@/queries/useWorkspace"
-import useWorkspaces from "@/queries/useWorkspaces"
+import useWorkspaces, { useWorkspace } from "@/queries/useWorkspaces"
 import { useAppLayout } from "@/layouts/context/AppLayoutContext"
 import { color } from "@/tokens"
 import { useEffect, useRef, useState } from "react"

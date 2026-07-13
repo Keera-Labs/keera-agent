@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useWorkspace } from '@/queries/useWorkspace'
+import { useWorkspace } from '@/queries/useWorkspaces'
 
 const inputCls = 'bg-canvas border border-stroke rounded-md text-zinc-900 placeholder:text-zinc-500 text-[13px] px-2.5 py-1.5 font-mono outline-none w-full'
 const labelSpanCls = 'text-zinc-600 text-[11px] uppercase tracking-[0.05em]'
