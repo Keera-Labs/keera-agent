@@ -31,6 +31,17 @@ class TestCommandController(TestCase, DatabaseTransaction):
         response.assert_no_content()
         self.assertIsNone(await Command.find(command.id))
 
+    async def test_destroy_returns_bodyless_204(self):
+        """A 204 must carry no body. A JSON body ({}) sets Content-Length: 0 while
+        writing 2 bytes, raising a server-side "Response content longer than
+        Content-Length" RuntimeError on every delete. Assert the body is empty."""
+        command = await self._create_command()
+
+        response = await self.delete(f"/api/commands/{command.id}")
+
+        response.assert_no_content()
+        assert response.content == b"", f"expected empty 204 body, got {response.content!r}"
+
     async def test_destroy_missing_command_returns_404(self):
         response = await self.delete("/api/commands/999999")
         response.assert_status(404)
