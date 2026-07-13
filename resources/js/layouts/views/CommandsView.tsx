@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { FitAddon } from '@xterm/addon-fit'
+import {
+    Zap, Check, Upload, Filter, AlignLeft, MessageSquare, Database, List,
+    CirclePlay, Terminal, AlertTriangle, Plus, Square, Play, Pencil, X,
+} from 'lucide-react'
 import { color } from '@/tokens'
 import type { Project } from '@/types/type'
 import { makeTerminal } from '@/hooks/useTerminalSessions'
@@ -42,56 +46,16 @@ function timeAgo(isoStr: string): string {
 
 function getCmdIcon(label: string): React.ReactNode {
     const l = label.toLowerCase()
-    if (l.includes('build') || l.includes('compile')) return (
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M9.504.43a1.516 1.516 0 012.437 1.713L10.415 5.5h2.123c1.57 0 2.454 1.833 1.447 3.04L6.04 15.96a1.516 1.516 0 01-2.437-1.713l1.526-3.356H3.006c-1.57 0-2.454-1.833-1.447-3.04L9.504.43z"/>
-        </svg>
-    )
-    if (l.includes('test') || l.includes('spec') || l.includes('check')) return (
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.751.751 0 011.042-1.08l.018.018 2.72 2.72 6.72-6.72a.75.75 0 011.06 0z"/>
-        </svg>
-    )
-    if (l.includes('deploy') || l.includes('ship') || l.includes('release') || l.includes('publish')) return (
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M7.47 1.97a.75.75 0 011.06 0l3.75 3.75a.75.75 0 01-1.06 1.06L8.75 4.31v7.94a.75.75 0 01-1.5 0V4.31L4.78 6.78a.75.75 0 01-1.06-1.06l3.75-3.75zM3.75 13a.75.75 0 000 1.5h8.5a.75.75 0 000-1.5h-8.5z"/>
-        </svg>
-    )
-    if (l.includes('lint')) return (
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M0 1.75A.75.75 0 01.75 1h4.253c1.227 0 2.317.59 3 1.501A3.744 3.744 0 0111.006 1h3.245a.75.75 0 010 1.5H11.006a2.25 2.25 0 00-2.25 2.25v8.5a.75.75 0 01-1.5 0v-8.5a2.25 2.25 0 00-2.25-2.25H.75A.75.75 0 010 1.75z"/>
-        </svg>
-    )
-    if (l.includes('format') || l.includes('fmt') || l.includes('prettier')) return (
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M1.5 2.75a.75.75 0 01.75-.75h11.5a.75.75 0 010 1.5H2.25a.75.75 0 01-.75-.75zM1.5 8a.75.75 0 01.75-.75h7.5a.75.75 0 010 1.5h-7.5A.75.75 0 011.5 8zm0 5.25a.75.75 0 01.75-.75h5.5a.75.75 0 010 1.5h-5.5a.75.75 0 01-.75-.75z"/>
-        </svg>
-    )
-    if (l.includes('review') || l.includes('pr') || l.includes('diff')) return (
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M1.5 2.75a.25.25 0 01.25-.25h8.5a.25.25 0 01.25.25v5.5a.25.25 0 01-.25.25h-3.5a.75.75 0 00-.53.22L3.5 11.44V9.25a.75.75 0 00-.75-.75h-1a.25.25 0 01-.25-.25v-5.5zM1.75 1A1.75 1.75 0 000 2.75v5.5C0 9.216.784 10 1.75 10H2v1.543a1.457 1.457 0 002.487 1.03L7.061 10h3.189A1.75 1.75 0 0012 8.25v-5.5A1.75 1.75 0 0010.25 1h-8.5z"/>
-        </svg>
-    )
-    if (l.includes('db') || l.includes('database') || l.includes('migrate') || l.includes('sql')) return (
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M1 3.5C1 2.119 3.582 1 7 1s6 1.119 6 2.5v2c0 1.381-2.582 2.5-6 2.5S1 6.881 1 5.5v-2zm6 9C3.582 12.5 1 11.381 1 10V8.5c0-.304.082-.598.27-.867.502.677 1.508 1.247 2.812 1.598C4.74 9.485 5.838 9.6 7 9.6s2.26-.115 3.918-.369c1.304-.351 2.31-.921 2.812-1.598.188.269.27.563.27.867v1.5c0 1.381-2.582 2.5-6 2.5zm0 3c-3.418 0-6-1.119-6-2.5V11.5c0-.304.082-.598.27-.867.502.677 1.508 1.247 2.812 1.598C4.74 12.485 5.838 12.6 7 12.6s2.26-.115 3.918-.369c1.304-.351 2.31-.921 2.812-1.598.188.269.27.563.27.867V13c0 1.381-2.582 2.5-6 2.5z"/>
-        </svg>
-    )
-    if (l.includes('log') || l.includes('tail') || l.includes('monitor') || l.includes('watch')) return (
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M1.75 2.5a.25.25 0 000 .5h12.5a.25.25 0 000-.5H1.75zM1.5 6a.75.75 0 01.75-.75h12.5a.75.75 0 010 1.5H2.25A.75.75 0 011.5 6zm.75 3.25a.25.25 0 000 .5h12.5a.25.25 0 000-.5H2.25z"/>
-        </svg>
-    )
-    if (l.includes('dev') || l.includes('start') || l.includes('serve')) return (
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M8 0a8 8 0 100 16A8 8 0 008 0zM1.5 8a6.5 6.5 0 1113 0 6.5 6.5 0 01-13 0zm4.879-2.773l4.264 2.559a.25.25 0 010 .428l-4.264 2.559A.25.25 0 016 10.559V5.442a.25.25 0 01.379-.215z"/>
-        </svg>
-    )
-    return (
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25V2.75zm1.75-.25a.25.25 0 00-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V2.75a.25.25 0 00-.25-.25H1.75zM3.5 6.25a.75.75 0 000 1.5h.268l-.01.034L2.76 10.5a.75.75 0 001.44.42l.04-.138H6.76l.04.138a.75.75 0 001.44-.42L7.242 7.784l-.01-.034H7.5a.75.75 0 000-1.5h-4z"/>
-        </svg>
-    )
+    if (l.includes('build') || l.includes('compile')) return <Zap size={12}/>
+    if (l.includes('test') || l.includes('spec') || l.includes('check')) return <Check size={12}/>
+    if (l.includes('deploy') || l.includes('ship') || l.includes('release') || l.includes('publish')) return <Upload size={12}/>
+    if (l.includes('lint')) return <Filter size={12}/>
+    if (l.includes('format') || l.includes('fmt') || l.includes('prettier')) return <AlignLeft size={12}/>
+    if (l.includes('review') || l.includes('pr') || l.includes('diff')) return <MessageSquare size={12}/>
+    if (l.includes('db') || l.includes('database') || l.includes('migrate') || l.includes('sql')) return <Database size={12}/>
+    if (l.includes('log') || l.includes('tail') || l.includes('monitor') || l.includes('watch')) return <List size={12}/>
+    if (l.includes('dev') || l.includes('start') || l.includes('serve')) return <CirclePlay size={12}/>
+    return <Terminal size={12}/>
 }
 
 const cmdPulseStyle = `@keyframes cmd-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`
@@ -284,9 +248,7 @@ export function CommandsView({ project }: { project: Project }) {
                 display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0,
                 background: color.bgCanvas,
             }}>
-                <svg width="13" height="13" viewBox="0 0 16 16" fill={color.textMuted}>
-                    <path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25V2.75zm1.75-.25a.25.25 0 00-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V2.75a.25.25 0 00-.25-.25H1.75zM3.5 6.25a.75.75 0 000 1.5h.268l-.01.034L2.76 10.5a.75.75 0 001.44.42l.04-.138H6.76l.04.138a.75.75 0 001.44-.42L7.242 7.784l-.01-.034H7.5a.75.75 0 000-1.5h-4zm.751 1.5H6.25l-.609 2.099H4.86L4.251 7.75zm5.5-1.5a.75.75 0 000 1.5h3.5a.75.75 0 000-1.5h-3.5zm0 3a.75.75 0 000 1.5h3.5a.75.75 0 000-1.5h-3.5z"/>
-                </svg>
+                <Terminal size={13} color={color.textMuted}/>
                 <span style={{ color: color.textPrimary, fontSize: '13px', fontWeight: 600, flex: 1 }}>Commands</span>
                 {commands.filter(c => c.status === 'running').length > 0 && (
                     <span style={{
@@ -312,9 +274,7 @@ export function CommandsView({ project }: { project: Project }) {
                         '× Cancel'
                     ) : (
                         <>
-                            <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
-                                <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
-                            </svg>
+                            <Plus size={10}/>
                             New command
                         </>
                     )}
@@ -387,9 +347,7 @@ export function CommandsView({ project }: { project: Project }) {
                                 background: color.dangerCanvas, border: `1px solid ${color.danger}`,
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                             }}>
-                                <svg width="22" height="22" viewBox="0 0 16 16" fill={color.danger}>
-                                    <path d="M8.982 1.566a1.13 1.13 0 00-1.964 0L.165 13.233c-.457.778.091 1.767.982 1.767h13.706c.891 0 1.438-.99.982-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 01-1.1 0L7.1 5.995A.905.905 0 018 5zm.002 6a1 1 0 110 2 1 1 0 010-2z"/>
-                                </svg>
+                                <AlertTriangle size={22} color={color.danger}/>
                             </div>
                             <div>
                                 <p style={{ margin: '0 0 4px', color: color.textSecondary, fontSize: '13px', fontWeight: 500 }}>
@@ -423,9 +381,7 @@ export function CommandsView({ project }: { project: Project }) {
                                 background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                             }}>
-                                <svg width="22" height="22" viewBox="0 0 16 16" fill={color.textFaint}>
-                                    <path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25V2.75zm1.75-.25a.25.25 0 00-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V2.75a.25.25 0 00-.25-.25H1.75zM3.5 6.25a.75.75 0 000 1.5h.268l-.01.034L2.76 10.5a.75.75 0 001.44.42l.04-.138H6.76l.04.138a.75.75 0 001.44-.42L7.242 7.784l-.01-.034H7.5a.75.75 0 000-1.5h-4zm.751 1.5H6.25l-.609 2.099H4.86L4.251 7.75zm5.5-1.5a.75.75 0 000 1.5h3.5a.75.75 0 000-1.5h-3.5zm0 3a.75.75 0 000 1.5h3.5a.75.75 0 000-1.5h-3.5z"/>
-                                </svg>
+                                <Terminal size={22} color={color.textFaint}/>
                             </div>
                             <div>
                                 <p style={{ margin: '0 0 4px', color: color.textSecondary, fontSize: '13px', fontWeight: 500 }}>
@@ -545,13 +501,9 @@ export function CommandsView({ project }: { project: Project }) {
                                             }}
                                         >
                                             {isRunning ? (
-                                                <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor">
-                                                    <rect x="1.5" y="1.5" width="7" height="7" rx="1"/>
-                                                </svg>
+                                                <Square size={9} fill="currentColor"/>
                                             ) : (
-                                                <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor">
-                                                    <path d="M2 1.5l7 3.5-7 3.5V1.5z"/>
-                                                </svg>
+                                                <Play size={9} fill="currentColor"/>
                                             )}
                                         </button>
 
@@ -598,9 +550,7 @@ export function CommandsView({ project }: { project: Project }) {
                                             onMouseEnter={e => { e.currentTarget.style.color = color.accent; e.currentTarget.style.background = color.bgBase }}
                                             onMouseLeave={e => { e.currentTarget.style.color = color.textFaint; e.currentTarget.style.background = 'transparent' }}
                                         >
-                                            <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
-                                                <path d="M11.013 1.427a1.75 1.75 0 012.474 0l1.086 1.086a1.75 1.75 0 010 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 01-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61zm1.414 1.06a.25.25 0 00-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 000-.354l-1.086-1.086zM11.189 6.25L9.75 4.81l-6.286 6.287a.25.25 0 00-.064.108l-.558 1.953 1.953-.558a.249.249 0 00.108-.064l6.286-6.286z"/>
-                                            </svg>
+                                            <Pencil size={11}/>
                                         </button>
 
                                         {/* Delete */}
@@ -614,7 +564,7 @@ export function CommandsView({ project }: { project: Project }) {
                                             }}
                                             onMouseEnter={e => { e.currentTarget.style.color = color.danger; e.currentTarget.style.background = color.dangerCanvas }}
                                             onMouseLeave={e => { e.currentTarget.style.color = color.textFaint; e.currentTarget.style.background = 'transparent' }}
-                                        >×</button>
+                                        ><X size={11}/></button>
                                     </div>
                                 )
                             })}
@@ -631,9 +581,7 @@ export function CommandsView({ project }: { project: Project }) {
                                 onMouseEnter={e => { e.currentTarget.style.color = color.textMuted; e.currentTarget.style.background = color.bgSurface }}
                                 onMouseLeave={e => { e.currentTarget.style.color = color.textFaint; e.currentTarget.style.background = 'transparent' }}
                             >
-                                <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
-                                    <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
-                                </svg>
+                                <Plus size={10}/>
                                 Add command
                             </button>
                         </div>
@@ -674,7 +622,7 @@ export function CommandsView({ project }: { project: Project }) {
                                     }}
                                     onMouseEnter={e => (e.currentTarget.style.color = color.textSecondary)}
                                     onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
-                                >×</button>
+                                ><X size={14}/></button>
                             </div>
                             {/* SHELL section */}
                             <div>

@@ -1,5 +1,6 @@
 import { type MouseEvent, type ReactNode } from 'react'
 import { router } from '@inertiajs/react'
+import { Play, RotateCw, CircleDot, GitMerge, X } from 'lucide-react'
 import { color } from '@/tokens'
 import { useAgents } from '@/queries/agents'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
@@ -82,9 +83,7 @@ export function AgentsListPanel({ project }: { project: Project }) {
                         onMouseEnter={e => { e.currentTarget.style.borderColor = '#16a34a'; e.currentTarget.style.color = '#16a34a' }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = color.stroke; e.currentTarget.style.color = color.textFaint }}
                     >
-                        <svg width="8" height="8" viewBox="0 0 10 10" fill="currentColor">
-                            <path d="M2 1.5l7 3.5-7 3.5V1.5z"/>
-                        </svg>
+                        <Play size={8} fill="currentColor"/>
                         All
                     </button>
                 )}
@@ -217,20 +216,14 @@ export function AgentsListPanel({ project }: { project: Project }) {
                                     setActiveAgentId(agent.id)
                                 }}
                             >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M23 4v6h-6" />
-                                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                                </svg>
+                                <RotateCw size={14}/>
                             </CardIconButton>
 
                             <CardIconButton
                                 title="Edit agent"
                                 onClick={() => setEditingAgent(agent)}
                             >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                                    <circle cx="12" cy="12" r="8" />
-                                    <circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none" />
-                                </svg>
+                                <CircleDot size={14}/>
                             </CardIconButton>
 
                             <CardIconButton
@@ -247,12 +240,7 @@ export function AgentsListPanel({ project }: { project: Project }) {
                                     }
                                 }}
                             >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                                    <line x1="6" y1="3" x2="6" y2="15" />
-                                    <circle cx="18" cy="6" r="3" />
-                                    <circle cx="6" cy="18" r="3" />
-                                    <path d="M18 9a9 9 0 0 1-9 9" />
-                                </svg>
+                                <GitMerge size={14}/>
                             </CardIconButton>
 
                             <CardIconButton
@@ -274,10 +262,7 @@ export function AgentsListPanel({ project }: { project: Project }) {
                                     await removeAgent.mutateAsync(agent.id)
                                 }}
                             >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                                    <line x1="6" y1="6" x2="18" y2="18" />
-                                    <line x1="18" y1="6" x2="6" y2="18" />
-                                </svg>
+                                <X size={14}/>
                             </CardIconButton>
                         </div>
                     </div>

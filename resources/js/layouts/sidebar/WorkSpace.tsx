@@ -2,6 +2,7 @@ import useWorkspaces from "@/queries/useWorkspaces"
 import { useAppLayout } from "@/layouts/context/AppLayoutContext"
 import { color } from "@/tokens"
 import { useEffect, useRef, useState } from "react"
+import { ChevronsUpDown, Check, Trash2, Plus } from "lucide-react"
 
 export function WorkspacePicker({
                                     selected,
@@ -58,9 +59,7 @@ export function WorkspacePicker({
                     {current?.name ?? "Personal Workspace"}
                 </span>
                 {/* Up/down chevrons */}
-                <svg width="12" height="12" viewBox="0 0 16 16" fill={color.textFaint} style={{ flexShrink: 0 }}>
-                    <path d="M5 7l3-3 3 3M5 9l3 3 3-3" stroke={color.textFaint} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                </svg>
+                <ChevronsUpDown size={12} color={color.textFaint} style={{ flexShrink: 0 }}/>
             </button>
 
             {open && (
@@ -86,9 +85,7 @@ export function WorkspacePicker({
                     >
                         All Projects
                         {selected === null && (
-                            <svg width="10" height="10" viewBox="0 0 16 16" fill={color.accent} style={{ marginLeft: "auto" }}>
-                                <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/>
-                            </svg>
+                            <Check size={10} color={color.accent} style={{ marginLeft: "auto" }}/>
                         )}
                     </button>
 
@@ -110,9 +107,7 @@ export function WorkspacePicker({
                             >
                                 {w.name}
                                 {selected === w.id && (
-                                    <svg width="10" height="10" viewBox="0 0 16 16" fill={color.accent} style={{ marginLeft: "auto" }}>
-                                        <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/>
-                                    </svg>
+                                    <Check size={10} color={color.accent} style={{ marginLeft: "auto" }}/>
                                 )}
                             </button>
                             <button
@@ -128,9 +123,7 @@ export function WorkspacePicker({
                                 onMouseEnter={e => (e.currentTarget.style.color = color.danger)}
                                 onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
                             >
-                                <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
-                                    <path d="M6.5 1.75a.25.25 0 01.25-.25h2.5a.25.25 0 01.25.25V3h-3V1.75zm4.5 0V3h2.25a.75.75 0 010 1.5H2.75a.75.75 0 010-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75zM4.496 6.675l.66 6.6a.25.25 0 00.249.225h5.19a.25.25 0 00.249-.225l.66-6.6a.75.75 0 011.492.149l-.66 6.6A1.748 1.748 0 0110.595 15h-5.19a1.75 1.75 0 01-1.741-1.575l-.66-6.6a.75.75 0 011.492-.15z"/>
-                                </svg>
+                                <Trash2 size={11}/>
                             </button>
                         </div>
                     ))}
@@ -150,9 +143,7 @@ export function WorkspacePicker({
                         onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
                         onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                     >
-                        <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/>
-                        </svg>
+                        <Plus size={10}/>
                         New Workspace
                     </button>
                 </div>
