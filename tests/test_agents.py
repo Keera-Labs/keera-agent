@@ -40,6 +40,7 @@ class TestAgents(HttpTestCase):
             f"/api/projects/{self.project_id}/agents",
             json={
                 "name": "My Agent",
+                "complexity": "medium",
             },
         )
         self.assertEqual(response.status_code, 200)
@@ -56,6 +57,7 @@ class TestAgents(HttpTestCase):
             f"/api/projects/{self.project_id}/agents",
             json={
                 "name": "PM",
+                "complexity": "medium",
                 "agent_type": "pm",
             },
         )
@@ -69,6 +71,7 @@ class TestAgents(HttpTestCase):
             f"/api/projects/{self.project_id}/agents",
             json={
                 "name": "Planner",
+                "complexity": "medium",
                 "agent_type": "reviewer",
                 "plan_mode": True,
             },
@@ -82,6 +85,7 @@ class TestAgents(HttpTestCase):
             f"/api/projects/{self.project_id}/agents",
             json={
                 "name": "Legacy Plan",
+                "complexity": "medium",
                 "flags": {"plan_mode": True},
             },
         )
@@ -95,6 +99,7 @@ class TestAgents(HttpTestCase):
             f"/api/projects/{self.project_id}/agents",
             json={
                 "name": "PM No Plan",
+                "complexity": "medium",
                 "agent_type": "pm",
                 "plan_mode": False,
             },
@@ -107,6 +112,7 @@ class TestAgents(HttpTestCase):
             f"/api/projects/{self.project_id}/agents",
             json={
                 "name": "Safe Agent",
+                "complexity": "medium",
                 "dangerously_skip_permissions": False,
             },
         )
@@ -127,6 +133,7 @@ class TestAgents(HttpTestCase):
             f"/api/projects/{self.project_id}/agents",
             json={
                 "name": "Flag Agent",
+                "complexity": "medium",
                 "flags": {"dangerously_skip_permissions": True, "plan_mode": True, "verbose": True},
             },
         )
@@ -141,9 +148,8 @@ class TestAgents(HttpTestCase):
     # --- update ---
 
     async def _create_agent(self, **kwargs) -> dict:
-        resp = await self.post(
-            f"/api/projects/{self.project_id}/agents", json={"name": "Agent", **kwargs}
-        )
+        payload = {"name": "Agent", "complexity": "medium", **kwargs}
+        resp = await self.post(f"/api/projects/{self.project_id}/agents", json=payload)
         return _attrs(resp)
 
     async def test_update_name(self):
@@ -177,10 +183,12 @@ class TestAgents(HttpTestCase):
         self.assertNotIn("plan_mode", json.loads(attrs["flags"]))
 
     async def test_update_omitted_fields_unchanged(self):
-        agent = await self._create_agent(model="claude-opus-4-5")
+        # complexity=hard maps the created agent to claude-opus-4-8; a PATCH that
+        # omits model must leave that resolved model untouched.
+        agent = await self._create_agent(complexity="hard")
         response = await self.client.patch(f"/api/agents/{agent['id']}", json={"name": "New Name"})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(_attrs(response)["model"], "claude-opus-4-5")
+        self.assertEqual(_attrs(response)["model"], "claude-opus-4-8")
 
     async def test_update_nonexistent_agent_returns_404(self):
         response = await self.client.patch("/api/agents/999999", json={"name": "Ghost"})
@@ -221,6 +229,7 @@ class TestAgentTypeEnforcement(HttpTestCase):
             f"/api/projects/{self.project_id}/agents",
             json={
                 "name": "Bad Agent",
+                "complexity": "medium",
                 "agent_type": "hacker",
             },
         )
@@ -231,6 +240,7 @@ class TestAgentTypeEnforcement(HttpTestCase):
             f"/api/projects/{self.project_id}/agents",
             json={
                 "name": "SE Agent",
+                "complexity": "medium",
                 "agent_type": "software_engineer",
             },
         )
@@ -244,6 +254,7 @@ class TestAgentTypeEnforcement(HttpTestCase):
             f"/api/projects/{self.project_id}/agents",
             json={
                 "name": "Frontend Agent",
+                "complexity": "medium",
                 "agent_type": "software_engineer_frontend",
             },
         )
@@ -255,6 +266,7 @@ class TestAgentTypeEnforcement(HttpTestCase):
             f"/api/projects/{self.project_id}/agents",
             json={
                 "name": "Reviewer Agent",
+                "complexity": "medium",
                 "agent_type": "reviewer",
             },
         )
@@ -266,6 +278,7 @@ class TestAgentTypeEnforcement(HttpTestCase):
             f"/api/projects/{self.project_id}/agents",
             json={
                 "name": "PM Agent",
+                "complexity": "medium",
                 "agent_type": "pm",
             },
         )
@@ -277,6 +290,7 @@ class TestAgentTypeEnforcement(HttpTestCase):
             f"/api/projects/{self.project_id}/agents",
             json={
                 "name": "SE Agent",
+                "complexity": "medium",
                 "agent_type": "software_engineer",
             },
         )
@@ -288,6 +302,7 @@ class TestAgentTypeEnforcement(HttpTestCase):
             f"/api/projects/{self.project_id}/agents",
             json={
                 "name": "PM Agent",
+                "complexity": "medium",
                 "agent_type": "pm",
             },
         )
@@ -299,6 +314,7 @@ class TestAgentTypeEnforcement(HttpTestCase):
             f"/api/projects/{self.project_id}/agents",
             json={
                 "name": "SE Agent",
+                "complexity": "medium",
                 "agent_type": "software_engineer",
             },
         )
@@ -349,18 +365,33 @@ class TestAgentLimit(HttpTestCase):
 
     async def test_create_agents_up_to_limit(self):
         """Should succeed creating agents up to the configured limit."""
-        r1 = await self.post(f"/api/projects/{self.project_id}/agents", json={"name": "Agent 1"})
+        r1 = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={"name": "Agent 1", "complexity": "medium"},
+        )
         self.assertEqual(r1.status_code, 200)
 
-        r2 = await self.post(f"/api/projects/{self.project_id}/agents", json={"name": "Agent 2"})
+        r2 = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={"name": "Agent 2", "complexity": "medium"},
+        )
         self.assertEqual(r2.status_code, 200)
 
     async def test_create_agent_beyond_limit_returns_422(self):
         """Creating an agent when the project is at the limit returns 422."""
-        await self.post(f"/api/projects/{self.project_id}/agents", json={"name": "Agent 1"})
-        await self.post(f"/api/projects/{self.project_id}/agents", json={"name": "Agent 2"})
+        await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={"name": "Agent 1", "complexity": "medium"},
+        )
+        await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={"name": "Agent 2", "complexity": "medium"},
+        )
 
-        r3 = await self.post(f"/api/projects/{self.project_id}/agents", json={"name": "Agent 3"})
+        r3 = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={"name": "Agent 3", "complexity": "medium"},
+        )
         self.assertEqual(r3.status_code, 422)
         body = r3.json()
         self.assertIn("error", body)
@@ -368,15 +399,24 @@ class TestAgentLimit(HttpTestCase):
 
     async def test_deleted_agent_does_not_count_toward_limit(self):
         """Soft-deleted agents should not count against the limit."""
-        r1 = await self.post(f"/api/projects/{self.project_id}/agents", json={"name": "Agent 1"})
-        await self.post(f"/api/projects/{self.project_id}/agents", json={"name": "Agent 2"})
+        r1 = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={"name": "Agent 1", "complexity": "medium"},
+        )
+        await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={"name": "Agent 2", "complexity": "medium"},
+        )
         agent1_id = _attrs(r1)["id"]
 
         # Delete one agent
         await self.client.delete(f"/api/agents/{agent1_id}")
 
         # Now we should be able to create another agent
-        r3 = await self.post(f"/api/projects/{self.project_id}/agents", json={"name": "Agent 3"})
+        r3 = await self.post(
+            f"/api/projects/{self.project_id}/agents",
+            json={"name": "Agent 3", "complexity": "medium"},
+        )
         self.assertEqual(r3.status_code, 200)
 
 

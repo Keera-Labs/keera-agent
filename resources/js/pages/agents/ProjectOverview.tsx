@@ -6,6 +6,7 @@ import useWorkspaces from '@/queries/useWorkspaces'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import type { Project } from '@/types/type'
 import { AgentCard } from './AgentCard'
+import { AgentAddModal } from './AgentAddModal'
 import { PLACEHOLDER } from './presentation'
 
 const PAGE_BG = '#f7f7f5'
@@ -30,7 +31,7 @@ function HeaderPill({ children }: { children: React.ReactNode }) {
 export function ProjectOverview({ project }: { project: Project }) {
     const {
         agentSessions, launchAgentSession,
-        setActiveAgentId, setEditingAgent, setShowAddAgent,
+        setActiveAgentId,
     } = useAppLayout()
     const { workspaces } = useWorkspaces()
     const { agents, adoptWork } = useAgents(project.id)
@@ -87,21 +88,24 @@ export function ProjectOverview({ project }: { project: Project }) {
                         </div>
                     </div>
 
-                    <button
-                        type="button"
-                        onClick={() => setShowAddAgent(true)}
-                        style={{
-                            flexShrink: 0, display: 'flex', alignItems: 'center', gap: '7px',
-                            background: '#111318', border: 'none', borderRadius: '10px',
-                            color: '#fff', fontSize: '13.5px', fontWeight: 600,
-                            padding: '10px 16px', cursor: 'pointer', transition: 'opacity 0.1s',
-                        }}
-                        onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
-                        onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
-                    >
-                        <Plus size={13}/>
-                        New Agent
-                    </button>
+                    <AgentAddModal
+                        trigger={
+                            <button
+                                type="button"
+                                style={{
+                                    flexShrink: 0, display: 'flex', alignItems: 'center', gap: '7px',
+                                    background: '#111318', border: 'none', borderRadius: '10px',
+                                    color: '#fff', fontSize: '13.5px', fontWeight: 600,
+                                    padding: '10px 16px', cursor: 'pointer', transition: 'opacity 0.1s',
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
+                                onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+                            >
+                                <Plus size={13}/>
+                                New Agent
+                            </button>
+                        }
+                    />
                 </div>
 
                 {/* Agent cards grid */}
@@ -139,7 +143,6 @@ export function ProjectOverview({ project }: { project: Project }) {
                                     setActiveAgentId(agent.id)
                                     router.visit(`/${project.slug}/agents/${agent.id}`)
                                 }}
-                                onEdit={() => setEditingAgent(agent)}
                                 onRestart={() => {
                                     const session = agentSessions.current.get(agent.id)
                                     if (session) {

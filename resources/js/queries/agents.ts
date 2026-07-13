@@ -169,6 +169,7 @@ export function useAgents(projectId: number | null) {
         name: string,
         agentType: string,
         message: string,
+        complexity: string,
         taskId?: number,
     ): Promise<{ success: boolean; text: string }> => {
         const res = await fetch('/mcp', {
@@ -188,6 +189,7 @@ export function useAgents(projectId: number | null) {
                         name,
                         agent_type: agentType,
                         message,
+                        complexity,
                         ...(taskId != null ? { task_id: taskId } : {}),
                     },
                 },
