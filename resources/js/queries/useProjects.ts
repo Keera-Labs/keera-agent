@@ -1,5 +1,5 @@
 import { router, usePage } from "@inertiajs/react"
-import { useContext, useEffect } from "react"
+import { useContext } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import type { Project } from "@/types/type"
 import { AppLayoutContext } from "@/layouts/context/AppLayoutContext"
@@ -27,16 +27,17 @@ export default function useProjects() {
     const projects = query.data ?? []
     const activeProject = projects.find(p => p.slug === projectName) ?? projects[0] ?? null
 
-    // Push the derived active project into the shared store whenever the
-    // fetched project list or route changes. Guarded on id so re-renders that
-    // resolve to the project already in the store are a no-op — this hook is
-    // called from several components, and without the guard each of them would
-    // re-set the same value on every render.
-    useEffect(() => {
-        if (useProjectStore.getState().activeProject?.id !== activeProject?.id) {
-            useProjectStore.getState().setActiveProject(activeProject)
-        }
-    }, [activeProject])
+    // Push the derived active project into the shared store as soon as it's
+    // computed — synchronously during render, not in a useEffect — so any
+    // component reading useProjectStore(s => s.activeProject) this same render
+    // pass (e.g. AppLayoutContext, which calls this hook first) sees the fresh
+    // value immediately instead of one render behind. Guarded on id so re-renders
+    // that resolve to the project already in the store are a no-op — this hook
+    // is called from several components, and without the guard each of them
+    // would re-set the same value on every render.
+    if (useProjectStore.getState().activeProject?.id !== activeProject?.id) {
+        useProjectStore.getState().setActiveProject(activeProject)
+    }
 
     const invalidate = () => queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY })
 
@@ -101,7 +102,6 @@ export default function useProjects() {
 
     return {
         projects,
-        activeProject,
         deleting: deleteMutation.isPending,
         handleProjectCreated,
         handleMoveProject,

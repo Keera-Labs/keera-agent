@@ -12,6 +12,7 @@ import type { ProjectView } from '@/layouts/sidebar/Sidebar'
 import { useTasks } from '@/queries/tasks'
 import useProjects, { PROJECTS_QUERY_KEY } from '@/queries/useProjects'
 import { WORKSPACES_QUERY_KEY } from '@/queries/useWorkspaces'
+import { useProjectStore } from '@/stores/projectStore'
 
 // ─── Context value interface ──────────────────────────────────────────────────
 
@@ -19,7 +20,8 @@ export interface AppLayoutContextValue {
     // ── Data ─────────────────────────────────────────────────────────────────
     // Project and workspace lists are owned by their own React Query hooks
     // (useProjects / useWorkspaces). useProjects derives activeProject and pushes
-    // it into useProjectStore; consumers read it from that store directly.
+    // it into useProjectStore; every consumer, including this provider, reads
+    // it from that store directly rather than off the context.
     tasks: Task[]
 
     // ── Modal state ───────────────────────────────────────────────────────────
@@ -166,9 +168,11 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
 
     // Projects and workspaces are owned by their own React Query hooks. useProjects
     // derives activeProject (from the route + fetched list) and pushes it into
-    // useProjectStore itself; the layout just reads it back for its own needs
-    // (terminal sessions, task/agent hooks) and to seed claudeStatus.
-    const { projects, activeProject } = useProjects()
+    // useProjectStore synchronously during its own render, so it's already fresh
+    // in the store by the time the selector below reads it in this same render
+    // pass. `projects` itself is still needed here to seed claudeStatus below.
+    const { projects } = useProjects()
+    const activeProject = useProjectStore(s => s.activeProject)
 
     async function refreshData() {
         // Workspace changes can reassign projects (e.g. deleting a workspace
