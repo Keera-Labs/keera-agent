@@ -2,7 +2,6 @@ import React from 'react'
 import { router, usePage } from '@inertiajs/react'
 import { useAppLayout } from './context/AppLayoutContext'
 import AgentsIndex from '@/pages/agents/Index'
-import { CommandsView } from './views/CommandsView'
 import { color } from '@/tokens'
 import type { ProjectView } from './sidebar/Sidebar'
 import { DotsIndicator } from './sidebar/Project'
@@ -42,10 +41,11 @@ export function ProjectLayout({ children }: { children: React.ReactNode }) {
 
     const { component } = usePage()
     const isTasksPage = component === 'Tasks'
+    const isConfigPage = component === 'Configurations'
     // The agent detail page owns the visible agent view; AgentsIndex then only
     // acts as the hidden terminal holder, so hide its wrapper (keep it mounted).
     const isAgentDetail = component === 'agents/Detail'
-    const activeView: ProjectView = isTasksPage ? 'tasks' : projectView
+    const activeView: ProjectView = isTasksPage ? 'tasks' : isConfigPage ? 'commands' : projectView
 
     return (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -62,9 +62,11 @@ export function ProjectLayout({ children }: { children: React.ReactNode }) {
                         <button
                             key={tab.id}
                             onClick={() => {
-                                if (tab.id === 'tasks' && activeProject) { router.visit(`/${activeProject.slug}/tasks`); return }
-                                setProjectView(tab.id)
-                                if (isTasksPage) router.visit(`/${activeProject?.slug}`)
+                                if (!activeProject) { setProjectView(tab.id); return }
+                                if (tab.id === 'tasks') { router.visit(`/${activeProject.slug}/tasks`); return }
+                                if (tab.id === 'commands') { router.visit(`/${activeProject.slug}/configurations`); return }
+                                setProjectView('agents')
+                                if (isTasksPage || isConfigPage) router.visit(`/${activeProject.slug}`)
                             }}
                             className="bg-transparent border-none cursor-pointer px-4 h-full text-[13px] transition-colors duration-100 relative"
                             style={{
@@ -110,12 +112,8 @@ export function ProjectLayout({ children }: { children: React.ReactNode }) {
                     <AgentsIndex />
                 </div>
 
-                {/* Commands view */}
-                {activeView === 'commands' && activeProject && (
-                    <CommandsView project={activeProject} />
-                )}
-
-                {/* Tasks view is rendered by the Tasks page itself (see pages/Tasks.tsx),
+                {/* The Commands (Configurations) and Tasks views are rendered by their
+                    own Inertia pages (pages/Configurations.tsx, pages/Tasks.tsx) and
                     delivered here through {children}. */}
 
                 {/* Empty state when no project is selected */}
