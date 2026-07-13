@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import { color } from '@/tokens'
-import { toggleStyle } from '@/components/ui/styles'
+import { toggleClass } from '@/components/ui/styles'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -57,69 +56,53 @@ export default function PluginsTab() {
     }
 
     return (
-        <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px' }}>
-            <div style={{ maxWidth: '720px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+        <div className="flex-1 overflow-y-auto py-7 px-8">
+            <div className="max-w-[720px] flex flex-col gap-[18px]">
                 <div>
-                    <h3 style={{ margin: '0 0 6px', color: color.textPrimary, fontSize: '14px', fontWeight: 600 }}>Plugins</h3>
-                    <p style={{ margin: 0, color: color.textMuted, fontSize: '12px', lineHeight: 1.6 }}>
-                        Plugins are auto-discovered from the <code style={{ fontFamily: 'monospace', color: color.accent }}>plugins/</code> folder.
+                    <h3 className="mt-0 mx-0 mb-1.5 text-zinc-900 text-[14px] font-semibold">Plugins</h3>
+                    <p className="m-0 text-zinc-500 text-[12px] leading-[1.6]">
+                        Plugins are auto-discovered from the <code className="font-[monospace] text-accent">plugins/</code> folder.
                         Activate one to mount its routes and expose its tools live — no restart required.
                     </p>
                 </div>
 
-                {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
+                {error && <span className="text-danger text-[12px]">{error}</span>}
 
                 {loading ? (
-                    <div style={{ color: color.textFaint, fontSize: '12px' }}>Loading…</div>
+                    <div className="text-zinc-400 text-[12px]">Loading…</div>
                 ) : plugins.length === 0 ? (
-                    <div style={{
-                        border: `1px dashed ${color.borderMuted}`, borderRadius: '8px',
-                        padding: '32px 24px', textAlign: 'center',
-                        color: color.textFaint, fontSize: '12px', lineHeight: 1.6,
-                    }}>
+                    <div className="border border-dashed border-stroke rounded-md py-8 px-6 text-center text-zinc-400 text-[12px] leading-[1.6]">
                         No plugins discovered.<br />
-                        Drop a folder with a <code style={{ fontFamily: 'monospace' }}>provider.py</code> into <code style={{ fontFamily: 'monospace' }}>plugins/</code>.
+                        Drop a folder with a <code className="font-[monospace]">provider.py</code> into <code className="font-[monospace]">plugins/</code>.
                     </div>
                 ) : (
-                    <div style={{
-                        border: `1px solid ${color.border}`, borderRadius: '8px', overflow: 'hidden',
-                        display: 'flex', flexDirection: 'column',
-                    }}>
+                    <div className="border border-stroke rounded-md overflow-hidden flex flex-col">
                         {plugins.map((plugin, i) => {
                             const busy = !!pending[plugin.slug]
                             return (
                                 <div
                                     key={plugin.slug}
-                                    style={{
-                                        display: 'flex', alignItems: 'center', gap: '16px',
-                                        padding: '14px 18px',
-                                        borderTop: i === 0 ? 'none' : `1px solid ${color.border}`,
-                                        background: plugin.active ? color.accentSubtle : color.bgSurface,
-                                        transition: 'background 0.15s',
-                                    }}
+                                    className={`flex items-center gap-4 py-3.5 px-[18px] transition-colors duration-150 ${i === 0 ? '' : 'border-t border-stroke'} ${plugin.active ? 'bg-blue-50' : 'bg-surface'}`}
                                 >
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                                            <span style={{ color: color.textPrimary, fontSize: '13px', fontWeight: 600 }}>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-baseline gap-2">
+                                            <span className="text-zinc-900 text-[13px] font-semibold">
                                                 {plugin.name}
                                             </span>
                                             {plugin.version && (
-                                                <span style={{ color: color.textFaint, fontSize: '11px', fontFamily: '"JetBrains Mono", monospace' }}>
+                                                <span className="text-zinc-400 text-[11px] font-mono">
                                                     v{plugin.version}
                                                 </span>
                                             )}
                                         </div>
                                         {plugin.description && (
-                                            <p style={{ margin: '3px 0 0', color: color.textMuted, fontSize: '12px', lineHeight: 1.5 }}>
+                                            <p className="mt-[3px] mx-0 mb-0 text-zinc-500 text-[12px] leading-[1.5]">
                                                 {plugin.description}
                                             </p>
                                         )}
                                     </div>
 
-                                    <span style={{
-                                        fontSize: '11px', fontWeight: 500, flexShrink: 0,
-                                        color: plugin.active ? color.success : color.textFaint,
-                                    }}>
+                                    <span className={`text-[11px] font-medium shrink-0 ${plugin.active ? 'text-success' : 'text-zinc-400'}`}>
                                         {plugin.active ? 'Active' : 'Inactive'}
                                     </span>
 
@@ -129,13 +112,12 @@ export default function PluginsTab() {
                                         disabled={busy}
                                         title={plugin.active ? 'Deactivate' : 'Activate'}
                                         aria-pressed={plugin.active}
-                                        style={{ ...toggleStyle(plugin.active), opacity: busy ? 0.5 : 1 }}
+                                        className={toggleClass(plugin.active)}
+                                        style={{ opacity: busy ? 0.5 : 1 }}
                                     >
-                                        <span style={{
-                                            position: 'absolute', top: '3px', left: plugin.active ? '17px' : '3px',
-                                            width: '12px', height: '12px', borderRadius: '50%',
-                                            background: '#fff', transition: 'left 0.15s',
-                                        }} />
+                                        <span
+                                            className={`absolute top-[3px] w-3 h-3 rounded-full bg-white transition-[left] duration-150 ${plugin.active ? 'left-[17px]' : 'left-[3px]'}`}
+                                        />
                                     </button>
                                 </div>
                             )
