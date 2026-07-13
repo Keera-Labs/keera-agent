@@ -6,7 +6,7 @@ import { color } from '@/tokens'
 import type { ProjectView } from './sidebar/Sidebar'
 import { DotsIndicator } from './sidebar/Project'
 import { useProjectStore } from '@/stores/projectStore'
-import useProjects from '@/queries/useProjects'
+import useProjects from '@/queries/projectsQuery'
 
 // ─── Claude status badge ───────────────────────────────────────────────────────
 

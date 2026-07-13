@@ -2,7 +2,7 @@ import { type ReactNode } from 'react'
 import { color } from '@/tokens'
 import type { Project } from '@/types/type'
 import Modal from '@/components/ui/Modal'
-import useProjects from '@/queries/useProjects'
+import useProjects from '@/queries/projectsQuery'
 
 // Trigger-based delete confirmation. Delegates to useProjects' handleProjectDeleted
 // so the deleted project's terminal sessions are torn down and useProjects' own

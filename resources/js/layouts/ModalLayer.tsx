@@ -1,6 +1,6 @@
 import { router } from '@inertiajs/react'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
-import useProjects from '@/queries/useProjects'
+import useProjects from '@/queries/projectsQuery'
 import AddWorkspaceModal from '@/components/AddWorkspaceModal'
 import { GlobalSettingsModal } from '@/components/modals/GlobalSettingsModal'
 import { ProjectSearchModal } from '@/components/modals/ProjectSearchModal'

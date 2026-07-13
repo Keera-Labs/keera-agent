@@ -1,5 +1,5 @@
 import ProjectCreateModal from "@/components/project/ProjectCreateModal"
-import useProjects from "@/queries/useProjects"
+import useProjects from "@/queries/projectsQuery"
 import { useWorkspaceStore } from "@/stores/workspaceStore"
 import { color } from "@/tokens"
 import type { Project } from "@/types/type"

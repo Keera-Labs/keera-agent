@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { color } from '@/tokens'
 import type { Project } from '@/types/type'
 import Modal from '@/components/ui/Modal'
-import useProjects from '@/queries/useProjects'
+import useProjects from '@/queries/projectsQuery'
 import { ProjectTemplatesModal } from '@/components/modals/ProjectTemplatesModal'
 
 const inputStyle: React.CSSProperties = {

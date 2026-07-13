@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from 'react'
 import type { Project } from '@/types/type'
 import Modal from '@/components/ui/Modal'
-import useProjects from '@/queries/useProjects'
-import useWorkspaces from '@/queries/useWorkspaces'
+import useProjects from '@/queries/projectsQuery'
+import useWorkspaces from '@/queries/workspacesQuery'
 
 const LANGUAGES = ['Python', 'TypeScript', 'JavaScript', 'Go', 'Rust', 'Other']
 

@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { color } from '@/tokens'
 import Modal from '@/components/ui/Modal'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
-import { type ProjectAgent, type AgentFlags, normalizeAgent } from '@/queries/agents'
+import { type ProjectAgent, type AgentFlags, normalizeAgent } from '@/queries/agentQuery'
 import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, MODELS } from '@/types/agent'
 import { labelStyle, inputStyle, cancelBtnStyle, submitBtnStyle, flagRowStyle, toggleStyle } from '@/components/ui/styles'
 
