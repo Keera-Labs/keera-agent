@@ -1,22 +1,11 @@
-import { color } from '@/tokens'
-
 export function StatCard({ label, value, dot }: { label: string; value: number; dot: string }) {
     return (
-        <div style={{
-            flex: 1, minWidth: 0,
-            background: color.bgSurface,
-            border: `1px solid ${color.border}`,
-            borderRadius: '8px',
-            padding: '14px 16px',
-        }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: dot, flexShrink: 0 }} />
-                <span style={{
-                    color: color.textMuted, fontSize: '11px', fontWeight: 600,
-                    textTransform: 'uppercase', letterSpacing: '0.04em',
-                }}>{label}</span>
+        <div className="flex-1 min-w-0 bg-surface border border-stroke rounded-md py-[14px] px-4">
+            <div className="flex items-center gap-1.5 mb-2">
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: dot }} />
+                <span className="text-zinc-500 text-[11px] font-semibold uppercase tracking-[0.04em]">{label}</span>
             </div>
-            <div style={{ color: color.textPrimary, fontSize: '28px', fontWeight: 700, lineHeight: 1 }}>
+            <div className="text-zinc-900 text-[28px] font-bold leading-none">
                 {value}
             </div>
         </div>

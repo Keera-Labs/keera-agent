@@ -1,5 +1,4 @@
 import { router } from '@inertiajs/react'
-import { color } from '@/tokens'
 import { avatarColor, FolderIcon, projectStatusSummary } from './helpers'
 import type { DashboardProject } from './types'
 
@@ -10,62 +9,35 @@ export function ProjectCard({ project }: { project: DashboardProject }) {
             type="button"
             onClick={() => router.visit(`/${project.slug}`)}
             title={`Open ${project.name}`}
-            style={{
-                textAlign: 'left', font: 'inherit', cursor: 'pointer', width: '100%',
-                background: color.bgSurface,
-                border: `1px solid ${color.border}`,
-                borderRadius: '8px',
-                padding: '14px',
-                display: 'flex', flexDirection: 'column', gap: '12px',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = color.accent }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = color.border }}
+            className="text-left cursor-pointer w-full bg-surface border border-stroke rounded-md p-[14px] flex flex-col gap-3 hover:border-accent"
+            style={{ font: 'inherit' }}
         >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="flex items-center gap-2">
                 <FolderIcon />
-                <span style={{
-                    flex: 1, minWidth: 0,
-                    color: color.textPrimary, fontSize: '13px', fontWeight: 600,
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>{project.name}</span>
-                <span style={{
-                    width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0,
-                    background: project.online ? color.success : color.textGhost,
-                }} />
+                <span className="flex-1 min-w-0 text-zinc-900 text-[13px] font-semibold truncate">{project.name}</span>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${project.online ? 'bg-success' : 'bg-zinc-400'}`} />
             </div>
 
             {project.agents.length > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <div className="flex items-center gap-1">
                     {project.agents.map((a, i) => (
-                        <span key={i} style={{
-                            width: '24px', height: '24px', borderRadius: '6px', flexShrink: 0,
-                            background: avatarColor(a.agentType, a.initials), color: '#fff',
-                            fontSize: '10px', fontWeight: 700,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontFamily: '"JetBrains Mono", monospace',
-                        }}>{a.initials}</span>
+                        <span
+                            key={i}
+                            className="w-6 h-6 rounded shrink-0 text-white text-[10px] font-bold flex items-center justify-center font-mono"
+                            style={{ background: avatarColor(a.agentType, a.initials) }}
+                        >{a.initials}</span>
                     ))}
                     {project.extraAgents > 0 ? (
-                        <span style={{
-                            width: '24px', height: '24px', borderRadius: '6px', flexShrink: 0,
-                            background: color.bgCanvas, border: `1px solid ${color.border}`,
-                            color: color.textMuted, fontSize: '10px', fontWeight: 700,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontFamily: '"JetBrains Mono", monospace',
-                        }}>+{project.extraAgents}</span>
+                        <span className="w-6 h-6 rounded shrink-0 bg-canvas border border-stroke text-zinc-500 text-[10px] font-bold flex items-center justify-center font-mono">+{project.extraAgents}</span>
                     ) : null}
                 </div>
             )}
 
-            <div style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px',
-                fontSize: '11px', color: color.textFaint,
-                fontFamily: '"JetBrains Mono", monospace',
-            }}>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div className="flex items-center justify-between gap-2 text-[11px] text-zinc-400 font-mono">
+                <span className="truncate">
                     {summary}
                 </span>
-                <span style={{ flexShrink: 0 }}>{project.lastActivity}</span>
+                <span className="shrink-0">{project.lastActivity}</span>
             </div>
         </button>
     )
