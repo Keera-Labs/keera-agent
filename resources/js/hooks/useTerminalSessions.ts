@@ -2,8 +2,8 @@ import { useRef, useEffect, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import type { Project } from '@/types/type'
-import type { ProjectAgent } from '@/queries/agents'
-import { normalizeAgent } from '@/queries/agents'
+import type { ProjectAgent } from '@/queries/agentQuery'
+import { normalizeAgent } from '@/queries/agentQuery'
 
 export interface Session {
     term: Terminal

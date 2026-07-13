@@ -2,8 +2,8 @@ import { useState, type ReactNode } from 'react'
 import { color } from '@/tokens'
 import type { Project, Workspace } from '@/types/type'
 import Modal from '@/components/ui/Modal'
-import useProjects from '@/queries/useProjects'
-import useWorkspaces from '@/queries/useWorkspaces'
+import useProjects from '@/queries/projectsQuery'
+import useWorkspaces from '@/queries/workspacesQuery'
 
 // Trigger-based "move project to workspace" modal (see ProjectCreateModal / PR #198).
 

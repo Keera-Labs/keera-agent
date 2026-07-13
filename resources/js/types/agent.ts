@@ -1,4 +1,4 @@
-import type { AgentFlags } from '@/queries/agents'
+import type { AgentFlags } from '@/queries/agentQuery'
 
 export type { AgentFlags }
 

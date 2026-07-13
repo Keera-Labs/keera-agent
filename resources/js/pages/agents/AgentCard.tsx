@@ -1,7 +1,7 @@
 import type { MouseEvent, ReactNode } from 'react'
 import { RotateCw, CircleDot, GitMerge, ArrowRight } from 'lucide-react'
 import { color } from '@/tokens'
-import type { ProjectAgent } from '@/queries/agents'
+import type { ProjectAgent } from '@/queries/agentQuery'
 import { AgentEditModal } from './AgentEditModal'
 import { agentAvatarColor, agentInitials, agentRoleLabel, PLACEHOLDER } from './presentation'
 

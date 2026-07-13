@@ -1,4 +1,4 @@
-import useWorkspaces from "@/queries/useWorkspaces"
+import useWorkspaces from "@/queries/workspacesQuery"
 import { useAppLayout } from "@/layouts/context/AppLayoutContext"
 import { color } from "@/tokens"
 import { useEffect, useRef, useState } from "react"

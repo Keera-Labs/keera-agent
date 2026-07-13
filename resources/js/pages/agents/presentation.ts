@@ -1,6 +1,6 @@
 import { agentColor } from '@/utils/agentColor'
 import { AGENT_TYPE_COLORS, AGENT_TYPE_LABELS } from '@/types/agent'
-import type { ProjectAgent } from '@/queries/agents'
+import type { ProjectAgent } from '@/queries/agentQuery'
 
 // Shown wherever the backend doesn't yet expose a value (runtime, usage, branch).
 // Never fabricate a number — a placeholder reads as "unknown", a made-up figure lies.

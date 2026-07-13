@@ -1,7 +1,7 @@
-import { useAgents } from '@/queries/agents'
+import { useAgents } from '@/queries/agentQuery'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import { useProjectStore } from '@/stores/projectStore'
-import useProjects from '@/queries/useProjects'
+import useProjects from '@/queries/projectsQuery'
 import { ProjectOverview } from './ProjectOverview'
 
 // ─── Agents view (rendered by the persistent ProjectLayout) ───────────────────
