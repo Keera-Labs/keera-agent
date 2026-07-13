@@ -6,6 +6,7 @@ import { color } from '@/tokens'
 import type { ProjectView } from './sidebar/Sidebar'
 import { DotsIndicator } from './sidebar/Project'
 import { useProjectStore } from '@/stores/projectStore'
+import useProjects from '@/queries/useProjects'
 
 // ─── Claude status badge ───────────────────────────────────────────────────────
 
@@ -35,12 +36,23 @@ export function ProjectLayout({ children }: { children: React.ReactNode }) {
         projectView, setProjectView,
         sessions, agentSessions,
     } = useAppLayout()
+
+    const { component, props } = usePage<{ project?: string }>()
+
+    // ProjectLayout is the only layout with a project route to read, so it's
+    // the one place that resolves the slug into an active project — calling
+    // setActiveProject synchronously during render (not in a useEffect) so the
+    // store is already fresh by the time the selector below reads it back in
+    // this same render pass. Pages using AppLayout without ProjectLayout
+    // (Dashboard, Settings, Broadcasting) aren't project-scoped and don't touch
+    // this at all — the store just keeps whatever project was last resolved here.
+    const { setActiveProject } = useProjects()
+    setActiveProject(props.project)
     const activeProject = useProjectStore(s => s.activeProject)
 
     // Live PTY sessions across all projects (PM + agent terminals).
     const runningCount = sessions.current.size + agentSessions.current.size
 
-    const { component } = usePage()
     const isTasksPage = component === 'Tasks'
     const isConfigPage = component === 'Configurations'
     // The agent detail page owns the visible agent view; AgentsIndex then only

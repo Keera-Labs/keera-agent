@@ -20,9 +20,9 @@ export interface AppLayoutContextValue {
     // ── Data ─────────────────────────────────────────────────────────────────
     // Project and workspace lists are owned by their own React Query hooks
     // (useProjects / useWorkspaces). useProjects only fetches/manages the list;
-    // this provider is the one place that resolves the route slug into an
-    // active project and pushes it into useProjectStore. Every consumer,
-    // including this provider itself, reads it back from that store.
+    // ProjectLayout resolves the route slug into an active project and pushes
+    // it into useProjectStore. Every consumer, including this provider, reads
+    // it back from that store.
     tasks: Task[]
 
     // ── Modal state ───────────────────────────────────────────────────────────
@@ -161,21 +161,17 @@ function playSound(type: 'done' | 'input') {
 export function AppLayoutStateProvider({ children }: { children: React.ReactNode }) {
     const { props } = usePage<{
         agent_id?: number
-        project?: string
         tasks?: Task[]
         global_settings?: { max_agents_per_project?: number }
     }>()
     const agentIdFromUrl = props.agent_id
     const queryClient = useQueryClient()
 
-    // useProjects only fetches/manages the projects list. This provider is the
-    // one place that resolves the route slug into an active project, calling
-    // setActiveProject synchronously during render (not in a useEffect) so the
-    // store is already fresh by the time the selector below reads it back in
-    // this same render pass. `projects` itself is still needed here to seed
-    // claudeStatus below.
-    const { projects, setActiveProject } = useProjects()
-    setActiveProject(props.project)
+    // useProjects only fetches/manages the projects list; it doesn't resolve
+    // which one is "active" here — that's ProjectLayout's job, since it's the
+    // component that actually has a project route to read (usePage().props.project).
+    // `projects` itself is still needed here to seed claudeStatus below.
+    const { projects } = useProjects()
     const activeProject = useProjectStore(s => s.activeProject)
 
     async function refreshData() {
