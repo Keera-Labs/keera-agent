@@ -25,18 +25,19 @@ export default function useProjects() {
         staleTime: 1000 * 30,
     })
     const projects = query.data ?? []
-    const activeProject = projects.find(p => p.slug === projectName) ?? projects[0] ?? null
 
-    // Push the derived active project into the shared store as soon as it's
-    // computed — synchronously during render, not in a useEffect — so any
-    // component reading useProjectStore(s => s.activeProject) this same render
-    // pass (e.g. AppLayoutContext, which calls this hook first) sees the fresh
-    // value immediately instead of one render behind. Guarded on id so re-renders
-    // that resolve to the project already in the store are a no-op — this hook
-    // is called from several components, and without the guard each of them
-    // would re-set the same value on every render.
-    if (useProjectStore.getState().activeProject?.id !== activeProject?.id) {
-        useProjectStore.getState().setActiveProject(activeProject)
+    // Resolves the project for a route slug and publishes it to the shared
+    // store. This hook only owns `projects`; it doesn't decide on its own which
+    // one is "active" — useProjects() is called from several components, so
+    // this is exposed as an explicit action and only the one component that
+    // bootstraps app state (AppLayoutContext) calls it, synchronously during
+    // its render rather than in a useEffect. Guarded on id so calling it again
+    // with an already-current slug is a no-op.
+    function setActiveProject(slug?: string) {
+        const active = projects.find(p => p.slug === slug) ?? projects[0] ?? null
+        if (useProjectStore.getState().activeProject?.id !== active?.id) {
+            useProjectStore.getState().setActiveProject(active)
+        }
     }
 
     const invalidate = () => queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY })
@@ -102,6 +103,7 @@ export default function useProjects() {
 
     return {
         projects,
+        setActiveProject,
         deleting: deleteMutation.isPending,
         handleProjectCreated,
         handleMoveProject,

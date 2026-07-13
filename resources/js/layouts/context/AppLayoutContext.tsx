@@ -19,9 +19,10 @@ import { useProjectStore } from '@/stores/projectStore'
 export interface AppLayoutContextValue {
     // ── Data ─────────────────────────────────────────────────────────────────
     // Project and workspace lists are owned by their own React Query hooks
-    // (useProjects / useWorkspaces). useProjects derives activeProject and pushes
-    // it into useProjectStore; every consumer, including this provider, reads
-    // it from that store directly rather than off the context.
+    // (useProjects / useWorkspaces). useProjects only fetches/manages the list;
+    // this provider is the one place that resolves the route slug into an
+    // active project and pushes it into useProjectStore. Every consumer,
+    // including this provider itself, reads it back from that store.
     tasks: Task[]
 
     // ── Modal state ───────────────────────────────────────────────────────────
@@ -160,18 +161,21 @@ function playSound(type: 'done' | 'input') {
 export function AppLayoutStateProvider({ children }: { children: React.ReactNode }) {
     const { props } = usePage<{
         agent_id?: number
+        project?: string
         tasks?: Task[]
         global_settings?: { max_agents_per_project?: number }
     }>()
     const agentIdFromUrl = props.agent_id
     const queryClient = useQueryClient()
 
-    // Projects and workspaces are owned by their own React Query hooks. useProjects
-    // derives activeProject (from the route + fetched list) and pushes it into
-    // useProjectStore synchronously during its own render, so it's already fresh
-    // in the store by the time the selector below reads it in this same render
-    // pass. `projects` itself is still needed here to seed claudeStatus below.
-    const { projects } = useProjects()
+    // useProjects only fetches/manages the projects list. This provider is the
+    // one place that resolves the route slug into an active project, calling
+    // setActiveProject synchronously during render (not in a useEffect) so the
+    // store is already fresh by the time the selector below reads it back in
+    // this same render pass. `projects` itself is still needed here to seed
+    // claudeStatus below.
+    const { projects, setActiveProject } = useProjects()
+    setActiveProject(props.project)
     const activeProject = useProjectStore(s => s.activeProject)
 
     async function refreshData() {
