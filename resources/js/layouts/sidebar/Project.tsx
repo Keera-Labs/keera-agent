@@ -21,18 +21,15 @@ const dotsStyle = `
 
 export function DotsIndicator() {
     return (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', flexShrink: 0, position: 'relative' }}>
+        <span className="inline-flex items-center gap-[3px] shrink-0 relative">
             <style>{dotsStyle}</style>
-            <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: '#f59e0b', animation: 'bounce1 1.0s ease-in-out infinite 0.0s' }} />
-            <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: '#f59e0b', animation: 'bounce2 1.0s ease-in-out infinite 0.15s' }} />
-            <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: '#f59e0b', animation: 'bounce3 1.0s ease-in-out infinite 0.3s' }} />
-            <span style={{
-                position: 'absolute', top: '50%', marginTop: '-2px',
-                width: '4px', height: '4px', borderRadius: '50%',
-                background: '#d97706',
-                boxShadow: '0 0 4px 1px rgba(217,119,6,0.4)',
-                animation: 'traveler 1.0s linear infinite',
-            }} />
+            <span className="w-[3px] h-[3px] rounded-full bg-[#f59e0b]" style={{ animation: 'bounce1 1.0s ease-in-out infinite 0.0s' }} />
+            <span className="w-[3px] h-[3px] rounded-full bg-[#f59e0b]" style={{ animation: 'bounce2 1.0s ease-in-out infinite 0.15s' }} />
+            <span className="w-[3px] h-[3px] rounded-full bg-[#f59e0b]" style={{ animation: 'bounce3 1.0s ease-in-out infinite 0.3s' }} />
+            <span
+                className="absolute top-1/2 -mt-0.5 w-1 h-1 rounded-full bg-[#d97706] shadow-[0_0_4px_1px_rgba(217,119,6,0.4)]"
+                style={{ animation: 'traveler 1.0s linear infinite' }}
+            />
         </span>
     )
 }
@@ -53,13 +50,8 @@ export function ProjectItem({ project, active, status }: {
         return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [menuOpen])
 
-    const menuItemStyle = (danger = false): React.CSSProperties => ({
-        display: 'flex', alignItems: 'center', gap: '8px',
-        padding: '6px 12px', cursor: 'pointer', fontSize: '12px',
-        color: danger ? color.danger : color.textSecondary,
-        background: 'transparent', border: 'none', width: '100%', textAlign: 'left',
-        whiteSpace: 'nowrap',
-    })
+    const menuItemClass = (danger = false): string =>
+        `flex items-center gap-2 py-1.5 px-3 cursor-pointer text-[12px] ${danger ? 'text-danger' : 'text-zinc-700'} bg-transparent border-0 w-full text-left whitespace-nowrap hover:bg-canvas`
 
     // Close the popover menu once a triggered modal finishes (opens or closes).
     const closeMenu = (open: boolean) => { if (!open) setMenuOpen(false) }
@@ -68,38 +60,26 @@ export function ProjectItem({ project, active, status }: {
         <div
             onMouseEnter={() => setHovered(true)}
             onMouseLeave={() => { setHovered(false) }}
-            style={{ position: 'relative', display: 'flex', padding: '1px 6px' }}
+            className="relative flex py-px px-1.5"
         >
             <div
                 role="button"
                 tabIndex={0}
                 onClick={() => router.visit(`/${project.slug}`)}
                 onKeyDown={e => e.key === 'Enter' && router.visit(`/${project.slug}`)}
-                style={{
-                    flex: 1, display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '7px',
-                    padding: '6px 28px 6px 8px',
-                    background: active ? '#EEF2FF' : hovered ? '#F5F7FF' : 'transparent',
-                    borderRadius: '6px',
-                    cursor: 'pointer', textAlign: 'left',
-                    transition: 'background 0.1s',
-                }}
+                className={`flex-1 flex flex-row items-center gap-[7px] pt-1.5 pr-7 pb-1.5 pl-2 rounded cursor-pointer text-left transition-colors duration-100 ${active ? 'bg-[#EEF2FF]' : hovered ? 'bg-[#F5F7FF]' : 'bg-transparent'}`}
             >
                 {/* Folder icon */}
-                <Folder size={14} color={active ? '#4F46E5' : color.textMuted} style={{ flexShrink: 0 }}/>
+                <Folder size={14} color={active ? '#4F46E5' : color.textMuted} className="shrink-0"/>
 
-                <span style={{
-                    color: active ? '#4338CA' : color.textSecondary, fontSize: '13px',
-                    fontWeight: active ? 600 : 400,
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    flex: 1,
-                }}>
+                <span className={`text-[13px] truncate flex-1 ${active ? 'text-[#4338CA] font-semibold' : 'text-zinc-700 font-normal'}`}>
                     {project.name}
                 </span>
 
-                <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+                <div className="shrink-0 flex items-center">
                     {status === 'running' && <DotsIndicator />}
                     {status === 'done' && (
-                        <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: color.success }} />
+                        <span className="w-[7px] h-[7px] rounded-full bg-success" />
                     )}
                 </div>
             </div>
@@ -107,39 +87,23 @@ export function ProjectItem({ project, active, status }: {
             {(hovered || menuOpen) && (
                 <button
                     onClick={e => { e.stopPropagation(); setMenuOpen(o => !o) }}
-                    style={{
-                        position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)',
-                        background: menuOpen ? color.bgSurface : 'transparent',
-                        border: menuOpen ? `1px solid ${color.borderMuted}` : '1px solid transparent',
-                        borderRadius: '4px', cursor: 'pointer',
-                        color: color.textMuted, padding: '2px 4px',
-                        display: 'flex', alignItems: 'center', lineHeight: 1,
-                    }}
-                    onMouseEnter={e => { if (!menuOpen) e.currentTarget.style.background = color.bgSurface }}
-                    onMouseLeave={e => { if (!menuOpen) e.currentTarget.style.background = 'transparent' }}
+                    className={`absolute right-1.5 top-1/2 -translate-y-1/2 border rounded-sm cursor-pointer text-zinc-500 py-0.5 px-1 flex items-center leading-none ${menuOpen ? 'bg-surface border-stroke' : 'bg-transparent border-transparent hover:bg-surface'}`}
                 >
                     <MoreVertical size={12}/>
                 </button>
             )}
 
             {menuOpen && (
-                <div ref={menuRef} style={{
-                    position: 'absolute', right: '0', top: '100%', zIndex: 200,
-                    background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
-                    borderRadius: '6px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                    minWidth: '170px', padding: '4px 0',
-                }}>
+                <div ref={menuRef} className="absolute right-0 top-full z-[200] bg-surface border border-stroke rounded shadow-[0_8px_24px_rgba(0,0,0,0.12)] min-w-[170px] py-1 px-0">
                     <ProjectEditModal
                         project={project}
                         onOpenChange={closeMenu}
                         trigger={
                             <button
                                 type="button"
-                                style={menuItemStyle()}
-                                onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
-                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                                className={menuItemClass()}
                             >
-                                <Settings size={12} style={{ flexShrink: 0 }}/>
+                                <Settings size={12} className="shrink-0"/>
                                 Edit project
                             </button>
                         }
@@ -150,37 +114,31 @@ export function ProjectItem({ project, active, status }: {
                         trigger={
                             <button
                                 type="button"
-                                style={menuItemStyle()}
-                                onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
-                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                                className={menuItemClass()}
                             >
-                                <ArrowRight size={12} style={{ flexShrink: 0 }}/>
+                                <ArrowRight size={12} className="shrink-0"/>
                                 Move to workspace
                             </button>
                         }
                     />
                     <button
                         type="button"
-                        style={menuItemStyle()}
-                        onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        className={menuItemClass()}
                         onClick={e => { e.stopPropagation(); setMenuOpen(false); fetch(`/api/projects/${project.id}/open-directory`, { method: 'POST' }) }}
                     >
-                        <Folder size={12} style={{ flexShrink: 0 }}/>
+                        <Folder size={12} className="shrink-0"/>
                         Open in directory
                     </button>
-                    <div style={{ height: '1px', background: color.border, margin: '4px 0' }} />
+                    <div className="h-px bg-stroke my-1 mx-0" />
                     <ProjectDeleteModal
                         project={project}
                         onOpenChange={closeMenu}
                         trigger={
                             <button
                                 type="button"
-                                style={menuItemStyle(true)}
-                                onMouseEnter={e => (e.currentTarget.style.background = color.bgBase)}
-                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                                className={menuItemClass(true)}
                             >
-                                <Trash2 size={12} style={{ flexShrink: 0 }}/>
+                                <Trash2 size={12} className="shrink-0"/>
                                 Delete project
                             </button>
                         }

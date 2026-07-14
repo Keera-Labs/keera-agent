@@ -7,7 +7,7 @@ import type { ProjectAgent, AgentFlags } from '@/queries/agentQuery'
 import { normalizeAgent } from '@/queries/agentQuery'
 import type { AgentTemplate } from '@/types/agent'
 import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS } from '@/types/agent'
-import { labelStyle, inputStyle, cancelBtnStyle, submitBtnStyle, flagRowStyle, toggleStyle } from '@/components/ui/styles'
+import { labelClass, inputClass, cancelBtnClass, submitBtnClass, flagRowClass, toggleClass } from '@/components/ui/styles'
 
 /**
  * Find the "plain" builtin template for an agent type — prefers one without
@@ -97,41 +97,33 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
         }
     }
 
-    const templateCardStyle = (active: boolean): React.CSSProperties => ({
-        padding: '8px 10px',
-        borderRadius: '6px',
-        border: `1px solid ${active ? color.accent : color.borderMuted}`,
-        background: active ? `${color.accent}18` : color.bgCanvas,
-        cursor: 'pointer',
-        flexShrink: 0,
-        minWidth: '100px',
-        maxWidth: '140px',
-        textAlign: 'left',
-    })
+    const templateCardClass = (active: boolean) =>
+        `py-2 px-2.5 rounded border cursor-pointer shrink-0 min-w-[100px] max-w-[140px] text-left ${active ? 'border-accent' : 'border-stroke'} ${active ? '' : 'bg-canvas'}`
 
     return (
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>Add Agent</h2>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+            <h2 className="m-0 text-zinc-900 text-[15px] font-semibold">Add Agent</h2>
             {isAtLimit && (
-                <div style={{ color: color.danger, fontSize: '12px', padding: '8px 12px', background: `${color.danger}14`, borderRadius: '6px', border: `1px solid ${color.danger}40` }}>
+                <div className="text-danger text-[12px] py-2 px-3 rounded" style={{ background: `${color.danger}14`, border: `1px solid ${color.danger}40` }}>
                     Agent limit reached ({agentCount}/{maxAgents}). Delete an existing agent before adding a new one.
                 </div>
             )}
-            {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
+            {error && <span className="text-danger text-[12px]">{error}</span>}
 
             {/* Template selector */}
             {templates.length > 0 && (
-                <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <span style={labelStyle}>Template</span>
-                    <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+                <label className="flex flex-col gap-1.5">
+                    <span className={labelClass}>Template</span>
+                    <div className="flex gap-2 overflow-x-auto pb-1">
                         <button
                             key="blank"
                             type="button"
                             onClick={() => applyTemplate(null)}
-                            style={templateCardStyle(selectedTemplateId === null && !systemPrompt)}
+                            className={templateCardClass(selectedTemplateId === null && !systemPrompt)}
+                            style={(selectedTemplateId === null && !systemPrompt) ? { background: `${color.accent}18` } : undefined}
                         >
-                            <div style={{ fontSize: '11px', fontWeight: 600, color: color.textSecondary }}>Blank</div>
-                            <div style={{ fontSize: '10px', color: color.textFaint, marginTop: '2px' }}>Start from scratch</div>
+                            <div className="text-[11px] font-semibold text-zinc-700">Blank</div>
+                            <div className="text-[10px] text-zinc-400 mt-0.5">Start from scratch</div>
                         </button>
                         {templates.map(tpl => {
                             const active = selectedTemplateId === tpl.id
@@ -141,21 +133,22 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
                                     key={tpl.id}
                                     type="button"
                                     onClick={() => applyTemplate(tpl)}
-                                    style={templateCardStyle(active)}
+                                    className={templateCardClass(active)}
+                                    style={active ? { background: `${color.accent}18` } : undefined}
                                 >
-                                    <div style={{ fontSize: '11px', fontWeight: 600, color: active ? color.accent : color.textSecondary }}>
+                                    <div className={`text-[11px] font-semibold ${active ? 'text-accent' : 'text-zinc-700'}`}>
                                         {tpl.name}
                                     </div>
-                                    <div style={{ fontSize: '10px', color: typeColor, marginTop: '2px' }}>
+                                    <div className="text-[10px] mt-0.5" style={{ color: typeColor }}>
                                         {AGENT_TYPE_LABELS[tpl.agent_type] ?? tpl.agent_type}
                                     </div>
                                     {(tpl.flags?.dangerously_skip_permissions || tpl.plan_mode) && (
-                                        <div style={{ display: 'flex', gap: '3px', marginTop: '4px', flexWrap: 'wrap' }}>
+                                        <div className="flex gap-[3px] mt-1 flex-wrap">
                                             {tpl.flags?.dangerously_skip_permissions && (
-                                                <span style={{ fontSize: '9px', padding: '1px 4px', borderRadius: '3px', background: '#ff6b3518', color: '#ff6b35', fontWeight: 600 }}>FULL AUTO</span>
+                                                <span className="text-[9px] py-px px-1 rounded-[3px] bg-[#ff6b3518] text-[#ff6b35] font-semibold">FULL AUTO</span>
                                             )}
                                             {tpl.plan_mode && (
-                                                <span style={{ fontSize: '9px', padding: '1px 4px', borderRadius: '3px', background: `${color.accent}18`, color: color.accent, fontWeight: 600 }}>PLAN ONLY</span>
+                                                <span className="text-[9px] py-px px-1 rounded-[3px] text-accent font-semibold" style={{ background: `${color.accent}18` }}>PLAN ONLY</span>
                                             )}
                                         </div>
                                     )}
@@ -166,115 +159,109 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
                 </label>
             )}
 
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <span style={labelStyle}>Name</span>
+            <label className="flex flex-col gap-1">
+                <span className={labelClass}>Name</span>
                 <input
                     value={name}
                     onChange={e => setName(e.target.value)}
                     placeholder={agentType === 'pm' ? 'e.g. Alice' : agentType === 'qa' ? 'e.g. QA Bot' : 'e.g. Dev Agent'}
                     required
-                    style={inputStyle}
+                    className={inputClass}
                 />
             </label>
 
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <span style={labelStyle}>Description</span>
+            <label className="flex flex-col gap-1">
+                <span className={labelClass}>Description</span>
                 <input
                     value={description}
                     onChange={e => setDescription(e.target.value)}
                     placeholder="Short description"
-                    style={inputStyle}
+                    className={inputClass}
                 />
             </label>
 
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <span style={labelStyle}>Complexity</span>
-                <select value={complexity} onChange={e => setComplexity(e.target.value)} style={inputStyle}>
+            <label className="flex flex-col gap-1">
+                <span className={labelClass}>Complexity</span>
+                <select value={complexity} onChange={e => setComplexity(e.target.value)} className={inputClass}>
                     <option value="easy">Easy</option>
                     <option value="medium">Medium</option>
                     <option value="hard">Hard</option>
                 </select>
             </label>
 
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <span style={labelStyle}>System Prompt</span>
+            <label className="flex flex-col gap-1">
+                <span className={labelClass}>System Prompt</span>
                 <textarea
                     value={systemPrompt}
                     onChange={e => setSystemPrompt(e.target.value)}
                     placeholder="Instructions for this agent…"
                     rows={6}
-                    style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }}
+                    className={`${inputClass} resize-y leading-normal`}
                 />
             </label>
 
             {/* Launch Options */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <span style={labelStyle}>Launch Options</span>
+            <div className="flex flex-col gap-1.5">
+                <span className={labelClass}>Launch Options</span>
 
-                <div style={flagRowStyle}>
+                <div className={flagRowClass}>
                     <div>
-                        <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Skip Permissions</div>
-                        <div style={{ fontSize: '10px', color: color.textFaint }}>--dangerously-skip-permissions — no prompts</div>
+                        <div className="text-[12px] font-medium text-zinc-700">Skip Permissions</div>
+                        <div className="text-[10px] text-zinc-400">--dangerously-skip-permissions — no prompts</div>
                     </div>
                     <button
                         type="button"
-                        style={toggleStyle(!!flags.dangerously_skip_permissions)}
+                        className={toggleClass(!!flags.dangerously_skip_permissions)}
                         onClick={() => setFlag('dangerously_skip_permissions', !flags.dangerously_skip_permissions)}
                         title="Toggle --dangerously-skip-permissions"
                     >
-                        <span style={{
-                            position: 'absolute', top: '3px',
-                            left: flags.dangerously_skip_permissions ? '17px' : '3px',
-                            width: '12px', height: '12px', borderRadius: '50%',
-                            background: '#fff', transition: 'left 0.15s',
-                        }} />
+                        <span
+                            className="absolute top-[3px] w-3 h-3 rounded-full bg-white transition-[left] duration-150"
+                            style={{ left: flags.dangerously_skip_permissions ? '17px' : '3px' }}
+                        />
                     </button>
                 </div>
 
-                <div style={flagRowStyle}>
+                <div className={flagRowClass}>
                     <div>
-                        <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Plan Mode</div>
-                        <div style={{ fontSize: '10px', color: color.textFaint }}>Read-only — analyse and plan, never edit files</div>
+                        <div className="text-[12px] font-medium text-zinc-700">Plan Mode</div>
+                        <div className="text-[10px] text-zinc-400">Read-only — analyse and plan, never edit files</div>
                     </div>
                     <button
                         type="button"
-                        style={toggleStyle(planMode)}
+                        className={toggleClass(planMode)}
                         onClick={() => setPlanMode(p => !p)}
                         title="Toggle plan mode"
                     >
-                        <span style={{
-                            position: 'absolute', top: '3px',
-                            left: planMode ? '17px' : '3px',
-                            width: '12px', height: '12px', borderRadius: '50%',
-                            background: '#fff', transition: 'left 0.15s',
-                        }} />
+                        <span
+                            className="absolute top-[3px] w-3 h-3 rounded-full bg-white transition-[left] duration-150"
+                            style={{ left: planMode ? '17px' : '3px' }}
+                        />
                     </button>
                 </div>
 
-                <div style={flagRowStyle}>
+                <div className={flagRowClass}>
                     <div>
-                        <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Verbose</div>
-                        <div style={{ fontSize: '10px', color: color.textFaint }}>--verbose — detailed claude output</div>
+                        <div className="text-[12px] font-medium text-zinc-700">Verbose</div>
+                        <div className="text-[10px] text-zinc-400">--verbose — detailed claude output</div>
                     </div>
                     <button
                         type="button"
-                        style={toggleStyle(!!flags.verbose)}
+                        className={toggleClass(!!flags.verbose)}
                         onClick={() => setFlag('verbose', !flags.verbose)}
                         title="Toggle --verbose"
                     >
-                        <span style={{
-                            position: 'absolute', top: '3px',
-                            left: flags.verbose ? '17px' : '3px',
-                            width: '12px', height: '12px', borderRadius: '50%',
-                            background: '#fff', transition: 'left 0.15s',
-                        }} />
+                        <span
+                            className="absolute top-[3px] w-3 h-3 rounded-full bg-white transition-[left] duration-150"
+                            style={{ left: flags.verbose ? '17px' : '3px' }}
+                        />
                     </button>
                 </div>
 
-                <div style={{ ...flagRowStyle, gap: '12px' }}>
-                    <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Max Turns</div>
-                        <div style={{ fontSize: '10px', color: color.textFaint }}>--max-turns N — limit conversation turns</div>
+                <div className={`${flagRowClass} gap-3`}>
+                    <div className="flex-1">
+                        <div className="text-[12px] font-medium text-zinc-700">Max Turns</div>
+                        <div className="text-[10px] text-zinc-400">--max-turns N — limit conversation turns</div>
                     </div>
                     <input
                         type="number"
@@ -283,14 +270,15 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
                         placeholder="∞"
                         value={flags.max_turns ?? ''}
                         onChange={e => setFlag('max_turns', e.target.value ? parseInt(e.target.value, 10) : null)}
-                        style={{ ...inputStyle, width: '72px', textAlign: 'center', padding: '4px 8px' }}
+                        className={`${inputClass} w-[72px] text-center`}
+                        style={{ padding: '4px 8px' }}
                     />
                 </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                <button type="button" onClick={close} style={cancelBtnStyle}>Cancel</button>
-                <button type="submit" disabled={loading || isAtLimit} style={{ ...submitBtnStyle, opacity: (loading || isAtLimit) ? 0.5 : 1, cursor: isAtLimit ? 'not-allowed' : 'pointer' }}>
+            <div className="flex gap-2 justify-end">
+                <button type="button" onClick={close} className={cancelBtnClass}>Cancel</button>
+                <button type="submit" disabled={loading || isAtLimit} className={submitBtnClass} style={{ opacity: (loading || isAtLimit) ? 0.5 : 1, cursor: isAtLimit ? 'not-allowed' : 'pointer' }}>
                     {loading ? 'Adding…' : 'Add Agent'}
                 </button>
             </div>

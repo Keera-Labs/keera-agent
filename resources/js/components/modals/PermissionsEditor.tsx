@@ -1,9 +1,6 @@
 import { color } from '@/tokens'
 import { TagInput } from '@/components/ui/TagInput'
 
-// Dark modal palette
-const M = { bg: '#1c1f26', border: '#2a2f3a', heading: '#f0f6fc', body: '#8b949e', faint: '#6e7681' }
-
 export function PermissionsEditor({
     title,
     subtitle,
@@ -28,25 +25,18 @@ export function PermissionsEditor({
     onClose: () => void
 }) {
     return (
-        <div style={{
-            position: 'fixed', inset: 0, background: color.overlay,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
-        }}>
-            <div style={{
-                background: M.bg, border: `1px solid ${M.border}`, borderRadius: '8px',
-                padding: '24px', width: '480px', display: 'flex', flexDirection: 'column', gap: '14px',
-                boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
-            }}>
-                <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
+            <div className="bg-[#1c1f26] border border-[#2a2f3a] rounded-md p-6 w-[480px] flex flex-col gap-3.5 shadow-[0_16px_48px_rgba(0,0,0,0.5)]">
+                <form onSubmit={onSubmit} className="flex flex-col gap-3.5">
                     <div>
-                        <h2 style={{ margin: '0 0 4px', color: M.heading, fontSize: '15px', fontWeight: 600 }}>
+                        <h2 className="mt-0 mx-0 mb-1 text-[#f0f6fc] text-[15px] font-semibold">
                             {title}
                         </h2>
-                        <p style={{ margin: 0, color: M.body, fontSize: '11px' }}>{subtitle}</p>
+                        <p className="m-0 text-[#8b949e] text-[11px]">{subtitle}</p>
                     </div>
-                    {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <span style={{ color: M.body, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Allow</span>
+                    {error && <span className="text-danger text-[12px]">{error}</span>}
+                    <div className="flex flex-col gap-1">
+                        <span className="text-[#8b949e] text-[11px] uppercase tracking-[0.05em]">Allow</span>
                         <TagInput
                             tags={allow}
                             onChange={tags => onChange('allow', tags)}
@@ -55,8 +45,8 @@ export function PermissionsEditor({
                             tagColor={color.success}
                         />
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <span style={{ color: M.body, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Deny</span>
+                    <div className="flex flex-col gap-1">
+                        <span className="text-[#8b949e] text-[11px] uppercase tracking-[0.05em]">Deny</span>
                         <TagInput
                             tags={deny}
                             onChange={tags => onChange('deny', tags)}
@@ -65,20 +55,20 @@ export function PermissionsEditor({
                             tagColor={color.danger}
                         />
                     </div>
-                    <p style={{ margin: 0, color: M.faint, fontSize: '10px', lineHeight: '1.5' }}>
-                        Rules follow Claude Code syntax, e.g. <code style={{ fontFamily: 'monospace', color: M.body }}>Bash(*)</code>,{' '}
-                        <code style={{ fontFamily: 'monospace', color: M.body }}>Bash(npm run *)</code>,{' '}
-                        <code style={{ fontFamily: 'monospace', color: M.body }}>Read</code>.{' '}
+                    <p className="m-0 text-[#6e7681] text-[10px] leading-normal">
+                        Rules follow Claude Code syntax, e.g. <code className="font-mono text-[#8b949e]">Bash(*)</code>,{' '}
+                        <code className="font-mono text-[#8b949e]">Bash(npm run *)</code>,{' '}
+                        <code className="font-mono text-[#8b949e]">Read</code>.{' '}
                         Press Enter to add. Leave both empty to rely on interactive prompts.
                     </p>
-                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                    <div className="flex gap-2 justify-end">
                         <button
                             type="button" onClick={onClose}
-                            style={{ background: 'transparent', border: `1px solid ${M.border}`, borderRadius: '6px', color: M.body, fontSize: '12px', padding: '6px 14px', cursor: 'pointer' }}
+                            className="bg-transparent border border-[#2a2f3a] rounded text-[#8b949e] text-[12px] py-1.5 px-3.5 cursor-pointer"
                         >Cancel</button>
                         <button
                             type="submit" disabled={fetching || loading}
-                            style={{ background: color.accentEmphasis, border: 'none', borderRadius: '6px', color: '#fff', fontSize: '12px', fontWeight: 600, padding: '6px 14px', cursor: (fetching || loading) ? 'default' : 'pointer', opacity: loading ? 0.7 : 1 }}
+                            className={`bg-blue-600 border-0 rounded text-white text-[12px] font-semibold py-1.5 px-3.5 ${(fetching || loading) ? 'cursor-default' : 'cursor-pointer'} ${loading ? 'opacity-70' : 'opacity-100'}`}
                         >
                             {loading ? 'Saving…' : 'Save'}
                         </button>

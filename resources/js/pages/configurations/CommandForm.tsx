@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { color } from '@/tokens'
-import { labelStyle, inputStyle, cancelBtnStyle, submitBtnStyle } from '@/components/ui/styles'
+import { labelClass, inputClass, cancelBtnClass, submitBtnClass } from '@/components/ui/styles'
 
 // Create-command form shown under the panel header. On submit it delegates the
 // API call to the parent and only clears itself on success.
@@ -26,41 +25,35 @@ export function CommandForm({
     }
 
     return (
-        <div style={{
-            padding: '14px 20px', borderBottom: `1px solid ${color.border}`,
-            background: color.bgSurface, flexShrink: 0,
-        }}>
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '0 0 180px' }}>
-                        <span style={labelStyle}>Label</span>
+        <div className="py-[14px] px-5 border-b border-stroke bg-surface shrink-0">
+            <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
+                <div className="flex gap-2.5">
+                    <div className="flex flex-col gap-1 flex-[0_0_180px]">
+                        <span className={labelClass}>Label</span>
                         <input
                             autoFocus
                             value={label}
                             onChange={e => setLabel(e.target.value)}
                             placeholder="Dev Server"
                             required
-                            style={{ ...inputStyle, boxSizing: 'border-box', width: '100%' }}
+                            className={`${inputClass} box-border w-full`}
                         />
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
-                        <span style={labelStyle}>Shell command</span>
+                    <div className="flex flex-col gap-1 flex-1">
+                        <span className={labelClass}>Shell command</span>
                         <input
                             value={cmd}
                             onChange={e => setCmd(e.target.value)}
                             placeholder="npm run dev"
                             required
-                            style={{
-                                ...inputStyle, boxSizing: 'border-box', width: '100%',
-                                fontFamily: '"JetBrains Mono", monospace',
-                            }}
+                            className={`${inputClass} box-border w-full font-mono`}
                         />
                     </div>
                 </div>
-                {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
-                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                    <button type="button" onClick={onCancel} style={cancelBtnStyle}>Cancel</button>
-                    <button type="submit" disabled={loading} style={submitBtnStyle}>
+                {error && <span className="text-danger text-[12px]">{error}</span>}
+                <div className="flex gap-2 justify-end">
+                    <button type="button" onClick={onCancel} className={cancelBtnClass}>Cancel</button>
+                    <button type="submit" disabled={loading} className={submitBtnClass}>
                         {loading ? 'Adding…' : 'Add command'}
                     </button>
                 </div>

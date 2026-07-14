@@ -123,44 +123,35 @@ export default function Broadcasting() {
     const sc = statusColors[status]
 
     return (
-        <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            height: '100%',
-            maxWidth: '720px',
-            margin: '0 auto',
-            padding: '32px 24px',
-            gap: '24px',
-            boxSizing: 'border-box',
-        }}>
+        <div className="flex flex-col h-full max-w-[720px] mx-auto py-8 px-6 gap-6 box-border">
             {/* ── Header ──────────────────────────────────────────────── */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#111' }}>
+            <div className="flex items-center gap-3">
+                <h1 className="m-0 text-[20px] font-bold text-[#111]">
                     Broadcasting POC
                 </h1>
 
                 {/* Connection status badge */}
-                <span style={{
-                    display: 'inline-flex', alignItems: 'center', gap: '6px',
-                    padding: '3px 10px', borderRadius: '999px',
-                    background: sc.bg, color: sc.text,
-                    fontSize: '12px', fontWeight: 600,
-                }}>
-                    <span style={{
-                        width: '7px', height: '7px', borderRadius: '50%',
-                        background: sc.dot,
-                        boxShadow: status === 'connected' ? `0 0 0 2px ${sc.dot}40` : 'none',
-                    }} />
+                <span
+                    className="inline-flex items-center gap-1.5 py-[3px] px-2.5 rounded-full text-[12px] font-semibold"
+                    style={{ background: sc.bg, color: sc.text }}
+                >
+                    <span
+                        className="w-[7px] h-[7px] rounded-full"
+                        style={{
+                            background: sc.dot,
+                            boxShadow: status === 'connected' ? `0 0 0 2px ${sc.dot}40` : 'none',
+                        }}
+                    />
                     {status}
                 </span>
 
-                <span style={{ fontSize: '12px', color: '#94a3b8', marginLeft: 'auto' }}>
-                    channel: <code style={{ background: '#f1f5f9', padding: '1px 5px', borderRadius: '4px' }}>{CHANNEL_NAME}</code>
+                <span className="text-[12px] text-[#94a3b8] ml-auto">
+                    channel: <code className="bg-[#f1f5f9] py-px px-[5px] rounded-sm">{CHANNEL_NAME}</code>
                 </span>
             </div>
 
             {/* ── Description ─────────────────────────────────────────── */}
-            <p style={{ margin: 0, fontSize: '13px', color: '#64748b', lineHeight: 1.6 }}>
+            <p className="m-0 text-[13px] text-[#64748b] leading-[1.6]">
                 This page proves the full broadcast pipeline:{' '}
                 <strong>HTTP POST → server broadcasts event → Reverb WebSocket → UI updates live.</strong>{' '}
                 Type a message and click <strong>Ping</strong>; the event should appear in the log below within
@@ -168,7 +159,7 @@ export default function Broadcasting() {
             </p>
 
             {/* ── Input + button ──────────────────────────────────────── */}
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div className="flex gap-2">
                 <input
                     type="text"
                     value={input}
@@ -176,31 +167,12 @@ export default function Broadcasting() {
                     onKeyDown={handleKeyDown}
                     placeholder='Message (default: "ping")'
                     disabled={sending}
-                    style={{
-                        flex: 1,
-                        padding: '8px 12px',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '6px',
-                        fontSize: '14px',
-                        color: '#1e293b',
-                        background: '#fff',
-                        outline: 'none',
-                    }}
+                    className="flex-1 py-2 px-3 border border-[#e2e8f0] rounded text-[14px] text-[#1e293b] bg-[#fff] outline-none"
                 />
                 <button
                     onClick={handlePing}
                     disabled={sending || status !== 'connected'}
-                    style={{
-                        padding: '8px 20px',
-                        borderRadius: '6px',
-                        border: 'none',
-                        background: sending || status !== 'connected' ? '#94a3b8' : '#6c47ff',
-                        color: '#fff',
-                        fontWeight: 600,
-                        fontSize: '14px',
-                        cursor: sending || status !== 'connected' ? 'not-allowed' : 'pointer',
-                        transition: 'background 0.15s',
-                    }}
+                    className={`py-2 px-5 rounded border-none text-white font-semibold text-[14px] transition-colors duration-150 ${sending || status !== 'connected' ? 'bg-[#94a3b8] cursor-not-allowed' : 'bg-[#6c47ff] cursor-pointer'}`}
                 >
                     {sending ? 'Sending…' : 'Ping'}
                 </button>
@@ -208,69 +180,44 @@ export default function Broadcasting() {
 
             {/* ── Error ───────────────────────────────────────────────── */}
             {error && (
-                <div style={{
-                    padding: '8px 12px',
-                    background: '#fee2e2',
-                    border: '1px solid #fca5a5',
-                    borderRadius: '6px',
-                    color: '#b91c1c',
-                    fontSize: '13px',
-                }}>
+                <div className="py-2 px-3 bg-[#fee2e2] border border-[#fca5a5] rounded text-[#b91c1c] text-[13px]">
                     ⚠ {error}
                 </div>
             )}
 
             {/* ── Event log ───────────────────────────────────────────── */}
-            <div style={{
-                flex: 1,
-                overflowY: 'auto',
-                border: '1px solid #e2e8f0',
-                borderRadius: '8px',
-                background: '#f8fafc',
-                minHeight: '200px',
-            }}>
+            <div className="flex-1 overflow-y-auto border border-[#e2e8f0] rounded-md bg-[#f8fafc] min-h-[200px]">
                 {messages.length === 0 ? (
-                    <div style={{
-                        padding: '32px',
-                        textAlign: 'center',
-                        color: '#94a3b8',
-                        fontSize: '13px',
-                    }}>
+                    <div className="p-8 text-center text-[#94a3b8] text-[13px]">
                         {status === 'connected'
                             ? 'No events yet — click Ping to send one.'
                             : 'Waiting for WebSocket connection…'}
                     </div>
                 ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                    <table className="w-full border-collapse text-[13px]">
                         <thead>
-                            <tr style={{ background: '#f1f5f9', borderBottom: '1px solid #e2e8f0' }}>
-                                <th style={{ padding: '8px 12px', textAlign: 'left', color: '#64748b', fontWeight: 600, width: '40px' }}>#</th>
-                                <th style={{ padding: '8px 12px', textAlign: 'left', color: '#64748b', fontWeight: 600 }}>Event</th>
-                                <th style={{ padding: '8px 12px', textAlign: 'left', color: '#64748b', fontWeight: 600 }}>Data</th>
-                                <th style={{ padding: '8px 12px', textAlign: 'right', color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>Received at</th>
+                            <tr className="bg-[#f1f5f9] border-b border-b-[#e2e8f0]">
+                                <th className="py-2 px-3 text-left text-[#64748b] font-semibold w-10">#</th>
+                                <th className="py-2 px-3 text-left text-[#64748b] font-semibold">Event</th>
+                                <th className="py-2 px-3 text-left text-[#64748b] font-semibold">Data</th>
+                                <th className="py-2 px-3 text-right text-[#64748b] font-semibold whitespace-nowrap">Received at</th>
                             </tr>
                         </thead>
                         <tbody>
                             {messages.map(msg => (
-                                <tr key={msg.id} style={{ borderBottom: '1px solid #e2e8f0', background: '#fff' }}>
-                                    <td style={{ padding: '8px 12px', color: '#94a3b8' }}>{msg.id}</td>
-                                    <td style={{ padding: '8px 12px' }}>
-                                        <code style={{
-                                            background: '#ede9fe',
-                                            color: '#6c47ff',
-                                            padding: '1px 6px',
-                                            borderRadius: '4px',
-                                            fontWeight: 600,
-                                        }}>
+                                <tr key={msg.id} className="border-b border-b-[#e2e8f0] bg-[#fff]">
+                                    <td className="py-2 px-3 text-[#94a3b8]">{msg.id}</td>
+                                    <td className="py-2 px-3">
+                                        <code className="bg-[#ede9fe] text-[#6c47ff] py-px px-1.5 rounded-sm font-semibold">
                                             {msg.event}
                                         </code>
                                     </td>
-                                    <td style={{ padding: '8px 12px', color: '#374151', wordBreak: 'break-word' }}>
+                                    <td className="py-2 px-3 text-[#374151] [word-break:break-word]">
                                         {typeof msg.data?.message === 'string'
                                             ? msg.data.message
                                             : JSON.stringify(msg.data)}
                                     </td>
-                                    <td style={{ padding: '8px 12px', textAlign: 'right', color: '#94a3b8', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                                    <td className="py-2 px-3 text-right text-[#94a3b8] [font-variant-numeric:tabular-nums] whitespace-nowrap">
                                         {msg.receivedAt.toLocaleTimeString()}
                                     </td>
                                 </tr>
@@ -282,25 +229,11 @@ export default function Broadcasting() {
             </div>
 
             {/* ── Pipeline diagram ─────────────────────────────────────── */}
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                fontSize: '11px',
-                color: '#94a3b8',
-                justifyContent: 'center',
-                padding: '8px 0',
-            }}>
+            <div className="flex items-center gap-2 text-[11px] text-[#94a3b8] justify-center py-2">
                 {['Browser POST /api/broadcasting/ping', '→', 'FastAPI broadcasts PingEvent', '→', 'Reverb WebSocket', '→', 'UI event log'].map((step, i) => (
                     <span
                         key={i}
-                        style={step === '→' ? {} : {
-                            padding: '3px 8px',
-                            background: '#f1f5f9',
-                            borderRadius: '4px',
-                            fontWeight: 500,
-                            color: '#64748b',
-                        }}
+                        className={step === '→' ? '' : 'py-[3px] px-2 bg-[#f1f5f9] rounded-sm font-medium text-[#64748b]'}
                     >
                         {step}
                     </span>

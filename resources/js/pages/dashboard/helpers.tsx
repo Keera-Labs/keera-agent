@@ -9,7 +9,7 @@ export function avatarColor(agentType: string, name: string): string {
 }
 
 export function FolderIcon({ size = 13, fill = color.textMuted }: { size?: number; fill?: string }) {
-    return <Folder size={size} color={fill} style={{ flexShrink: 0 }}/>
+    return <Folder size={size} color={fill} className="shrink-0"/>
 }
 
 export function projectStatusSummary(p: DashboardProject): string {

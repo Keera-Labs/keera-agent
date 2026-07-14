@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { color } from '@/tokens'
 import type { Project } from '@/types/type'
 import { PermissionsEditor } from './PermissionsEditor'
 
@@ -56,7 +55,7 @@ export function ProjectPermissionsModal({
 
     return (
         <PermissionsEditor
-            title={<>Permissions — <span style={{ fontFamily: '"JetBrains Mono", monospace', color: color.accent }}>{project.name}</span></>}
+            title={<>Permissions — <span className="font-mono text-accent">{project.name}</span></>}
             subtitle="Saved to the project's .claude/settings.json and database. Takes effect on next agent start."
             allow={allow}
             deny={deny}

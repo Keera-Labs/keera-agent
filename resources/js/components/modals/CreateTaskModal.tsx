@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { color } from '@/tokens'
 import type { Project, Workspace } from '@/types/type'
-import { labelStyle, inputStyle, cancelBtnStyle, submitBtnStyle } from '@/components/ui/styles'
+import { labelClass, inputClass, cancelBtnClass, submitBtnClass } from '@/components/ui/styles'
 
 const LS_TASK_PROJECT_ID = 'keera:task_project_id'
 const LS_TASK_WORKSPACE_ID = 'keera:task_workspace_id'
@@ -85,33 +84,25 @@ export function CreateTaskModal({
         onClose()
     }
 
-    const selectStyle: React.CSSProperties = {
-        ...inputStyle, width: '100%', boxSizing: 'border-box' as const, cursor: 'pointer',
-    }
+    const selectClass = `${inputClass} w-full box-border cursor-pointer`
 
     return (
-        <div style={{
-            position: 'fixed', inset: 0, background: color.overlay,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
-        }}>
-            <div style={{
-                background: color.bgModal, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
-                padding: '24px', width: '420px', display: 'flex', flexDirection: 'column', gap: '16px',
-            }}>
-                <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>New Task</h2>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
+            <div className="bg-modal border border-stroke rounded-md p-6 w-[420px] flex flex-col gap-4">
+                <h2 className="m-0 text-zinc-900 text-[15px] font-semibold">New Task</h2>
 
-                {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
+                {error && <span className="text-danger text-[12px]">{error}</span>}
 
-                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
                     {/* Workspace + Project row */}
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div className="flex gap-2">
                         {workspaces.length > 0 && (
-                            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
-                                <span style={labelStyle}>Workspace</span>
+                            <label className="flex flex-col gap-1 flex-1">
+                                <span className={labelClass}>Workspace</span>
                                 <select
                                     value={selectedWorkspaceId ?? ''}
                                     onChange={e => handleWorkspaceChange(e.target.value === '' ? null : parseInt(e.target.value, 10))}
-                                    style={selectStyle}
+                                    className={selectClass}
                                 >
                                     <option value="">All</option>
                                     {workspaces.map(w => (
@@ -120,12 +111,12 @@ export function CreateTaskModal({
                                 </select>
                             </label>
                         )}
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
-                            <span style={labelStyle}>Project <span style={{ color: color.danger }}>*</span></span>
+                        <label className="flex flex-col gap-1 flex-1">
+                            <span className={labelClass}>Project <span className="text-danger">*</span></span>
                             <select
                                 value={selectedProjectId ?? ''}
                                 onChange={e => handleProjectChange(parseInt(e.target.value, 10))}
-                                style={selectStyle}
+                                className={selectClass}
                             >
                                 <option value="" disabled>Select project</option>
                                 {visibleProjects.map(p => (
@@ -136,59 +127,47 @@ export function CreateTaskModal({
                     </div>
 
                     {/* Title */}
-                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <span style={labelStyle}>Title <span style={{ color: color.danger }}>*</span></span>
+                    <label className="flex flex-col gap-1">
+                        <span className={labelClass}>Title <span className="text-danger">*</span></span>
                         <input
                             autoFocus
                             value={title}
                             onChange={e => { setTitle(e.target.value); setError('') }}
                             placeholder="Task title"
-                            style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }}
+                            className={`${inputClass} w-full box-border`}
                         />
                     </label>
 
                     {/* Description / body */}
-                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <span style={labelStyle}>Description</span>
+                    <label className="flex flex-col gap-1">
+                        <span className={labelClass}>Description</span>
                         <textarea
                             value={body}
                             onChange={e => setBody(e.target.value)}
                             placeholder="Optional details…"
                             rows={3}
-                            style={{
-                                ...inputStyle, width: '100%', boxSizing: 'border-box',
-                                resize: 'vertical', lineHeight: 1.5,
-                            }}
+                            className={`${inputClass} w-full box-border resize-y leading-normal`}
                         />
                     </label>
 
                     {/* Assignees */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <span style={labelStyle}>Assignees</span>
+                    <div className="flex flex-col gap-1.5">
+                        <span className={labelClass}>Assignees</span>
                         {assignees.length > 0 && (
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                            <div className="flex flex-wrap gap-1.5">
                                 {assignees.map(a => (
-                                    <span key={a} style={{
-                                        display: 'inline-flex', alignItems: 'center', gap: '4px',
-                                        background: color.accentSubtle, border: `1px solid ${color.accentEmphasis}`,
-                                        borderRadius: '12px', padding: '2px 8px',
-                                        color: color.accentMuted, fontSize: '11px',
-                                    }}>
+                                    <span key={a} className="inline-flex items-center gap-1 bg-blue-50 border border-blue-600 rounded-xl py-0.5 px-2 text-blue-600 text-[11px]">
                                         {a}
                                         <button
                                             type="button"
                                             onClick={() => removeAssignee(a)}
-                                            style={{
-                                                background: 'transparent', border: 'none',
-                                                color: color.accentMuted, cursor: 'pointer', padding: 0,
-                                                lineHeight: 1, fontSize: '13px',
-                                            }}
+                                            className="bg-transparent border-none text-blue-600 cursor-pointer p-0 leading-none text-[13px]"
                                         >×</button>
                                     </span>
                                 ))}
                             </div>
                         )}
-                        <div style={{ display: 'flex', gap: '6px' }}>
+                        <div className="flex gap-1.5">
                             <input
                                 value={assigneeInput}
                                 onChange={e => setAssigneeInput(e.target.value)}
@@ -196,23 +175,19 @@ export function CreateTaskModal({
                                     if (e.key === 'Enter') { e.preventDefault(); addAssignee() }
                                 }}
                                 placeholder="Add name and press Enter"
-                                style={{ ...inputStyle, flex: 1, boxSizing: 'border-box' }}
+                                className={`${inputClass} flex-1 box-border`}
                             />
                             <button
                                 type="button"
                                 onClick={addAssignee}
-                                style={{
-                                    background: 'transparent', border: `1px solid ${color.borderMuted}`,
-                                    borderRadius: '6px', color: color.textMuted, fontSize: '12px',
-                                    padding: '6px 10px', cursor: 'pointer',
-                                }}
+                                className="bg-transparent border border-stroke rounded text-zinc-500 text-[12px] py-1.5 px-2.5 cursor-pointer"
                             >Add</button>
                         </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', paddingTop: '4px' }}>
-                        <button type="button" onClick={onClose} style={cancelBtnStyle}>Cancel</button>
-                        <button type="submit" style={submitBtnStyle}>Create Task</button>
+                    <div className="flex gap-2 justify-end pt-1">
+                        <button type="button" onClick={onClose} className={cancelBtnClass}>Cancel</button>
+                        <button type="submit" className={submitBtnClass}>Create Task</button>
                     </div>
                 </form>
             </div>

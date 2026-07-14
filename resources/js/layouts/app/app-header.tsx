@@ -1,10 +1,9 @@
 import { Info } from "lucide-react"
-import { color } from "@/tokens"
 import { router } from "@inertiajs/react"
 
 export default function AppHeader() {
     return (
-        <header className="shrink-0 bg-white flex items-stretch" style={{ height: "48px", borderBottom: `1px solid ${color.stroke}`, zIndex: 20 }}>
+        <header className="shrink-0 bg-white flex items-stretch h-12 border-b border-stroke z-20">
 
             {/* Logo zone — same width as sidebar; doubles as the Dashboard (home) link */}
             <button
@@ -12,13 +11,12 @@ export default function AppHeader() {
                 onClick={() => router.visit("/")}
                 aria-label="Go to Dashboard"
                 title="Dashboard"
-                className="shrink-0 flex items-center gap-2.5 px-4 text-left cursor-pointer transition-colors hover:bg-black/[0.03]"
-                style={{ width: "220px", borderRight: `1px solid ${color.stroke}` }}
+                className="shrink-0 flex items-center gap-2.5 px-4 text-left cursor-pointer transition-colors hover:bg-black/[0.03] w-[220px] border-r border-stroke"
             >
-                <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: color.accent }}>
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-accent">
                     <Info size={14} color="white"/>
                 </div>
-                <span style={{ fontWeight: 700, fontSize: "14px", color: color.textPrimary, letterSpacing: "-0.01em" }}>
+                <span className="font-bold text-[14px] text-zinc-900 tracking-[-0.01em]">
                         Keera Agent
                 </span>
             </button>
@@ -28,7 +26,7 @@ export default function AppHeader() {
 
             {/* Right: avatar */}
             <div className="flex items-center gap-1 pr-3">
-                <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white cursor-pointer ml-1 shrink-0" style={{ background: "#7c6af7" }}>
+                <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white cursor-pointer ml-1 shrink-0 bg-[#7c6af7]">
                     B
                 </div>
             </div>

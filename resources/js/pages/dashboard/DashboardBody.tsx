@@ -8,32 +8,27 @@ import type { DashboardData } from './types'
 
 export function DashboardBody({ data }: { data: DashboardData }) {
     return (
-        <div style={{ flex: 1, overflow: 'auto', background: color.bgCanvas }}>
-            <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 28px 40px' }}>
+        <div className="flex-1 overflow-auto bg-canvas">
+            <div className="max-w-[1200px] mx-auto pt-6 px-7 pb-10">
 
                 {/* ── Header ── */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '24px' }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ color: color.textPrimary, fontSize: '22px', fontWeight: 700, lineHeight: 1.2 }}>
+                <div className="flex items-start gap-3 mb-6">
+                    <div className="flex-1 min-w-0">
+                        <div className="text-zinc-900 text-[22px] font-bold leading-[1.2]">
                             {data.workspaceName}
                         </div>
-                        <div style={{ color: color.textMuted, fontSize: '13px', marginTop: '4px' }}>
+                        <div className="text-zinc-500 text-[13px] mt-1">
                             {data.agentCount} agents working across {data.projectCount} projects.
                         </div>
                     </div>
-                    <span style={{
-                        display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0, marginTop: '2px',
-                    }}>
+                    <span className="flex items-center gap-1.5 shrink-0 mt-0.5">
                         <DotsIndicator />
-                        <span style={{
-                            color: color.warning, fontSize: '11px',
-                            fontFamily: '"JetBrains Mono", monospace',
-                        }}>running</span>
+                        <span className="text-amber-700 text-[11px] font-mono">running</span>
                     </span>
                 </div>
 
                 {/* ── Stat cards ── */}
-                <div style={{ display: 'flex', gap: '12px', marginBottom: '28px' }}>
+                <div className="flex gap-3 mb-7">
                     <StatCard label="Projects" value={data.stats.projects} dot={color.accent} />
                     <StatCard label="Active" value={data.stats.active} dot={color.success} />
                     <StatCard label="Waiting" value={data.stats.waiting} dot={color.warningBright} />
@@ -42,13 +37,9 @@ export function DashboardBody({ data }: { data: DashboardData }) {
 
                 {/* ── Working now ── */}
                 {data.workingNow.length > 0 && (
-                    <div style={{ marginBottom: '32px' }}>
+                    <div className="mb-8">
                         <SectionHeader title="Working now" count={data.workingNow.length} />
-                        <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                            gap: '12px',
-                        }}>
+                        <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
                             {data.workingNow.map(agent => (
                                 <WorkingAgentCard key={agent.id} agent={agent} />
                             ))}
@@ -59,11 +50,7 @@ export function DashboardBody({ data }: { data: DashboardData }) {
                 {/* ── Projects ── */}
                 <div>
                     <SectionHeader title="Projects" count={data.projects.length} />
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-                        gap: '12px',
-                    }}>
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
                         {data.projects.map(project => (
                             <ProjectCard key={project.id} project={project} />
                         ))}

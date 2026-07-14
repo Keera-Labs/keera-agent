@@ -1,5 +1,4 @@
 import { useState, type ReactNode } from 'react'
-import { color } from '@/tokens'
 import type { Project, Workspace } from '@/types/type'
 import Modal from '@/components/ui/Modal'
 import useProjects from '@/queries/projectsQuery'
@@ -31,37 +30,32 @@ function MoveForm({
         }
     }
 
-    const optionStyle = (selected: boolean): React.CSSProperties => ({
-        textAlign: 'left', padding: '8px 12px', borderRadius: '6px', background: 'transparent',
-        border: `1px solid ${selected ? color.accent : color.stroke}`,
-        color: selected ? color.accent : color.textSecondary,
-        fontSize: '13px', cursor: loading ? 'default' : 'pointer',
-        display: 'flex', alignItems: 'center', gap: '8px',
-    })
+    const optionClass = (selected: boolean): string =>
+        `text-left py-2 px-3 rounded bg-transparent border ${selected ? 'border-accent text-accent' : 'border-stroke text-zinc-700'} text-[13px] ${loading ? 'cursor-default' : 'cursor-pointer'} flex items-center gap-2`
 
     return (
         <>
-            <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '14px', fontWeight: 600 }}>
+            <h2 className="m-0 text-zinc-900 text-[14px] font-semibold">
                 Move{' '}
-                <span style={{ fontFamily: '"JetBrains Mono", monospace', color: color.accent }}>{project.name}</span>
+                <span className="font-mono text-accent">{project.name}</span>
             </h2>
-            {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <button type="button" onClick={() => select(null)} disabled={loading} style={optionStyle(project.workspace_id === null)}>
-                    <span style={{ color: color.textFaint }}>—</span> Unassigned
-                    {project.workspace_id === null && <span style={{ marginLeft: 'auto', color: color.textFaint, fontSize: '11px' }}>current</span>}
+            {error && <span className="text-danger text-[12px]">{error}</span>}
+            <div className="flex flex-col gap-1.5">
+                <button type="button" onClick={() => select(null)} disabled={loading} className={optionClass(project.workspace_id === null)}>
+                    <span className="text-zinc-400">—</span> Unassigned
+                    {project.workspace_id === null && <span className="ml-auto text-zinc-400 text-[11px]">current</span>}
                 </button>
                 {workspaces.map(w => (
-                    <button key={w.id} type="button" onClick={() => select(w.id)} disabled={loading} style={optionStyle(w.id === project.workspace_id)}>
+                    <button key={w.id} type="button" onClick={() => select(w.id)} disabled={loading} className={optionClass(w.id === project.workspace_id)}>
                         {w.name}
-                        {w.id === project.workspace_id && <span style={{ marginLeft: 'auto', color: color.textFaint, fontSize: '11px' }}>current</span>}
+                        {w.id === project.workspace_id && <span className="ml-auto text-zinc-400 text-[11px]">current</span>}
                     </button>
                 ))}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <div className="flex justify-end">
                 <button
                     type="button" onClick={close} disabled={loading}
-                    style={{ background: 'transparent', border: `1px solid ${color.stroke}`, borderRadius: '6px', color: color.textSecondary, fontSize: '12px', padding: '6px 14px', cursor: 'pointer' }}
+                    className="bg-transparent border border-stroke rounded text-zinc-700 text-[12px] py-1.5 px-3.5 cursor-pointer"
                 >Cancel</button>
             </div>
         </>

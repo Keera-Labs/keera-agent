@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { ChevronDown, X } from 'lucide-react'
-import { color } from '@/tokens'
 import type { Task } from '@/types/type'
 import { STATUS_CYCLE, STATUS_COLORS, STATUS_LABELS } from '@/types/task'
 import { PriorityBadge } from '@/components/ui/PriorityBadge'
@@ -10,27 +9,25 @@ import { PriorityBadge } from '@/components/ui/PriorityBadge'
 function PlanningSection({ label, items, color: dotColor }: { label: string; items: string[]; color: string }) {
     const [open, setOpen] = useState(false)
     return (
-        <div style={{ marginTop: '2px' }}>
+        <div className="mt-0.5">
             <button
                 onClick={() => setOpen(o => !o)}
-                style={{
-                    background: 'transparent', border: 'none', cursor: 'pointer',
-                    padding: 0, display: 'flex', alignItems: 'center', gap: '4px',
-                }}
+                className="bg-transparent border-none cursor-pointer p-0 flex items-center gap-1"
             >
                 <ChevronDown
                     size={8} color={dotColor}
-                    style={{ transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }}
+                    className="transition-transform duration-150"
+                    style={{ transform: open ? 'rotate(0deg)' : 'rotate(-90deg)' }}
                 />
-                <span style={{ fontSize: '10px', color: dotColor, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.05em]" style={{ color: dotColor }}>
                     {label} ({items.length})
                 </span>
             </button>
             {open && (
-                <ul style={{ margin: '4px 0 0 12px', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <ul className="mt-1 mr-0 mb-0 ml-3 p-0 list-none flex flex-col gap-0.5">
                     {items.map((item, i) => (
-                        <li key={i} style={{ fontSize: '11px', color: color.textMuted, lineHeight: 1.5 }}>
-                            <span style={{ color: dotColor, marginRight: '4px' }}>•</span>{item}
+                        <li key={i} className="text-[11px] text-zinc-500 leading-[1.5]">
+                            <span className="mr-1" style={{ color: dotColor }}>•</span>{item}
                         </li>
                     ))}
                 </ul>
@@ -58,29 +55,20 @@ export function TasksView({
     const [dragOverStatus, setDragOverStatus] = useState<Task['status'] | null>(null)
 
     return (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div className="flex-1 flex flex-col overflow-hidden">
             {/* Header */}
-            <div style={{
-                padding: '12px 20px', borderBottom: `1px solid ${color.border}`,
-                display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0,
-            }}>
-                <span style={{ color: color.textPrimary, fontSize: '13px', fontWeight: 600, flex: 1 }}>Tasks</span>
+            <div className="py-3 px-5 border-b border-stroke flex items-center gap-2 shrink-0">
+                <span className="text-zinc-900 text-[13px] font-semibold flex-1">Tasks</span>
                 <button
                     onClick={onOpenCreateTask}
-                    style={{
-                        background: color.successEmphasis, border: `1px solid ${color.successBorder}`, borderRadius: '5px',
-                        color: '#fff', fontSize: '11px', padding: '4px 10px', cursor: 'pointer',
-                    }}
+                    className="bg-success border border-success rounded-[5px] text-white text-[11px] py-1 px-2.5 cursor-pointer"
                 >
                     + New task
                 </button>
             </div>
 
             {/* Kanban board */}
-            <div style={{
-                flex: 1, display: 'flex', flexDirection: 'row', gap: '12px',
-                padding: '16px', overflowX: 'auto', overflowY: 'hidden', alignItems: 'flex-start',
-            }}>
+            <div className="flex-1 flex flex-row gap-3 p-4 overflow-x-auto overflow-y-hidden items-start">
                 {STATUS_CYCLE.map(status => {
                     const col = tasks.filter(t => t.status === status)
                     const isOver = dragOverStatus === status
@@ -100,48 +88,26 @@ export function TasksView({
                                 }
                                 setDragTaskId(null)
                             }}
-                            style={{
-                                width: '240px', flexShrink: 0, display: 'flex', flexDirection: 'column',
-                                background: isOver ? color.bgSurface : color.bgCanvas,
-                                border: `1px solid ${isOver ? color.borderMuted : color.border}`,
-                                borderRadius: '8px', transition: 'background 0.1s, border-color 0.1s',
-                                maxHeight: '100%',
-                            }}
+                            className={`w-[240px] shrink-0 flex flex-col border border-stroke rounded-md transition-colors duration-100 max-h-full ${isOver ? 'bg-surface' : 'bg-canvas'}`}
                         >
                             {/* Column header */}
-                            <div style={{
-                                padding: '10px 12px 8px', display: 'flex', alignItems: 'center',
-                                gap: '7px', borderBottom: `1px solid ${color.border}`, flexShrink: 0,
-                            }}>
-                                <span style={{
-                                    width: '8px', height: '8px', borderRadius: '50%',
-                                    background: STATUS_COLORS[status], flexShrink: 0, display: 'inline-block',
-                                }} />
-                                <span style={{
-                                    fontSize: '11px', fontWeight: 600, color: color.textMuted,
-                                    textTransform: 'uppercase', letterSpacing: '0.06em', flex: 1,
-                                }}>
+                            <div className="pt-2.5 px-3 pb-2 flex items-center gap-[7px] border-b border-stroke shrink-0">
+                                <span
+                                    className="w-2 h-2 rounded-full shrink-0 inline-block"
+                                    style={{ background: STATUS_COLORS[status] }}
+                                />
+                                <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-[0.06em] flex-1">
                                     {STATUS_LABELS[status]}
                                 </span>
-                                <span style={{
-                                    fontSize: '10px', color: color.textFaint,
-                                    background: color.bgBase, borderRadius: '10px',
-                                    padding: '1px 6px', border: `1px solid ${color.border}`,
-                                }}>
+                                <span className="text-[10px] text-zinc-400 bg-canvas rounded-lg py-px px-1.5 border border-stroke">
                                     {col.length}
                                 </span>
                             </div>
 
                             {/* Cards */}
-                            <div style={{ flex: 1, overflowY: 'auto', padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-1.5">
                                 {col.length === 0 && (
-                                    <div style={{
-                                        border: `1px dashed ${isOver ? color.borderMuted : color.border}`,
-                                        borderRadius: '6px', padding: '20px 10px',
-                                        textAlign: 'center', color: color.textFaint,
-                                        fontSize: '11px', fontStyle: 'italic',
-                                        transition: 'border-color 0.1s',
-                                    }}>
+                                    <div className="border border-dashed border-stroke rounded py-5 px-2.5 text-center text-zinc-400 text-[11px] italic transition-colors duration-100">
                                         {isOver ? 'Drop here' : 'No tasks'}
                                     </div>
                                 )}
@@ -152,37 +118,16 @@ export function TasksView({
                                         onDragStart={() => setDragTaskId(task.id)}
                                         onDragEnd={() => { setDragTaskId(null); setDragOverStatus(null) }}
                                         onClick={() => { if (dragTaskId === null) onOpenTask(task) }}
-                                        style={{
-                                            background: color.bgBase,
-                                            border: `1px solid ${color.borderMuted}`,
-                                            borderRadius: '6px', padding: '10px 10px 8px',
-                                            cursor: 'pointer', opacity: dragTaskId === task.id ? 0.35 : 1,
-                                            transition: 'opacity 0.1s', display: 'flex',
-                                            flexDirection: 'column', gap: '6px',
-                                            position: 'relative',
-                                        }}
-                                        onMouseEnter={e => (e.currentTarget.style.borderColor = color.border)}
-                                        onMouseLeave={e => (e.currentTarget.style.borderColor = color.borderMuted)}
+                                        className={`bg-canvas border border-stroke hover:border-stroke rounded py-2.5 px-2.5 pb-2 cursor-pointer transition-opacity duration-100 flex flex-col gap-1.5 relative ${dragTaskId === task.id ? 'opacity-35' : 'opacity-100'}`}
                                     >
                                         {/* Title + delete */}
-                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
-                                            <span style={{
-                                                flex: 1, fontSize: '12px', fontWeight: 500,
-                                                color: task.status === 'completed' || task.status === 'cancelled' ? color.textFaint : color.textPrimary,
-                                                textDecoration: task.status === 'completed' || task.status === 'cancelled' ? 'line-through' : 'none',
-                                                lineHeight: 1.4, wordBreak: 'break-word',
-                                            }}>
+                                        <div className="flex items-start gap-1.5">
+                                            <span className={`flex-1 text-[12px] font-medium leading-[1.4] break-words ${task.status === 'completed' || task.status === 'cancelled' ? 'text-zinc-400 line-through' : 'text-zinc-900 no-underline'}`}>
                                                 {task.title}
                                             </span>
                                             <button
                                                 onClick={e => { e.stopPropagation(); onDeleteTask(task) }}
-                                                style={{
-                                                    flexShrink: 0, background: 'transparent', border: 'none',
-                                                    color: color.textFaint, cursor: 'pointer', padding: 0,
-                                                    fontSize: '14px', lineHeight: 1, opacity: 0, transition: 'opacity 0.1s',
-                                                }}
-                                                onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = color.danger }}
-                                                onMouseLeave={e => { e.currentTarget.style.opacity = '0'; e.currentTarget.style.color = color.textFaint }}
+                                                className="shrink-0 bg-transparent border-none cursor-pointer p-0 text-[14px] leading-none transition-opacity duration-100 opacity-0 hover:opacity-100 text-zinc-400 hover:text-danger"
                                             >
                                                 <X size={12}/>
                                             </button>
@@ -190,43 +135,34 @@ export function TasksView({
 
                                         {/* Body snippet */}
                                         {task.body && (
-                                            <span style={{
-                                                fontSize: '11px', color: color.textMuted,
-                                                lineHeight: 1.4, wordBreak: 'break-word',
-                                                display: '-webkit-box', WebkitLineClamp: 2,
-                                                WebkitBoxOrient: 'vertical', overflow: 'hidden',
-                                            }}>
+                                            <span className="text-[11px] text-zinc-500 leading-[1.4] break-words line-clamp-2">
                                                 {task.body}
                                             </span>
                                         )}
 
                                         {/* Footer: priority + assignees */}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                        <div className="flex items-center gap-1 flex-wrap">
                                             <PriorityBadge priority={task.priority} />
                                             {task.assignees.map(a => (
-                                                <span key={a} style={{
-                                                    background: color.accentSubtle, border: `1px solid ${color.accentEmphasis}`,
-                                                    borderRadius: '10px', padding: '1px 6px',
-                                                    color: color.accentMuted, fontSize: '10px',
-                                                }}>{a}</span>
+                                                <span key={a} className="bg-blue-50 border border-blue-600 rounded-lg py-px px-1.5 text-blue-600 text-[10px]">{a}</span>
                                             ))}
                                         </div>
 
                                         {/* Planning indicators */}
                                         {(task.acceptance_criteria.length > 0 || task.testing_methods.length > 0 || task.validation_steps.length > 0) && (
-                                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                            <div className="flex gap-1 flex-wrap">
                                                 {task.acceptance_criteria.length > 0 && (
-                                                    <span style={{ fontSize: '10px', color: color.success }}>
+                                                    <span className="text-[10px] text-success">
                                                         ✓ {task.acceptance_criteria.length} criteria
                                                     </span>
                                                 )}
                                                 {task.testing_methods.length > 0 && (
-                                                    <span style={{ fontSize: '10px', color: color.accent }}>
+                                                    <span className="text-[10px] text-accent">
                                                         ⬡ {task.testing_methods.length} tests
                                                     </span>
                                                 )}
                                                 {task.validation_steps.length > 0 && (
-                                                    <span style={{ fontSize: '10px', color: color.warning }}>
+                                                    <span className="text-[10px] text-amber-700">
                                                         ◎ {task.validation_steps.length} steps
                                                     </span>
                                                 )}
@@ -239,14 +175,7 @@ export function TasksView({
                                 {status === 'pending' && (
                                     <button
                                         onClick={onOpenCreateTask}
-                                        style={{
-                                            background: 'transparent', border: `1px dashed ${color.border}`,
-                                            borderRadius: '6px', color: color.textFaint, fontSize: '11px',
-                                            padding: '8px', cursor: 'pointer', textAlign: 'center',
-                                            marginTop: col.length > 0 ? '2px' : '0',
-                                        }}
-                                        onMouseEnter={e => { e.currentTarget.style.color = color.textMuted; e.currentTarget.style.borderColor = color.borderMuted }}
-                                        onMouseLeave={e => { e.currentTarget.style.color = color.textFaint; e.currentTarget.style.borderColor = color.border }}
+                                        className={`bg-transparent border border-dashed border-stroke hover:border-stroke rounded text-zinc-400 hover:text-zinc-500 text-[11px] p-2 cursor-pointer text-center ${col.length > 0 ? 'mt-0.5' : 'mt-0'}`}
                                     >
                                         + Add task
                                     </button>

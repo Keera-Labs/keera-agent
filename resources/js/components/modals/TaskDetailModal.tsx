@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { color } from '@/tokens'
 import type { Task } from '@/types/type'
 import { STATUS_COLORS, STATUS_LABELS } from '@/types/task'
-import { labelStyle } from '@/components/ui/styles'
+import { labelClass } from '@/components/ui/styles'
 
 function PriorityBadge({ priority }: { priority: string }) {
     const PRIORITY_STYLES: Record<string, { bg: string; color: string; border: string }> = {
@@ -12,12 +12,10 @@ function PriorityBadge({ priority }: { priority: string }) {
     }
     const s = PRIORITY_STYLES[priority] ?? PRIORITY_STYLES.medium
     return (
-        <span style={{
-            fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em',
-            padding: '1px 6px', borderRadius: '10px',
-            background: s.bg, border: `1px solid ${s.border}`, color: s.color,
-            textTransform: 'uppercase', flexShrink: 0,
-        }}>
+        <span
+            className="text-[10px] font-semibold tracking-[0.04em] py-px px-1.5 rounded-lg uppercase shrink-0"
+            style={{ background: s.bg, border: `1px solid ${s.border}`, color: s.color }}
+        >
             {priority}
         </span>
     )
@@ -36,35 +34,27 @@ export function TaskDetailModal({ task, onClose }: { task: Task; onClose: () => 
 
     return (
         <div
-            style={{
-                position: 'fixed', inset: 0, background: color.overlay,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
-            }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]"
             onClick={onClose}
         >
             <div
-                style={{
-                    background: color.bgModal, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
-                    width: '540px', maxHeight: '80vh', display: 'flex', flexDirection: 'column',
-                    overflow: 'hidden',
-                }}
+                className="bg-modal border border-stroke rounded-md w-[540px] max-h-[80vh] flex flex-col overflow-hidden"
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
-                <div style={{
-                    padding: '16px 20px', borderBottom: `1px solid ${color.border}`,
-                    display: 'flex', alignItems: 'flex-start', gap: '10px', flexShrink: 0,
-                }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: '15px', fontWeight: 600, color: color.textPrimary, lineHeight: 1.4, wordBreak: 'break-word' }}>
+                <div className="py-4 px-5 border-b border-stroke flex items-start gap-2.5 shrink-0">
+                    <div className="flex-1 min-w-0">
+                        <div className="text-[15px] font-semibold text-zinc-900 leading-[1.4] break-words">
                             {task.title}
                         </div>
-                        <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                            <span style={{
-                                fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '10px',
-                                background: `${statusColor}20`, border: `1px solid ${statusColor}40`,
-                                color: statusColor, textTransform: 'uppercase', letterSpacing: '0.05em',
-                            }}>
+                        <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                            <span
+                                className="text-[10px] font-semibold py-0.5 px-2 rounded-lg uppercase tracking-[0.05em]"
+                                style={{
+                                    background: `${statusColor}20`, border: `1px solid ${statusColor}40`,
+                                    color: statusColor,
+                                }}
+                            >
                                 {STATUS_LABELS[task.status]}
                             </span>
                             <PriorityBadge priority={task.priority} />
@@ -72,43 +62,33 @@ export function TaskDetailModal({ task, onClose }: { task: Task; onClose: () => 
                     </div>
                     <button
                         onClick={onClose}
-                        style={{
-                            flexShrink: 0, background: 'transparent', border: 'none',
-                            color: color.textFaint, cursor: 'pointer', padding: '2px',
-                            fontSize: '20px', lineHeight: 1,
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.color = color.textPrimary }}
-                        onMouseLeave={e => { e.currentTarget.style.color = color.textFaint }}
+                        className="shrink-0 bg-transparent border-none text-zinc-400 cursor-pointer p-0.5 text-[20px] leading-none hover:text-zinc-900"
                     >
                         ×
                     </button>
                 </div>
 
                 {/* Scrollable body */}
-                <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div className="flex-1 overflow-y-auto py-4 px-5 flex flex-col gap-4">
                     {/* Description */}
                     {task.body ? (
                         <div>
-                            <div style={{ ...labelStyle, marginBottom: '6px' }}>Description</div>
-                            <div style={{ fontSize: '13px', color: color.textMuted, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                            <div className={`${labelClass} mb-1.5`}>Description</div>
+                            <div className="text-[13px] text-zinc-500 leading-[1.6] whitespace-pre-wrap break-words">
                                 {task.body}
                             </div>
                         </div>
                     ) : (
-                        <div style={{ fontSize: '12px', color: color.textFaint, fontStyle: 'italic' }}>No description</div>
+                        <div className="text-[12px] text-zinc-400 italic">No description</div>
                     )}
 
                     {/* Assignees */}
                     {task.assignees.length > 0 && (
                         <div>
-                            <div style={{ ...labelStyle, marginBottom: '6px' }}>Assignees</div>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                            <div className={`${labelClass} mb-1.5`}>Assignees</div>
+                            <div className="flex flex-wrap gap-1.5">
                                 {task.assignees.map(a => (
-                                    <span key={a} style={{
-                                        background: color.accentSubtle, border: `1px solid ${color.accentEmphasis}`,
-                                        borderRadius: '10px', padding: '2px 8px',
-                                        color: color.accentMuted, fontSize: '11px',
-                                    }}>{a}</span>
+                                    <span key={a} className="bg-blue-50 border border-blue-600 rounded-lg py-0.5 px-2 text-blue-600 text-[11px]">{a}</span>
                                 ))}
                             </div>
                         </div>
@@ -117,11 +97,11 @@ export function TaskDetailModal({ task, onClose }: { task: Task; onClose: () => 
                     {/* Acceptance criteria */}
                     {task.acceptance_criteria.length > 0 && (
                         <div>
-                            <div style={{ ...labelStyle, marginBottom: '6px', color: color.success }}>Acceptance Criteria</div>
-                            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <div className={`${labelClass} mb-1.5`} style={{ color: color.success }}>Acceptance Criteria</div>
+                            <ul className="m-0 p-0 list-none flex flex-col gap-1.5">
                                 {task.acceptance_criteria.map((c, i) => (
-                                    <li key={i} style={{ display: 'flex', gap: '8px', fontSize: '12px', color: color.textMuted, lineHeight: 1.5 }}>
-                                        <span style={{ color: color.success, flexShrink: 0 }}>✓</span>
+                                    <li key={i} className="flex gap-2 text-[12px] text-zinc-500 leading-normal">
+                                        <span className="text-success shrink-0">✓</span>
                                         <span>{c}</span>
                                     </li>
                                 ))}
@@ -132,11 +112,11 @@ export function TaskDetailModal({ task, onClose }: { task: Task; onClose: () => 
                     {/* Testing methods */}
                     {task.testing_methods.length > 0 && (
                         <div>
-                            <div style={{ ...labelStyle, marginBottom: '6px', color: color.accent }}>Testing Methods</div>
-                            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <div className={`${labelClass} mb-1.5`} style={{ color: color.accent }}>Testing Methods</div>
+                            <ul className="m-0 p-0 list-none flex flex-col gap-1.5">
                                 {task.testing_methods.map((m, i) => (
-                                    <li key={i} style={{ display: 'flex', gap: '8px', fontSize: '12px', color: color.textMuted, lineHeight: 1.5 }}>
-                                        <span style={{ color: color.accent, flexShrink: 0 }}>⬡</span>
+                                    <li key={i} className="flex gap-2 text-[12px] text-zinc-500 leading-normal">
+                                        <span className="text-accent shrink-0">⬡</span>
                                         <span>{m}</span>
                                     </li>
                                 ))}
@@ -147,11 +127,11 @@ export function TaskDetailModal({ task, onClose }: { task: Task; onClose: () => 
                     {/* Validation steps */}
                     {task.validation_steps.length > 0 && (
                         <div>
-                            <div style={{ ...labelStyle, marginBottom: '6px', color: color.warning }}>Validation Steps</div>
-                            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <div className={`${labelClass} mb-1.5`} style={{ color: color.warning }}>Validation Steps</div>
+                            <ul className="m-0 p-0 list-none flex flex-col gap-1.5">
                                 {task.validation_steps.map((s, i) => (
-                                    <li key={i} style={{ display: 'flex', gap: '8px', fontSize: '12px', color: color.textMuted, lineHeight: 1.5 }}>
-                                        <span style={{ color: color.warning, flexShrink: 0 }}>◎</span>
+                                    <li key={i} className="flex gap-2 text-[12px] text-zinc-500 leading-normal">
+                                        <span className="text-warning shrink-0">◎</span>
                                         <span>{s}</span>
                                     </li>
                                 ))}
