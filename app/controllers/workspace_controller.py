@@ -56,9 +56,7 @@ async def store(request: Request):
 async def update(request: Request, workspace_id: int):
     body = await request.json()
 
-    workspace = await Workspace.find(workspace_id)
-    if not workspace:
-        return JSONResponse({"error": "Workspace not found"}, status_code=404)
+    workspace = await Workspace.find_or_fail(workspace_id)
 
     name = (body.get("name") or "").strip()
     description = body.get("description")
@@ -76,9 +74,7 @@ async def update(request: Request, workspace_id: int):
 
 
 async def destroy(request: Request, workspace_id: int):
-    workspace = await Workspace.find(workspace_id)
-    if not workspace:
-        return JSONResponse({"error": "Workspace not found"}, status_code=404)
+    await Workspace.find_or_fail(workspace_id)
 
     # Unlink projects before deleting
     projects = await Project.where("workspace_id", workspace_id).get()

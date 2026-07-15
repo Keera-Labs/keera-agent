@@ -35,17 +35,13 @@ async def relay(request: Request):
             {"error": "from_agent_id, to_agent_id and content are required"}, status_code=400
         )
 
-    from_agent = await Agent.find(from_agent_id)
-    to_agent = await Agent.find(to_agent_id)
+    from_agent = await Agent.find_or_fail(from_agent_id)
+    to_agent = await Agent.find_or_fail(to_agent_id)
 
-    if not from_agent:
-        return JSONResponse({"error": f"Agent {from_agent_id} not found"}, status_code=404)
     if getattr(from_agent, "deleted_at", None):
         return JSONResponse(
             {"error": f"Agent {from_agent_id} not found or has been deleted"}, status_code=404
         )
-    if not to_agent:
-        return JSONResponse({"error": f"Agent {to_agent_id} not found"}, status_code=404)
     if getattr(to_agent, "deleted_at", None):
         return JSONResponse(
             {"error": f"Agent {to_agent_id} not found or has been deleted"}, status_code=404
@@ -99,9 +95,7 @@ async def relay(request: Request):
 
 async def get_messages(request: Request, agent_id: int):
     """Return all relay messages sent to or from an agent."""
-    agent = await Agent.find(agent_id)
-    if not agent:
-        return JSONResponse({"error": "Agent not found"}, status_code=404)
+    await Agent.find_or_fail(agent_id)
 
     sent = await AgentRelayMessage.where("from_agent_id", agent_id).get()
     received = await AgentRelayMessage.where("to_agent_id", agent_id).get()

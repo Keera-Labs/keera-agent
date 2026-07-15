@@ -72,13 +72,8 @@ async def trigger(request: Request, agent_id: int):
     if not message:
         return JSONResponse({"error": "message is required"}, status_code=400)
 
-    agent = await Agent.find(agent_id)
-    if not agent:
-        return JSONResponse({"error": "Agent not found"}, status_code=404)
-
-    project = await Project.find(agent.project_id)
-    if not project:
-        return JSONResponse({"error": "Project not found"}, status_code=404)
+    agent = await Agent.find_or_fail(agent_id)
+    project = await Project.find_or_fail(agent.project_id)
 
     # If an interactive Claude session is already running, wait for it to be ready then inject
     session_id = agent.session_id
