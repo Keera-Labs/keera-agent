@@ -22,6 +22,11 @@ from app.terminal.websocket_terminal import WebsocketTerminal
 # Minimum lifetime (seconds) for a Claude process to count as a successful session
 _MIN_SESSION_LIFETIME = 5.0
 
+# Upper bound (seconds) to wait for Claude to signal ready before injecting the
+# initial task anyway. Generous enough to cover a --continue restart; a missed
+# readiness signal degrades to a delayed inject, never a permanent drop or hang.
+_READY_TIMEOUT = 30.0
+
 
 def _activity_summary(message: str) -> str:
     """First non-empty line of an injected message, trimmed for the dashboard."""
@@ -214,18 +219,6 @@ def _build_relay_instructions(agent, cwd: str, base_url: str, siblings) -> str:
     )
 
 
-def _make_after_restart(terminal, initial_message: str):
-    """Return an async callable that re-injects the initial message after a Claude restart."""
-
-    async def _after_restart():
-        data = initial_message.encode().rstrip(b"\r\n")
-        await terminal.write(data)
-        await asyncio.sleep(0.05)
-        await terminal.write(b"\r")
-
-    return _after_restart
-
-
 async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) -> None:
     """Spawn a Terminal for the agent without a WebSocket — triggered from the backend.
 
@@ -268,15 +261,20 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
         )
         return a.to_command(system_prompt_suffix=suffix)
 
-    # Parts 1 & 3: monitor PTY output via WebsocketTerminal (no WS connection)
-    # after_restart re-injects the initial message so the agent has a task after recovery
+    # The monitor sets this once Claude is genuinely ready — after it renders real
+    # output, or after a --continue restart settles. Injecting on that signal
+    # instead of a blind timer is what stops the first task from being typed into a
+    # still-starting PTY and silently lost.
+    ready_event = claude_ready.setdefault(session_id, asyncio.Event())
+
+    # Parts 1 & 3: monitor PTY output via WebsocketTerminal (no WS connection).
     monitor = make_claude_session_monitor(
         agent_id=agent.id,
         terminal=terminal,
         terminal_manager=terminal_manager,
         session_id=session_id,
         build_cmd=_build_cmd_with_identity,
-        after_restart=_make_after_restart(terminal, initial_message),
+        ready_event=ready_event,
     )
     bridge = WebsocketTerminal(None, terminal, on_output=monitor)
     asyncio.create_task(
@@ -288,14 +286,16 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
 
     start_time = time.monotonic()
 
-    # Signal ready and inject relay context + initial message.
-    # relay_instructions (agent identity, roster, project dir, communication
-    # protocol) was previously injected via --system-prompt; now that
-    # system_prompt_file() is removed we prepend it to the first user message so
-    # the agent still has its full context before acting on the task.
-    ready_event = claude_ready.setdefault(session_id, asyncio.Event())
-    await asyncio.sleep(1.5)
-    ready_event.set()
+    # Hold the initial task until Claude signals ready, with a bounded fallback so a
+    # missed signal degrades to a delayed inject rather than a hang. Then inject the
+    # relay context (agent identity, roster, project dir, communication protocol)
+    # followed by the task itself so the agent has full context before acting.
+    try:
+        await asyncio.wait_for(ready_event.wait(), timeout=_READY_TIMEOUT)
+    except asyncio.TimeoutError:
+        pass
+    # Brief settle so the input prompt is fully interactive before typing.
+    await asyncio.sleep(0.3)
 
     await TerminalWriteAction.prepare(session_id, relay_instructions).execute()
     await TerminalWriteAction.prepare(session_id, initial_message).execute()
