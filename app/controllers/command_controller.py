@@ -122,9 +122,7 @@ async def store(request: Request, project_id: int):
 
 
 async def update(request: Request, command_id: int):
-    cmd = await Command.find(command_id)
-    if not cmd:
-        return JSONResponse({"error": "not found"}, status_code=404)
+    cmd = await Command.find_or_fail(command_id)
 
     body = await request.json()
     if "label" in body:
@@ -143,9 +141,7 @@ async def update(request: Request, command_id: int):
 
 
 async def run(request: Request, command_id: int):
-    cmd = await Command.find(command_id)
-    if not cmd:
-        return JSONResponse({"error": "not found"}, status_code=404)
+    cmd = await Command.find_or_fail(command_id)
 
     if cmd.status == "running" and command_id in _processes:
         return JSONResponse({"error": "already running"}, status_code=409)
@@ -178,9 +174,7 @@ async def run(request: Request, command_id: int):
 
 
 async def stop(request: Request, command_id: int):
-    cmd = await Command.find(command_id)
-    if not cmd:
-        return JSONResponse({"error": "not found"}, status_code=404)
+    cmd = await Command.find_or_fail(command_id)
 
     proc = _processes.pop(command_id, None)
     if proc is not None:
@@ -209,9 +203,7 @@ async def runs(request: Request, command_id: int):
 
 
 async def destroy(request: Request, command_id: int):
-    cmd = await Command.find(command_id)
-    if not cmd:
-        return JSONResponse({"error": "not found"}, status_code=404)
+    await Command.find_or_fail(command_id)
 
     # Stop first if running
     proc = _processes.pop(command_id, None)

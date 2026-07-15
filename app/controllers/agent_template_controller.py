@@ -115,9 +115,7 @@ async def store(request: Request):
 async def update(request: Request, template_id: int):
     """Update a GLOBAL template. Built-ins are editable too; startup seeding is
     insert-if-missing only, so edits survive a re-seed (use Sync to revert)."""
-    template = await AgentTemplate.find(template_id)
-    if not template:
-        return JSONResponse({"error": "Template not found"}, status_code=404)
+    template = await AgentTemplate.find_or_fail(template_id)
 
     _apply_body(template, await request.json())
     await template.save()
@@ -126,9 +124,7 @@ async def update(request: Request, template_id: int):
 
 async def destroy(request: Request, template_id: int):
     """Delete a user-defined GLOBAL template. Built-ins cannot be deleted."""
-    template = await AgentTemplate.find(template_id)
-    if not template:
-        return JSONResponse({"error": "Template not found"}, status_code=404)
+    template = await AgentTemplate.find_or_fail(template_id)
     if getattr(template, "is_builtin", False):
         return JSONResponse({"error": "Built-in templates cannot be deleted"}, status_code=403)
     await AgentTemplate.where("id", template_id).delete()
@@ -195,9 +191,7 @@ async def project_update(request: Request, project_id: int, template_id: int):
     - Editing an existing project override updates it in place.
     - Editing a global forks a project-scoped override (never mutates the global).
     """
-    template = await AgentTemplate.find(template_id)
-    if not template:
-        return JSONResponse({"error": "Template not found"}, status_code=404)
+    template = await AgentTemplate.find_or_fail(template_id)
 
     body = await request.json()
     tpl_project = getattr(template, "project_id", None)
@@ -237,8 +231,8 @@ async def project_update(request: Request, project_id: int, template_id: int):
 
 async def project_destroy(request: Request, project_id: int, template_id: int):
     """Delete a project-scoped override/template. Reverts to the global (if any)."""
-    template = await AgentTemplate.find(template_id)
-    if not template or getattr(template, "project_id", None) != project_id:
+    template = await AgentTemplate.find_or_fail(template_id)
+    if getattr(template, "project_id", None) != project_id:
         return JSONResponse({"error": "Template not found"}, status_code=404)
     await AgentTemplate.where("id", template_id).delete()
     return JSONResponse({"ok": True})
