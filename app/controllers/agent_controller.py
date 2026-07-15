@@ -42,9 +42,7 @@ async def store(request: Request, body: AgentStoreRequest, project_id: int):
 
 
 async def update(body: AgentUpdateRequest, agent_id: int):
-    agent = await Agent.find(agent_id)
-    if not agent:
-        return JSONResponse({"error": "Agent not found"}, status_code=404)
+    agent = await Agent.find_or_fail(agent_id)
 
     update_data = body.model_dump(exclude_unset=True)
 
@@ -62,7 +60,7 @@ async def update(body: AgentUpdateRequest, agent_id: int):
 
     await Agent.where("id", agent_id).update(update_data)
 
-    agent = await Agent.find(agent_id)
+    agent = await Agent.find_or_fail(agent_id)
     return AgentResource(agent)
 
 
@@ -129,9 +127,7 @@ async def output(request: Request, agent_id: int):
     from app.models.TerminalOutput import TerminalOutput
     from app.models.TerminalSession import TerminalSession
 
-    agent = await Agent.find(agent_id)
-    if not agent:
-        return JSONResponse({"error": "Agent not found"}, status_code=404)
+    agent = await Agent.find_or_fail(agent_id)
 
     project = await Project.find(agent.project_id)
     if not project:

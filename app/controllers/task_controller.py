@@ -1,6 +1,6 @@
 import datetime
 
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import Response
 from fastapi_startkit.jsonapi import ResourceCollection
 
 from app.models.Task import TERMINAL_STATUSES, Task
@@ -39,9 +39,7 @@ async def store(body: TaskStoreRequest, project_id: int) -> TaskResource:
 
 
 async def update(request: TaskUpdateRequest, task_id: int):
-    task = await Task.find(task_id)
-    if not task:
-        return JSONResponse({"error": "not found"}, status_code=404)
+    task = await Task.find_or_fail(task_id)
 
     completed_at = (
         datetime.datetime.now().isoformat() if request.status in TERMINAL_STATUSES else None
@@ -57,9 +55,7 @@ async def update(request: TaskUpdateRequest, task_id: int):
 
 
 async def destroy(task_id: int):
-    task = await Task.find(task_id)
-    if not task:
-        return JSONResponse({"error": "not found"}, status_code=404)
+    await Task.find_or_fail(task_id)
 
     await Task.where("id", task_id).delete()
     # 204 must carry no body — a JSON body here triggers a server-side

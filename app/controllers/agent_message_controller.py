@@ -40,9 +40,7 @@ async def index(request: Request, project_id: int):
 
 async def mark_read(request: Request, message_id: int):
     """Mark a message as read."""
-    msg = await AgentMessage.find(message_id)
-    if not msg:
-        return JSONResponse({"error": "Not found"}, status_code=404)
+    msg = await AgentMessage.find_or_fail(message_id)
     msg.status = "read"
     await msg.save()
     return JSONResponse({"id": msg.id, "status": msg.status})

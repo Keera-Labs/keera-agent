@@ -5,6 +5,7 @@ import sys
 
 from fastapi import File, Request, UploadFile
 from fastapi.responses import JSONResponse
+from fastapi_startkit.masoniteorm.exceptions import ModelNotFoundException
 from fastapi_startkit.storage.storage import Storage
 
 from app.actions.claude_hook_action import ClaudeHookAction
@@ -47,8 +48,9 @@ async def update(request: Request, project_id: int):
     body = await request.json()
     is_inertia = request.headers.get("X-Inertia") == "true"
 
-    project = await Project.find(project_id)
-    if not project:
+    try:
+        project = await Project.find_or_fail(project_id)
+    except ModelNotFoundException:
         if is_inertia:
             return _inertia_error(request, {"_": "Project not found"}, 404)
         return JSONResponse({"error": "Project not found"}, status_code=404)
@@ -96,9 +98,7 @@ async def update(request: Request, project_id: int):
 
 
 async def open_directory(request: Request, project_id: int):
-    project = await Project.find(project_id)
-    if not project:
-        return JSONResponse({"error": "Project not found"}, status_code=404)
+    project = await Project.find_or_fail(project_id)
     path = os.path.expanduser(project.path)
     if not os.path.isdir(path):
         return JSONResponse({"error": "Directory does not exist"}, status_code=422)
@@ -113,9 +113,7 @@ async def open_directory(request: Request, project_id: int):
 
 
 async def destroy(request: Request, project_id: int):
-    project = await Project.find(project_id)
-    if not project:
-        return JSONResponse({"error": "Project not found"}, status_code=404)
+    await Project.find_or_fail(project_id)
     try:
         # Cascade-delete related records before removing the project
         from app.models.Command import Command
@@ -132,9 +130,7 @@ async def destroy(request: Request, project_id: int):
 
 
 async def upload_image(request: Request, project_id: int, file: UploadFile = File(...)):
-    project = await Project.find(project_id)
-    if not project:
-        return JSONResponse({"error": "Project not found"}, status_code=404)
+    await Project.find_or_fail(project_id)
 
     if not file.content_type or not file.content_type.startswith("image/"):
         return JSONResponse({"error": "Only image files are supported"}, status_code=422)
