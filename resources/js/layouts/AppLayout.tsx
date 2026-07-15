@@ -1,5 +1,4 @@
 import AppHeader from "@/layouts/app/app-header"
-import { color } from "@/tokens"
 import { router, usePage } from "@inertiajs/react"
 import "@xterm/xterm/css/xterm.css"
 import { AppLayoutStateProvider, useAppLayout } from "./context/AppLayoutContext"
@@ -9,7 +8,6 @@ import { useProjectStore } from "@/stores/projectStore"
 
 // ─── Phase 1 re-exports ───────────────────────────────────────────────────────
 export { agentColor } from "@/utils/agentColor"
-export { labelStyle, inputStyle, cancelBtnStyle, submitBtnStyle, flagRowStyle, toggleStyle } from "@/components/ui/styles"
 export type { AgentTemplate } from "@/types/agent"
 export { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS } from "@/types/agent"
 export { STATUS_CYCLE, STATUS_COLORS, STATUS_LABELS } from "@/types/task"
@@ -53,7 +51,7 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
     const activeView: ProjectView = isTasksPage ? "tasks" : isConfigPage ? "commands" : projectView
 
     return (
-        <div className="flex flex-col w-full h-screen overflow-hidden" style={{ background: color.bgCanvas }}>
+        <div className="flex flex-col w-full h-screen overflow-hidden bg-canvas">
             <AppHeader/>
             <div className="flex flex-1 overflow-hidden">
                 <Sidebar

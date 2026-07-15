@@ -169,36 +169,21 @@ export function CommandsPanel({
     const runningCount = commands.filter(c => c.status === 'running').length
 
     return (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div className="flex-1 flex flex-col overflow-hidden">
             <style>{cmdPulseStyle}</style>
 
             {/* ── Header ── */}
-            <div style={{
-                padding: '10px 20px', borderBottom: `1px solid ${color.border}`,
-                display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0,
-                background: color.bgCanvas,
-            }}>
+            <div className="py-2.5 px-5 border-b border-stroke flex items-center gap-2 shrink-0 bg-canvas">
                 <Terminal size={13} color={color.textMuted} />
-                <span style={{ color: color.textPrimary, fontSize: '13px', fontWeight: 600, flex: 1 }}>Commands</span>
+                <span className="text-zinc-900 text-[13px] font-semibold flex-1">Commands</span>
                 {runningCount > 0 && (
-                    <span style={{
-                        fontSize: '10px', padding: '1px 7px', borderRadius: '10px',
-                        background: 'rgba(63,185,80,0.1)', border: '1px solid rgba(63,185,80,0.3)',
-                        color: color.success,
-                    }}>
+                    <span className="text-[10px] py-px px-[7px] rounded-lg bg-[rgba(63,185,80,0.1)] border border-[rgba(63,185,80,0.3)] text-success">
                         {runningCount} running
                     </span>
                 )}
                 <button
                     onClick={() => setShowForm(s => !s)}
-                    style={{
-                        background: showForm ? color.bgSurface : color.successEmphasis,
-                        border: `1px solid ${showForm ? color.borderMuted : color.successBorder}`,
-                        borderRadius: '5px',
-                        color: showForm ? color.textMuted : '#fff',
-                        fontSize: '11px', padding: '4px 10px', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', gap: '5px',
-                    }}
+                    className={`border rounded-[5px] text-[11px] py-1 px-2.5 cursor-pointer flex items-center gap-[5px] ${showForm ? 'bg-surface border-stroke text-zinc-500' : 'bg-success border-success text-white'}`}
                 >
                     {showForm ? '× Cancel' : (
                         <>
@@ -215,52 +200,34 @@ export function CommandsPanel({
             )}
 
             {/* ── Body ── */}
-            <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+            <div className="flex-1 flex overflow-hidden">
 
                 {/* Command list */}
-                <div style={{
-                    width: hasOutput ? '260px' : '100%',
-                    flexShrink: 0,
-                    overflowY: 'auto',
-                    borderRight: hasOutput ? `1px solid ${color.border}` : 'none',
-                    display: 'flex', flexDirection: 'column',
-                }}>
+                <div
+                    className={`shrink-0 overflow-y-auto flex flex-col ${hasOutput ? 'w-[260px] border-r border-r-stroke' : 'w-full border-r-0'}`}
+                >
                     {commands.length === 0 ? (
-                        <div style={{
-                            flex: 1, display: 'flex', flexDirection: 'column',
-                            alignItems: 'center', justifyContent: 'center', gap: '12px',
-                            padding: '40px 24px', textAlign: 'center',
-                        }}>
-                            <div style={{
-                                width: '48px', height: '48px', borderRadius: '50%',
-                                background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            }}>
+                        <div className="flex-1 flex flex-col items-center justify-center gap-3 py-10 px-6 text-center">
+                            <div className="w-12 h-12 rounded-full bg-surface border border-stroke flex items-center justify-center">
                                 <Terminal size={22} color={color.textFaint} />
                             </div>
                             <div>
-                                <p style={{ margin: '0 0 4px', color: color.textSecondary, fontSize: '13px', fontWeight: 500 }}>
+                                <p className="mt-0 mr-0 mb-1 ml-0 text-zinc-700 text-[13px] font-medium">
                                     No commands yet
                                 </p>
-                                <p style={{ margin: 0, color: color.textFaint, fontSize: '12px', lineHeight: 1.5 }}>
+                                <p className="m-0 text-zinc-400 text-[12px] leading-normal">
                                     Add build scripts, dev servers,<br/>or any long-running process.
                                 </p>
                             </div>
                             <button
                                 onClick={() => setShowForm(true)}
-                                style={{
-                                    background: 'transparent', border: `1px dashed ${color.borderMuted}`,
-                                    borderRadius: '6px', color: color.textMuted, fontSize: '12px',
-                                    padding: '6px 14px', cursor: 'pointer',
-                                }}
-                                onMouseEnter={e => { e.currentTarget.style.borderColor = color.accent; e.currentTarget.style.color = color.accent }}
-                                onMouseLeave={e => { e.currentTarget.style.borderColor = color.borderMuted; e.currentTarget.style.color = color.textMuted }}
+                                className="bg-transparent border border-dashed border-stroke rounded text-zinc-500 text-[12px] py-1.5 px-3.5 cursor-pointer hover:border-accent hover:text-accent"
                             >
                                 + Add your first command
                             </button>
                         </div>
                     ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <div className="flex flex-col">
                             {commands.map(c => (
                                 <CommandRow
                                     key={c.id}
@@ -276,15 +243,7 @@ export function CommandsPanel({
                             {/* Add command footer row */}
                             <button
                                 onClick={() => setShowForm(true)}
-                                style={{
-                                    display: 'flex', alignItems: 'center', gap: '6px',
-                                    padding: '9px 14px',
-                                    background: 'transparent', border: 'none',
-                                    color: color.textFaint, fontSize: '11px', cursor: 'pointer',
-                                    width: '100%', textAlign: 'left',
-                                }}
-                                onMouseEnter={e => { e.currentTarget.style.color = color.textMuted; e.currentTarget.style.background = color.bgSurface }}
-                                onMouseLeave={e => { e.currentTarget.style.color = color.textFaint; e.currentTarget.style.background = 'transparent' }}
+                                className="flex items-center gap-1.5 py-[9px] px-3.5 bg-transparent border-none text-zinc-400 text-[11px] cursor-pointer w-full text-left hover:text-zinc-500 hover:bg-surface"
                             >
                                 <Plus size={10} />
                                 Add command
@@ -295,57 +254,32 @@ export function CommandsPanel({
 
                 {/* ── Output panel ── */}
                 {hasOutput && (
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                    <div className="flex-1 flex flex-col overflow-hidden">
                         {/* Command detail header */}
-                        <div style={{
-                            padding: '16px 20px 14px',
-                            borderBottom: `1px solid ${color.border}`,
-                            flexShrink: 0,
-                            background: color.bgCanvas,
-                        }}>
+                        <div className="pt-4 pr-5 pb-3.5 pl-5 border-b border-stroke shrink-0 bg-canvas">
                             {/* Title row */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-                                <h2 style={{
-                                    margin: 0, color: color.textPrimary, fontSize: '18px', fontWeight: 700,
-                                    fontFamily: '"JetBrains Mono", monospace', letterSpacing: '-0.01em',
-                                }}>
+                            <div className="flex items-center gap-2.5 mb-3">
+                                <h2 className="m-0 text-zinc-900 text-[18px] font-bold font-mono tracking-[-0.01em]">
                                     /{outputCmd.label}
                                 </h2>
                                 {outputCmd.status === 'running' && <DotsIndicator />}
                                 {outputCmd.status === 'stopped' && (
-                                    <span style={{ fontSize: '10px', color: color.textFaint, fontFamily: '"JetBrains Mono", monospace' }}>
+                                    <span className="text-[10px] text-zinc-400 font-mono">
                                         exited
                                     </span>
                                 )}
-                                <div style={{ flex: 1 }} />
+                                <div className="flex-1" />
                                 <button
                                     onClick={() => setOutputCmd(null)}
-                                    style={{
-                                        background: 'transparent', border: 'none',
-                                        color: color.textFaint, cursor: 'pointer',
-                                        padding: '0 2px', lineHeight: 1, borderRadius: '4px',
-                                        display: 'flex', alignItems: 'center',
-                                    }}
-                                    onMouseEnter={e => (e.currentTarget.style.color = color.textSecondary)}
-                                    onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
+                                    className="bg-transparent border-none text-zinc-400 cursor-pointer py-0 px-0.5 leading-none rounded-sm flex items-center hover:text-zinc-700"
                                 ><X size={14} /></button>
                             </div>
                             {/* SHELL section */}
                             <div>
-                                <div style={{
-                                    color: color.textFaint, fontSize: '10px', fontWeight: 700,
-                                    textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px',
-                                }}>Shell</div>
-                                <div style={{
-                                    background: color.bgCanvas, borderRadius: '6px', padding: '8px 12px',
-                                    border: `1px solid ${color.border}`,
-                                    fontFamily: '"JetBrains Mono", monospace', fontSize: '12px',
-                                    color: color.textSecondary,
-                                    display: 'flex', alignItems: 'center', gap: '8px',
-                                    overflow: 'hidden',
-                                }}>
-                                    <span style={{ color: color.success, flexShrink: 0 }}>$</span>
-                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <div className="text-zinc-400 text-[10px] font-bold uppercase tracking-[0.08em] mb-1.5">Shell</div>
+                                <div className="bg-canvas rounded py-2 px-3 border border-stroke font-mono text-[12px] text-zinc-700 flex items-center gap-2 overflow-hidden">
+                                    <span className="text-success shrink-0">$</span>
+                                    <span className="truncate">
                                         {outputCmd.command}
                                     </span>
                                 </div>
@@ -353,15 +287,12 @@ export function CommandsPanel({
                         </div>
 
                         {/* xterm containers — one per command, only the selected one visible */}
-                        <div style={{ flex: 1, position: 'relative', background: '#0d1117', overflow: 'hidden' }}>
+                        <div className="flex-1 relative bg-[#0d1117] overflow-hidden">
                             {commands.map(c => (
                                 <div
                                     key={c.id}
                                     ref={el => { cmdContainerRefs.current.set(c.id, el) }}
-                                    style={{
-                                        position: 'absolute', inset: 0, padding: '8px', boxSizing: 'border-box',
-                                        display: c.id === outputCmd?.id ? 'block' : 'none',
-                                    }}
+                                    className={`absolute inset-0 p-2 box-border ${c.id === outputCmd?.id ? 'block' : 'hidden'}`}
                                 />
                             ))}
                         </div>

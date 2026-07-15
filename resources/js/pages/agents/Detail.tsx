@@ -20,16 +20,16 @@ function ClaudeStatusBadge({ status }: { status?: 'running' | 'done' }) {
     if (!status) return null
     if (status === 'running') {
         return (
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '8px' }}>
+            <span className="flex items-center gap-1.5 ml-2">
                 <DotsIndicator />
-                <span style={{ color: color.warning, fontSize: '11px', fontFamily: '"JetBrains Mono", monospace' }}>running</span>
+                <span className="text-amber-700 text-[11px] font-mono">running</span>
             </span>
         )
     }
     return (
-        <span style={{ display: 'flex', alignItems: 'center', gap: '5px', marginLeft: '6px' }}>
-            <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: color.success }} />
-            <span style={{ color: color.success, fontSize: '11px', fontFamily: '"JetBrains Mono", monospace' }}>done</span>
+        <span className="flex items-center gap-[5px] ml-1.5">
+            <span className="w-[7px] h-[7px] rounded-full bg-success" />
+            <span className="text-success text-[11px] font-mono">done</span>
         </span>
     )
 }
@@ -122,13 +122,13 @@ export default function AgentDetail() {
     if (activeAgentId === null) return <ProjectOverview project={activeProject} />
 
     return (
-        <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+        <div className="flex-1 overflow-hidden flex">
             {/* Agents list — left */}
             <AgentsListPanel project={activeProject} />
 
             {/* Agent execution — chrome + terminal slot */}
             <div
-                style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', background: '#fff' }}
+                className="flex-1 flex flex-col overflow-hidden relative bg-white"
                 onDragOver={e => { e.preventDefault(); setIsDraggingOver(true) }}
                 onDragEnter={e => { e.preventDefault(); setIsDraggingOver(true) }}
                 onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDraggingOver(false) }}
@@ -140,66 +140,52 @@ export default function AgentDetail() {
                 }}
             >
                 {/* Header */}
-                <div style={{
-                    minHeight: '48px', flexShrink: 0, display: 'flex', alignItems: 'center',
-                    paddingLeft: '16px', paddingRight: '14px', paddingTop: '7px', paddingBottom: '7px', gap: '10px',
-                    borderBottom: `1px solid ${color.stroke}`, background: '#fff',
-                }}>
+                <div className="min-h-[48px] shrink-0 flex items-center pl-4 pr-3.5 pt-[7px] pb-[7px] gap-2.5 border-b border-stroke bg-white">
                     <button
                         onClick={() => setActiveAgentId(null)}
                         title="Back"
-                        style={{
-                            background: 'transparent', border: 'none', color: color.textFaint, cursor: 'pointer',
-                            padding: '4px', display: 'flex', alignItems: 'center', borderRadius: '4px',
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.color = color.textPrimary; e.currentTarget.style.background = color.bgCanvas }}
-                        onMouseLeave={e => { e.currentTarget.style.color = color.textFaint; e.currentTarget.style.background = 'transparent' }}
+                        className="bg-transparent border-0 text-zinc-400 cursor-pointer p-1 flex items-center rounded-sm hover:text-zinc-900 hover:bg-canvas"
                     >
                         <ArrowLeft size={14}/>
                     </button>
 
-                    <div style={{
-                        width: '28px', height: '28px', borderRadius: '8px', flexShrink: 0, background: agentBg,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '11px', fontWeight: 700, color: '#fff',
-                    }}>
+                    <div
+                        className="w-7 h-7 rounded-md shrink-0 flex items-center justify-center text-[11px] font-bold text-white"
+                        style={{ background: agentBg }}
+                    >
                         {displayName.charAt(0).toUpperCase()}
                     </div>
 
-                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '1px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ color: color.textPrimary, fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div className="flex-1 min-w-0 flex flex-col justify-center gap-px">
+                        <div className="flex items-center gap-2">
+                            <span className="text-zinc-900 text-[13px] font-semibold truncate">
                                 {displayName}
                             </span>
-                            <span style={{
-                                fontSize: '10px', fontWeight: 600, padding: '2px 7px', borderRadius: '10px', letterSpacing: '0.04em',
-                                background: `${agentBg}18`, border: `1px solid ${agentBg}40`, color: agentBg, flexShrink: 0,
-                            }}>
+                            <span
+                                className="text-[10px] font-semibold py-0.5 px-[7px] rounded-lg tracking-[0.04em] border shrink-0"
+                                style={{ background: `${agentBg}18`, borderColor: `${agentBg}40`, color: agentBg }}
+                            >
                                 {activeAgent ? (AGENT_TYPE_LABELS[activeAgent.agent_type] ?? activeAgent.agent_type).toUpperCase() : 'AGENT'}
                             </span>
                         </div>
                         {activeAgent && (
-                            <span style={{ color: color.textMuted, fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <span className="text-zinc-500 text-[12px] truncate">
                                 {activeAgent.model ? `${agentRoleLabel(activeAgent)} · ${activeAgent.model}` : agentRoleLabel(activeAgent)}
                             </span>
                         )}
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                    <div className="flex items-center gap-2 shrink-0">
                         <ClaudeStatusBadge status={claudeStatus[activeProject.id]} />
                     </div>
                 </div>
 
                 {/* Drag overlay */}
                 {isDraggingOver && (
-                    <div style={{
-                        position: 'absolute', inset: 0, zIndex: 10, background: color.accentGlow,
-                        border: `2px dashed ${color.accent}`, borderRadius: '4px',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
-                    }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                    <div className="absolute inset-0 z-10 bg-[rgba(9,105,218,0.08)] border-2 border-dashed border-accent rounded-sm flex items-center justify-center pointer-events-none">
+                        <div className="flex flex-col items-center gap-2.5">
                             <Image size={36} color={color.accent} opacity={0.8}/>
-                            <span style={{ color: color.accent, fontSize: '13px', fontFamily: '"JetBrains Mono", monospace' }}>
+                            <span className="text-accent text-[13px] font-mono">
                                 Drop image to attach
                             </span>
                         </div>
@@ -211,7 +197,7 @@ export default function AgentDetail() {
                     ref={fileInputRef}
                     type="file"
                     accept="image/*"
-                    style={{ display: 'none' }}
+                    className="hidden"
                     onChange={e => {
                         const file = e.target.files?.[0]
                         if (file) uploadImage(file)
@@ -220,7 +206,7 @@ export default function AgentDetail() {
                 />
 
                 {/* Terminal slot — the active agent's live xterm is re-parented here */}
-                <div ref={setSlot} style={{ flex: 1, position: 'relative', overflow: 'hidden', padding: '8px', boxSizing: 'border-box' }} />
+                <div ref={setSlot} className="flex-1 relative overflow-hidden p-2 box-border" />
             </div>
         </div>
     )

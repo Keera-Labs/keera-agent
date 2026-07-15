@@ -1,7 +1,6 @@
 import ProjectCreateModal from "@/components/project/ProjectCreateModal"
 import useProjects from "@/queries/projectsQuery"
 import { useWorkspaceStore } from "@/stores/workspaceStore"
-import { color } from "@/tokens"
 import type { Project } from "@/types/type"
 import { router, usePage } from "@inertiajs/react"
 import { Info, Terminal, SquareCheckBig, Plus, Settings } from "lucide-react"
@@ -59,10 +58,7 @@ export default function Sidebar({
         : projects
 
     return (
-        <aside style={{
-            width: "220px", flexShrink: 0, background: color.bgCanvas,
-            borderRight: `1px solid ${color.stroke}`, display: "flex", flexDirection: "column", overflow: "hidden",
-        }}>
+        <aside className="w-[220px] shrink-0 bg-canvas border-r border-stroke flex flex-col overflow-hidden">
             <WorkspacePicker
                 selected={filterWorkspaceId}
                 onSelect={setFilterWorkspaceId}
@@ -70,11 +66,11 @@ export default function Sidebar({
             />
 
             {/* Scrollable middle */}
-            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", minHeight: 0 }}>
+            <div className="flex-1 overflow-y-auto flex flex-col min-h-0">
 
                 {/* PROJECTS */}
-                <div style={{ padding: "10px 10px 4px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ color: color.textFaint, fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em" }}>
+                <div className="pt-2.5 pr-2.5 pb-1 pl-3.5 flex items-center justify-between">
+                    <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-[0.12em]">
                         Projects
                     </span>
                     <ProjectCreateModal
@@ -82,9 +78,7 @@ export default function Sidebar({
                         trigger={
                             <button
                                 title="Add project"
-                                style={{ background: "transparent", border: "none", cursor: "pointer", color: color.textFaint, padding: "0 2px", display: "flex", alignItems: "center" }}
-                                onMouseEnter={e => (e.currentTarget.style.color = color.textMuted)}
-                                onMouseLeave={e => (e.currentTarget.style.color = color.textFaint)}
+                                className="bg-transparent border-0 cursor-pointer text-zinc-400 py-0 px-0.5 flex items-center hover:text-zinc-500"
                             >
                                 <Plus size={11}/>
                             </button>
@@ -92,9 +86,9 @@ export default function Sidebar({
                     />
                 </div>
 
-                <ul style={{ listStyle: "none", margin: 0, padding: "0 2px" }}>
+                <ul className="list-none m-0 py-0 px-0.5">
                     {filteredProjects.length === 0 && (
-                        <li style={{ padding: "4px 16px", color: color.textFaint, fontSize: "11px", fontStyle: "italic" }}>
+                        <li className="py-1 px-4 text-zinc-400 text-[11px] italic">
                             No projects
                         </li>
                     )}
@@ -113,20 +107,7 @@ export default function Sidebar({
                                 defaultWorkspaceId={filterWorkspaceId}
                                 trigger={
                                     <button
-                                        style={{
-                                            margin: "2px 10px 6px", width: "calc(100% - 20px)",
-                                            background: "transparent", border: `1px dashed ${color.borderMuted}`,
-                                            borderRadius: "6px", color: color.textFaint, fontSize: "11px", padding: "6px",
-                                            cursor: "pointer", textAlign: "center", display: "block",
-                                        }}
-                                        onMouseEnter={e => {
-                                            e.currentTarget.style.color = color.textMuted
-                                            e.currentTarget.style.borderColor = color.textMuted
-                                        }}
-                                        onMouseLeave={e => {
-                                            e.currentTarget.style.color = color.textFaint
-                                            e.currentTarget.style.borderColor = color.borderMuted
-                                        }}
+                                        className="mt-0.5 mx-2.5 mb-1.5 w-[calc(100%-20px)] bg-transparent border border-dashed border-stroke rounded text-zinc-400 text-[11px] p-1.5 cursor-pointer text-center block hover:text-zinc-500 hover:border-zinc-500"
                                     >
                                         + Add project
                                     </button>
@@ -138,26 +119,17 @@ export default function Sidebar({
 
                 {/* Active project card */}
                 {activeProject && (
-                    <div style={{ padding: "8px 8px 4px" }}>
-                        <div style={{
-                            display: "flex", alignItems: "center", gap: "10px",
-                            padding: "9px 12px", borderRadius: "8px",
-                            background: color.bgSurface, border: `1px solid ${color.borderMuted}`,
-                        }}>
+                    <div className="pt-2 px-2 pb-1">
+                        <div className="flex items-center gap-2.5 py-[9px] px-3 rounded-md bg-surface border border-stroke">
                             {/* Terminal icon in blue square */}
-                            <div style={{
-                                width: "32px", height: "32px", borderRadius: "8px",
-                                background: "#EEF2FF",
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                                flexShrink: 0,
-                            }}>
+                            <div className="w-8 h-8 rounded-md bg-[#EEF2FF] flex items-center justify-center shrink-0">
                                 <Terminal size={16} color="#4F46E5"/>
                             </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ color: color.textPrimary, fontSize: "13px", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            <div className="flex-1 min-w-0">
+                                <div className="text-zinc-900 text-[13px] font-bold truncate">
                                     {activeProject.name}
                                 </div>
-                                <div style={{ color: color.textMuted, fontSize: "11px", marginTop: "1px" }}>
+                                <div className="text-zinc-500 text-[11px] mt-px">
                                     AI Coding Manager
                                 </div>
                             </div>
@@ -166,12 +138,12 @@ export default function Sidebar({
                 )}
 
                 {/* WORKSPACE nav */}
-                <div style={{ padding: "10px 16px 4px" }}>
-                    <span style={{ color: color.textFaint, fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                <div className="pt-2.5 px-4 pb-1">
+                    <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-[0.08em]">
                         Workspace
                     </span>
                 </div>
-                <div style={{ padding: "0 8px 8px", display: "flex", flexDirection: "column", gap: "1px" }}>
+                <div className="pt-0 px-2 pb-2 flex flex-col gap-px">
                     {PROJECT_NAV.map(item => {
                         const active = item.id === projectView
                         const count = item.id === "tasks" ? taskCount : 0
@@ -180,38 +152,12 @@ export default function Sidebar({
                                 key={item.id}
                                 data-tab={item.id}
                                 onClick={() => onChangeView(item.id)}
-                                style={{
-                                    display: "flex", alignItems: "center", gap: "8px",
-                                    padding: "7px 10px",
-                                    background: active ? color.accentSubtle : "transparent",
-                                    border: `1px solid ${active ? color.accentEmphasis : "transparent"}`,
-                                    borderRadius: "6px",
-                                    color: active ? color.accentMuted : color.textMuted,
-                                    fontSize: "12px", fontWeight: active ? 600 : 400,
-                                    cursor: "pointer", textAlign: "left", width: "100%",
-                                    transition: "all 0.1s",
-                                }}
-                                onMouseEnter={e => {
-                                    if (!active) {
-                                        e.currentTarget.style.background = color.bgSurface
-                                        e.currentTarget.style.color = color.textSecondary
-                                    }
-                                }}
-                                onMouseLeave={e => {
-                                    if (!active) {
-                                        e.currentTarget.style.background = "transparent"
-                                        e.currentTarget.style.color = color.textMuted
-                                    }
-                                }}
+                                className={`flex items-center gap-2 py-[7px] px-2.5 border rounded text-[12px] cursor-pointer text-left w-full transition-all duration-100 ${active ? "bg-blue-50 border-blue-600 text-blue-600 font-semibold" : "bg-transparent border-transparent text-zinc-500 font-normal hover:bg-surface hover:text-zinc-700"}`}
                             >
                                 {item.icon}
-                                <span style={{ flex: 1 }}>{item.label}</span>
+                                <span className="flex-1">{item.label}</span>
                                 {count > 0 && (
-                                    <span style={{
-                                        fontSize: "10px", fontWeight: 700,
-                                        padding: "1px 6px", borderRadius: "10px",
-                                        background: color.accentSubtle, color: color.accent,
-                                    }}>
+                                    <span className="text-[10px] font-bold py-px px-1.5 rounded-lg bg-blue-50 text-accent">
                                         {count}
                                     </span>
                                 )}
@@ -222,33 +168,11 @@ export default function Sidebar({
             </div>
 
             {/* Bottom bar: Settings link + New Agent button */}
-            <div style={{ borderTop: `1px solid ${color.stroke}`, display: "flex", flexDirection: "column", gap: "4px", padding: "8px 10px 10px" }}>
+            <div className="border-t border-stroke flex flex-col gap-1 pt-2 px-2.5 pb-2.5">
                 {/* Settings link */}
                 <button
                     onClick={() => router.visit("/settings")}
-                    style={{
-                        display: "flex", alignItems: "center", gap: "8px",
-                        padding: "7px 10px", width: "100%",
-                        background: isSettingsPage ? color.accentSubtle : "transparent",
-                        border: `1px solid ${isSettingsPage ? color.accentEmphasis : "transparent"}`,
-                        borderRadius: "6px",
-                        color: isSettingsPage ? color.accentMuted : color.textMuted,
-                        fontSize: "12px", fontWeight: isSettingsPage ? 600 : 400,
-                        cursor: "pointer", textAlign: "left",
-                        transition: "all 0.1s",
-                    }}
-                    onMouseEnter={e => {
-                        if (!isSettingsPage) {
-                            e.currentTarget.style.background = color.bgSurface
-                            e.currentTarget.style.color = color.textSecondary
-                        }
-                    }}
-                    onMouseLeave={e => {
-                        if (!isSettingsPage) {
-                            e.currentTarget.style.background = "transparent"
-                            e.currentTarget.style.color = color.textMuted
-                        }
-                    }}
+                    className={`flex items-center gap-2 py-[7px] px-2.5 w-full border rounded text-[12px] cursor-pointer text-left transition-all duration-100 ${isSettingsPage ? "bg-blue-50 border-blue-600 text-blue-600 font-semibold" : "bg-transparent border-transparent text-zinc-500 font-normal hover:bg-surface hover:text-zinc-700"}`}
                 >
                     <Settings size={14}/>
                     <span>Settings</span>
@@ -261,20 +185,7 @@ export default function Sidebar({
                     trigger={
                         <button
                             disabled={!activeProject}
-                            style={{
-                                width: "100%", padding: "8px 12px",
-                                background: activeProject ? color.accentEmphasis : color.bgSurface,
-                                border: activeProject ? "none" : `1px solid ${color.stroke}`,
-                                borderRadius: "7px",
-                                color: activeProject ? "#fff" : color.textFaint,
-                                fontSize: "13px", fontWeight: 600,
-                                cursor: activeProject ? "pointer" : "default",
-                                display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
-                                transition: "opacity 0.1s",
-                                opacity: activeProject ? 1 : 0.5,
-                            }}
-                            onMouseEnter={e => { if (activeProject) e.currentTarget.style.opacity = "0.88" }}
-                            onMouseLeave={e => { if (activeProject) e.currentTarget.style.opacity = "1" }}
+                            className={`w-full py-2 px-3 rounded-[7px] text-[13px] font-semibold flex items-center justify-center gap-1.5 transition-opacity duration-100 ${activeProject ? "bg-blue-600 border-0 text-white cursor-pointer opacity-100 hover:opacity-[0.88]" : "bg-surface border border-stroke text-zinc-400 cursor-default opacity-50"}`}
                         >
                             <Plus size={12}/>
                             + New Agent

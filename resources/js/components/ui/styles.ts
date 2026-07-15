@@ -1,64 +1,18 @@
-import { color } from '@/tokens'
+// ─── Shared Tailwind class strings ────────────────────────────────────────────
 
-// ─── Shared styles ────────────────────────────────────────────────────────────
+export const labelClass = 'text-zinc-500 text-[11px] uppercase tracking-[0.05em]'
 
-export const labelStyle: React.CSSProperties = {
-    color: color.textMuted,
-    fontSize: '11px',
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-}
+export const inputClass =
+    'bg-canvas border border-stroke rounded text-zinc-900 text-[13px] px-2.5 py-1.5 font-mono outline-none'
 
-export const inputStyle: React.CSSProperties = {
-    background: color.bgBase,
-    border: `1px solid ${color.borderMuted}`,
-    borderRadius: '6px',
-    color: color.textPrimary,
-    fontSize: '13px',
-    padding: '6px 10px',
-    fontFamily: '"JetBrains Mono", monospace',
-    outline: 'none',
-}
+export const cancelBtnClass =
+    'bg-transparent border border-stroke rounded text-zinc-500 text-[12px] px-3.5 py-1.5 cursor-pointer'
 
-export const cancelBtnStyle: React.CSSProperties = {
-    background: 'transparent',
-    border: `1px solid ${color.borderMuted}`,
-    borderRadius: '6px',
-    color: color.textMuted,
-    fontSize: '12px',
-    padding: '6px 14px',
-    cursor: 'pointer',
-}
+export const submitBtnClass =
+    'bg-success border border-success rounded text-white text-[12px] px-3.5 py-1.5 cursor-pointer'
 
-export const submitBtnStyle: React.CSSProperties = {
-    background: color.successEmphasis,
-    border: `1px solid ${color.successBorder}`,
-    borderRadius: '6px',
-    color: '#fff',
-    fontSize: '12px',
-    padding: '6px 14px',
-    cursor: 'pointer',
-}
+export const flagRowClass =
+    'flex items-center justify-between px-2.5 py-1.5 rounded bg-canvas border border-stroke cursor-pointer'
 
-export const flagRowStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '6px 10px',
-    borderRadius: '6px',
-    background: color.bgCanvas,
-    border: `1px solid ${color.borderMuted}`,
-    cursor: 'pointer',
-}
-
-export const toggleStyle = (on: boolean): React.CSSProperties => ({
-    width: '32px',
-    height: '18px',
-    borderRadius: '9px',
-    background: on ? color.accent : color.borderMuted,
-    border: 'none',
-    cursor: 'pointer',
-    position: 'relative',
-    flexShrink: 0,
-    transition: 'background 0.15s',
-})
+export const toggleClass = (on: boolean) =>
+    `w-8 h-[18px] rounded-[9px] ${on ? 'bg-accent' : 'bg-stroke'} border-0 cursor-pointer relative shrink-0 transition-colors duration-150`

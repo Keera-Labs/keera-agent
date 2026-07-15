@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Pencil, Play, Square, X } from 'lucide-react'
-import { color } from '@/tokens'
-import { inputStyle, cancelBtnStyle, submitBtnStyle } from '@/components/ui/styles'
+import { inputClass, cancelBtnClass, submitBtnClass } from '@/components/ui/styles'
 import type { Command } from './types'
 
 // A single command in the list. Owns its own inline-edit state; all process and
@@ -47,13 +46,7 @@ export function CommandRow({
         return (
             <form
                 onSubmit={handleSave}
-                style={{
-                    display: 'flex', flexDirection: 'column', gap: '8px',
-                    padding: '10px 14px',
-                    background: color.bgSurface,
-                    borderLeft: `2px solid ${color.accent}`,
-                    borderBottom: `1px solid ${color.border}`,
-                }}
+                className="flex flex-col gap-2 py-2.5 px-3.5 bg-surface border-l-2 border-l-accent border-b border-b-stroke"
             >
                 <input
                     autoFocus
@@ -61,21 +54,18 @@ export function CommandRow({
                     onChange={e => setEditLabel(e.target.value)}
                     placeholder="Label"
                     required
-                    style={{ ...inputStyle, boxSizing: 'border-box', width: '100%' }}
+                    className={`${inputClass} box-border w-full`}
                 />
                 <input
                     value={editCmd}
                     onChange={e => setEditCmd(e.target.value)}
                     placeholder="Shell command"
                     required
-                    style={{
-                        ...inputStyle, boxSizing: 'border-box', width: '100%',
-                        fontFamily: '"JetBrains Mono", monospace',
-                    }}
+                    className={`${inputClass} box-border w-full font-mono`}
                 />
-                <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                    <button type="button" onClick={() => setEditing(false)} style={cancelBtnStyle}>Cancel</button>
-                    <button type="submit" disabled={saving} style={submitBtnStyle}>
+                <div className="flex gap-1.5 justify-end">
+                    <button type="button" onClick={() => setEditing(false)} className={cancelBtnClass}>Cancel</button>
+                    <button type="submit" disabled={saving} className={submitBtnClass}>
                         {saving ? 'Saving…' : 'Save'}
                     </button>
                 </div>
@@ -86,39 +76,17 @@ export function CommandRow({
     return (
         <div
             onClick={onSelect}
-            style={{
-                display: 'flex', alignItems: 'center', gap: '10px',
-                padding: '10px 14px', cursor: 'pointer',
-                background: isSelected ? color.bgSurface : 'transparent',
-                borderLeft: `2px solid ${isSelected ? color.accent : 'transparent'}`,
-                borderBottom: `1px solid ${color.border}`,
-                transition: 'background 0.1s',
-            }}
-            onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = color.bgSurface }}
-            onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
+            className={`flex items-center gap-2.5 py-2.5 px-3.5 cursor-pointer border-l-2 border-b border-b-stroke transition-colors duration-100 hover:bg-surface ${isSelected ? 'bg-surface border-l-accent' : 'bg-transparent border-l-transparent'}`}
         >
             {/* Play/Stop circle */}
             <button
                 onClick={e => { e.stopPropagation(); isRunning ? onStop() : onRun() }}
                 title={isRunning ? 'Stop' : 'Run'}
-                style={{
-                    width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0,
-                    background: isRunning ? 'rgba(63,185,80,0.1)' : color.bgBase,
-                    border: `1px solid ${isRunning ? 'rgba(63,185,80,0.4)' : color.borderMuted}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: 'pointer', color: isRunning ? color.success : color.textMuted,
-                    transition: 'all 0.15s',
-                }}
-                onMouseEnter={e => {
-                    e.currentTarget.style.borderColor = isRunning ? color.danger : color.success
-                    e.currentTarget.style.color = isRunning ? color.danger : color.success
-                    e.currentTarget.style.background = isRunning ? color.dangerCanvas : 'rgba(63,185,80,0.1)'
-                }}
-                onMouseLeave={e => {
-                    e.currentTarget.style.borderColor = isRunning ? 'rgba(63,185,80,0.4)' : color.borderMuted
-                    e.currentTarget.style.color = isRunning ? color.success : color.textMuted
-                    e.currentTarget.style.background = isRunning ? 'rgba(63,185,80,0.1)' : color.bgBase
-                }}
+                className={`w-[30px] h-[30px] rounded-full shrink-0 border flex items-center justify-center cursor-pointer transition-all duration-150 ${
+                    isRunning
+                        ? 'bg-[rgba(63,185,80,0.1)] border-[rgba(63,185,80,0.4)] text-success hover:border-danger hover:text-danger hover:bg-red-50'
+                        : 'bg-canvas border-stroke text-zinc-500 hover:border-success hover:text-success hover:bg-[rgba(63,185,80,0.1)]'
+                }`}
             >
                 {isRunning ? (
                     <Square size={9} fill="currentColor" />
@@ -128,32 +96,21 @@ export function CommandRow({
             </button>
 
             {/* Label and command */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{
-                    fontSize: '12px', fontWeight: 600, color: color.textPrimary,
-                    fontFamily: '"JetBrains Mono", monospace',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>
+            <div className="flex-1 min-w-0">
+                <div className="text-[12px] font-semibold text-zinc-900 font-mono truncate">
                     /{command.label}
                 </div>
-                <div style={{
-                    fontSize: '10px', color: color.textFaint,
-                    fontFamily: '"JetBrains Mono", monospace',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    marginTop: '2px',
-                }}>
+                <div className="text-[10px] text-zinc-400 font-mono truncate mt-0.5">
                     {command.command}
                 </div>
             </div>
 
             {/* Running pill */}
             {isRunning && (
-                <span style={{
-                    fontSize: '10px', padding: '1px 6px', borderRadius: '8px',
-                    background: 'rgba(63,185,80,0.08)', border: '1px solid rgba(63,185,80,0.25)',
-                    color: color.success, fontFamily: '"JetBrains Mono", monospace', flexShrink: 0,
-                    animation: 'cmd-pulse 2s infinite',
-                }}>
+                <span
+                    className="text-[10px] py-px px-1.5 rounded-md bg-[rgba(63,185,80,0.08)] border border-[rgba(63,185,80,0.25)] text-success font-mono shrink-0"
+                    style={{ animation: 'cmd-pulse 2s infinite' }}
+                >
                     {command.pid ? `pid ${command.pid}` : 'running'}
                 </span>
             )}
@@ -162,13 +119,7 @@ export function CommandRow({
             <button
                 onClick={e => { e.stopPropagation(); startEditing() }}
                 title="Edit"
-                style={{
-                    flexShrink: 0, background: 'transparent', border: 'none',
-                    color: color.textFaint, cursor: 'pointer',
-                    padding: '3px 4px', borderRadius: '4px', display: 'flex', alignItems: 'center',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.color = color.accent; e.currentTarget.style.background = color.bgBase }}
-                onMouseLeave={e => { e.currentTarget.style.color = color.textFaint; e.currentTarget.style.background = 'transparent' }}
+                className="shrink-0 bg-transparent border-none text-zinc-400 cursor-pointer py-[3px] px-1 rounded-sm flex items-center hover:text-accent hover:bg-canvas"
             >
                 <Pencil size={11} />
             </button>
@@ -177,14 +128,7 @@ export function CommandRow({
             <button
                 onClick={e => { e.stopPropagation(); onDelete() }}
                 title="Delete"
-                style={{
-                    flexShrink: 0, background: 'transparent', border: 'none',
-                    color: color.textFaint, cursor: 'pointer',
-                    padding: '3px 4px', lineHeight: 1, borderRadius: '4px',
-                    display: 'flex', alignItems: 'center',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.color = color.danger; e.currentTarget.style.background = color.dangerCanvas }}
-                onMouseLeave={e => { e.currentTarget.style.color = color.textFaint; e.currentTarget.style.background = 'transparent' }}
+                className="shrink-0 bg-transparent border-none text-zinc-400 cursor-pointer py-[3px] px-1 leading-none rounded-sm flex items-center hover:text-danger hover:bg-red-50"
             ><X size={11} /></button>
         </div>
     )

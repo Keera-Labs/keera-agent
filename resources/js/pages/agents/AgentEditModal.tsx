@@ -4,7 +4,7 @@ import Modal from '@/components/ui/Modal'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import { type ProjectAgent, type AgentFlags, normalizeAgent } from '@/queries/agentQuery'
 import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, MODELS } from '@/types/agent'
-import { labelStyle, inputStyle, cancelBtnStyle, submitBtnStyle, flagRowStyle, toggleStyle } from '@/components/ui/styles'
+import { labelClass, inputClass, cancelBtnClass, submitBtnClass, flagRowClass, toggleClass } from '@/components/ui/styles'
 
 function EditAgentForm({ agent, onSaved, close }: {
     agent: ProjectAgent
@@ -69,15 +69,15 @@ function EditAgentForm({ agent, onSaved, close }: {
     }
 
     return (
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>Edit Agent</h2>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+            <h2 className="m-0 text-zinc-900 text-[15px] font-semibold">Edit Agent</h2>
 
-            {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
+            {error && <span className="text-danger text-[12px]">{error}</span>}
 
             {/* Type selector */}
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <span style={labelStyle}>Type</span>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <label className="flex flex-col gap-1.5">
+                <span className={labelClass}>Type</span>
+                <div className="flex gap-2 flex-wrap">
                     {Object.entries(AGENT_TYPE_LABELS).map(([type, label]) => {
                         const active = agentType === type
                         return (
@@ -85,14 +85,11 @@ function EditAgentForm({ agent, onSaved, close }: {
                                 key={type}
                                 type="button"
                                 onClick={() => setAgentType(type)}
+                                className={`py-[5px] px-3 rounded border text-[12px] cursor-pointer ${active ? 'font-semibold' : 'font-normal'}`}
                                 style={{
-                                    padding: '5px 12px',
-                                    borderRadius: '6px',
-                                    border: `1px solid ${active ? AGENT_TYPE_COLORS[type] ?? color.accent : color.borderMuted}`,
+                                    borderColor: active ? AGENT_TYPE_COLORS[type] ?? color.accent : color.borderMuted,
                                     background: active ? `${AGENT_TYPE_COLORS[type] ?? color.accent}18` : 'transparent',
                                     color: active ? (AGENT_TYPE_COLORS[type] ?? color.accent) : color.textMuted,
-                                    fontSize: '12px', fontWeight: active ? 600 : 400,
-                                    cursor: 'pointer',
                                 }}
                             >
                                 {label}
@@ -103,138 +100,128 @@ function EditAgentForm({ agent, onSaved, close }: {
             </label>
 
             {/* Name */}
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <span style={labelStyle}>Name</span>
+            <label className="flex flex-col gap-1">
+                <span className={labelClass}>Name</span>
                 <input
                     autoFocus
                     value={name}
                     onChange={e => setName(e.target.value)}
                     placeholder="Agent name"
                     required
-                    style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' as const }}
+                    className={`${inputClass} w-full box-border`}
                 />
             </label>
 
             {/* Description */}
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <span style={labelStyle}>Description</span>
+            <label className="flex flex-col gap-1">
+                <span className={labelClass}>Description</span>
                 <input
                     value={description}
                     onChange={e => setDescription(e.target.value)}
                     placeholder="Short description"
-                    style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' as const }}
+                    className={`${inputClass} w-full box-border`}
                 />
             </label>
 
             {/* Model */}
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <span style={labelStyle}>Model</span>
+            <label className="flex flex-col gap-1">
+                <span className={labelClass}>Model</span>
                 <select
                     value={model}
                     onChange={e => setModel(e.target.value)}
-                    style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' as const }}
+                    className={`${inputClass} w-full box-border`}
                 >
                     {MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                 </select>
             </label>
 
             {/* System Prompt */}
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <span style={labelStyle}>System Prompt</span>
+            <label className="flex flex-col gap-1">
+                <span className={labelClass}>System Prompt</span>
                 <textarea
                     value={systemPrompt}
                     onChange={e => setSystemPrompt(e.target.value)}
                     placeholder="Instructions for this agent… (leave blank to use none)"
                     rows={6}
-                    style={{
-                        ...inputStyle,
-                        width: '100%', boxSizing: 'border-box' as const,
-                        resize: 'vertical' as const, lineHeight: 1.5,
-                    }}
+                    className={`${inputClass} w-full box-border resize-y leading-normal`}
                 />
             </label>
 
             {/* Launch Options */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <span style={labelStyle}>Launch Options</span>
+            <div className="flex flex-col gap-1.5">
+                <span className={labelClass}>Launch Options</span>
 
                 {/* Skip Permissions */}
                 <div
-                    style={flagRowStyle}
+                    className={flagRowClass}
                     onClick={() => setFlag('dangerously_skip_permissions', !flags.dangerously_skip_permissions)}
                 >
                     <div>
-                        <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Skip Permissions</div>
-                        <div style={{ fontSize: '10px', color: color.textFaint }}>--dangerously-skip-permissions — no prompts</div>
+                        <div className="text-[12px] font-medium text-zinc-700">Skip Permissions</div>
+                        <div className="text-[10px] text-zinc-400">--dangerously-skip-permissions — no prompts</div>
                     </div>
                     <button
                         type="button"
-                        style={toggleStyle(!!flags.dangerously_skip_permissions)}
+                        className={toggleClass(!!flags.dangerously_skip_permissions)}
                         onClick={e => e.stopPropagation()}
                         title="Toggle --dangerously-skip-permissions"
                     >
-                        <span style={{
-                            position: 'absolute', top: '3px',
-                            left: flags.dangerously_skip_permissions ? '17px' : '3px',
-                            width: '12px', height: '12px', borderRadius: '50%',
-                            background: '#fff', transition: 'left 0.15s',
-                        }} />
+                        <span
+                            className="absolute top-[3px] w-3 h-3 rounded-full bg-white transition-[left] duration-150"
+                            style={{ left: flags.dangerously_skip_permissions ? '17px' : '3px' }}
+                        />
                     </button>
                 </div>
 
                 {/* Plan Mode */}
                 <div
-                    style={flagRowStyle}
+                    className={flagRowClass}
                     onClick={() => setPlanMode(p => !p)}
                 >
                     <div>
-                        <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Plan Mode</div>
-                        <div style={{ fontSize: '10px', color: color.textFaint }}>Read-only — analyse and plan, never edit files</div>
+                        <div className="text-[12px] font-medium text-zinc-700">Plan Mode</div>
+                        <div className="text-[10px] text-zinc-400">Read-only — analyse and plan, never edit files</div>
                     </div>
                     <button
                         type="button"
-                        style={toggleStyle(planMode)}
+                        className={toggleClass(planMode)}
                         onClick={e => e.stopPropagation()}
                         title="Toggle plan mode"
                     >
-                        <span style={{
-                            position: 'absolute', top: '3px',
-                            left: planMode ? '17px' : '3px',
-                            width: '12px', height: '12px', borderRadius: '50%',
-                            background: '#fff', transition: 'left 0.15s',
-                        }} />
+                        <span
+                            className="absolute top-[3px] w-3 h-3 rounded-full bg-white transition-[left] duration-150"
+                            style={{ left: planMode ? '17px' : '3px' }}
+                        />
                     </button>
                 </div>
 
                 {/* Verbose */}
                 <div
-                    style={flagRowStyle}
+                    className={flagRowClass}
                     onClick={() => setFlag('verbose', !flags.verbose)}
                 >
                     <div>
-                        <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Verbose</div>
-                        <div style={{ fontSize: '10px', color: color.textFaint }}>--verbose — detailed claude output</div>
+                        <div className="text-[12px] font-medium text-zinc-700">Verbose</div>
+                        <div className="text-[10px] text-zinc-400">--verbose — detailed claude output</div>
                     </div>
                     <button
                         type="button"
-                        style={toggleStyle(!!flags.verbose)}
+                        className={toggleClass(!!flags.verbose)}
                         onClick={e => e.stopPropagation()}
                         title="Toggle --verbose"
                     >
-                        <span style={{
-                            position: 'absolute', top: '3px',
-                            left: flags.verbose ? '17px' : '3px',
-                            width: '12px', height: '12px', borderRadius: '50%',
-                            background: '#fff', transition: 'left 0.15s',
-                        }} />
+                        <span
+                            className="absolute top-[3px] w-3 h-3 rounded-full bg-white transition-[left] duration-150"
+                            style={{ left: flags.verbose ? '17px' : '3px' }}
+                        />
                     </button>
                 </div>
 
                 {/* Max Turns */}
-                <div style={{ ...flagRowStyle, gap: '12px' }}>
-                    <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Max Turns</div>
-                        <div style={{ fontSize: '10px', color: color.textFaint }}>--max-turns N — limit conversation turns</div>
+                <div className={`${flagRowClass} gap-3`}>
+                    <div className="flex-1">
+                        <div className="text-[12px] font-medium text-zinc-700">Max Turns</div>
+                        <div className="text-[10px] text-zinc-400">--max-turns N — limit conversation turns</div>
                     </div>
                     <input
                         type="number"
@@ -243,15 +230,16 @@ function EditAgentForm({ agent, onSaved, close }: {
                         placeholder="∞"
                         value={flags.max_turns ?? ''}
                         onChange={e => setFlag('max_turns', e.target.value ? parseInt(e.target.value, 10) : null)}
-                        style={{ ...inputStyle, width: '72px', textAlign: 'center', padding: '4px 8px' }}
+                        className={`${inputClass} w-[72px] text-center`}
+                        style={{ padding: '4px 8px' }}
                     />
                 </div>
             </div>
 
             {/* Footer */}
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', paddingTop: '4px' }}>
-                <button type="button" onClick={close} style={cancelBtnStyle}>Cancel</button>
-                <button type="submit" disabled={loading} style={{ ...submitBtnStyle, opacity: loading ? 0.7 : 1 }}>
+            <div className="flex gap-2 justify-end pt-1">
+                <button type="button" onClick={close} className={cancelBtnClass}>Cancel</button>
+                <button type="submit" disabled={loading} className={submitBtnClass} style={{ opacity: loading ? 0.7 : 1 }}>
                     {loading ? 'Saving…' : 'Save Changes'}
                 </button>
             </div>

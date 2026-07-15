@@ -3,7 +3,7 @@ import { color } from '@/tokens'
 import type { AgentTemplate, AgentFlags } from '@/types/agent'
 import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, MODELS } from '@/types/agent'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
-import { labelStyle, inputStyle, cancelBtnStyle, submitBtnStyle, flagRowStyle, toggleStyle } from '@/components/ui/styles'
+import { labelClass, inputClass, cancelBtnClass, submitBtnClass, flagRowClass, toggleClass } from '@/components/ui/styles'
 
 /**
  * Per-project agent-template manager. The list is the project's EFFECTIVE
@@ -103,40 +103,44 @@ export function ProjectTemplatesModal({
 
     return (
         <div
-            style={{ position: 'fixed', inset: 0, background: color.overlay, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-[300]"
             onClick={e => { if (e.target === e.currentTarget) onClose() }}
         >
-            <div style={{ background: color.bgModal, border: `1px solid ${color.borderMuted}`, borderRadius: '8px', width: '760px', maxWidth: '95vw', height: '560px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                <div style={{ padding: '16px 20px', borderBottom: `1px solid ${color.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div className="bg-modal border border-stroke rounded-md w-[760px] max-w-[95vw] h-[560px] max-h-[90vh] flex flex-col overflow-hidden">
+                <div className="py-4 px-5 border-b border-stroke flex items-center justify-between">
                     <div>
-                        <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>Agent Templates</h2>
-                        <p style={{ margin: '2px 0 0', color: color.textMuted, fontSize: '12px' }}>
-                            Project: <span style={{ color: color.accent }}>{projectName}</span> — edits here stay in this project (copy-on-write).
+                        <h2 className="m-0 text-zinc-900 text-[15px] font-semibold">Agent Templates</h2>
+                        <p className="mt-0.5 mx-0 mb-0 text-zinc-500 text-[12px]">
+                            Project: <span className="text-accent">{projectName}</span> — edits here stay in this project (copy-on-write).
                         </p>
                     </div>
-                    <button onClick={resetAll} style={{ ...cancelBtnStyle, color: color.danger, borderColor: color.danger }} title="Remove all project overrides and revert to global templates">
+                    <button onClick={resetAll} className={cancelBtnClass} style={{ color: color.danger, borderColor: color.danger }} title="Remove all project overrides and revert to global templates">
                         Reset all to global
                     </button>
                 </div>
 
-                <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+                <div className="flex-1 flex overflow-hidden">
                     {/* List */}
-                    <div style={{ width: '240px', flexShrink: 0, borderRight: `1px solid ${color.border}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                        <div style={{ padding: '10px' }}>
-                            <button onClick={startNew} style={{ ...submitBtnStyle, width: '100%', padding: '6px 0' }}>+ New (project only)</button>
+                    <div className="w-[240px] shrink-0 border-r border-stroke flex flex-col overflow-hidden">
+                        <div className="p-2.5">
+                            <button onClick={startNew} className={`${submitBtnClass} w-full`} style={{ padding: '6px 0' }}>+ New (project only)</button>
                         </div>
-                        <div style={{ flex: 1, overflowY: 'auto' }}>
-                            {loading && <div style={{ padding: '12px', color: color.textFaint, fontSize: '12px' }}>Loading…</div>}
+                        <div className="flex-1 overflow-y-auto">
+                            {loading && <div className="p-3 text-zinc-400 text-[12px]">Loading…</div>}
                             {templates.map(tpl => {
                                 const active = !isNew && selected?.id === tpl.id
                                 return (
-                                    <button key={tpl.id} onClick={() => load(tpl)} style={{ width: '100%', textAlign: 'left', background: active ? color.bgCanvas : 'transparent', border: 'none', borderLeft: `2px solid ${active ? color.accent : 'transparent'}`, padding: '9px 12px', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            <span style={{ color: color.textPrimary, fontSize: '12px', fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tpl.name}</span>
-                                            {tpl.is_override && <span style={{ color: color.accent, fontSize: '9px', fontWeight: 600 }}>OVERRIDE</span>}
-                                            {!tpl.is_override && tpl.is_builtin && <span style={{ color: color.textFaint, fontSize: '9px' }}>global</span>}
+                                    <button
+                                        key={tpl.id}
+                                        onClick={() => load(tpl)}
+                                        className={`w-full text-left border-0 border-l-2 border-solid py-[9px] px-3 cursor-pointer flex flex-col gap-[3px] ${active ? 'bg-canvas border-l-accent' : 'bg-transparent border-l-transparent'}`}
+                                    >
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-zinc-900 text-[12px] font-medium flex-1 truncate">{tpl.name}</span>
+                                            {tpl.is_override && <span className="text-accent text-[9px] font-semibold">OVERRIDE</span>}
+                                            {!tpl.is_override && tpl.is_builtin && <span className="text-zinc-400 text-[9px]">global</span>}
                                         </div>
-                                        <span style={{ color: AGENT_TYPE_COLORS[tpl.agent_type] ?? color.textFaint, fontSize: '10px' }}>{AGENT_TYPE_LABELS[tpl.agent_type] ?? tpl.agent_type}</span>
+                                        <span className="text-[10px]" style={{ color: AGENT_TYPE_COLORS[tpl.agent_type] ?? color.textFaint }}>{AGENT_TYPE_LABELS[tpl.agent_type] ?? tpl.agent_type}</span>
                                     </button>
                                 )
                             })}
@@ -144,75 +148,75 @@ export function ProjectTemplatesModal({
                     </div>
 
                     {/* Editor */}
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                    <div className="flex-1 flex flex-col overflow-hidden">
                         {showEditor ? (
                             <>
-                                <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                    {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
+                                <div className="flex-1 overflow-y-auto py-4 px-5 flex flex-col gap-3">
+                                    {error && <span className="text-danger text-[12px]">{error}</span>}
                                     {selected?.is_override && (
-                                        <div style={{ fontSize: '11px', color: color.textMuted, background: color.bgCanvas, border: `1px solid ${color.borderMuted}`, borderRadius: '6px', padding: '7px 10px' }}>
+                                        <div className="text-[11px] text-zinc-500 bg-canvas border border-stroke rounded py-[7px] px-2.5">
                                             Project override — shadows a global template. Use Revert to drop it.
                                         </div>
                                     )}
-                                    <div style={{ display: 'flex', gap: '10px' }}>
-                                        <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                            <span style={labelStyle}>Name</span>
-                                            <input value={name} onChange={e => setName(e.target.value)} style={inputStyle} />
+                                    <div className="flex gap-2.5">
+                                        <label className="flex-1 flex flex-col gap-1">
+                                            <span className={labelClass}>Name</span>
+                                            <input value={name} onChange={e => setName(e.target.value)} className={inputClass} />
                                         </label>
-                                        <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                            <span style={labelStyle}>Type</span>
-                                            <select value={type} onChange={e => setType(e.target.value)} style={inputStyle}>
+                                        <label className="flex-1 flex flex-col gap-1">
+                                            <span className={labelClass}>Type</span>
+                                            <select value={type} onChange={e => setType(e.target.value)} className={inputClass}>
                                                 {Object.entries(AGENT_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                                             </select>
                                         </label>
                                     </div>
-                                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                        <span style={labelStyle}>Description</span>
-                                        <input value={desc} onChange={e => setDesc(e.target.value)} style={inputStyle} />
+                                    <label className="flex flex-col gap-1">
+                                        <span className={labelClass}>Description</span>
+                                        <input value={desc} onChange={e => setDesc(e.target.value)} className={inputClass} />
                                     </label>
-                                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                        <span style={labelStyle}>Model</span>
-                                        <select value={model} onChange={e => setModel(e.target.value)} style={inputStyle}>
+                                    <label className="flex flex-col gap-1">
+                                        <span className={labelClass}>Model</span>
+                                        <select value={model} onChange={e => setModel(e.target.value)} className={inputClass}>
                                             {MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                                         </select>
                                     </label>
-                                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                        <span style={labelStyle}>System Prompt</span>
-                                        <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={6} style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }} />
+                                    <label className="flex flex-col gap-1">
+                                        <span className={labelClass}>System Prompt</span>
+                                        <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={6} className={`${inputClass} resize-y leading-normal`} />
                                     </label>
-                                    <div style={flagRowStyle} onClick={() => setFlag('dangerously_skip_permissions', !flags.dangerously_skip_permissions)}>
+                                    <div className={flagRowClass} onClick={() => setFlag('dangerously_skip_permissions', !flags.dangerously_skip_permissions)}>
                                         <div>
-                                            <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Skip Permissions</div>
-                                            <div style={{ fontSize: '10px', color: color.textFaint }}>--dangerously-skip-permissions — no prompts</div>
+                                            <div className="text-[12px] font-medium text-zinc-700">Skip Permissions</div>
+                                            <div className="text-[10px] text-zinc-400">--dangerously-skip-permissions — no prompts</div>
                                         </div>
-                                        <button type="button" style={toggleStyle(!!flags.dangerously_skip_permissions)} onClick={e => e.stopPropagation()}>
-                                            <span style={{ position: 'absolute', top: '3px', left: flags.dangerously_skip_permissions ? '17px' : '3px', width: '12px', height: '12px', borderRadius: '50%', background: '#fff', transition: 'left 0.15s' }} />
+                                        <button type="button" className={toggleClass(!!flags.dangerously_skip_permissions)} onClick={e => e.stopPropagation()}>
+                                            <span className={`absolute top-[3px] w-3 h-3 rounded-full bg-white transition-[left] duration-150 ${flags.dangerously_skip_permissions ? 'left-[17px]' : 'left-[3px]'}`} />
                                         </button>
                                     </div>
-                                    <div style={flagRowStyle} onClick={() => setPlanMode(p => !p)}>
+                                    <div className={flagRowClass} onClick={() => setPlanMode(p => !p)}>
                                         <div>
-                                            <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Plan Mode</div>
-                                            <div style={{ fontSize: '10px', color: color.textFaint }}>Read-only — analyse and plan, never edit files</div>
+                                            <div className="text-[12px] font-medium text-zinc-700">Plan Mode</div>
+                                            <div className="text-[10px] text-zinc-400">Read-only — analyse and plan, never edit files</div>
                                         </div>
-                                        <button type="button" style={toggleStyle(planMode)} onClick={e => e.stopPropagation()}>
-                                            <span style={{ position: 'absolute', top: '3px', left: planMode ? '17px' : '3px', width: '12px', height: '12px', borderRadius: '50%', background: '#fff', transition: 'left 0.15s' }} />
+                                        <button type="button" className={toggleClass(planMode)} onClick={e => e.stopPropagation()}>
+                                            <span className={`absolute top-[3px] w-3 h-3 rounded-full bg-white transition-[left] duration-150 ${planMode ? 'left-[17px]' : 'left-[3px]'}`} />
                                         </button>
                                     </div>
                                 </div>
-                                <div style={{ padding: '12px 20px', borderTop: `1px solid ${color.border}`, display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                <div className="py-3 px-5 border-t border-stroke flex gap-2 justify-end">
                                     {selected?.is_override && (
-                                        <button onClick={() => revertOverride(selected)} style={{ ...cancelBtnStyle, color: color.danger, borderColor: color.danger, marginRight: 'auto' }}>
+                                        <button onClick={() => revertOverride(selected)} className={`${cancelBtnClass} mr-auto`} style={{ color: color.danger, borderColor: color.danger }}>
                                             Revert to global
                                         </button>
                                     )}
-                                    <button onClick={onClose} style={cancelBtnStyle}>Close</button>
-                                    <button onClick={save} disabled={saving} style={{ ...submitBtnStyle, opacity: saving ? 0.6 : 1 }}>
+                                    <button onClick={onClose} className={cancelBtnClass}>Close</button>
+                                    <button onClick={save} disabled={saving} className={submitBtnClass} style={{ opacity: saving ? 0.6 : 1 }}>
                                         {saving ? 'Saving…' : selected && !selected.is_override ? 'Save (creates override)' : 'Save'}
                                     </button>
                                 </div>
                             </>
                         ) : (
-                            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: color.textFaint, fontSize: '13px', padding: '20px', textAlign: 'center' }}>
+                            <div className="flex-1 flex items-center justify-center text-zinc-400 text-[13px] p-5 text-center">
                                 Select a template to edit it for this project, or create a project-only one.
                             </div>
                         )}

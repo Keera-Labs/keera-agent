@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { color } from '@/tokens'
 import type { Workspace } from '@/types/type'
-import { cancelBtnStyle } from '@/components/ui/styles'
+import { cancelBtnClass } from '@/components/ui/styles'
 
 export function ConfirmDeleteWorkspaceModal({
     workspace,
@@ -35,31 +34,22 @@ export function ConfirmDeleteWorkspaceModal({
     }
 
     return (
-        <div style={{
-            position: 'fixed', inset: 0, background: color.overlay,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
-        }}>
-            <div style={{
-                background: color.bgModal, border: `1px solid ${color.borderMuted}`, borderRadius: '8px',
-                padding: '24px', width: '340px', display: 'flex', flexDirection: 'column', gap: '14px',
-            }}>
-                <h2 style={{ margin: 0, color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>Delete Workspace</h2>
-                <p style={{ margin: 0, color: color.textMuted, fontSize: '13px', lineHeight: 1.5 }}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
+            <div className="bg-modal border border-stroke rounded-md p-6 w-[340px] flex flex-col gap-3.5">
+                <h2 className="m-0 text-zinc-900 text-[15px] font-semibold">Delete Workspace</h2>
+                <p className="m-0 text-zinc-500 text-[13px] leading-normal">
                     Delete{' '}
-                    <span style={{ color: color.textSecondary, fontFamily: '"JetBrains Mono", monospace', fontSize: '12px' }}>{workspace.name}</span>
+                    <span className="text-zinc-700 font-mono text-[12px]">{workspace.name}</span>
                     {' '}? Projects in this workspace will become unassigned.
                 </p>
-                {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
-                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                    <button type="button" onClick={onClose} disabled={loading} style={cancelBtnStyle}>Cancel</button>
+                {error && <span className="text-danger text-[12px]">{error}</span>}
+                <div className="flex gap-2 justify-end">
+                    <button type="button" onClick={onClose} disabled={loading} className={cancelBtnClass}>Cancel</button>
                     <button
                         type="button"
                         disabled={loading}
                         onClick={handleDelete}
-                        style={{
-                            background: '#da3633', border: `1px solid ${color.danger}`,
-                            borderRadius: '6px', color: '#fff', fontSize: '12px', padding: '6px 14px', cursor: 'pointer',
-                        }}
+                        className="bg-[#da3633] border border-danger rounded text-white text-[12px] py-1.5 px-3.5 cursor-pointer"
                     >
                         {loading ? 'Deleting…' : 'Delete'}
                     </button>

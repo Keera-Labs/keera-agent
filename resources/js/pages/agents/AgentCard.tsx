@@ -20,13 +20,7 @@ function CardIconButton({
             type="button"
             title={title}
             onClick={e => { e.stopPropagation(); onClick(e) }}
-            style={{
-                background: 'transparent', border: `1px solid ${color.stroke}`,
-                color: color.textMuted, cursor: 'pointer',
-                width: '30px', height: '30px', borderRadius: '8px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexShrink: 0, transition: 'color 0.1s, background 0.1s, border-color 0.1s',
-            }}
+            className="bg-transparent border border-stroke text-zinc-500 cursor-pointer w-[30px] h-[30px] rounded-md flex items-center justify-center shrink-0 transition-[color,background,border-color] duration-100"
             onMouseEnter={e => { e.currentTarget.style.color = hoverColor; e.currentTarget.style.borderColor = hoverColor; e.currentTarget.style.background = color.bgCanvas }}
             onMouseLeave={e => { e.currentTarget.style.color = color.textMuted; e.currentTarget.style.borderColor = color.stroke; e.currentTarget.style.background = 'transparent' }}
         >
@@ -42,13 +36,11 @@ function StatusPill({ running }: { running: boolean }) {
         ? { bg: '#e7f6ec', fg: '#16a34a', label: 'Active' }
         : { bg: color.warningSubtle, fg: color.warningBright, label: 'Waiting' }
     return (
-        <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: '6px',
-            background: tone.bg, color: tone.fg,
-            fontSize: '12px', fontWeight: 600,
-            padding: '4px 10px', borderRadius: '999px', flexShrink: 0,
-        }}>
-            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: tone.fg }} />
+        <span
+            className="inline-flex items-center gap-1.5 text-[12px] font-semibold py-1 px-2.5 rounded-full shrink-0"
+            style={{ background: tone.bg, color: tone.fg }}
+        >
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: tone.fg }} />
             {tone.label}
         </span>
     )
@@ -59,18 +51,11 @@ function StatusPill({ running }: { running: boolean }) {
 function Stat({ label, value }: { label: string; value: string }) {
     const isPlaceholder = value === PLACEHOLDER
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
-            <span style={{
-                fontSize: '10px', fontWeight: 600, textTransform: 'uppercase',
-                letterSpacing: '0.07em', color: color.textFaint,
-            }}>
+        <div className="flex flex-col gap-[3px] min-w-0">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.07em] text-zinc-400">
                 {label}
             </span>
-            <span style={{
-                fontSize: '13px', fontFamily: '"JetBrains Mono", monospace',
-                color: isPlaceholder ? color.textFaint : color.textPrimary,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
+            <span className={`text-[13px] font-mono truncate ${isPlaceholder ? 'text-zinc-400' : 'text-zinc-900'}`}>
                 {value}
             </span>
         </div>
@@ -99,35 +84,23 @@ export function AgentCard({
     onRestart: () => void
     onAdopt: () => void
 }) {
-    const divider = { height: '1px', background: color.stroke, border: 'none', margin: 0 }
+    const dividerClass = 'h-px bg-stroke border-0 m-0'
 
     return (
-        <article style={{
-            display: 'flex', flexDirection: 'column', gap: '16px',
-            background: color.bgSurface, border: `1px solid ${color.stroke}`,
-            borderRadius: '16px', padding: '22px 24px',
-        }}>
+        <article className="flex flex-col gap-4 bg-surface border border-stroke rounded-[16px] py-[22px] px-6">
             {/* Header: avatar + name/role + status */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '13px' }}>
-                <div style={{
-                    width: '46px', height: '46px', borderRadius: '12px', flexShrink: 0,
-                    background: agentAvatarColor(agent),
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '15px', fontWeight: 700, color: '#fff', letterSpacing: '0.02em',
-                }}>
+            <div className="flex items-center gap-[13px]">
+                <div
+                    className="w-[46px] h-[46px] rounded-xl shrink-0 flex items-center justify-center text-[15px] font-bold text-white tracking-[0.02em]"
+                    style={{ background: agentAvatarColor(agent) }}
+                >
                     {agentInitials(agent.name)}
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{
-                        fontSize: '16px', fontWeight: 700, color: color.textPrimary,
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
+                <div className="flex-1 min-w-0">
+                    <div className="text-[16px] font-bold text-zinc-900 truncate">
                         {agent.name}
                     </div>
-                    <div style={{
-                        fontSize: '13px', color: color.textMuted, marginTop: '1px',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
+                    <div className="text-[13px] text-zinc-500 mt-px truncate">
                         {agentRoleLabel(agent)}
                     </div>
                 </div>
@@ -135,27 +108,24 @@ export function AgentCard({
             </div>
 
             {/* Status / description line */}
-            <p style={{
-                margin: 0, fontSize: '13.5px', lineHeight: 1.55,
-                color: statusLine ? color.textSecondary : color.textFaint,
-            }}>
+            <p className={`m-0 text-[13.5px] leading-[1.55] ${statusLine ? 'text-zinc-700' : 'text-zinc-400'}`}>
                 {statusLine ?? 'No status reported.'}
             </p>
 
-            <hr style={divider} />
+            <hr className={dividerClass} />
 
             {/* Stats: RUNTIME · MODEL / BRANCH · USAGE */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', rowGap: '16px', columnGap: '16px' }}>
+            <div className="grid grid-cols-2 gap-4">
                 <Stat label="Runtime" value={stats.runtime} />
                 <Stat label="Model" value={stats.model} />
                 <Stat label="Branch" value={stats.branch} />
                 <Stat label="Usage" value={stats.usage} />
             </div>
 
-            <hr style={divider} />
+            <hr className={dividerClass} />
 
             {/* Footer: action icons + Open link */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="flex items-center gap-2">
                 <CardIconButton
                     title={running ? 'Restart agent' : 'Start agent'}
                     hoverColor="#ca8a04"
@@ -170,15 +140,7 @@ export function AgentCard({
                         <button
                             type="button"
                             title="Edit agent"
-                            style={{
-                                background: 'transparent', border: `1px solid ${color.stroke}`,
-                                color: color.textMuted, cursor: 'pointer',
-                                width: '30px', height: '30px', borderRadius: '8px',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                flexShrink: 0, transition: 'color 0.1s, background 0.1s, border-color 0.1s',
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.color = color.textPrimary; e.currentTarget.style.borderColor = color.textPrimary; e.currentTarget.style.background = color.bgCanvas }}
-                            onMouseLeave={e => { e.currentTarget.style.color = color.textMuted; e.currentTarget.style.borderColor = color.stroke; e.currentTarget.style.background = 'transparent' }}
+                            className="bg-transparent border border-stroke text-zinc-500 cursor-pointer w-[30px] h-[30px] rounded-md flex items-center justify-center shrink-0 transition-[color,background,border-color] duration-100 hover:text-zinc-900 hover:border-zinc-900 hover:bg-canvas"
                         >
                             <CircleDot size={14}/>
                         </button>
@@ -196,14 +158,7 @@ export function AgentCard({
                 <button
                     type="button"
                     onClick={onOpen}
-                    style={{
-                        marginLeft: 'auto', background: 'transparent', border: 'none',
-                        color: color.accentMuted, cursor: 'pointer',
-                        fontSize: '13.5px', fontWeight: 600,
-                        display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 2px',
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.opacity = '0.7')}
-                    onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+                    className="ml-auto bg-transparent border-0 text-blue-600 cursor-pointer text-[13.5px] font-semibold flex items-center gap-[5px] py-1 px-0.5 hover:opacity-70"
                 >
                     Open
                     <ArrowRight size={14}/>

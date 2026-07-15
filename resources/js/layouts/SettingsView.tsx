@@ -40,33 +40,13 @@ const AGENT_TYPE_COLORS: Record<string, string> = {
 
 // ─── Shared styles ────────────────────────────────────────────────────────────
 
-const labelStyle: React.CSSProperties = {
-    color: color.textMuted, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em',
-}
-const inputStyle: React.CSSProperties = {
-    background: color.bgBase, border: `1px solid ${color.borderMuted}`, borderRadius: '6px',
-    color: color.textPrimary, fontSize: '13px', padding: '6px 10px',
-    fontFamily: '"JetBrains Mono", monospace', outline: 'none',
-}
-const cancelBtnStyle: React.CSSProperties = {
-    background: 'transparent', border: `1px solid ${color.borderMuted}`, borderRadius: '6px',
-    color: color.textMuted, fontSize: '12px', padding: '6px 14px', cursor: 'pointer',
-}
-const submitBtnStyle: React.CSSProperties = {
-    background: color.successEmphasis, border: `1px solid ${color.successBorder}`, borderRadius: '6px',
-    color: '#fff', fontSize: '12px', padding: '6px 14px', cursor: 'pointer',
-}
-const flagRowStyle: React.CSSProperties = {
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    padding: '6px 10px', borderRadius: '6px',
-    background: color.bgCanvas, border: `1px solid ${color.borderMuted}`, cursor: 'pointer',
-}
-const toggleStyle = (on: boolean): React.CSSProperties => ({
-    width: '32px', height: '18px', borderRadius: '9px',
-    background: on ? color.accent : color.borderMuted,
-    border: 'none', cursor: 'pointer', position: 'relative',
-    flexShrink: 0, transition: 'background 0.15s',
-})
+const labelClass = 'text-zinc-500 text-[11px] uppercase tracking-[0.05em]'
+const inputClass = 'bg-canvas border border-stroke rounded text-zinc-900 text-[13px] py-1.5 px-2.5 font-mono outline-none'
+const cancelBtnClass = 'bg-transparent border border-stroke rounded text-zinc-500 text-[12px] py-1.5 px-3.5 cursor-pointer'
+const submitBtnClass = 'bg-success border border-success rounded text-white text-[12px] py-1.5 px-3.5 cursor-pointer'
+const flagRowClass = 'flex items-center justify-between py-1.5 px-2.5 rounded bg-canvas border border-stroke cursor-pointer'
+const toggleClass = (on: boolean) =>
+    `w-8 h-[18px] rounded-[9px] border-none cursor-pointer relative shrink-0 transition-colors duration-150 ${on ? 'bg-accent' : 'bg-stroke'}`
 
 // ─── TagInput ─────────────────────────────────────────────────────────────────
 
@@ -98,31 +78,22 @@ function TagInput({
     return (
         <div
             onClick={() => inputRef.current?.focus()}
-            style={{
-                display: 'flex', flexWrap: 'wrap', gap: '5px', alignItems: 'center',
-                background: color.bgBase, border: `1px solid ${color.borderMuted}`, borderRadius: '6px',
-                padding: '6px 8px', minHeight: '38px', cursor: 'text',
-                opacity: disabled ? 0.5 : 1,
-            }}
+            className={`flex flex-wrap gap-[5px] items-center bg-canvas border border-stroke rounded py-1.5 px-2 min-h-[38px] cursor-text ${disabled ? 'opacity-50' : 'opacity-100'}`}
         >
             {tags.map((tag, i) => (
-                <span key={i} style={{
-                    display: 'inline-flex', alignItems: 'center', gap: '4px',
-                    background: tagColor + '22', border: `1px solid ${tagColor}55`,
-                    borderRadius: '4px', padding: '2px 6px',
-                    fontFamily: '"JetBrains Mono", monospace', fontSize: '11px',
-                    color: tagColor, lineHeight: '1.4',
-                }}>
+                <span key={i}
+                    className="inline-flex items-center gap-1 rounded-sm py-0.5 px-1.5 font-mono text-[11px] leading-[1.4]"
+                    style={{
+                        background: tagColor + '22', border: `1px solid ${tagColor}55`,
+                        color: tagColor,
+                    }}>
                     {tag}
                     {!disabled && (
                         <button
                             type="button"
                             onClick={e => { e.stopPropagation(); onChange(tags.filter((_, j) => j !== i)) }}
-                            style={{
-                                background: 'none', border: 'none', cursor: 'pointer',
-                                color: tagColor, padding: '0', lineHeight: 1, fontSize: '12px',
-                                display: 'flex', alignItems: 'center', opacity: 0.7,
-                            }}
+                            className="bg-transparent border-none cursor-pointer p-0 leading-none text-[12px] flex items-center opacity-70"
+                            style={{ color: tagColor }}
                         >×</button>
                     )}
                 </span>
@@ -135,11 +106,7 @@ function TagInput({
                     onKeyDown={handleKeyDown}
                     onBlur={() => { if (input.trim()) addTag(input) }}
                     placeholder={tags.length === 0 ? placeholder : ''}
-                    style={{
-                        background: 'none', border: 'none', outline: 'none', padding: '2px 0',
-                        fontFamily: '"JetBrains Mono", monospace', fontSize: '11px',
-                        color: color.textPrimary, minWidth: '120px', flex: 1,
-                    }}
+                    className="bg-transparent border-none outline-none py-0.5 px-0 font-mono text-[11px] text-zinc-900 min-w-[120px] flex-1"
                 />
             )}
         </div>
@@ -227,25 +194,25 @@ function TemplatesTab() {
     const showEditor = isNew || selected !== null
 
     return (
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        <div className="flex-1 flex overflow-hidden">
             {/* Left list */}
-            <div style={{ width: '220px', flexShrink: 0, borderRight: `1px solid ${color.border}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                <div style={{ padding: '10px', borderBottom: `1px solid ${color.border}`, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <button onClick={startNew} style={{ ...submitBtnStyle, width: '100%', textAlign: 'center' as const, padding: '6px 0' }}>
+            <div className="w-[220px] shrink-0 border-r border-stroke flex flex-col overflow-hidden">
+                <div className="p-2.5 border-b border-stroke flex flex-col gap-1.5">
+                    <button onClick={startNew} className={`${submitBtnClass} w-full text-center py-1.5 px-0`}>
                         + New Template
                     </button>
                     <button
                         onClick={syncFromDefaults}
                         disabled={syncing}
                         title="Re-pull code defaults into the built-in templates, overwriting manual edits"
-                        style={{ ...cancelBtnStyle, width: '100%', textAlign: 'center' as const, padding: '6px 0', opacity: syncing ? 0.6 : 1 }}
+                        className={`${cancelBtnClass} w-full text-center py-1.5 px-0 ${syncing ? 'opacity-60' : 'opacity-100'}`}
                     >
                         {syncing ? 'Syncing…' : 'Sync from defaults'}
                     </button>
                 </div>
-                <div style={{ flex: 1, overflowY: 'auto' }}>
+                <div className="flex-1 overflow-y-auto">
                     {loading && (
-                        <div style={{ padding: '12px 16px', color: color.textFaint, fontSize: '12px' }}>Loading…</div>
+                        <div className="py-3 px-4 text-zinc-400 text-[12px]">Loading…</div>
                     )}
                     {templates.map(tpl => {
                         const active = !isNew && selected?.id === tpl.id
@@ -253,19 +220,15 @@ function TemplatesTab() {
                             <button
                                 key={tpl.id}
                                 onClick={() => loadTemplate(tpl)}
-                                style={{
-                                    width: '100%', textAlign: 'left' as const, background: active ? color.bgCanvas : 'transparent',
-                                    border: 'none', borderLeft: `2px solid ${active ? color.accent : 'transparent'}`,
-                                    padding: '9px 12px', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '3px',
-                                }}
+                                className={`w-full text-left border-l-2 py-[9px] px-3 cursor-pointer flex flex-col gap-[3px] ${active ? 'bg-canvas border-accent' : 'bg-transparent border-transparent'}`}
                             >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <span style={{ color: color.textPrimary, fontSize: '12px', fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-zinc-900 text-[12px] font-medium flex-1 truncate">
                                         {tpl.name}
                                     </span>
-                                    {tpl.is_builtin && <span style={{ color: color.textFaint, fontSize: '9px', letterSpacing: '0.03em' }}>built-in</span>}
+                                    {tpl.is_builtin && <span className="text-zinc-400 text-[9px] tracking-[0.03em]">built-in</span>}
                                 </div>
-                                <span style={{ color: AGENT_TYPE_COLORS[tpl.agent_type] ?? color.textFaint, fontSize: '10px' }}>
+                                <span className="text-[10px]" style={{ color: AGENT_TYPE_COLORS[tpl.agent_type] ?? color.textFaint }}>
                                     {AGENT_TYPE_LABELS[tpl.agent_type] ?? tpl.agent_type}
                                 </span>
                             </button>
@@ -276,114 +239,109 @@ function TemplatesTab() {
 
             {/* Right editor */}
             {showEditor ? (
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <div className="flex-1 flex flex-col overflow-hidden">
                     {selected?.is_builtin && (
-                        <div style={{ padding: '7px 16px', background: color.bgCanvas, borderBottom: `1px solid ${color.border}`, color: color.textMuted, fontSize: '11px' }}>
+                        <div className="py-[7px] px-4 bg-canvas border-b border-stroke text-zinc-500 text-[11px]">
                             Built-in template — your edits are saved and persist across restarts. It can’t be deleted.
                         </div>
                     )}
-                    <div style={{ flex: 1, overflowY: 'auto', padding: '18px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                        {formError && <span style={{ color: color.danger, fontSize: '12px' }}>{formError}</span>}
+                    <div className="flex-1 overflow-y-auto py-[18px] px-6 flex flex-col gap-3.5">
+                        {formError && <span className="text-danger text-[12px]">{formError}</span>}
 
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                            <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                <span style={labelStyle}>Name *</span>
+                        <div className="flex gap-2.5">
+                            <label className="flex-1 flex flex-col gap-1">
+                                <span className={labelClass}>Name *</span>
                                 <input value={tplName} disabled={!canEdit} onChange={e => setTplName(e.target.value)}
-                                    style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' as const, opacity: canEdit ? 1 : 0.55 }} />
+                                    className={`${inputClass} w-full box-border ${canEdit ? 'opacity-100' : 'opacity-55'}`} />
                             </label>
-                            <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                <span style={labelStyle}>Type</span>
+                            <label className="flex-1 flex flex-col gap-1">
+                                <span className={labelClass}>Type</span>
                                 <select value={tplType} disabled={!canEdit} onChange={e => setTplType(e.target.value)}
-                                    style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' as const, opacity: canEdit ? 1 : 0.55 }}>
+                                    className={`${inputClass} w-full box-border ${canEdit ? 'opacity-100' : 'opacity-55'}`}>
                                     {Object.entries(AGENT_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                                 </select>
                             </label>
                         </div>
 
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <span style={labelStyle}>Description</span>
+                        <label className="flex flex-col gap-1">
+                            <span className={labelClass}>Description</span>
                             <input value={tplDesc} disabled={!canEdit} onChange={e => setTplDesc(e.target.value)}
                                 placeholder="Short description of this template's role…"
-                                style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' as const, opacity: canEdit ? 1 : 0.55 }} />
+                                className={`${inputClass} w-full box-border ${canEdit ? 'opacity-100' : 'opacity-55'}`} />
                         </label>
 
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <span style={labelStyle}>Model</span>
+                        <label className="flex flex-col gap-1">
+                            <span className={labelClass}>Model</span>
                             <select value={tplModel} disabled={!canEdit} onChange={e => setTplModel(e.target.value)}
-                                style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' as const, opacity: canEdit ? 1 : 0.55 }}>
+                                className={`${inputClass} w-full box-border ${canEdit ? 'opacity-100' : 'opacity-55'}`}>
                                 {MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                             </select>
                         </label>
 
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <span style={labelStyle}>System Prompt</span>
+                        <label className="flex flex-col gap-1">
+                            <span className={labelClass}>System Prompt</span>
                             <textarea value={tplPrompt} disabled={!canEdit} onChange={e => setTplPrompt(e.target.value)}
                                 placeholder="Instructions passed to Claude when an agent using this template starts…"
                                 rows={9}
-                                style={{
-                                    ...inputStyle, width: '100%', boxSizing: 'border-box' as const,
-                                    resize: 'vertical' as const, lineHeight: 1.6,
-                                    fontFamily: '"JetBrains Mono", monospace', fontSize: '11px',
-                                    opacity: canEdit ? 1 : 0.55,
-                                }} />
+                                className={`${inputClass} w-full box-border resize-y leading-[1.6] font-mono text-[11px] ${canEdit ? 'opacity-100' : 'opacity-55'}`} />
                         </label>
 
                         {canEdit && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                <span style={labelStyle}>Launch Flags</span>
+                            <div className="flex flex-col gap-1.5">
+                                <span className={labelClass}>Launch Flags</span>
                                 {([
                                     { key: 'dangerously_skip_permissions' as const, label: 'Skip Permissions', hint: '--dangerously-skip-permissions — no prompts' },
                                     { key: 'verbose' as const, label: 'Verbose', hint: '--verbose — detailed output' },
                                 ] as const).map(({ key, label, hint }) => (
-                                    <div key={key} style={flagRowStyle} onClick={() => setTplFlags(f => ({ ...f, [key]: !f[key] }))}>
+                                    <div key={key} className={flagRowClass} onClick={() => setTplFlags(f => ({ ...f, [key]: !f[key] }))}>
                                         <div>
-                                            <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>{label}</div>
-                                            <div style={{ fontSize: '10px', color: color.textFaint }}>{hint}</div>
+                                            <div className="text-[12px] font-medium text-zinc-700">{label}</div>
+                                            <div className="text-[10px] text-zinc-400">{hint}</div>
                                         </div>
-                                        <button type="button" style={toggleStyle(!!tplFlags[key])} onClick={e => e.stopPropagation()}>
-                                            <span style={{ position: 'absolute', top: '3px', left: tplFlags[key] ? '17px' : '3px', width: '12px', height: '12px', borderRadius: '50%', background: '#fff', transition: 'left 0.15s' }} />
+                                        <button type="button" className={toggleClass(!!tplFlags[key])} onClick={e => e.stopPropagation()}>
+                                            <span className={`absolute top-[3px] w-3 h-3 rounded-full bg-white transition-[left] duration-150 ${tplFlags[key] ? 'left-[17px]' : 'left-[3px]'}`} />
                                         </button>
                                     </div>
                                 ))}
-                                <div style={flagRowStyle} onClick={() => setTplPlanMode(p => !p)}>
+                                <div className={flagRowClass} onClick={() => setTplPlanMode(p => !p)}>
                                     <div>
-                                        <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Plan Mode</div>
-                                        <div style={{ fontSize: '10px', color: color.textFaint }}>Read-only — analyse and plan, never edit files</div>
+                                        <div className="text-[12px] font-medium text-zinc-700">Plan Mode</div>
+                                        <div className="text-[10px] text-zinc-400">Read-only — analyse and plan, never edit files</div>
                                     </div>
-                                    <button type="button" style={toggleStyle(tplPlanMode)} onClick={e => e.stopPropagation()}>
-                                        <span style={{ position: 'absolute', top: '3px', left: tplPlanMode ? '17px' : '3px', width: '12px', height: '12px', borderRadius: '50%', background: '#fff', transition: 'left 0.15s' }} />
+                                    <button type="button" className={toggleClass(tplPlanMode)} onClick={e => e.stopPropagation()}>
+                                        <span className={`absolute top-[3px] w-3 h-3 rounded-full bg-white transition-[left] duration-150 ${tplPlanMode ? 'left-[17px]' : 'left-[3px]'}`} />
                                     </button>
                                 </div>
-                                <div style={{ ...flagRowStyle, gap: '12px' }}>
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ fontSize: '12px', fontWeight: 500, color: color.textSecondary }}>Max Turns</div>
-                                        <div style={{ fontSize: '10px', color: color.textFaint }}>--max-turns N — limit conversation turns</div>
+                                <div className={`${flagRowClass} gap-3`}>
+                                    <div className="flex-1">
+                                        <div className="text-[12px] font-medium text-zinc-700">Max Turns</div>
+                                        <div className="text-[10px] text-zinc-400">--max-turns N — limit conversation turns</div>
                                     </div>
                                     <input type="number" min={1} max={500} placeholder="∞"
                                         value={tplFlags.max_turns ?? ''}
                                         onChange={e => setTplFlags(f => ({ ...f, max_turns: e.target.value ? parseInt(e.target.value, 10) : null }))}
                                         onClick={e => e.stopPropagation()}
-                                        style={{ ...inputStyle, width: '72px', textAlign: 'center' as const, padding: '4px 8px' }} />
+                                        className={`${inputClass} w-[72px] text-center py-1 px-2`} />
                                 </div>
                             </div>
                         )}
                     </div>
                     {canEdit && (
-                        <div style={{ padding: '12px 24px', borderTop: `1px solid ${color.border}`, display: 'flex', gap: '8px', justifyContent: 'flex-end', flexShrink: 0 }}>
+                        <div className="py-3 px-6 border-t border-stroke flex gap-2 justify-end shrink-0">
                             {canDelete && (
-                                <button onClick={deleteTemplate} style={{ ...cancelBtnStyle, color: color.danger, borderColor: color.danger }}>
+                                <button onClick={deleteTemplate} className={`${cancelBtnClass} text-danger border-danger`}>
                                     Delete
                                 </button>
                             )}
-                            <button onClick={saveTemplate} disabled={saving} style={{ ...submitBtnStyle, opacity: saving ? 0.6 : 1 }}>
+                            <button onClick={saveTemplate} disabled={saving} className={`${submitBtnClass} ${saving ? 'opacity-60' : 'opacity-100'}`}>
                                 {saving ? 'Saving…' : isNew ? 'Create Template' : 'Save Changes'}
                             </button>
                         </div>
                     )}
                 </div>
             ) : (
-                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ color: color.textFaint, fontSize: '13px' }}>Select a template to view, or create a new one</span>
+                <div className="flex-1 flex items-center justify-center">
+                    <span className="text-zinc-400 text-[13px]">Select a template to view, or create a new one</span>
                 </div>
             )}
         </div>
@@ -425,19 +383,19 @@ function DefaultPermissionsTab() {
     }
 
     return (
-        <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px' }}>
-            <div style={{ maxWidth: '560px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+        <div className="flex-1 overflow-y-auto py-7 px-8">
+            <div className="max-w-[560px] flex flex-col gap-[18px]">
                 <div>
-                    <h3 style={{ margin: '0 0 6px', color: color.textPrimary, fontSize: '14px', fontWeight: 600 }}>Default Permissions</h3>
-                    <p style={{ margin: 0, color: color.textMuted, fontSize: '12px', lineHeight: 1.6 }}>
+                    <h3 className="mt-0 mx-0 mb-1.5 text-zinc-900 text-[14px] font-semibold">Default Permissions</h3>
+                    <p className="m-0 text-zinc-500 text-[12px] leading-[1.6]">
                         Allow/deny rules applied globally to all projects and agents. Changing these syncs to every project and agent in the database.
                     </p>
                 </div>
 
-                {error && <span style={{ color: color.danger, fontSize: '12px' }}>{error}</span>}
+                {error && <span className="text-danger text-[12px]">{error}</span>}
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <span style={labelStyle}>Allow</span>
+                <div className="flex flex-col gap-1">
+                    <span className={labelClass}>Allow</span>
                     <TagInput
                         tags={allow}
                         onChange={setAllow}
@@ -447,8 +405,8 @@ function DefaultPermissionsTab() {
                     />
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <span style={labelStyle}>Deny</span>
+                <div className="flex flex-col gap-1">
+                    <span className={labelClass}>Deny</span>
                     <TagInput
                         tags={deny}
                         onChange={setDeny}
@@ -458,11 +416,11 @@ function DefaultPermissionsTab() {
                     />
                 </div>
 
-                <p style={{ margin: 0, color: color.textFaint, fontSize: '11px', lineHeight: 1.6 }}>
+                <p className="m-0 text-zinc-400 text-[11px] leading-[1.6]">
                     Rules follow Claude Code syntax, e.g.{' '}
-                    <code style={{ fontFamily: 'monospace', color: color.accent }}>Bash(*)</code>,{' '}
-                    <code style={{ fontFamily: 'monospace', color: color.accent }}>Bash(npm run *)</code>,{' '}
-                    <code style={{ fontFamily: 'monospace', color: color.accent }}>Read</code>.{' '}
+                    <code className="font-[monospace] text-accent">Bash(*)</code>,{' '}
+                    <code className="font-[monospace] text-accent">Bash(npm run *)</code>,{' '}
+                    <code className="font-[monospace] text-accent">Read</code>.{' '}
                     Press Enter to add a rule. Leave both empty to rely on interactive prompts.
                 </p>
 
@@ -470,7 +428,7 @@ function DefaultPermissionsTab() {
                     <button
                         onClick={save}
                         disabled={fetching || saving}
-                        style={{ ...submitBtnStyle, opacity: (fetching || saving) ? 0.6 : 1, minWidth: '140px' }}
+                        className={`${submitBtnClass} min-w-[140px] ${(fetching || saving) ? 'opacity-60' : 'opacity-100'}`}
                     >
                         {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save Permissions'}
                     </button>
@@ -487,27 +445,18 @@ type SettingsTab = 'templates' | 'permissions' | 'plugins'
 export default function SettingsView() {
     const [tab, setTab] = useState<SettingsTab>('templates')
 
-    const tabBtnStyle = (t: SettingsTab): React.CSSProperties => ({
-        background: tab === t ? color.bgCanvas : 'transparent',
-        border: `1px solid ${tab === t ? color.borderMuted : 'transparent'}`,
-        borderRadius: '6px',
-        color: tab === t ? color.textPrimary : color.textMuted,
-        fontSize: '12px', padding: '4px 16px', cursor: 'pointer',
-    })
+    const tabBtnClass = (t: SettingsTab) =>
+        `rounded text-[12px] py-1 px-4 cursor-pointer ${tab === t ? 'bg-canvas border border-stroke text-zinc-900' : 'bg-transparent border border-transparent text-zinc-500'}`
 
     return (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: color.bgSurface }}>
+        <div className="flex-1 flex flex-col overflow-hidden bg-surface">
             {/* Settings header */}
-            <div style={{
-                padding: '14px 24px', borderBottom: `1px solid ${color.border}`,
-                display: 'flex', alignItems: 'center', gap: '16px', flexShrink: 0,
-                background: color.bgCanvas,
-            }}>
-                <span style={{ color: color.textPrimary, fontSize: '15px', fontWeight: 600 }}>Settings</span>
-                <div style={{ display: 'flex', gap: '4px' }}>
-                    <button style={tabBtnStyle('templates')} onClick={() => setTab('templates')}>Templates</button>
-                    <button style={tabBtnStyle('permissions')} onClick={() => setTab('permissions')}>Default Permissions</button>
-                    <button style={tabBtnStyle('plugins')} onClick={() => setTab('plugins')}>Plugins</button>
+            <div className="py-3.5 px-6 border-b border-stroke flex items-center gap-4 shrink-0 bg-canvas">
+                <span className="text-zinc-900 text-[15px] font-semibold">Settings</span>
+                <div className="flex gap-1">
+                    <button className={tabBtnClass('templates')} onClick={() => setTab('templates')}>Templates</button>
+                    <button className={tabBtnClass('permissions')} onClick={() => setTab('permissions')}>Default Permissions</button>
+                    <button className={tabBtnClass('plugins')} onClick={() => setTab('plugins')}>Plugins</button>
                 </div>
             </div>
 

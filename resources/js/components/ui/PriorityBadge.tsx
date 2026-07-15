@@ -1,20 +1,13 @@
-import { color } from '@/tokens'
-
-const PRIORITY_STYLES: Record<string, { bg: string; color: string; border: string }> = {
-    low:    { bg: color.bgSurface, color: color.textMuted, border: color.borderMuted },
-    medium: { bg: color.priorityMediumBg, color: color.warning, border: color.warningSubtle },
-    high:   { bg: color.dangerCanvas, color: color.danger, border: color.dangerSubtle },
+const PRIORITY_CLASSES: Record<string, string> = {
+    low:    'bg-surface text-zinc-500 border-stroke',
+    medium: 'bg-amber-50 text-amber-700 border-amber-100',
+    high:   'bg-red-50 text-danger border-red-50',
 }
 
 export function PriorityBadge({ priority }: { priority: string }) {
-    const s = PRIORITY_STYLES[priority] ?? PRIORITY_STYLES.medium
+    const c = PRIORITY_CLASSES[priority] ?? PRIORITY_CLASSES.medium
     return (
-        <span style={{
-            fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em',
-            padding: '1px 6px', borderRadius: '10px',
-            background: s.bg, border: `1px solid ${s.border}`, color: s.color,
-            textTransform: 'uppercase', flexShrink: 0,
-        }}>
+        <span className={`text-[10px] font-semibold tracking-[0.04em] py-px px-1.5 rounded-lg border uppercase shrink-0 ${c}`}>
             {priority}
         </span>
     )

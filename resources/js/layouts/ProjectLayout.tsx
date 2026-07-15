@@ -2,7 +2,6 @@ import React from 'react'
 import { router, usePage } from '@inertiajs/react'
 import { useAppLayout } from './context/AppLayoutContext'
 import AgentsIndex from '@/pages/agents/Index'
-import { color } from '@/tokens'
 import type { ProjectView } from './sidebar/Sidebar'
 import { DotsIndicator } from './sidebar/Project'
 import { useProjectStore } from '@/stores/projectStore'
@@ -14,16 +13,16 @@ function ClaudeStatusBadge({ status }: { status?: 'running' | 'done' }) {
     if (!status) return null
     if (status === 'running') {
         return (
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '8px' }}>
+            <span className="flex items-center gap-1.5 ml-2">
                 <DotsIndicator />
-                <span style={{ color: color.warning, fontSize: '11px', fontFamily: '"JetBrains Mono", monospace' }}>running</span>
+                <span className="text-amber-700 text-[11px] font-mono">running</span>
             </span>
         )
     }
     return (
-        <span style={{ display: 'flex', alignItems: 'center', gap: '5px', marginLeft: '6px' }}>
-            <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: color.success }} />
-            <span style={{ color: color.success, fontSize: '11px', fontFamily: '"JetBrains Mono", monospace' }}>done</span>
+        <span className="flex items-center gap-[5px] ml-1.5">
+            <span className="w-[7px] h-[7px] rounded-full bg-success" />
+            <span className="text-success text-[11px] font-mono">done</span>
         </span>
     )
 }
@@ -61,10 +60,10 @@ export function ProjectLayout({ children }: { children: React.ReactNode }) {
     const activeView: ProjectView = isTasksPage ? 'tasks' : isConfigPage ? 'commands' : projectView
 
     return (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div className="flex-1 flex flex-col overflow-hidden">
 
             {/* ── Nav tabs: Dashboard / Configurations / Tasks + Claude status badge ── */}
-            <div className="flex items-stretch px-2 bg-white shrink-0" style={{ borderBottom: `1px solid ${color.stroke}`, height: '40px' }}>
+            <div className="flex items-stretch px-2 bg-white shrink-0 border-b border-stroke h-10">
                 {([
                     { id: 'agents' as ProjectView, label: 'Dashboard' },
                     { id: 'commands' as ProjectView, label: 'Configurations' },
@@ -81,13 +80,7 @@ export function ProjectLayout({ children }: { children: React.ReactNode }) {
                                 setProjectView('agents')
                                 if (isTasksPage || isConfigPage) router.visit(`/${activeProject.slug}`)
                             }}
-                            className="bg-transparent border-none cursor-pointer px-4 h-full text-[13px] transition-colors duration-100 relative"
-                            style={{
-                                color: isActive ? color.textPrimary : color.textMuted,
-                                fontWeight: isActive ? 600 : 400,
-                                borderBottom: isActive ? `2px solid ${color.accent}` : '2px solid transparent',
-                                marginBottom: '-1px',
-                            }}
+                            className={`bg-transparent cursor-pointer px-4 h-full text-[13px] transition-colors duration-100 relative border-b-2 -mb-px ${isActive ? 'text-zinc-900 font-semibold border-accent' : 'text-zinc-500 font-normal border-transparent'}`}
                         >
                             {tab.label}
                         </button>
@@ -95,7 +88,7 @@ export function ProjectLayout({ children }: { children: React.ReactNode }) {
                 })}
                 {activeProject && (
                     <>
-                        <div className="my-2 mx-1" style={{ width: '1px', background: color.stroke }} />
+                        <div className="my-2 mx-1 w-px bg-stroke" />
                         <div className="flex items-center gap-1.5 px-2">
                             <ClaudeStatusBadge status={claudeStatus[activeProject.id]} />
                         </div>
@@ -104,9 +97,9 @@ export function ProjectLayout({ children }: { children: React.ReactNode }) {
 
                 {/* Global running indicator — far right */}
                 {runningCount > 0 && (
-                    <div className="flex items-center gap-2 pr-3" style={{ marginLeft: 'auto' }}>
+                    <div className="flex items-center gap-2 pr-3 ml-auto">
                         <DotsIndicator />
-                        <span style={{ color: color.warningBright, fontSize: '12.5px', fontWeight: 600, fontFamily: '"JetBrains Mono", monospace' }}>
+                        <span className="text-amber-600 text-[12.5px] font-semibold font-mono">
                             {runningCount} running
                         </span>
                     </div>
@@ -114,14 +107,14 @@ export function ProjectLayout({ children }: { children: React.ReactNode }) {
             </div>
 
             {/* ── Main content area: routes between views ── */}
-            <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+            <div className="flex-1 flex overflow-hidden">
 
                 {/* Agents view — always rendered to keep terminal sessions alive.
                     The wrapper stays mounted (display-toggled) so terminals never
                     unmount and blank out. It shows the overview when no agent is
                     drilled in; on the agent detail page it's hidden and only holds
                     the parked terminal containers (the page renders the live view). */}
-                <div style={{ flex: 1, overflow: 'hidden', display: activeView === 'agents' && !isAgentDetail ? 'flex' : 'none' }}>
+                <div className={`flex-1 overflow-hidden ${activeView === 'agents' && !isAgentDetail ? 'flex' : 'hidden'}`}>
                     <AgentsIndex />
                 </div>
 
@@ -131,10 +124,8 @@ export function ProjectLayout({ children }: { children: React.ReactNode }) {
 
                 {/* Empty state when no project is selected */}
                 {!activeProject && (
-                    <div style={{
-                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                        <span style={{ color: color.textFaint, fontSize: '13px' }}>No project selected</span>
+                    <div className="flex-1 flex items-center justify-center">
+                        <span className="text-zinc-400 text-[13px]">No project selected</span>
                     </div>
                 )}
 

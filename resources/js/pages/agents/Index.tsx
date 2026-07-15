@@ -26,7 +26,7 @@ export default function AgentsIndex() {
     const showTerminal = activeAgentId !== null
 
     return (
-        <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+        <div className="flex-1 overflow-hidden flex">
 
             {/* Project overview dashboard (shown when no agent is drilled into) */}
             {activeProject && !showTerminal && (
@@ -36,17 +36,14 @@ export default function AgentsIndex() {
             {/* Persistent, off-screen terminal holder. Container divs stay mounted
                 so xterm instances + WebSockets survive navigation; the agent detail
                 page re-parents the active term into its slot and parks it back here. */}
-            <div aria-hidden style={{
-                position: 'absolute', left: '-99999px', top: 0,
-                width: '900px', height: '600px', overflow: 'hidden', pointerEvents: 'none',
-            }}>
-                <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+            <div aria-hidden className="absolute left-[-99999px] top-0 w-[900px] h-[600px] overflow-hidden pointer-events-none">
+                <div className="relative w-full h-full">
                     {/* PM session containers (one per project) */}
                     {projects.map(project => (
                         <div
                             key={project.id}
                             ref={el => { containerRefs.current.set(project.id, el) }}
-                            style={{ position: 'absolute', inset: 0, padding: '8px', boxSizing: 'border-box' }}
+                            className="absolute inset-0 p-2 box-border"
                         />
                     ))}
                     {/* Agent session containers — current project's agents + any live elsewhere */}
@@ -59,7 +56,7 @@ export default function AgentsIndex() {
                             <div
                                 key={`agent-${id}`}
                                 ref={el => { agentContainerRefs.current.set(id, el) }}
-                                style={{ position: 'absolute', inset: 0, padding: '8px', boxSizing: 'border-box' }}
+                                className="absolute inset-0 p-2 box-border"
                             />
                         ))
                     })()}
