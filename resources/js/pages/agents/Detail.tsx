@@ -205,8 +205,10 @@ export default function AgentDetail() {
                     }}
                 />
 
-                {/* Terminal slot — the active agent's live xterm is re-parented here */}
-                <div ref={setSlot} className="flex-1 relative overflow-hidden p-2 box-border" />
+                {/* Terminal slot — the active agent's live xterm is re-parented here.
+                    bg-canvas matches XTERM_THEME.background exactly so the p-2 padding
+                    blends into the xterm canvas with no color seam. */}
+                <div ref={setSlot} className="flex-1 relative overflow-hidden bg-canvas p-2 box-border" />
             </div>
         </div>
     )

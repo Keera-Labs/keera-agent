@@ -286,8 +286,10 @@ export function CommandsPanel({
                             </div>
                         </div>
 
-                        {/* xterm containers — one per command, only the selected one visible */}
-                        <div className="flex-1 relative bg-[#0d1117] overflow-hidden">
+                        {/* xterm containers — one per command, only the selected one visible.
+                            bg-canvas matches XTERM_THEME.background exactly so each container's
+                            p-2 padding blends into the xterm canvas with no color seam. */}
+                        <div className="flex-1 relative bg-canvas overflow-hidden">
                             {commands.map(c => (
                                 <div
                                     key={c.id}
