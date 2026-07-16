@@ -9,7 +9,6 @@ from app.controllers import (
     agent_relay_controller,
     agent_template_controller,
     agent_trigger_controller,
-    ai_controller,
     broadcasting_controller,
     claude_hook_controller,
     command_controller,
@@ -114,9 +113,6 @@ router.post("/api/heartbeat/stop", heartbeat_controller.stop)
 
 # Settings page — before wildcard
 router.get("/settings", settings_controller.settings)
-
-# AI chat route — before wildcard
-router.post("/api/ai/chat", ai_controller.chat)
 
 # Broadcasting page and API — before wildcard
 router.get("/broadcasting", broadcasting_controller.broadcasting_page)
