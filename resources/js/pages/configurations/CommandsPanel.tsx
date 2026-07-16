@@ -287,7 +287,7 @@ export function CommandsPanel({
                         </div>
 
                         {/* xterm containers — one per command, only the selected one visible */}
-                        <div className="flex-1 relative bg-[#0d1117] overflow-hidden">
+                        <div className="flex-1 relative bg-canvas overflow-hidden">
                             {commands.map(c => (
                                 <div
                                     key={c.id}
