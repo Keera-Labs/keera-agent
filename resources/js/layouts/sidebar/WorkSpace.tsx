@@ -3,17 +3,16 @@ import { useAppLayout } from "@/layouts/context/AppLayoutContext"
 import { color } from "@/tokens"
 import { useEffect, useRef, useState } from "react"
 import { ChevronsUpDown, Check, Trash2, Plus } from "lucide-react"
+import AddWorkspaceModal from "@/components/AddWorkspaceModal"
 
 export function WorkspacePicker({
                                     selected,
                                     onSelect,
-                                    onCreateWorkspace,
                                 }: {
     selected: number | null
     onSelect: (id: number | null) => void
-    onCreateWorkspace: () => void
 }) {
-    const { handleWorkspaceDeleted } = useAppLayout()
+    const { handleWorkspaceDeleted, handleWorkspaceCreated } = useAppLayout()
     const { workspaces, destroy } = useWorkspaces()
     const [open, setOpen] = useState(false)
     const ref = useRef<HTMLDivElement>(null)
@@ -94,16 +93,18 @@ export function WorkspacePicker({
 
                     <div className="h-px bg-stroke my-1 mx-0"/>
 
-                    <button
-                        onClick={() => {
-                            setOpen(false)
-                            onCreateWorkspace()
-                        }}
-                        className="flex items-center gap-1.5 w-full py-[7px] px-3 bg-transparent border-0 cursor-pointer text-[12px] text-accent hover:bg-canvas"
-                    >
-                        <Plus size={10}/>
-                        New Workspace
-                    </button>
+                    <AddWorkspaceModal
+                        onCreated={handleWorkspaceCreated}
+                        trigger={
+                            <button
+                                onClick={() => setOpen(false)}
+                                className="flex items-center gap-1.5 w-full py-[7px] px-3 bg-transparent border-0 cursor-pointer text-[12px] text-accent hover:bg-canvas"
+                            >
+                                <Plus size={10}/>
+                                New Workspace
+                            </button>
+                        }
+                    />
                 </div>
             )}
         </div>

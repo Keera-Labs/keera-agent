@@ -36,7 +36,6 @@ export default function Sidebar({
                                     taskCount,
                                     activeId,
                                     claudeStatus,
-                                    onCreateWorkspace,
                                 }: {
     activeProject: Project | null
     projectView: ProjectView
@@ -44,7 +43,6 @@ export default function Sidebar({
     taskCount: number
     activeId: number | null
     claudeStatus: Record<number, "running" | "done">
-    onCreateWorkspace: () => void
 }) {
     const filterWorkspaceId = useWorkspaceStore(s => s.currentWorkspaceId)
     const setFilterWorkspaceId = useWorkspaceStore(s => s.setCurrentWorkspaceId)
@@ -62,7 +60,6 @@ export default function Sidebar({
             <WorkspacePicker
                 selected={filterWorkspaceId}
                 onSelect={setFilterWorkspaceId}
-                onCreateWorkspace={onCreateWorkspace}
             />
 
             {/* Scrollable middle */}
