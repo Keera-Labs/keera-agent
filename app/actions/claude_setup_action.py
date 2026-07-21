@@ -10,14 +10,18 @@ from app.utils.json_utils import atomic_write_json
 _STOP_PATH = "/api/claude-stopped"
 _START_PATH = "/api/claude-started"
 
+# Tools denied by default in every project's permissions block.
+_DEFAULT_DENIED_TOOLS = ["Agent"]
 
-class ClaudeHookAction:
-    """Upsert keera-managed Claude hooks into a directory's .claude/settings.json.
+
+class ClaudeSetupAction:
+    """Upsert keera-managed hooks and permissions into a directory's .claude/settings.json.
 
     Writes the Stop and UserPromptSubmit hooks, with URLs derived from the
-    configured app_url. All other settings keys are preserved and keera-managed
-    hook URLs are updated in place, so the write is idempotent. execute() returns
-    True only when the file actually changed.
+    configured app_url, and enforces the default permissions.deny policy. All
+    other settings keys are preserved and keera-managed entries are updated in
+    place, so the write is idempotent. execute() returns True only when the
+    file actually changed.
 
     MCP server registration is intentionally out of scope — that lives in
     .mcp.json via McpSettingWriteAction (the mcp:sync command).
@@ -31,7 +35,7 @@ class ClaudeHookAction:
 
     @staticmethod
     def prepare(directory: str):
-        return ClaudeHookAction(directory)
+        return ClaudeSetupAction(directory)
 
     def execute(self) -> bool:
         base_url = Config.get("fastapi.app_url")
@@ -54,6 +58,8 @@ class ClaudeHookAction:
             settings["defaultMode"] = "acceptEdits"
             changed = True
 
+        changed |= self._upsert_default_deny(settings.setdefault("permissions", {}))
+
         if changed:
             atomic_write_json(settings_path, settings)
             print(f"[keera] Claude settings updated in {self.directory}/.claude/settings.json")
@@ -71,6 +77,17 @@ class ClaudeHookAction:
             if isinstance(data, dict):
                 return data
         return {}
+
+    @staticmethod
+    def _upsert_default_deny(permissions: dict) -> bool:
+        """Ensure every default-denied tool is listed in permissions.deny. True if changed."""
+        deny: list = permissions.setdefault("deny", [])
+        changed = False
+        for tool in _DEFAULT_DENIED_TOOLS:
+            if tool not in deny:
+                deny.append(tool)
+                changed = True
+        return changed
 
     @staticmethod
     def _upsert_hook(hook_list: list, path: str, new_url: str) -> bool:

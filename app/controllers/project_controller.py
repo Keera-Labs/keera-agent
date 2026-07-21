@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from fastapi_startkit.masoniteorm.exceptions import ModelNotFoundException
 from fastapi_startkit.storage.storage import Storage
 
-from app.actions.claude_hook_action import ClaudeHookAction
+from app.actions.claude_setup_action import ClaudeSetupAction
 from app.actions.mcp_setting_write_action import McpSettingWriteAction
 from app.models.AgentMessage import AgentMessage
 from app.models.Project import Project
@@ -71,7 +71,7 @@ async def update(request: Request, project_id: int):
                 return _inertia_error(request, {"_": "Directory does not exist"}, 422)
             return JSONResponse({"error": "Directory does not exist"}, status_code=422)
         project.path = new_path
-        ClaudeHookAction.prepare(expanded).execute()
+        ClaudeSetupAction.prepare(expanded).execute()
         path_changed = True
 
     await project.save()
@@ -206,7 +206,7 @@ async def store(request: Request):
         }
     )
 
-    ClaudeHookAction.prepare(expanded_path).execute()
+    ClaudeSetupAction.prepare(expanded_path).execute()
     await McpSettingWriteAction.prepare(project.id).execute()
 
     # Create a default PM agent for every new project

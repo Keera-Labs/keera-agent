@@ -6,14 +6,17 @@ from fastapi_startkit.console.command import Command
 
 class ClaudeHookCommand(Command):
     """
-    Re-sync the Claude hooks into the app's own .claude/settings.json and every
-    project's, from the configured app_url.
+    Re-sync the Claude hooks and default permissions into the app's own
+    .claude/settings.json and every project's, from the configured app_url.
 
     claude:hook
     """
 
     name = "claude:hook"
-    description = "Re-sync Claude hooks in .claude/settings.json into the app and every project."
+    description = (
+        "Re-sync Claude hooks and default permissions in .claude/settings.json "
+        "into the app and every project."
+    )
 
     def handle(self):
         return asyncio.run(self.handle_async())
@@ -22,7 +25,7 @@ class ClaudeHookCommand(Command):
         from fastapi_startkit import Config
         from fastapi_startkit.application import app
 
-        from app.actions.claude_hook_action import ClaudeHookAction
+        from app.actions.claude_setup_action import ClaudeSetupAction
         from app.models.Project import Project
 
         self.line(
@@ -30,7 +33,7 @@ class ClaudeHookCommand(Command):
         )
 
         # The keera-agent app's own directory — this is what dist/build.sh relies on.
-        ClaudeHookAction.prepare(str(app().base_path)).execute()
+        ClaudeSetupAction.prepare(str(app().base_path)).execute()
 
         projects = await Project.all()
         updated = skipped = unchanged = 0
@@ -42,7 +45,7 @@ class ClaudeHookCommand(Command):
                 )
                 skipped += 1
                 continue
-            if ClaudeHookAction.prepare(expanded).execute():
+            if ClaudeSetupAction.prepare(expanded).execute():
                 self.line(f"<info>updated</info> {project.name} ({expanded})")
                 updated += 1
             else:
