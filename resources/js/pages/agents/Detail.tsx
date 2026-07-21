@@ -206,7 +206,7 @@ export default function AgentDetail() {
                 />
 
                 {/* Terminal slot — the active agent's live xterm is re-parented here */}
-                <div ref={setSlot} className="flex-1 relative overflow-hidden p-2 box-border" />
+                <div ref={setSlot} className="flex-1 relative overflow-hidden bg-canvas p-2 box-border" />
             </div>
         </div>
     )
