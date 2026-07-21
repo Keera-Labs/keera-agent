@@ -3,7 +3,7 @@ import type React from 'react'
 import { usePage } from '@inertiajs/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { FitAddon } from '@xterm/addon-fit'
-import type { Workspace, Task } from '@/types/type'
+import type { Task } from '@/types/type'
 import { useAgents, normalizeAgent } from '@/queries/agentQuery'
 import type { AgentTemplate } from '@/types/agent'
 import { makeTerminal } from '@/hooks/useTerminalSessions'
@@ -26,14 +26,10 @@ export interface AppLayoutContextValue {
     tasks: Task[]
 
     // ── Modal state ───────────────────────────────────────────────────────────
-    showWorkspaceModal: boolean
-    setShowWorkspaceModal: (v: boolean) => void
     showGlobalSettings: boolean
     setShowGlobalSettings: (v: boolean) => void
     showDefaultPermissions: boolean
     setShowDefaultPermissions: (v: boolean) => void
-    deletingWorkspace: Workspace | null
-    setDeletingWorkspace: (w: Workspace | null) => void
     showProjectSearch: boolean
     setShowProjectSearch: (v: boolean) => void
 
@@ -182,10 +178,8 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
     }
 
     // ── Modal / UI state ──────────────────────────────────────────────────────
-    const [showWorkspaceModal, setShowWorkspaceModal] = useState(false)
     const [showGlobalSettings, setShowGlobalSettings] = useState(false)
     const [showDefaultPermissions, setShowDefaultPermissions] = useState(false)
-    const [deletingWorkspace, setDeletingWorkspace] = useState<Workspace | null>(null)
 
     // ── Terminal / Claude status state (driven by WebSocket events) ───────────
     const [claudeStatus, setClaudeStatus] = useState<Record<number, 'running' | 'done'>>({})
@@ -546,10 +540,8 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         // Data
         tasks,
         // Modal state
-        showWorkspaceModal, setShowWorkspaceModal,
         showGlobalSettings, setShowGlobalSettings,
         showDefaultPermissions, setShowDefaultPermissions,
-        deletingWorkspace, setDeletingWorkspace,
         showProjectSearch, setShowProjectSearch,
         // View state
         projectView, setProjectView,
