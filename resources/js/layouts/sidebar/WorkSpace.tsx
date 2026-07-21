@@ -3,7 +3,7 @@ import { useAppLayout } from "@/layouts/context/AppLayoutContext"
 import { color } from "@/tokens"
 import { useEffect, useRef, useState } from "react"
 import { ChevronsUpDown, Check, Trash2, Plus } from "lucide-react"
-import AddWorkspaceModal from "@/components/AddWorkspaceModal"
+import WorkspaceAddModal from "@/components/WorkspaceAddModal"
 
 export function WorkspacePicker({
                                     selected,
@@ -12,7 +12,7 @@ export function WorkspacePicker({
     selected: number | null
     onSelect: (id: number | null) => void
 }) {
-    const { handleWorkspaceDeleted, handleWorkspaceCreated } = useAppLayout()
+    const { handleWorkspaceDeleted } = useAppLayout()
     const { workspaces, destroy } = useWorkspaces()
     const [open, setOpen] = useState(false)
     const ref = useRef<HTMLDivElement>(null)
@@ -93,8 +93,7 @@ export function WorkspacePicker({
 
                     <div className="h-px bg-stroke my-1 mx-0"/>
 
-                    <AddWorkspaceModal
-                        onCreated={handleWorkspaceCreated}
+                    <WorkspaceAddModal
                         trigger={
                             <button
                                 onClick={() => setOpen(false)}
