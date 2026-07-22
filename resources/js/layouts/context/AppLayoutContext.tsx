@@ -63,7 +63,6 @@ export interface AppLayoutContextValue {
     // Invalidates the workspaces and projects queries (workspace changes can
     // reassign projects). Project mutations refresh themselves via useProjects.
     refreshData: () => Promise<void>
-    handleWorkspaceCreated: () => void
     handleWorkspaceDeleted: () => void
 
     // ── Agent hook (mutations used by ModalLayer and AgentsIndex) ─────────────
@@ -531,7 +530,6 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         }
     }
 
-    async function handleWorkspaceCreated() { await refreshData() }
     async function handleWorkspaceDeleted() { await refreshData() }
 
     // ── Context value ─────────────────────────────────────────────────────────
@@ -553,7 +551,7 @@ export function AppLayoutStateProvider({ children }: { children: React.ReactNode
         claudeStatus, setClaudeStatus, lastActivity, outputChars, sessionStart,
         // Business handlers
         refreshData,
-        handleWorkspaceCreated, handleWorkspaceDeleted,
+        handleWorkspaceDeleted,
         // Agent hook
         agentHook,
         // Agent templates

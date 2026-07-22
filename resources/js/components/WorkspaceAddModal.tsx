@@ -1,14 +1,16 @@
 import { useState, type ReactNode } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import Modal from '@/components/ui/Modal'
-import useWorkspaces from '@/queries/workspacesQuery'
+import useWorkspaces, { WORKSPACES_QUERY_KEY } from '@/queries/workspacesQuery'
 
 const inputCls = 'bg-canvas border border-stroke rounded-md text-zinc-900 placeholder:text-zinc-500 text-[13px] px-2.5 py-1.5 font-mono outline-none w-full'
 const labelSpanCls = 'text-zinc-600 text-[11px] uppercase tracking-[0.05em]'
 const cancelCls = 'bg-transparent border border-stroke rounded-md text-zinc-700 text-xs px-3.5 py-1.5 cursor-pointer disabled:opacity-50'
 const submitCls = 'bg-success border border-success rounded-md text-white text-xs px-3.5 py-1.5 cursor-pointer disabled:opacity-50'
 
-function AddWorkspaceForm({ onCreated, close }: { onCreated: () => void; close: () => void }) {
+function WorkspaceAddForm({ close }: { close: () => void }) {
     const { create, creating } = useWorkspaces()
+    const queryClient = useQueryClient()
     const [name, setName] = useState('')
     const [description, setDescription] = useState('')
     const [error, setError] = useState('')
@@ -19,7 +21,10 @@ function AddWorkspaceForm({ onCreated, close }: { onCreated: () => void; close: 
         if (!name.trim()) { setError('Name is required'); return }
         create(
             { name: name.trim(), description: description.trim() || undefined },
-            () => { onCreated(); close() },
+            () => {
+                queryClient.invalidateQueries({ queryKey: WORKSPACES_QUERY_KEY })
+                close()
+            },
         )
     }
 
@@ -45,10 +50,10 @@ function AddWorkspaceForm({ onCreated, close }: { onCreated: () => void; close: 
     )
 }
 
-export default function AddWorkspaceModal({ trigger, onCreated }: { trigger: ReactNode; onCreated: () => void }) {
+export default function WorkspaceAddModal({ trigger }: { trigger: ReactNode }) {
     return (
         <Modal trigger={trigger} ariaLabel="New workspace">
-            {close => <AddWorkspaceForm onCreated={onCreated} close={close} />}
+            {close => <WorkspaceAddForm close={close} />}
         </Modal>
     )
 }
