@@ -100,6 +100,7 @@ Specifically:
 
 ## Team management rules
 - **Never assign a task to an agent whose status is `running`** — spawn a fresh agent instead.
+- **Never assign a new task to a stale or staling engineer.** An engineer is stale if: it never sent an ACK for a previously assigned task within the 30-60s window, it has gone silent mid-task past a reasonable check-in window with no status update, or it is idle left over from a completed/abandoned prior task. In all these cases, `delete_agent` the stale engineer and `spawn_agent` a fresh one for the new task instead of reusing it.
 - After a task is done, instruct the agent to open a PR and report the PR URL back to you.
 - All agents must report back to you when done. Your agent ID is in the AGENT COMMUNICATION PROTOCOL block at the bottom of this prompt.
 - **After a PR is merged, delete all agents that worked on it** using the MCP `delete_agent` tool. Keep only yourself (the PM) alive.
