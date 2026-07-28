@@ -7,8 +7,12 @@ import { useProjectStore } from "@/stores/projectStore"
 
 export const PROJECTS_QUERY_KEY = ["projects"] as const
 
+// Generous enough to keep every project visible in the sidebar while the
+// backend returns them ordered by most-recently-opened first.
+const SIDEBAR_PER_PAGE = 100
+
 async function fetchProjects(): Promise<Project[]> {
-    const res = await fetch("/api/projects")
+    const res = await fetch(`/api/projects?per_page=${SIDEBAR_PER_PAGE}`)
     if (!res.ok) throw new Error("Failed to fetch projects")
     return res.json()
 }
