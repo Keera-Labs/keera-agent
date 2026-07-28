@@ -31,8 +31,8 @@ async def index(request: Request):
 
     # Recently-opened first; never-opened projects fall back to created_at so
     # they still sort sensibly instead of vanishing to the bottom.
-    projects = await (
-        Project.order_by_raw("COALESCE(last_opened_at, created_at) DESC").paginate(per_page, page)
+    projects = await Project.order_by_raw("COALESCE(last_opened_at, created_at) DESC").paginate(
+        per_page, page
     )
 
     return JSONResponse(
