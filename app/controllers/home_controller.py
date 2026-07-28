@@ -1,3 +1,5 @@
+import datetime
+
 from fastapi import Request
 from fastapi.responses import RedirectResponse
 from fastapi_startkit.inertia.inertia import Inertia
@@ -6,6 +8,17 @@ from app.controllers.global_settings_controller import read_global_settings
 from app.models.Agent import Agent
 from app.models.Project import Project
 from app.models.Workspace import Workspace
+
+
+async def _stamp_opened(slug: str) -> None:
+    """Record that a user just navigated into this project.
+
+    Stored in the same UTC ``%Y-%m-%d %H:%M:%S`` format the ORM uses for
+    ``created_at`` so the sidebar's COALESCE(last_opened_at, created_at) sort
+    compares the two columns consistently.
+    """
+    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    await Project.where("slug", slug).update({"last_opened_at": now})
 
 
 async def _shared_props(**extra) -> dict:
@@ -34,8 +47,10 @@ async def _shared_props(**extra) -> dict:
             }
         )
 
-    # Build flat projects list (same shape as project_controller.index)
-    all_projects = await Project.all()
+    # Build flat projects list (same shape as project_controller.index),
+    # most-recently-opened first so the sidebar's first paint already matches
+    # the order the /api/projects query will refetch.
+    all_projects = await Project.order_by_raw("COALESCE(last_opened_at, created_at) DESC").get()
     projects = [
         {
             "id": p.id,
@@ -90,4 +105,5 @@ async def project_home(request: Request, project: str):
 
 async def agent_page(request: Request, project: str, agent_id: int):
     """Render the main UI with active project + agent context."""
+    await _stamp_opened(project)
     return Inertia.render("agents/Detail", await _shared_props(project=project, agent_id=agent_id))

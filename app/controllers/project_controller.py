@@ -18,8 +18,23 @@ def slugify(name: str) -> str:
     return re.sub(r"[^a-z0-9-]", "", name.lower().replace(" ", "-"))
 
 
+def _int_param(request: Request, name: str, default: int, minimum: int = 1) -> int:
+    try:
+        return max(minimum, int(request.query_params.get(name, default)))
+    except (TypeError, ValueError):
+        return default
+
+
 async def index(request: Request):
-    projects = await Project.all()
+    per_page = _int_param(request, "per_page", 50)
+    page = _int_param(request, "page", 1)
+
+    # Recently-opened first; never-opened projects fall back to created_at so
+    # they still sort sensibly instead of vanishing to the bottom.
+    projects = await Project.order_by_raw("COALESCE(last_opened_at, created_at) DESC").paginate(
+        per_page, page
+    )
+
     return JSONResponse(
         [
             {
