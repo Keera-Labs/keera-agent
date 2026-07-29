@@ -161,6 +161,39 @@ def discover_worktree_path(cwd: str, branch_name: str) -> str | None:
     return None
 
 
+def discover_agent_worktree(cwd: str, agent_id: int) -> tuple[str, str] | None:
+    """Return ``(path, branch)`` for the agent's worktree, keyed on its path.
+
+    An agent's worktree lives at ``<cwd>/.claude/worktrees/agent-{id}``. Its
+    branch is not necessarily ``worktree-agent-{id}`` — the agent may have
+    committed its work on a differently named branch (e.g. ``task/1310-...``).
+    We therefore locate the worktree by its stable path and report the branch
+    git actually has checked out there, so callers adopt the real work instead
+    of a synthetic default name. Returns None when no such worktree exists, or
+    when it is in a detached-HEAD state (no branch to adopt).
+    """
+    result = subprocess.run(
+        ["git", "worktree", "list", "--porcelain"],
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+    )
+    if result.returncode != 0:
+        return None
+
+    target = os.path.realpath(os.path.join(cwd, ".claude", "worktrees", f"agent-{agent_id}"))
+    current_path: str | None = None
+    for line in result.stdout.splitlines():
+        if line.startswith("worktree "):
+            current_path = line[len("worktree ") :].strip()
+        elif line.startswith("branch ") and current_path is not None:
+            if os.path.realpath(current_path) == target:
+                ref = line[len("branch ") :].strip()
+                branch = ref[len("refs/heads/") :] if ref.startswith("refs/heads/") else ref
+                return current_path, branch
+    return None
+
+
 async def _prune_all_orphaned_worktrees() -> None:
     """One-off startup prune: remove git worktrees for all soft-deleted agents.
 
