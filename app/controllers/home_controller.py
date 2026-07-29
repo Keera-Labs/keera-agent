@@ -55,9 +55,7 @@ async def _shared_props(**extra) -> dict:
     # Build flat projects list (same shape as project_controller.index),
     # most-recently-opened first and capped the same way, so the sidebar's
     # first paint already matches what the /api/projects refetch returns.
-    all_projects = (
-        await Project.order_by_raw("updated_at DESC").limit(SIDEBAR_PROJECTS_LIMIT).get()
-    )
+    all_projects = await Project.order_by_raw("updated_at DESC").limit(SIDEBAR_PROJECTS_LIMIT).get()
     projects = [
         {
             "id": p.id,
