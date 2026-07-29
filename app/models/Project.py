@@ -16,6 +16,5 @@ class Project(Model):
     permissions_allow: str | None
     permissions_deny: str | None
     is_repository: bool
-    last_opened_at: str | None
     created_at: str | None
     updated_at: str | None

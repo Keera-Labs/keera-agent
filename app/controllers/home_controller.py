@@ -9,16 +9,21 @@ from app.models.Agent import Agent
 from app.models.Project import Project
 from app.models.Workspace import Workspace
 
+# Keep in sync with SIDEBAR_PER_PAGE in resources/js/queries/projectsQuery.ts —
+# these props seed the sidebar before that query's own per_page-bound fetch resolves.
+SIDEBAR_PROJECTS_LIMIT = 100
+
 
 async def _stamp_opened(slug: str) -> None:
     """Record that a user just navigated into this project.
 
-    Stored in the same UTC ``%Y-%m-%d %H:%M:%S`` format the ORM uses for
-    ``created_at`` so the sidebar's COALESCE(last_opened_at, created_at) sort
-    compares the two columns consistently.
+    The ORM only auto-stamps ``updated_at`` on the ``creating`` event, not on
+    targeted query-builder updates, so it's set explicitly here. Stored in
+    the same UTC ``%Y-%m-%d %H:%M:%S`` format the ORM uses elsewhere so the
+    sidebar's ``ORDER BY updated_at DESC`` sort compares consistently.
     """
     now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-    await Project.where("slug", slug).update({"last_opened_at": now})
+    await Project.where("slug", slug).update({"updated_at": now})
 
 
 async def _shared_props(**extra) -> dict:
@@ -48,9 +53,9 @@ async def _shared_props(**extra) -> dict:
         )
 
     # Build flat projects list (same shape as project_controller.index),
-    # most-recently-opened first so the sidebar's first paint already matches
-    # the order the /api/projects query will refetch.
-    all_projects = await Project.order_by_raw("COALESCE(last_opened_at, created_at) DESC").get()
+    # most-recently-opened first and capped the same way, so the sidebar's
+    # first paint already matches what the /api/projects refetch returns.
+    all_projects = await Project.order_by_raw("updated_at DESC").limit(SIDEBAR_PROJECTS_LIMIT).get()
     projects = [
         {
             "id": p.id,

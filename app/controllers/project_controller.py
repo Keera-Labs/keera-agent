@@ -29,11 +29,9 @@ async def index(request: Request):
     per_page = _int_param(request, "per_page", 50)
     page = _int_param(request, "page", 1)
 
-    # Recently-opened first; never-opened projects fall back to created_at so
-    # they still sort sensibly instead of vanishing to the bottom.
-    projects = await Project.order_by_raw("COALESCE(last_opened_at, created_at) DESC").paginate(
-        per_page, page
-    )
+    # Recently-touched first — updated_at is always set (from insert onward),
+    # so no fallback column is needed here.
+    projects = await Project.order_by_raw("updated_at DESC").paginate(per_page, page)
 
     return JSONResponse(
         [
