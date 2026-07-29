@@ -9,9 +9,11 @@ from app.models.Agent import Agent
 from app.models.Project import Project
 from app.models.Workspace import Workspace
 
-# Keep in sync with SIDEBAR_PER_PAGE in resources/js/queries/projectsQuery.ts —
-# these props seed the sidebar before that query's own per_page-bound fetch resolves.
-SIDEBAR_PROJECTS_LIMIT = 100
+# Keep in sync with SIDEBAR_PER_PAGE in resources/js/queries/projectsQuery.ts and
+# PROJECTS_PER_PAGE_MAX in project_controller.py — these props seed the sidebar
+# before that query's own per_page-bound fetch resolves, and the API clamps
+# per_page to the same value anyway.
+SIDEBAR_PROJECTS_LIMIT = 10
 
 
 async def _stamp_opened(slug: str) -> None:
