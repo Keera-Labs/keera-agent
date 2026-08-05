@@ -12,10 +12,12 @@ class TaskComplexity(str, enum.Enum):
 
     def model(self) -> str:
         match self:
-            case TaskComplexity.EASY | TaskComplexity.MEDIUM:
+            case TaskComplexity.EASY:
                 return "claude-sonnet-5"
-            case TaskComplexity.HARD:
+            case TaskComplexity.MEDIUM:
                 return "claude-opus-4-8"
+            case TaskComplexity.HARD:
+                return "claude-fable-5"
 
     @classmethod
     def model_for(cls, value) -> str:

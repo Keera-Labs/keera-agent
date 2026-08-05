@@ -178,12 +178,12 @@ class TestAgents(TestCase):
         self.assertNotIn("plan_mode", json.loads(attrs["flags"]))
 
     async def test_update_omitted_fields_unchanged(self):
-        # complexity=hard maps the created agent to claude-opus-4-8; a PATCH that
+        # complexity=hard maps the created agent to claude-fable-5; a PATCH that
         # omits model must leave that resolved model untouched.
         agent = await self._create_agent(complexity="hard")
         response = await self.client.patch(f"/api/agents/{agent['id']}", json={"name": "New Name"})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(_attrs(response)["model"], "claude-opus-4-8")
+        self.assertEqual(_attrs(response)["model"], "claude-fable-5")
 
     async def test_update_nonexistent_agent_returns_404(self):
         response = await self.client.patch("/api/agents/999999", json={"name": "Ghost"})
