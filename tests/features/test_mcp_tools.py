@@ -628,17 +628,17 @@ class TestSpawnAgentComplexity(TestCase, DatabaseTransaction):
         agent = await self._spawn(complexity="easy")
         self.assertEqual(agent.model, "claude-sonnet-5")
 
-    async def test_medium_selects_sonnet(self):
+    async def test_medium_selects_opus(self):
         agent = await self._spawn(complexity="medium")
-        self.assertEqual(agent.model, "claude-sonnet-5")
-
-    async def test_hard_selects_opus(self):
-        agent = await self._spawn(complexity="hard")
         self.assertEqual(agent.model, "claude-opus-4-8")
+
+    async def test_hard_selects_fable(self):
+        agent = await self._spawn(complexity="hard")
+        self.assertEqual(agent.model, "claude-fable-5")
 
     async def test_complexity_overrides_explicit_model(self):
         agent = await self._spawn(complexity="hard", model="claude-sonnet-5")
-        self.assertEqual(agent.model, "claude-opus-4-8")
+        self.assertEqual(agent.model, "claude-fable-5")
 
     async def test_omitted_complexity_raises(self):
         from pydantic import ValidationError

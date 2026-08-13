@@ -36,6 +36,7 @@ export const AGENT_TYPE_COLORS: Record<string, string> = {
 // Model options offered in the agent/template selectors. The `value` is passed
 // verbatim to `claude --model`, so each must be a real model id the CLI accepts.
 export const MODELS = [
+    { value: 'claude-fable-5', label: 'Claude Fable 5' },
     { value: 'claude-sonnet-5', label: 'Claude Sonnet 5' },
     { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
     { value: 'claude-opus-4-8', label: 'Claude Opus 4.8' },
