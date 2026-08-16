@@ -1,5 +1,6 @@
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
+from app.controllers.project_controller import PROJECTS_PER_PAGE_MAX
 from databases.factories.project_factory import ProjectFactory
 from tests.test_case import TestCase
 
@@ -43,3 +44,21 @@ class TestProjectController(TestCase, DatabaseTransaction):
 
         self.assertEqual([r["slug"] for r in page1], [newest.slug])
         self.assertEqual([r["slug"] for r in page2], [second.slug])
+
+    async def test_index_clamps_per_page_to_max_when_requested_higher(self):
+        for i in range(PROJECTS_PER_PAGE_MAX + 2):
+            await ProjectFactory.new().create(updated_at=f"2099-07-{i + 1:02d} 00:00:00")
+
+        response = await self.get(f"/api/projects?per_page={PROJECTS_PER_PAGE_MAX * 10}")
+        response.assert_ok()
+
+        self.assertEqual(len(response.json()), PROJECTS_PER_PAGE_MAX)
+
+    async def test_index_defaults_to_max_per_page_when_omitted(self):
+        for i in range(PROJECTS_PER_PAGE_MAX + 2):
+            await ProjectFactory.new().create(updated_at=f"2099-08-{i + 1:02d} 00:00:00")
+
+        response = await self.get("/api/projects")
+        response.assert_ok()
+
+        self.assertEqual(len(response.json()), PROJECTS_PER_PAGE_MAX)

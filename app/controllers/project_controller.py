@@ -18,15 +18,21 @@ def slugify(name: str) -> str:
     return re.sub(r"[^a-z0-9-]", "", name.lower().replace(" ", "-"))
 
 
-def _int_param(request: Request, name: str, default: int, minimum: int = 1) -> int:
+PROJECTS_PER_PAGE_MAX = 10
+
+
+def _int_param(
+    request: Request, name: str, default: int, minimum: int = 1, maximum: int | None = None
+) -> int:
     try:
-        return max(minimum, int(request.query_params.get(name, default)))
+        value = max(minimum, int(request.query_params.get(name, default)))
     except (TypeError, ValueError):
-        return default
+        value = default
+    return min(value, maximum) if maximum is not None else value
 
 
 async def index(request: Request):
-    per_page = _int_param(request, "per_page", 50)
+    per_page = _int_param(request, "per_page", PROJECTS_PER_PAGE_MAX, maximum=PROJECTS_PER_PAGE_MAX)
     page = _int_param(request, "page", 1)
 
     # Recently-touched first — updated_at is always set (from insert onward),
