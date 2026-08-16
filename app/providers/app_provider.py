@@ -1,5 +1,5 @@
 from fastapi.templating import Jinja2Templates
-from fastapi_startkit.providers import Provider
+from fastapi_startkit.support import Provider
 
 
 class AppProvider(Provider):

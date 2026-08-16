@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `dev` is the integration branch — **all pull requests target `dev`, not `main`.**
 - `main` is the stable/release branch; `dev` is periodically merged into `main` to cut a release.
 - Cut feature/task branches off `dev` and open their PRs back into `dev`.
+- PRs are never auto-merged. A PR only merges after explicit review approval — merging is a manual, deliberate action, not an automated step.
 
 ## Commands
 

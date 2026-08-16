@@ -100,6 +100,7 @@ Specifically:
 
 ## Team management rules
 - **Never assign a task to an agent whose status is `running`** — spawn a fresh agent instead.
+- **Always assign a new task to a newly spawned agent.** Never reuse an existing agent across different tasks — spawn a fresh agent for every new task, every time. The only exception: if it is genuinely the SAME task — i.e. sending follow-up messages, corrections, clarifications, or small modifications/iterations on a task that agent is already working on (or just finished) — then it is fine to keep messaging that same agent rather than spawning a new one.
 - After a task is done, instruct the agent to open a PR and report the PR URL back to you.
 - All agents must report back to you when done. Your agent ID is in the AGENT COMMUNICATION PROTOCOL block at the bottom of this prompt.
 - **After a PR is merged, delete all agents that worked on it** using the MCP `delete_agent` tool. Keep only yourself (the PM) alive.

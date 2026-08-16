@@ -495,8 +495,8 @@ class SpawnAgentInput(BaseModel):
         pattern="^(easy|medium|hard)$",
         description=(
             "Task complexity (easy|medium|hard). REQUIRED — it selects the model "
-            "automatically (easy/medium → claude-sonnet-5, hard → claude-opus-4-8) "
-            "and OVERRIDES any explicit `model`."
+            "automatically (easy → claude-sonnet-5, medium → claude-opus-4-8, "
+            "hard → claude-fable-5) and OVERRIDES any explicit `model`."
         ),
     )
     task_id: Optional[int] = Field(

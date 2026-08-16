@@ -1,7 +1,7 @@
 import { router } from '@inertiajs/react'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
+import { useWorkspaceStore } from '@/stores/workspaceStore'
 import useProjects from '@/queries/projectsQuery'
-import AddWorkspaceModal from '@/components/AddWorkspaceModal'
 import { GlobalSettingsModal } from '@/components/modals/GlobalSettingsModal'
 import { ProjectSearchModal } from '@/components/modals/ProjectSearchModal'
 import { ConfirmDeleteWorkspaceModal } from '@/components/modals/ConfirmDeleteWorkspaceModal'
@@ -9,34 +9,22 @@ import { ConfirmDeleteWorkspaceModal } from '@/components/modals/ConfirmDeleteWo
 export function ModalLayer() {
     const { projects } = useProjects()
     const {
-        // Workspace modal
-        showWorkspaceModal,
-        setShowWorkspaceModal,
-        handleWorkspaceCreated,
         // Global settings
         showGlobalSettings,
         setShowGlobalSettings,
         agentTemplates,
         setAgentTemplates,
         // Delete workspace
-        deletingWorkspace,
-        setDeletingWorkspace,
         handleWorkspaceDeleted,
         // Project search
         showProjectSearch,
         setShowProjectSearch,
     } = useAppLayout()
+    const deletingWorkspace = useWorkspaceStore(s => s.deletingWorkspace)
+    const setDeletingWorkspace = useWorkspaceStore(s => s.setDeletingWorkspace)
 
     return (
         <>
-            {/* Add workspace */}
-            {showWorkspaceModal && (
-                <AddWorkspaceModal
-                    onClose={() => setShowWorkspaceModal(false)}
-                    onCreated={() => handleWorkspaceCreated()}
-                />
-            )}
-
             {/* Global settings */}
             {showGlobalSettings && (
                 <GlobalSettingsModal

@@ -12,7 +12,10 @@ import tempfile
 
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
-from app.controllers.agent_trigger_controller import discover_worktree_path
+from app.controllers.agent_trigger_controller import (
+    discover_agent_worktree,
+    discover_worktree_path,
+)
 from databases.factories.agent_factory import AgentFactory
 from databases.factories.project_factory import ProjectFactory
 from tests.test_case import TestCase
@@ -54,9 +57,10 @@ class TestAdoptWork(TestCase, DatabaseTransaction):
             name="AdoptBot",
         )
 
-    def _make_worktree_with_commit(self, filename="feature.txt"):
+    def _make_worktree_with_commit(self, filename="feature.txt", branch=None):
         """Create the agent worktree/branch and commit a file inside it."""
-        branch = f"worktree-agent-{self.agent.id}"
+        if branch is None:
+            branch = f"worktree-agent-{self.agent.id}"
         wt_path = os.path.join(self._tmpdir, ".claude", "worktrees", f"agent-{self.agent.id}")
         _git(self._tmpdir, "worktree", "add", "-b", branch, wt_path)
         with open(os.path.join(wt_path, filename), "w") as f:
@@ -74,6 +78,21 @@ class TestAdoptWork(TestCase, DatabaseTransaction):
 
     def test_discover_worktree_path_returns_none_when_absent(self):
         self.assertIsNone(discover_worktree_path(self._tmpdir, "worktree-agent-does-not-exist"))
+
+    def test_discover_agent_worktree_reports_real_branch(self):
+        """The lookup keys on the agent's worktree PATH and reports whatever
+        branch git actually has checked out there — even a non-default name."""
+        branch, wt_path = self._make_worktree_with_commit(
+            branch="task/1310-chat-query-industry-analysis"
+        )
+        found = discover_agent_worktree(self._tmpdir, self.agent.id)
+        self.assertIsNotNone(found)
+        found_path, found_branch = found
+        self.assertEqual(os.path.realpath(found_path), os.path.realpath(wt_path))
+        self.assertEqual(found_branch, branch)
+
+    def test_discover_agent_worktree_returns_none_when_absent(self):
+        self.assertIsNone(discover_agent_worktree(self._tmpdir, self.agent.id))
 
     # ── POST /api/agents/:id/adopt-work ───────────────────────────────────────
 
@@ -115,6 +134,31 @@ class TestAdoptWork(TestCase, DatabaseTransaction):
         self.assertIn(branch, branch_list.stdout)
         # No merge ever ran.
         self.assertFalse(os.path.exists(os.path.join(self._tmpdir, ".git", "MERGE_HEAD")))
+
+    async def test_adopt_work_checks_out_real_branch_not_synthetic_name(self):
+        """Regression (#1334): when the agent worked on a non-default branch
+        (e.g. task/1310-...), adopt must check out THAT branch — not the
+        synthetic worktree-agent-{id} name it used to assume."""
+        real_branch = "task/1310-chat-query-industry-analysis"
+        branch, wt_path = self._make_worktree_with_commit(branch=real_branch)
+
+        response = await self.post(f"/api/agents/{self.agent.id}/adopt-work")
+        response.assert_ok().assert_json(
+            lambda j: j.where("ok", True).where("branch", real_branch).etc()
+        )
+
+        # The main repo is on the agent's REAL branch, and its work is present.
+        self.assertEqual(self._current_branch(), real_branch)
+        self.assertTrue(os.path.exists(os.path.join(self._tmpdir, "feature.txt")))
+        self.assertFalse(os.path.isdir(wt_path))
+        # The synthetic default branch was never created.
+        synthetic = subprocess.run(
+            ["git", "branch", "--list", f"worktree-agent-{self.agent.id}"],
+            cwd=self._tmpdir,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(synthetic.stdout.strip(), "")
 
     async def test_adopt_work_preserves_dirty_agent_worktree(self):
         """QA Req5 regression: an agent worktree with uncommitted/untracked

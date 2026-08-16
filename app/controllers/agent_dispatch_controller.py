@@ -52,29 +52,32 @@ async def adopt_work(agent_id: int):
     """Adopt an agent's worktree: remove the worktree, then check out its branch
     in the main repo — leaving the project ON that branch. No merge.
 
-    The agent runs in a git worktree at <project.path>/.claude/worktrees/agent-{id}
-    on branch worktree-agent-{id}. A branch checked out in a worktree cannot also
-    be checked out in the main repo, so we drop the worktree directory first and
-    then switch the main repo onto the branch. The branch is preserved (never
-    deleted); adopting simply moves the main repo onto the agent's work.
+    The agent runs in a git worktree at <project.path>/.claude/worktrees/agent-{id}.
+    Its branch is whatever the agent committed on — not necessarily the default
+    worktree-agent-{id} name (an agent may work on e.g. task/1310-...). We locate
+    the worktree by its stable path and adopt the branch git actually has checked
+    out there. A branch checked out in a worktree cannot also be checked out in
+    the main repo, so we drop the worktree directory first and then switch the
+    main repo onto the branch. The branch is preserved (never deleted); adopting
+    simply moves the main repo onto the agent's work.
     """
     import subprocess
 
-    from app.controllers.agent_trigger_controller import discover_worktree_path
+    from app.controllers.agent_trigger_controller import discover_agent_worktree
     from app.models.Project import Project
 
     agent = await Agent.find_or_fail(agent_id)
     project = await Project.find_or_fail(agent.project_id)
 
     cwd = os.path.expanduser(project.path)
-    branch_name = f"worktree-agent-{agent_id}"
 
-    worktree_path = discover_worktree_path(cwd, branch_name)
-    if not worktree_path:
+    discovered = discover_agent_worktree(cwd, agent_id)
+    if not discovered:
         return JSONResponse(
-            {"error": f"No active worktree found for branch {branch_name}"},
+            {"error": f"No active worktree found for agent {agent_id}"},
             status_code=404,
         )
+    worktree_path, branch_name = discovered
 
     # Pre-flight: refuse if the agent worktree has uncommitted or untracked
     # changes. Only committed work is on the branch, so removing the worktree

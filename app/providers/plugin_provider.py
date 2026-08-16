@@ -1,4 +1,4 @@
-from fastapi_startkit.providers import Provider
+from fastapi_startkit.support import Provider
 
 from app.plugins.registry import PluginRegistry
 

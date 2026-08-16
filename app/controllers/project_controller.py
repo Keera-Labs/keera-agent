@@ -18,8 +18,27 @@ def slugify(name: str) -> str:
     return re.sub(r"[^a-z0-9-]", "", name.lower().replace(" ", "-"))
 
 
+PROJECTS_PER_PAGE_MAX = 10
+
+
+def _int_param(
+    request: Request, name: str, default: int, minimum: int = 1, maximum: int | None = None
+) -> int:
+    try:
+        value = max(minimum, int(request.query_params.get(name, default)))
+    except (TypeError, ValueError):
+        value = default
+    return min(value, maximum) if maximum is not None else value
+
+
 async def index(request: Request):
-    projects = await Project.all()
+    per_page = _int_param(request, "per_page", PROJECTS_PER_PAGE_MAX, maximum=PROJECTS_PER_PAGE_MAX)
+    page = _int_param(request, "page", 1)
+
+    # Recently-touched first — updated_at is always set (from insert onward),
+    # so no fallback column is needed here.
+    projects = await Project.order_by_raw("updated_at DESC").paginate(per_page, page)
+
     return JSONResponse(
         [
             {

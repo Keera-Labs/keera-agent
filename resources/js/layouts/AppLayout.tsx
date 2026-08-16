@@ -41,7 +41,6 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
         tasks,
         claudeStatus,
         projectView, setProjectView,
-        setShowWorkspaceModal,
     } = useAppLayout()
     const activeProject = useProjectStore(s => s.activeProject)
 
@@ -67,7 +66,6 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
                     taskCount={tasks.length}
                     activeId={activeProject?.id ?? null}
                     claudeStatus={claudeStatus}
-                    onCreateWorkspace={() => setShowWorkspaceModal(true)}
                 />
 
                 {/* Main content slot — ProjectLayout or page children rendered here */}
