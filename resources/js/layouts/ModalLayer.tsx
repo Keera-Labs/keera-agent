@@ -1,13 +1,12 @@
 import { router } from '@inertiajs/react'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
-import useProjects from '@/queries/projectsQuery'
+import useAllProjects from '@/queries/allProjectsQuery'
 import { GlobalSettingsModal } from '@/components/modals/GlobalSettingsModal'
 import { ProjectSearchModal } from '@/components/modals/ProjectSearchModal'
 import { ConfirmDeleteWorkspaceModal } from '@/components/modals/ConfirmDeleteWorkspaceModal'
 
 export function ModalLayer() {
-    const { projects } = useProjects()
     const {
         // Global settings
         showGlobalSettings,
@@ -22,6 +21,7 @@ export function ModalLayer() {
     } = useAppLayout()
     const deletingWorkspace = useWorkspaceStore(s => s.deletingWorkspace)
     const setDeletingWorkspace = useWorkspaceStore(s => s.setDeletingWorkspace)
+    const searchProjects = useAllProjects(showProjectSearch)
 
     return (
         <>
@@ -46,7 +46,7 @@ export function ModalLayer() {
             {/* Project search */}
             {showProjectSearch && (
                 <ProjectSearchModal
-                    projects={projects}
+                    projects={searchProjects}
                     onClose={() => setShowProjectSearch(false)}
                     onSelect={project => router.visit(`/${project.slug}`)}
                 />
