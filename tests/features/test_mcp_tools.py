@@ -469,6 +469,52 @@ class TestDeleteAgentTool(TestCase, DatabaseTransaction):
         )
         self.assertEqual(branch_list.stdout.strip(), "", "stale branch should be deleted")
 
+    async def test_delete_agent_removes_worktree_under_dot_worktrees_and_branch(self):
+        """Task worktrees now live under <project>/.worktrees (not <project>/.claude/worktrees).
+        delete_agent cleanup must remove a stale worktree left at that new location too."""
+        import os
+        import subprocess
+        import tempfile
+
+        from app.models.Agent import Agent
+
+        repo = tempfile.mkdtemp(prefix="keera-test-repo-")
+        subprocess.run(["git", "init"], cwd=repo, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "t@t.com"], cwd=repo, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Tester"], cwd=repo, capture_output=True)
+        with open(os.path.join(repo, "README.md"), "w") as f:
+            f.write("hello")
+        subprocess.run(["git", "add", "."], cwd=repo, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "init"], cwd=repo, capture_output=True)
+
+        project = await ProjectFactory.new().create(path=repo)
+        agent = await AgentFactory.new().create(project_id=project.id, name="Worktree Agent")
+
+        worktree_path = os.path.join(repo, ".worktrees", f"agent-{agent.id}")
+        branch_name = f"worktree-agent-{agent.id}"
+        subprocess.run(
+            ["git", "worktree", "add", "-b", branch_name, worktree_path],
+            cwd=repo,
+            capture_output=True,
+        )
+        self.assertTrue(os.path.isdir(worktree_path), "worktree should exist before delete")
+
+        response = await self.tool.handle({"agent_id": agent.id})
+        text = _text(response)
+        self.assertNotIn("Error", text)
+
+        refreshed = await Agent.find(agent.id)
+        self.assertIsNotNone(refreshed.deleted_at)
+
+        self.assertFalse(os.path.isdir(worktree_path), "worktree should be removed after delete")
+        branch_list = subprocess.run(
+            ["git", "branch", "--list", branch_name],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(branch_list.stdout.strip(), "", "stale branch should be deleted")
+
     async def test_delete_agent_not_found_returns_error(self):
         response = await self.tool.handle({"agent_id": 999999})
         self.assertIn("Error", _text(response))
