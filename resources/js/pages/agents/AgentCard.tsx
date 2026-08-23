@@ -3,6 +3,7 @@ import { RotateCw, CircleDot, GitMerge, ArrowRight } from 'lucide-react'
 import { color } from '@/tokens'
 import type { ProjectAgent } from '@/queries/agentQuery'
 import { AgentEditModal } from './AgentEditModal'
+import { PmCheckinControl } from './PmCheckinControl'
 import { agentAvatarColor, agentInitials, agentRoleLabel, PLACEHOLDER } from './presentation'
 
 // ─── Footer action icon button (carried over from PR #207) ────────────────────
@@ -121,6 +122,13 @@ export function AgentCard({
                 <Stat label="Branch" value={stats.branch} />
                 <Stat label="Usage" value={stats.usage} />
             </div>
+
+            {agent.agent_type === 'pm' && (
+                <>
+                    <hr className={dividerClass} />
+                    <PmCheckinControl agentId={agent.id} />
+                </>
+            )}
 
             <hr className={dividerClass} />
 
