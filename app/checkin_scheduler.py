@@ -61,8 +61,10 @@ async def _send_checkin(project_id: int) -> None:
 async def _disable(project_id: int) -> None:
     from app.models.Agent import Agent
 
-    await Agent.where("project_id", project_id).where("agent_type", "pm").update(
-        {"checkin_enabled": False}
+    await (
+        Agent.where("project_id", project_id)
+        .where("agent_type", "pm")
+        .update({"checkin_enabled": False})
     )
 
 

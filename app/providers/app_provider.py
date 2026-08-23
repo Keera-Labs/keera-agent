@@ -36,15 +36,9 @@ class AppProvider(Provider):
                 from app import checkin_scheduler
                 from app.models.Agent import Agent
 
-                pms = (
-                    await Agent.where("agent_type", "pm")
-                    .where("checkin_enabled", True)
-                    .get()
-                )
+                pms = await Agent.where("agent_type", "pm").where("checkin_enabled", True).get()
                 for pm in pms:
-                    checkin_scheduler.start(
-                        pm.project_id, int(pm.checkin_interval_minutes or 5)
-                    )
+                    checkin_scheduler.start(pm.project_id, int(pm.checkin_interval_minutes or 5))
             except Exception:
                 pass
 

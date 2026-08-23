@@ -25,9 +25,7 @@ class TestCheckinScheduler(TestCase, DatabaseTransaction):
     async def test_tick_pings_pm_when_task_in_progress(self):
         await TaskFactory.new().create(project_id=self.project.id, status="in_progress")
 
-        with patch.object(
-            checkin_scheduler, "_send_checkin", new_callable=AsyncMock
-        ) as send:
+        with patch.object(checkin_scheduler, "_send_checkin", new_callable=AsyncMock) as send:
             cont = await checkin_scheduler._tick(self.project.id)
 
         self.assertTrue(cont)
@@ -36,9 +34,7 @@ class TestCheckinScheduler(TestCase, DatabaseTransaction):
     async def test_tick_stops_and_disables_when_no_in_progress_task(self):
         await TaskFactory.new().create(project_id=self.project.id, status="completed")
 
-        with patch.object(
-            checkin_scheduler, "_send_checkin", new_callable=AsyncMock
-        ) as send:
+        with patch.object(checkin_scheduler, "_send_checkin", new_callable=AsyncMock) as send:
             cont = await checkin_scheduler._tick(self.project.id)
 
         self.assertFalse(cont)

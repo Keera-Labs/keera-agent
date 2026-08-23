@@ -19,12 +19,12 @@ class TestAgentCheckinController(TestCase, DatabaseTransaction):
     async def asyncSetUp(self):
         await super().asyncSetUp()
         self.project = await ProjectFactory.new().create()
-        self.pm = await AgentFactory.new().create(
-            project_id=self.project.id, agent_type="pm"
-        )
+        self.pm = await AgentFactory.new().create(project_id=self.project.id, agent_type="pm")
 
     async def test_show_returns_default_state(self):
-        with patch.object(agent_checkin_controller.checkin_scheduler, "is_running", return_value=False):
+        with patch.object(
+            agent_checkin_controller.checkin_scheduler, "is_running", return_value=False
+        ):
             resp = await agent_checkin_controller.show(self.pm.id)
 
         data = _body(resp)
@@ -33,8 +33,12 @@ class TestAgentCheckinController(TestCase, DatabaseTransaction):
         self.assertFalse(data["running"])
 
     async def test_update_enables_persists_and_starts_scheduler(self):
-        with patch.object(agent_checkin_controller.checkin_scheduler, "start") as start, \
-             patch.object(agent_checkin_controller.checkin_scheduler, "is_running", return_value=True):
+        with (
+            patch.object(agent_checkin_controller.checkin_scheduler, "start") as start,
+            patch.object(
+                agent_checkin_controller.checkin_scheduler, "is_running", return_value=True
+            ),
+        ):
             resp = await agent_checkin_controller.update(
                 AgentCheckinRequest(enabled=True, interval_minutes=3), self.pm.id
             )
@@ -50,8 +54,12 @@ class TestAgentCheckinController(TestCase, DatabaseTransaction):
         self.assertEqual(int(pm.checkin_interval_minutes), 3)
 
     async def test_update_disable_stops_scheduler(self):
-        with patch.object(agent_checkin_controller.checkin_scheduler, "stop") as stop, \
-             patch.object(agent_checkin_controller.checkin_scheduler, "is_running", return_value=False):
+        with (
+            patch.object(agent_checkin_controller.checkin_scheduler, "stop") as stop,
+            patch.object(
+                agent_checkin_controller.checkin_scheduler, "is_running", return_value=False
+            ),
+        ):
             resp = await agent_checkin_controller.update(
                 AgentCheckinRequest(enabled=False, interval_minutes=5), self.pm.id
             )
