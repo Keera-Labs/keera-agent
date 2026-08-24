@@ -242,7 +242,7 @@ async def store(request: Request):
             "name": "PM",
             "agent_type": "pm",
             "description": "Project manager agent that coordinates work across the team.",
-            "model": "claude-opus-4-8",
+            "model": "claude-opus-5",
             "system_prompt": default_system_prompt("pm"),
             "permissions_allow": _json.dumps(_dp.get("allow", [])),
             "permissions_deny": _json.dumps(_dp.get("deny", [])),

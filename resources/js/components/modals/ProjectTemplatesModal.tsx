@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { color } from '@/tokens'
 import type { AgentTemplate, AgentFlags } from '@/types/agent'
-import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, MODELS } from '@/types/agent'
+import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, MODELS, DEFAULT_MODEL } from '@/types/agent'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import { labelClass, inputClass, cancelBtnClass, submitBtnClass, flagRowClass, toggleClass } from '@/components/ui/styles'
 
@@ -30,7 +30,7 @@ export function ProjectTemplatesModal({
     const [name, setName] = useState('')
     const [desc, setDesc] = useState('')
     const [type, setType] = useState('software_engineer')
-    const [model, setModel] = useState('claude-opus-4-8')
+    const [model, setModel] = useState(DEFAULT_MODEL)
     const [prompt, setPrompt] = useState('')
     const [flags, setFlags] = useState<AgentFlags>({})
     const [planMode, setPlanMode] = useState(false)
@@ -51,14 +51,14 @@ export function ProjectTemplatesModal({
     function load(tpl: AgentTemplate) {
         setSelected(tpl); setIsNew(false); setError('')
         setName(tpl.name); setDesc(tpl.description ?? ''); setType(tpl.agent_type)
-        setModel(tpl.model ?? 'claude-opus-4-8'); setPrompt(tpl.system_prompt ?? '')
+        setModel(tpl.model ?? DEFAULT_MODEL); setPrompt(tpl.system_prompt ?? '')
         setFlags(tpl.flags ?? {}); setPlanMode(!!tpl.plan_mode)
     }
 
     function startNew() {
         setSelected(null); setIsNew(true); setError('')
         setName(''); setDesc(''); setType('software_engineer')
-        setModel('claude-opus-4-8'); setPrompt(''); setFlags({}); setPlanMode(false)
+        setModel(DEFAULT_MODEL); setPrompt(''); setFlags({}); setPlanMode(false)
     }
 
     async function save() {

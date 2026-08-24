@@ -53,7 +53,7 @@ def _apply_body(template: AgentTemplate, body: dict) -> None:
     if "system_prompt" in body:
         template.system_prompt = (body["system_prompt"] or "").strip() or None
     if "model" in body:
-        template.model = (body["model"] or "claude-opus-4-8").strip()
+        template.model = (body["model"] or "claude-opus-5").strip()
     if "flags" in body:
         template.flags = body["flags"] or {}
     if "permissions_allow" in body:
@@ -71,7 +71,7 @@ def _new_template_fields(body: dict) -> dict:
         "name": (body.get("name") or "").strip(),
         "description": (body.get("description") or "").strip() or None,
         "agent_type": (body.get("agent_type") or "software_engineer").strip(),
-        "model": (body.get("model") or "claude-opus-4-8").strip(),
+        "model": (body.get("model") or "claude-opus-5").strip(),
         "system_prompt": (body.get("system_prompt") or "").strip() or None,
         "flags": body.get("flags") or {},
         "permissions_allow": body.get("permissions_allow") or [],

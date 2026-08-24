@@ -1,6 +1,11 @@
 import enum
 
-DEFAULT_MODEL = "claude-opus-4-8"
+# The only agent models the app offers. Every model reference (UI dropdown,
+# spawn_agent default, template seeds, complexity mapping) must resolve to one
+# of these ids — the migration heals any row still pointing at a removed model.
+ALLOWED_MODELS = ("claude-opus-5", "claude-sonnet-5", "claude-fable-5")
+
+DEFAULT_MODEL = "claude-opus-5"
 
 
 class TaskComplexity(str, enum.Enum):
@@ -15,7 +20,7 @@ class TaskComplexity(str, enum.Enum):
             case TaskComplexity.EASY:
                 return "claude-sonnet-5"
             case TaskComplexity.MEDIUM:
-                return "claude-opus-4-8"
+                return "claude-opus-5"
             case TaskComplexity.HARD:
                 return "claude-fable-5"
 
