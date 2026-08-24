@@ -3,11 +3,12 @@ import { Play, Square } from 'lucide-react'
 import { useAgentCheckin } from '@/queries/agentCheckinQuery'
 
 /**
- * Start/stop toggle + interval input for the PM check-in scheduler. Rendered
- * only on the PM agent card. The scheduler pings the PM every N minutes while a
- * task is in_progress and auto-stops once none remain.
+ * Start/stop toggle + interval input for the PM check-in scheduler. Used for
+ * the PM agent only — as a full block on the overview card, or via `compact`
+ * inline in the agent detail header. The scheduler pings the PM every N
+ * minutes while a task is in_progress and auto-stops once none remain.
  */
-export function PmCheckinControl({ agentId }: { agentId: number }) {
+export function PmCheckinControl({ agentId, compact = false }: { agentId: number; compact?: boolean }) {
     const { checkin, update } = useAgentCheckin(agentId)
     const [minutes, setMinutes] = useState(5)
 
@@ -22,6 +23,48 @@ export function PmCheckinControl({ agentId }: { agentId: number }) {
     const toggle = () => {
         const next = !running
         update.mutate({ enabled: next, interval_minutes: Math.max(1, minutes) })
+    }
+
+    // Compact: single-row rendering for the agent detail header, where the
+    // control must sit inline with the other header chrome instead of taking
+    // a full card-width block.
+    if (compact) {
+        return (
+            <div className="flex items-center gap-1.5">
+                <span
+                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                    style={{ background: running ? '#16a34a' : '#d4d4d8' }}
+                    title={running ? 'Check-in running' : 'Check-in stopped'}
+                />
+                <label className="flex items-center gap-1 text-[11px] text-zinc-500">
+                    Every
+                    <input
+                        type="number"
+                        min={1}
+                        max={1440}
+                        value={minutes}
+                        disabled={running}
+                        onChange={e => setMinutes(Number(e.target.value))}
+                        className="w-10 border border-stroke rounded py-0.5 px-1 text-[11px] text-zinc-900 disabled:bg-zinc-100 disabled:text-zinc-400"
+                    />
+                    min
+                </label>
+                <button
+                    type="button"
+                    onClick={toggle}
+                    disabled={update.isPending}
+                    title={running ? 'Stop PM check-in' : 'Start PM check-in'}
+                    className={`inline-flex items-center gap-1 rounded-md py-1 px-2 text-[11px] font-semibold border cursor-pointer transition-opacity duration-100 hover:opacity-[0.85] disabled:opacity-50 ${
+                        running
+                            ? 'bg-transparent border-stroke text-zinc-700'
+                            : 'bg-[#111318] border-transparent text-white'
+                    }`}
+                >
+                    {running ? <Square size={11} /> : <Play size={11} />}
+                    {running ? 'Stop' : 'Start'}
+                </button>
+            </div>
+        )
     }
 
     return (
