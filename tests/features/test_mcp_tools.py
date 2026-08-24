@@ -539,7 +539,7 @@ class TestSpawnAgentTool(TestCase, DatabaseTransaction):
         orchestrator = await AgentFactory.new().create(
             project_id=self.project.id,
             name="Orchestrator",
-            model="claude-opus-5",
+            model="claude-opus-4-8",
         )
 
         # Caller points project_path at a DIFFERENT project; it must be ignored.
@@ -563,7 +563,7 @@ class TestSpawnAgentTool(TestCase, DatabaseTransaction):
         gone = await AgentFactory.new().create(
             project_id=self.project.id,
             name="Deleted Orchestrator",
-            model="claude-opus-5",
+            model="claude-opus-4-8",
             deleted_at=datetime.datetime.utcnow(),
         )
         text = await self._spawn(from_agent_id=gone.id)
@@ -630,7 +630,7 @@ class TestSpawnAgentComplexity(TestCase, DatabaseTransaction):
 
     async def test_medium_selects_opus(self):
         agent = await self._spawn(complexity="medium")
-        self.assertEqual(agent.model, "claude-opus-5")
+        self.assertEqual(agent.model, "claude-opus-4-8")
 
     async def test_hard_selects_fable(self):
         agent = await self._spawn(complexity="hard")

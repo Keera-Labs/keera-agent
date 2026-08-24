@@ -43,7 +43,7 @@ async def _make_override(
     name: str,
     source_id: int,
     agent_type: str = "software_engineer",
-    model: str = "claude-opus-5",
+    model: str = "claude-opus-4-8",
     project_id: int = PID,
 ) -> AgentTemplate:
     """A project-scoped override that shadows the global ``source_id``."""
@@ -91,7 +91,7 @@ class TestProjectTemplates(TestCase, DatabaseTransaction):
         row = self._by_name(res.json(), "t283-eff-base")
         # the override replaces the global in the effective list
         self.assertEqual(row["id"], override.id)
-        self.assertEqual(row["model"], "claude-opus-5")
+        self.assertEqual(row["model"], "claude-opus-4-8")
         self.assertTrue(row["is_override"])
 
     async def test_effective_falls_back_to_global(self):
@@ -106,7 +106,7 @@ class TestProjectTemplates(TestCase, DatabaseTransaction):
     async def test_edit_global_in_project_forks_override_and_leaves_global(self):
         g = await _make_global(name="t283-cow", model="claude-sonnet-5")
         res = await self.patch(
-            f"/api/projects/{PID}/agent-templates/{g.id}", json={"model": "claude-opus-5"}
+            f"/api/projects/{PID}/agent-templates/{g.id}", json={"model": "claude-opus-4-8"}
         )
         res.assert_status(201).assert_json(
             lambda j: (
@@ -114,7 +114,7 @@ class TestProjectTemplates(TestCase, DatabaseTransaction):
                 .where("project_id", PID)
                 .where("source_template_id", g.id)
                 .where("is_builtin", False)
-                .where("model", "claude-opus-5")
+                .where("model", "claude-opus-4-8")
                 .etc()
             )
         )
@@ -125,7 +125,7 @@ class TestProjectTemplates(TestCase, DatabaseTransaction):
     async def test_edit_global_twice_updates_same_override(self):
         g = await _make_global(name="t283-cow2", model="claude-sonnet-5")
         first = await self.patch(
-            f"/api/projects/{PID}/agent-templates/{g.id}", json={"model": "claude-opus-5"}
+            f"/api/projects/{PID}/agent-templates/{g.id}", json={"model": "claude-opus-4-8"}
         )
         override_id = first.json()["id"]
         second = await self.patch(
@@ -227,7 +227,7 @@ class TestGlobalTemplateSync(TestCase, DatabaseTransaction):
         await SyncGlobalTemplatesAction().execute()
 
         pm = await AgentTemplate.where("name", "PM").where_null("project_id").first()
-        self.assertEqual(pm.model, "claude-opus-5")  # code default
+        self.assertEqual(pm.model, "claude-opus-4-8")  # code default
         self.assertFalse(bool(pm.plan_mode))  # PM is not a plan-mode role
 
     async def test_sync_leaves_project_overrides_untouched(self):
