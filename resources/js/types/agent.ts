@@ -35,14 +35,12 @@ export const AGENT_TYPE_COLORS: Record<string, string> = {
 
 // Model options offered in the agent/template selectors. The `value` is passed
 // verbatim to `claude --model`, so each must be a real model id the CLI accepts.
-// The Opus tier is branded "Claude Opus 5" but backed by the real top Opus id
-// (claude-opus-4-8) — there is no `claude-opus-5` model.
 export const MODELS = [
-    { value: 'claude-opus-4-8', label: 'Claude Opus 5' },
+    { value: 'claude-opus-5', label: 'Claude Opus 5' },
     { value: 'claude-sonnet-5', label: 'Claude Sonnet 5' },
     { value: 'claude-fable-5', label: 'Claude Fable 5' },
 ]
 
 // Default model when a selector needs a starting value (matches the backend DEFAULT_MODEL).
-export const DEFAULT_MODEL = 'claude-opus-4-8'
+export const DEFAULT_MODEL = 'claude-opus-5'
 

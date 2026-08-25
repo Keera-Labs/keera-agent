@@ -489,13 +489,13 @@ class SpawnAgentInput(BaseModel):
         description="Initial task or instruction to send to the agent after it starts. Omit to create an idle agent.",
     )
     model: Optional[str] = Field(
-        default=None, description="Claude model to use. Defaults to claude-opus-4-8."
+        default=None, description="Claude model to use. Defaults to claude-opus-5."
     )
     complexity: str = Field(
         pattern="^(easy|medium|hard)$",
         description=(
             "Task complexity (easy|medium|hard). REQUIRED — it selects the model "
-            "automatically (easy → claude-sonnet-5, medium → claude-opus-4-8, "
+            "automatically (easy → claude-sonnet-5, medium → claude-opus-5, "
             "hard → claude-fable-5) and OVERRIDES any explicit `model`."
         ),
     )
