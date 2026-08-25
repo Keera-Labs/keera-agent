@@ -10,7 +10,7 @@ class CreateAgents(Migration):
             table.integer("project_id")
             table.string("name")
             table.text("description").nullable()
-            table.string("model").default("claude-sonnet-4-6")
+            table.string("model").default("claude-sonnet-5")
             table.text("system_prompt").nullable()
             table.string("status").default("idle")  # idle | running
             table.timestamps()

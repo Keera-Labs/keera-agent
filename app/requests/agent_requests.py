@@ -3,7 +3,7 @@ from typing import Optional
 from pydantic import BaseModel, field_validator, model_validator
 
 from app.constant.agent_types import ALLOWED_AGENT_TYPES
-from app.constant.complexity import TaskComplexity
+from app.constant.complexity import DEFAULT_MODEL, TaskComplexity
 
 
 class AgentStoreRequest(BaseModel):
@@ -12,7 +12,7 @@ class AgentStoreRequest(BaseModel):
     name: str
     agent_type: str = "software_engineer"
     description: Optional[str] = None
-    model: str = "claude-opus-4-8"
+    model: str = DEFAULT_MODEL
     system_prompt: Optional[str] = None
     flags: dict = {}
     dangerously_skip_permissions: bool = True

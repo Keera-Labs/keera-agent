@@ -3,7 +3,7 @@ import { router, usePage } from '@inertiajs/react'
 import { color } from '@/tokens'
 import type { AgentTemplate } from '@/types/agent'
 import type { AgentFlags } from '@/queries/agentQuery'
-import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, MODELS } from '@/types/agent'
+import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, MODELS, DEFAULT_MODEL } from '@/types/agent'
 import { labelClass, inputClass, cancelBtnClass, submitBtnClass, flagRowClass, toggleClass } from '@/components/ui/styles'
 import { TagInput } from '@/components/ui/TagInput'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
@@ -84,7 +84,7 @@ export function GlobalSettingsModal({
     const [tplName, setTplName] = useState('')
     const [tplDesc, setTplDesc] = useState('')
     const [tplType, setTplType] = useState('software_engineer')
-    const [tplModel, setTplModel] = useState('claude-opus-4-8')
+    const [tplModel, setTplModel] = useState(DEFAULT_MODEL)
     const [tplPrompt, setTplPrompt] = useState('')
     const [tplFlags, setTplFlags] = useState<AgentFlags>({})
     const [tplPlanMode, setTplPlanMode] = useState(false)
@@ -119,7 +119,7 @@ export function GlobalSettingsModal({
     function startNew() {
         setSelected(null); setIsNew(true)
         setTplName(''); setTplDesc(''); setTplType('software_engineer')
-        setTplModel('claude-opus-4-8'); setTplPrompt(''); setTplFlags({})
+        setTplModel(DEFAULT_MODEL); setTplPrompt(''); setTplFlags({})
         setTplPlanMode(false)
         setFormError('')
     }

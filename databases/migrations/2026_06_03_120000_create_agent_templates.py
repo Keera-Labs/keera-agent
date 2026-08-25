@@ -11,7 +11,7 @@ class CreateAgentTemplates(Migration):
             table.text("description").nullable()
             table.string("agent_type").default("custom")
             table.text("system_prompt").nullable()
-            table.string("model").default("claude-sonnet-4-6")
+            table.string("model").default("claude-sonnet-5")
             table.text("permissions_allow").nullable()
             table.text("permissions_deny").nullable()
             table.text(

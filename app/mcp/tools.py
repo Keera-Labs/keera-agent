@@ -489,13 +489,13 @@ class SpawnAgentInput(BaseModel):
         description="Initial task or instruction to send to the agent after it starts. Omit to create an idle agent.",
     )
     model: Optional[str] = Field(
-        default=None, description="Claude model to use. Defaults to claude-opus-4-8."
+        default=None, description="Claude model to use. Defaults to claude-opus-5."
     )
     complexity: str = Field(
         pattern="^(easy|medium|hard)$",
         description=(
             "Task complexity (easy|medium|hard). REQUIRED — it selects the model "
-            "automatically (easy → claude-sonnet-5, medium → claude-opus-4-8, "
+            "automatically (easy → claude-sonnet-5, medium → claude-opus-5, "
             "hard → claude-fable-5) and OVERRIDES any explicit `model`."
         ),
     )
@@ -525,6 +525,7 @@ class SpawnAgentTool(Tool):
         from fastapi_startkit.application import app as _app
 
         from app.actions.agent_create_action import AgentCreateAction
+        from app.constant.complexity import DEFAULT_MODEL
         from app.controllers.global_settings_controller import read_global_settings
         from app.models.Agent import Agent as _Agent
         from app.requests.agent_requests import AgentStoreRequest
@@ -575,7 +576,7 @@ class SpawnAgentTool(Tool):
         request = AgentStoreRequest(
             name=name,
             agent_type=arguments.get("agent_type", "software_engineer"),
-            model=arguments.get("model") or "claude-opus-4-8",
+            model=arguments.get("model") or DEFAULT_MODEL,
             # complexity is required and its model validator overrides `model`.
             complexity=arguments.get("complexity"),
             description=f"{name} agent",

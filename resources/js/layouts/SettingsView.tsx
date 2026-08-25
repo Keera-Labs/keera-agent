@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { color } from '@/tokens'
-import { MODELS } from '@/types/agent'
+import { MODELS, DEFAULT_MODEL } from '@/types/agent'
 import PluginsTab from './views/PluginsTab'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -123,7 +123,7 @@ function TemplatesTab() {
     const [tplName, setTplName] = useState('')
     const [tplDesc, setTplDesc] = useState('')
     const [tplType, setTplType] = useState('software_engineer')
-    const [tplModel, setTplModel] = useState('claude-opus-4-8')
+    const [tplModel, setTplModel] = useState(DEFAULT_MODEL)
     const [tplPrompt, setTplPrompt] = useState('')
     const [tplFlags, setTplFlags] = useState<AgentFlags>({})
     const [tplPlanMode, setTplPlanMode] = useState(false)
@@ -161,7 +161,7 @@ function TemplatesTab() {
     function startNew() {
         setSelected(null); setIsNew(true)
         setTplName(''); setTplDesc(''); setTplType('software_engineer')
-        setTplModel('claude-opus-4-8'); setTplPrompt(''); setTplFlags({})
+        setTplModel(DEFAULT_MODEL); setTplPrompt(''); setTplFlags({})
         setTplPlanMode(false)
         setFormError('')
     }

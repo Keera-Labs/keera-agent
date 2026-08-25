@@ -12,7 +12,7 @@ class AgentTemplateFactory(Factory):
             "description": "orig desc",
             "agent_type": "software_engineer",
             "system_prompt": "orig prompt",
-            "model": "claude-sonnet-4-6",
+            "model": "claude-sonnet-5",
             "flags": {},
             "permissions_allow": [],
             "permissions_deny": [],
