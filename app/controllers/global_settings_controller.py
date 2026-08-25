@@ -43,9 +43,9 @@ async def update_global_settings(request: Request):
 
     if "max_agents_per_project" in body:
         val = body["max_agents_per_project"]
-        if not isinstance(val, int) or val < 1:
+        if not isinstance(val, int) or val < 1 or val > 100:
             return JSONResponse(
-                {"error": "max_agents_per_project must be a positive integer"},
+                {"error": "max_agents_per_project must be an integer between 1 and 100"},
                 status_code=422,
             )
         await write_global_setting("max_agents_per_project", val)
