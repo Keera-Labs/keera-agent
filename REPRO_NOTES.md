@@ -16,33 +16,34 @@ Reproduction only. No fix is included here.
 
 | Phase | Workload | Result |
 | --- | --- | --- |
-| 1 — control | 30 sequential `index(14)` calls | 0/30 failed (0.0%) |
-| 2 — concurrent | 5 rounds × 20 workers × 60 calls | 2546/6000 failed (**42.4%**), 5/5 rounds |
-| 3 — integrity | `PRAGMA integrity_check` on the dev DB | `ok` |
+| Sequential control | 30 `index(14)` calls | 0/30 failed (0.0%) |
+| Concurrent | 3 rounds × 20 workers × 60 calls | 2185/3600 failed (**60.7%**), 3/3 rounds |
 
-Per-round failure rates: 34.9%, 44.2%, 39.3%, 39.6%, 54.2%.
+Per-round failure rates: 59.1%, 78.8%, 44.2%. Rates vary run to run but every
+round reproduces; earlier runs measured 34.9–54.2%.
 
 A single non-concurrent request never errors, which isolates concurrency as
-the trigger. The workload is `SELECT`-only, so the dev DB is never written and
-`integrity_check` returns `ok`.
+the trigger. The workload is `SELECT`-only, so the dev DB is never written —
+verified out of band: the file mtime is unchanged and `PRAGMA integrity_check`
+returns `ok` after a full run.
 
 The captured traceback matches the reported production stack frame for frame,
 down to the `aggregate` → `select_one` → `commit` legs.
 
 ## Run it
 
+From the repo root, against whatever `DB_URL` your `.env` points at:
+
 ```bash
-uv run python scripts/repro_double_commit.py \
-    --db-url sqlite+aiosqlite:////absolute/path/to/keera-agent/storage/keera.db
+uv run python -m scripts.repro_double_commit
 ```
 
-Relative sqlite URLs resolve against the repo root, so from a checkout that has
-its own `storage/keera.db` a bare `uv run python scripts/repro_double_commit.py`
-also works. Useful flags: `--project-id`, `--workers`, `--iterations`,
-`--rounds`, `--control-runs`, `--verbose-sql`.
+The script boots the app through the normal `bootstrap.application` entry
+point, exactly like `artisan` does — no bespoke DB wiring. Tunables are plain
+constants at the top of the file: `PROJECT_ID`, `SEQUENTIAL_CALLS`, `WORKERS`,
+`CALLS_PER_WORKER`, `ROUNDS`.
 
-Exit codes: `0` reproduced, `1` nothing reproduced, `2` inconclusive (the
-sequential control failed too).
+Exit codes: `0` reproduced, `1` not reproduced or inconclusive.
 
 ## Root cause
 
@@ -61,9 +62,10 @@ async def get_connection(self) -> AsyncConnection:
     return self.connection                            # (3) last write wins
 ```
 
-While (2) is in flight, every other coroutine still sees `None`. The script
-instruments this directly: **20 concurrent workers build 20 distinct
-`AsyncConnection` facades** where the design assumes exactly 1.
+While (2) is in flight, every other coroutine still sees `None`. Counting the
+facades during investigation (a temporary wrapper around `get_connection`)
+confirmed it: **20 concurrent workers build 20 distinct `AsyncConnection`
+facades** where the design assumes exactly 1. With a single worker, exactly 1.
 
 For sqlite, `ConnectionFactory.create_engine` builds the engine with
 `StaticPool`, which hands the *same* underlying DBAPI connection to every
