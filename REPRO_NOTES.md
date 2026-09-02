@@ -16,11 +16,12 @@ Reproduction only. No fix is included here.
 
 | Phase | Workload | Result |
 | --- | --- | --- |
-| Sequential control | 30 `index(14)` calls | 0/30 failed (0.0%) |
-| Concurrent | 3 rounds × 20 workers × 60 calls | 2185/3600 failed (**60.7%**), 3/3 rounds |
+| Sequential control | 30 `paginate()` calls | 0/30 failed (0.0%) |
+| Concurrent | 3 rounds × 20 workers × 60 calls | 1548/3600 failed (**43.0%**), 3/3 rounds |
 
-Per-round failure rates: 59.1%, 78.8%, 44.2%. Rates vary run to run but every
-round reproduces; earlier runs measured 34.9–54.2%.
+Per-round failure rates: 39.6%, 44.5%, 44.9%. The rate swings between runs
+(observed 15–79% per round across many runs); what is stable is that **no
+round is ever clean**.
 
 A single non-concurrent request never errors, which isolates concurrency as
 the trigger. The workload is `SELECT`-only, so the dev DB is never written —
@@ -42,6 +43,12 @@ The script boots the app through the normal `bootstrap.application` entry
 point, exactly like `artisan` does — no bespoke DB wiring. Tunables are plain
 constants at the top of the file: `PROJECT_ID`, `SEQUENTIAL_CALLS`, `WORKERS`,
 `CALLS_PER_WORKER`, `ROUNDS`.
+
+It drives `Task...paginate()` directly rather than importing
+`task_controller.index`. Everything below `paginate` in the production stack
+is ORM code, so the controller is not implicated — it is just one caller of
+many, and the repro should not depend on application code that may change
+around it.
 
 Exit codes: `0` reproduced, `1` not reproduced or inconclusive.
 

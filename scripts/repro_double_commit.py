@@ -15,6 +15,10 @@ SYMPTOM
           -> builder.paginate -> count -> aggregate
             -> Connection.select_one -> await conn.commit()
 
+    Everything below ``paginate`` is the ORM, so this script drives the same
+    ``Task...paginate()`` the endpoint runs rather than importing the
+    controller. The controller is not implicated; it is one caller of many.
+
 ROOT CAUSE
     ``Connection.get_connection`` caches ONE SQLAlchemy ``AsyncConnection``
     for the whole process, and its lazy init is a check-then-act across an
@@ -46,7 +50,8 @@ WHY EACH ROUND RESETS THE CONNECTION
     dropping the cached connection first.
 
 EXPECTED OUTPUT
-    Sequential run clean, every concurrent round failing ~30-55% of its calls.
+    Sequential run clean, every concurrent round failing ~15-50% of its calls
+    (the rate swings between runs; what is stable is that no round is clean).
     The workload is SELECT-only, so the dev DB is never written.
 
 Full write-up and measured numbers: REPRO_NOTES.md
@@ -57,7 +62,7 @@ import logging
 import traceback
 import warnings
 
-from app.controllers.task_controller import index
+from app.models.Task import Task
 from bootstrap.application import app
 
 PROJECT_ID = 14
@@ -67,8 +72,18 @@ CALLS_PER_WORKER = 60
 ROUNDS = 3
 
 
+async def list_tasks():
+    """The query shape the endpoint runs: paginate() = a COUNT plus a SELECT.
+
+    Deliberately not calling task_controller.index -- the bug is in the ORM's
+    connection layer, so the repro should not depend on controller code that
+    may change around it. Any paginate() over any table reproduces this.
+    """
+    return await Task.where("project_id", PROJECT_ID).paginate()
+
+
 async def hammer(workers: int, calls: int) -> tuple[int, str | None]:
-    """Call the tasks index from `workers` coroutines at once, counting failures."""
+    """Run the query from `workers` coroutines at once, counting failures."""
     failures = 0
     first_error: str | None = None
 
@@ -76,7 +91,7 @@ async def hammer(workers: int, calls: int) -> tuple[int, str | None]:
         nonlocal failures, first_error
         for _ in range(calls):
             try:
-                await index(PROJECT_ID)
+                await list_tasks()
             except BaseException:  # noqa: BLE001 - any failure counts
                 failures += 1
                 if first_error is None:
@@ -91,7 +106,7 @@ async def main() -> int:
     logging.disable(logging.CRITICAL)
     warnings.simplefilter("ignore")
 
-    print(f"Repro #1631 - tasks index, project {PROJECT_ID}\n")
+    print(f"Repro #1631 - tasks paginate, project {PROJECT_ID}\n")
 
     sequential_failures, _ = await hammer(1, SEQUENTIAL_CALLS)
     print(f"sequential : {sequential_failures}/{SEQUENTIAL_CALLS} failed  (expected 0)")
