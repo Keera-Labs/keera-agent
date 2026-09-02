@@ -13,11 +13,18 @@ SYMPTOM
 
         app/controllers/task_controller.py::index
           -> builder.paginate -> count -> aggregate
-            -> Connection.select_one -> await conn.commit()
+            -> Connection.run -> await conn.commit()
 
     Everything below ``paginate`` is the ORM, so this script drives the same
     ``Task...paginate()`` the endpoint runs rather than importing the
     controller. The controller is not implicated; it is one caller of many.
+
+    Both of paginate's legs autocommit and both can lose the race -- the COUNT
+    via ``aggregate -> select_one``, the SELECT via ``get_models -> select``.
+    Roughly 98% of failures land in ``Connection.run``'s commit (either leg
+    calls it), which is the frame production reported; the rest hit
+    ``select_one``'s own second commit. The report below prints the MOST
+    COMMON traceback rather than the first, so what you see is representative.
 
 ROOT CAUSE
     ``Connection.get_connection`` caches ONE SQLAlchemy ``AsyncConnection``
@@ -61,6 +68,7 @@ import asyncio
 import logging
 import traceback
 import warnings
+from collections import Counter
 
 from app.models.Task import Task
 from bootstrap.application import app
@@ -82,23 +90,24 @@ async def list_tasks():
     return await Task.where("project_id", PROJECT_ID).paginate()
 
 
-async def hammer(workers: int, calls: int) -> tuple[int, str | None]:
-    """Run the query from `workers` coroutines at once, counting failures."""
-    failures = 0
-    first_error: str | None = None
+async def hammer(workers: int, calls: int) -> Counter:
+    """Run the query from `workers` coroutines at once, tallying tracebacks.
+
+    Keyed by traceback rather than just counted, so the report can show the
+    representative failure -- the commit racing inside Connection.run -- and
+    not whichever rarer variant happened to land first.
+    """
+    errors: Counter = Counter()
 
     async def worker() -> None:
-        nonlocal failures, first_error
         for _ in range(calls):
             try:
                 await list_tasks()
             except BaseException:  # noqa: BLE001 - any failure counts
-                failures += 1
-                if first_error is None:
-                    first_error = traceback.format_exc()
+                errors[traceback.format_exc()] += 1
 
     await asyncio.gather(*(worker() for _ in range(workers)))
-    return failures, first_error
+    return errors
 
 
 async def main() -> int:
@@ -108,25 +117,26 @@ async def main() -> int:
 
     print(f"Repro #1631 - tasks paginate, project {PROJECT_ID}\n")
 
-    sequential_failures, _ = await hammer(1, SEQUENTIAL_CALLS)
+    sequential_failures = sum((await hammer(1, SEQUENTIAL_CALLS)).values())
     print(f"sequential : {sequential_failures}/{SEQUENTIAL_CALLS} failed  (expected 0)")
 
     calls = WORKERS * CALLS_PER_WORKER
-    total_failures = 0
-    first_error = None
+    errors: Counter = Counter()
 
     print(f"concurrent : {ROUNDS} rounds x {WORKERS} workers x {CALLS_PER_WORKER} calls")
     for round_number in range(1, ROUNDS + 1):
         # Back to the cold state prod keeps returning to -- see the docstring.
         await app.make("db").clear()
 
-        failures, error = await hammer(WORKERS, CALLS_PER_WORKER)
-        first_error = first_error or error
-        total_failures += failures
+        round_errors = await hammer(WORKERS, CALLS_PER_WORKER)
+        errors += round_errors
+        failures = sum(round_errors.values())
         print(f"  round {round_number}: {failures}/{calls} failed ({failures / calls * 100:.1f}%)")
 
-    if first_error:
-        print(f"\nFirst failure:\n{first_error}")
+    total_failures = sum(errors.values())
+    if errors:
+        commonest, count = errors.most_common(1)[0]
+        print(f"\nMost common failure ({count}/{total_failures}):\n{commonest}")
 
     total_calls = ROUNDS * calls
     if sequential_failures:

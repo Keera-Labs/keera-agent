@@ -29,7 +29,20 @@ verified out of band: the file mtime is unchanged and `PRAGMA integrity_check`
 returns `ok` after a full run.
 
 The captured traceback matches the reported production stack frame for frame,
-down to the `aggregate` → `select_one` → `commit` legs.
+down to `Connection.run`'s `await conn.commit()`.
+
+Breakdown of where the failing commit sits, over one 3-round run (1129
+failures):
+
+| Site | Count | |
+| --- | --- | --- |
+| `select_one:129` → `run:90` `conn.commit()` | 1102 (98%) | the frame production reported |
+| `select_one:133` second `conn.commit()` | 17 | `select_one` commits again after `run` already did |
+| `select:124` → `run:90` `conn.commit()` | 10 | the SELECT leg of `paginate` |
+
+Both legs of `paginate` autocommit and both can lose the race. The script
+prints the *most common* traceback rather than the first, so the reported
+failure is representative rather than whichever rarer variant landed first.
 
 ## Run it
 
