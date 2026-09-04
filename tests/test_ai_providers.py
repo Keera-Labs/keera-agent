@@ -15,9 +15,7 @@ class TestAIProviders(unittest.TestCase):
         command = providers.get("claude").build_command(
             ProviderCommand(model="claude-sonnet-5", worktree="agent-7", continue_session=True)
         )
-        self.assertEqual(
-            command, "claude --worktree agent-7 --continue --model claude-sonnet-5"
-        )
+        self.assertEqual(command, "claude --worktree agent-7 --continue --model claude-sonnet-5")
 
     def test_codex_builds_new_session_command(self):
         command = providers.get("codex").build_command(
@@ -32,6 +30,4 @@ class TestAIProviders(unittest.TestCase):
         command = providers.get("codex").build_command(
             ProviderCommand(model="gpt-5.3-codex", continue_session=True, permission_mode="plan")
         )
-        self.assertEqual(
-            command, "codex resume --last --model gpt-5.3-codex --sandbox read-only"
-        )
+        self.assertEqual(command, "codex resume --last --model gpt-5.3-codex --sandbox read-only")
