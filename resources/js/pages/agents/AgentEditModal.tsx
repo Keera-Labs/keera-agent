@@ -1,9 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { usePage } from '@inertiajs/react'
 import { color } from '@/tokens'
 import Modal from '@/components/ui/Modal'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import { type ProjectAgent, type AgentFlags, normalizeAgent } from '@/queries/agentQuery'
-import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, MODELS, DEFAULT_MODEL } from '@/types/agent'
+import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, DEFAULT_MODEL } from '@/types/agent'
+import type { GlobalSettings } from '@/types/provider'
+import { FALLBACK_PROVIDERS, modelsForProvider } from '@/types/provider'
 import { labelClass, inputClass, cancelBtnClass, submitBtnClass, flagRowClass, toggleClass } from '@/components/ui/styles'
 
 function EditAgentForm({ agent, onSaved, close }: {
@@ -11,9 +14,12 @@ function EditAgentForm({ agent, onSaved, close }: {
     onSaved: (updated: ProjectAgent) => void
     close: () => void
 }) {
+    const { props } = usePage<{ global_settings?: GlobalSettings }>()
+    const providers = props.global_settings?.providers ?? FALLBACK_PROVIDERS
     const [name, setName] = useState(agent.name)
     const [agentType, setAgentType] = useState(agent.agent_type)
     const [description, setDescription] = useState(agent.description ?? '')
+    const [provider, setProvider] = useState(agent.provider ?? 'claude')
     const [model, setModel] = useState(agent.model ?? DEFAULT_MODEL)
     const [systemPrompt, setSystemPrompt] = useState(agent.system_prompt ?? '')
     const [flags, setFlags] = useState<AgentFlags>(agent.flags ?? {})
@@ -26,6 +32,7 @@ function EditAgentForm({ agent, onSaved, close }: {
         setName(agent.name)
         setAgentType(agent.agent_type)
         setDescription(agent.description ?? '')
+        setProvider(agent.provider ?? 'claude')
         setModel(agent.model ?? DEFAULT_MODEL)
         setSystemPrompt(agent.system_prompt ?? '')
         setFlags(agent.flags ?? {})
@@ -51,6 +58,7 @@ function EditAgentForm({ agent, onSaved, close }: {
                     name: trimmedName,
                     agent_type: agentType,
                     description: description.trim() || null,
+                    provider,
                     model,
                     system_prompt: systemPrompt.trim() || null,
                     flags,
@@ -123,17 +131,23 @@ function EditAgentForm({ agent, onSaved, close }: {
                 />
             </label>
 
-            {/* Model */}
-            <label className="flex flex-col gap-1">
-                <span className={labelClass}>Model</span>
-                <select
-                    value={model}
-                    onChange={e => setModel(e.target.value)}
-                    className={`${inputClass} w-full box-border`}
-                >
-                    {MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                </select>
-            </label>
+            <div className="flex gap-2.5">
+                <label className="w-[180px] flex flex-col gap-1">
+                    <span className={labelClass}>Provider</span>
+                    <select value={provider} onChange={e => {
+                        setProvider(e.target.value)
+                        setModel(modelsForProvider(providers, e.target.value)[0] ?? '')
+                    }} className={`${inputClass} w-full box-border`}>
+                        {providers.map(item => <option key={item.slug} value={item.slug}>{item.name}</option>)}
+                    </select>
+                </label>
+                <label className="flex-1 flex flex-col gap-1">
+                    <span className={labelClass}>Model</span>
+                    <select value={model} onChange={e => setModel(e.target.value)} className={`${inputClass} w-full box-border`}>
+                        {modelsForProvider(providers, provider).map(item => <option key={item} value={item}>{item}</option>)}
+                    </select>
+                </label>
+            </div>
 
             {/* System Prompt */}
             <label className="flex flex-col gap-1">

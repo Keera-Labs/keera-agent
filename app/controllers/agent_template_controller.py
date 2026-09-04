@@ -5,6 +5,18 @@ from app.constant.complexity import DEFAULT_MODEL
 from app.models.AgentTemplate import AgentTemplate
 
 
+async def _validate_provider_model(body: dict, template: AgentTemplate | None = None):
+    from app.controllers.global_settings_controller import provider_model_is_configured
+
+    provider = (body.get("provider") or getattr(template, "provider", None) or "claude").strip()
+    model = (body.get("model") or getattr(template, "model", None) or DEFAULT_MODEL).strip()
+    if not await provider_model_is_configured(provider, model):
+        return JSONResponse(
+            {"error": f"Model '{model}' is not configured for {provider}"}, status_code=422
+        )
+    return None
+
+
 def _serialize(t: AgentTemplate) -> dict:
     project_id = getattr(t, "project_id", None)
     return {
@@ -13,6 +25,7 @@ def _serialize(t: AgentTemplate) -> dict:
         "description": t.description,
         "agent_type": t.agent_type,
         "system_prompt": t.system_prompt,
+        "provider": getattr(t, "provider", "claude"),
         "model": t.model,
         "permissions_allow": getattr(t, "permissions_allow", None) or [],
         "permissions_deny": getattr(t, "permissions_deny", None) or [],
@@ -33,6 +46,7 @@ _COPYABLE_COLUMNS = (
     "description",
     "agent_type",
     "system_prompt",
+    "provider",
     "model",
     "flags",
     "permissions_allow",
@@ -55,6 +69,8 @@ def _apply_body(template: AgentTemplate, body: dict) -> None:
         template.system_prompt = (body["system_prompt"] or "").strip() or None
     if "model" in body:
         template.model = (body["model"] or DEFAULT_MODEL).strip()
+    if "provider" in body:
+        template.provider = (body["provider"] or "claude").strip()
     if "flags" in body:
         template.flags = body["flags"] or {}
     if "permissions_allow" in body:
@@ -72,6 +88,7 @@ def _new_template_fields(body: dict) -> dict:
         "name": (body.get("name") or "").strip(),
         "description": (body.get("description") or "").strip() or None,
         "agent_type": (body.get("agent_type") or "software_engineer").strip(),
+        "provider": (body.get("provider") or "claude").strip(),
         "model": (body.get("model") or DEFAULT_MODEL).strip(),
         "system_prompt": (body.get("system_prompt") or "").strip() or None,
         "flags": body.get("flags") or {},
@@ -101,6 +118,8 @@ async def store(request: Request):
     body = await request.json()
     if not (body.get("name") or "").strip():
         return JSONResponse({"error": "name is required"}, status_code=422)
+    if error := await _validate_provider_model(body):
+        return error
 
     template = await AgentTemplate.create(
         {
@@ -118,7 +137,10 @@ async def update(request: Request, template_id: int):
     insert-if-missing only, so edits survive a re-seed (use Sync to revert)."""
     template = await AgentTemplate.find_or_fail(template_id)
 
-    _apply_body(template, await request.json())
+    body = await request.json()
+    if error := await _validate_provider_model(body, template):
+        return error
+    _apply_body(template, body)
     await template.save()
     return JSONResponse(_serialize(template))
 
@@ -174,6 +196,8 @@ async def project_store(request: Request, project_id: int):
     body = await request.json()
     if not (body.get("name") or "").strip():
         return JSONResponse({"error": "name is required"}, status_code=422)
+    if error := await _validate_provider_model(body):
+        return error
 
     template = await AgentTemplate.create(
         {
@@ -195,6 +219,8 @@ async def project_update(request: Request, project_id: int, template_id: int):
     template = await AgentTemplate.find_or_fail(template_id)
 
     body = await request.json()
+    if error := await _validate_provider_model(body, template):
+        return error
     tpl_project = getattr(template, "project_id", None)
 
     # Already a project row for THIS project → update in place.

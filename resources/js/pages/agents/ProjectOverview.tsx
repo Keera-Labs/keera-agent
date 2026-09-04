@@ -106,6 +106,7 @@ export function ProjectOverview({ project }: { project: Project }) {
                                 adoptPending={adoptWork.isPending}
                                 stats={{
                                     runtime: PLACEHOLDER,
+                                    provider: agent.provider,
                                     model: agent.model,
                                     branch: PLACEHOLDER,
                                     usage: PLACEHOLDER,

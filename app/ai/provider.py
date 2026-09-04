@@ -23,6 +23,7 @@ class Provider(ABC):
 
     slug: str
     display_name: str
+    default_models: tuple[str, ...]
 
     @abstractmethod
     def build_command(self, command: ProviderCommand) -> str:

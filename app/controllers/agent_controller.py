@@ -46,6 +46,15 @@ async def update(body: AgentUpdateRequest, agent_id: int):
 
     update_data = body.model_dump(exclude_unset=True)
 
+    provider = update_data.get("provider", getattr(agent, "provider", None) or "claude")
+    model = update_data.get("model", agent.model)
+    from app.controllers.global_settings_controller import provider_model_is_configured
+
+    if not await provider_model_is_configured(provider, model):
+        return JSONResponse(
+            {"error": f"Model '{model}' is not configured for {provider}"}, status_code=422
+        )
+
     # plan_mode is column-authoritative. If a legacy client nests it in flags,
     # promote it to the column and strip it so the two never diverge.
     if isinstance(update_data.get("flags"), dict) and "plan_mode" in update_data["flags"]:

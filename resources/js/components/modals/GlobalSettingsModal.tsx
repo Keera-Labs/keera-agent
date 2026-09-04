@@ -3,10 +3,12 @@ import { router, usePage } from '@inertiajs/react'
 import { color } from '@/tokens'
 import type { AgentTemplate } from '@/types/agent'
 import type { AgentFlags } from '@/queries/agentQuery'
-import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, MODELS, DEFAULT_MODEL } from '@/types/agent'
+import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, DEFAULT_MODEL } from '@/types/agent'
 import { labelClass, inputClass, cancelBtnClass, submitBtnClass, flagRowClass, toggleClass } from '@/components/ui/styles'
 import { TagInput } from '@/components/ui/TagInput'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
+import type { GlobalSettings } from '@/types/provider'
+import { FALLBACK_PROVIDERS, modelsForProvider } from '@/types/provider'
 
 export function GlobalSettingsModal({
     onClose,
@@ -23,9 +25,13 @@ export function GlobalSettingsModal({
     const [templates, setTemplates] = useState<AgentTemplate[]>(initialTemplates)
 
     // ── General settings — seeded from Inertia props, no extra fetch needed ───
-    const { props: pageProps } = usePage<{ global_settings?: { max_agents_per_project?: number } }>()
+    const { props: pageProps } = usePage<{ global_settings?: GlobalSettings }>()
     const serverMax = pageProps.global_settings?.max_agents_per_project ?? 10
+    const configuredProviders = pageProps.global_settings?.providers ?? FALLBACK_PROVIDERS
     const [maxAgents, setMaxAgents] = useState<number>(serverMax)
+    const [providerModels, setProviderModels] = useState<Record<string, string[]>>(() =>
+        Object.fromEntries(configuredProviders.map(provider => [provider.slug, provider.models]))
+    )
     const [generalSaving, setGeneralSaving] = useState(false)
     const [generalSaved, setGeneralSaved] = useState(false)
     const [generalError, setGeneralError] = useState('')
@@ -63,7 +69,15 @@ export function GlobalSettingsModal({
             const res = await fetch('/api/global-settings', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ max_agents_per_project: maxAgents }),
+                body: JSON.stringify({
+                    max_agents_per_project: maxAgents,
+                    provider_models: Object.fromEntries(
+                        configuredProviders.map(provider => [
+                            provider.slug,
+                            (providerModels[provider.slug] ?? []).map(model => model.trim()).filter(Boolean),
+                        ])
+                    ),
+                }),
             })
             const d = await res.json()
             if (!res.ok) { setGeneralError(d.error ?? 'Save failed'); return }
@@ -84,6 +98,7 @@ export function GlobalSettingsModal({
     const [tplName, setTplName] = useState('')
     const [tplDesc, setTplDesc] = useState('')
     const [tplType, setTplType] = useState('software_engineer')
+    const [tplProvider, setTplProvider] = useState('claude')
     const [tplModel, setTplModel] = useState(DEFAULT_MODEL)
     const [tplPrompt, setTplPrompt] = useState('')
     const [tplFlags, setTplFlags] = useState<AgentFlags>({})
@@ -110,7 +125,7 @@ export function GlobalSettingsModal({
     function loadTemplate(tpl: AgentTemplate) {
         setSelected(tpl); setIsNew(false)
         setTplName(tpl.name); setTplDesc(tpl.description ?? '')
-        setTplType(tpl.agent_type); setTplModel(tpl.model)
+        setTplType(tpl.agent_type); setTplProvider(tpl.provider ?? 'claude'); setTplModel(tpl.model)
         setTplPrompt(tpl.system_prompt ?? ''); setTplFlags(tpl.flags ?? {})
         setTplPlanMode(!!tpl.plan_mode)
         setFormError('')
@@ -119,7 +134,8 @@ export function GlobalSettingsModal({
     function startNew() {
         setSelected(null); setIsNew(true)
         setTplName(''); setTplDesc(''); setTplType('software_engineer')
-        setTplModel(DEFAULT_MODEL); setTplPrompt(''); setTplFlags({})
+        setTplProvider('claude')
+        setTplModel(modelsForProvider(configuredProviders, 'claude')[0] ?? DEFAULT_MODEL); setTplPrompt(''); setTplFlags({})
         setTplPlanMode(false)
         setFormError('')
     }
@@ -128,7 +144,7 @@ export function GlobalSettingsModal({
         if (!tplName.trim()) { setFormError('Name is required'); return }
         setSaving(true); setFormError('')
         try {
-            const body = { name: tplName, description: tplDesc, agent_type: tplType, model: tplModel, system_prompt: tplPrompt, flags: tplFlags, plan_mode: tplPlanMode }
+            const body = { name: tplName, description: tplDesc, agent_type: tplType, provider: tplProvider, model: tplModel, system_prompt: tplPrompt, flags: tplFlags, plan_mode: tplPlanMode }
             const url = isNew ? '/api/agent-templates' : `/api/agent-templates/${selected!.id}`
             const res = await fetch(url, { method: isNew ? 'POST' : 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
             if (!res.ok) { const d = await res.json(); setFormError(d.error ?? 'Save failed'); return }
@@ -188,7 +204,7 @@ export function GlobalSettingsModal({
                 {/* ── General tab ── */}
                 {tab === 'general' && (
                     <div className="flex-1 overflow-y-auto p-6">
-                        <div className="flex flex-col gap-3.5 max-w-[400px]">
+                        <div className="flex flex-col gap-5 max-w-[620px]">
                             <p className="m-0 text-zinc-500 text-[11px]">
                                 Global settings that apply across all projects.
                             </p>
@@ -207,6 +223,53 @@ export function GlobalSettingsModal({
                                     Maximum number of agents (excluding deleted) allowed in a single project. Default: 10.
                                 </span>
                             </label>
+                            <div className="h-px bg-stroke" />
+                            <div className="flex flex-col gap-3">
+                                <div>
+                                    <div className="text-zinc-800 text-[12px] font-semibold">Provider models</div>
+                                    <p className="m-0 mt-1 text-zinc-400 text-[10px] leading-normal">
+                                        These model identifiers appear in agent and template forms.
+                                    </p>
+                                </div>
+                                {configuredProviders.map(provider => (
+                                    <div key={provider.slug} className="rounded-md border border-stroke bg-canvas p-3 flex flex-col gap-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-zinc-800 text-[12px] font-medium">{provider.name}</span>
+                                            <span className="text-zinc-400 text-[10px] font-mono">{provider.slug}</span>
+                                        </div>
+                                        {(providerModels[provider.slug] ?? []).map((model, index) => (
+                                            <div key={`${provider.slug}-${index}`} className="flex gap-1.5">
+                                                <input
+                                                    value={model}
+                                                    aria-label={`${provider.name} model ${index + 1}`}
+                                                    onChange={e => setProviderModels(current => ({
+                                                        ...current,
+                                                        [provider.slug]: current[provider.slug].map((value, i) => i === index ? e.target.value : value),
+                                                    }))}
+                                                    className={`${inputClass} flex-1 font-mono text-[11px]`}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setProviderModels(current => ({
+                                                        ...current,
+                                                        [provider.slug]: current[provider.slug].filter((_, i) => i !== index),
+                                                    }))}
+                                                    className={`${cancelBtnClass} w-8`}
+                                                    aria-label={`Remove ${model}`}
+                                                >×</button>
+                                            </div>
+                                        ))}
+                                        <button
+                                            type="button"
+                                            onClick={() => setProviderModels(current => ({
+                                                ...current,
+                                                [provider.slug]: [...(current[provider.slug] ?? []), ''],
+                                            }))}
+                                            className={`${cancelBtnClass} self-start`}
+                                        >+ Add model</button>
+                                    </div>
+                                ))}
+                            </div>
                             <div>
                                 <button
                                     onClick={saveGeneralSettings}
@@ -295,13 +358,24 @@ export function GlobalSettingsModal({
                                             className={`${inputClass} w-full box-border ${canEdit ? 'opacity-100' : 'opacity-[0.55]'}`} />
                                     </label>
 
-                                    <label className="flex flex-col gap-1">
-                                        <span className={labelClass}>Model</span>
-                                        <select value={tplModel} disabled={!canEdit} onChange={e => setTplModel(e.target.value)}
-                                            className={`${inputClass} w-full box-border ${canEdit ? 'opacity-100' : 'opacity-[0.55]'}`}>
-                                            {MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                                        </select>
-                                    </label>
+                                    <div className="flex gap-2.5">
+                                        <label className="w-[160px] flex flex-col gap-1">
+                                            <span className={labelClass}>Provider</span>
+                                            <select value={tplProvider} disabled={!canEdit} onChange={e => {
+                                                setTplProvider(e.target.value)
+                                                setTplModel(modelsForProvider(configuredProviders, e.target.value)[0] ?? '')
+                                            }} className={`${inputClass} w-full box-border ${canEdit ? 'opacity-100' : 'opacity-[0.55]'}`}>
+                                                {configuredProviders.map(provider => <option key={provider.slug} value={provider.slug}>{provider.name}</option>)}
+                                            </select>
+                                        </label>
+                                        <label className="flex-1 flex flex-col gap-1">
+                                            <span className={labelClass}>Model</span>
+                                            <select value={tplModel} disabled={!canEdit} onChange={e => setTplModel(e.target.value)}
+                                                className={`${inputClass} w-full box-border ${canEdit ? 'opacity-100' : 'opacity-[0.55]'}`}>
+                                                {modelsForProvider(configuredProviders, tplProvider).map(model => <option key={model} value={model}>{model}</option>)}
+                                            </select>
+                                        </label>
+                                    </div>
 
                                     <label className="flex flex-col gap-1">
                                         <span className={labelClass}>System Prompt</span>

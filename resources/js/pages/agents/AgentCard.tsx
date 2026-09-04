@@ -67,6 +67,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 export interface AgentCardStats {
     runtime: string
+    provider: string
     model: string
     branch: string
     usage: string
@@ -115,9 +116,10 @@ export function AgentCard({
 
             <hr className={dividerClass} />
 
-            {/* Stats: RUNTIME · MODEL / BRANCH · USAGE */}
+            {/* Runtime and provider configuration */}
             <div className="grid grid-cols-2 gap-4">
                 <Stat label="Runtime" value={stats.runtime} />
+                <Stat label="Provider" value={stats.provider} />
                 <Stat label="Model" value={stats.model} />
                 <Stat label="Branch" value={stats.branch} />
                 <Stat label="Usage" value={stats.usage} />
