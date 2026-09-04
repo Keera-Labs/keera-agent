@@ -133,6 +133,37 @@ def _cleanup_stale_worktree(agent, cwd: str) -> None:
         )
 
 
+def ensure_codex_worktree(agent, cwd: str) -> str:
+    if getattr(agent, "provider", None) != "codex" or not getattr(
+        agent, "use_worktree", True
+    ):
+        return cwd
+
+    worktree_name = f"agent-{agent.id}"
+    worktree_path = os.path.join(cwd, ".claude", "worktrees", worktree_name)
+    branch_name = f"worktree-{worktree_name}"
+    existing_path = discover_worktree_path(cwd, branch_name)
+    if existing_path:
+        return existing_path
+
+    branch = subprocess.run(
+        ["git", "branch", "--list", branch_name],
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+    )
+    command = ["git", "worktree", "add"]
+    if not branch.stdout.strip():
+        command.extend(("-b", branch_name))
+        command.append(worktree_path)
+    else:
+        command.extend((worktree_path, branch_name))
+    result = subprocess.run(command, capture_output=True, text=True, cwd=cwd)
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or "Failed to create Codex worktree")
+    return worktree_path
+
+
 def discover_worktree_path(cwd: str, branch_name: str) -> str | None:
     """Return the real filesystem path of the worktree checked out on ``branch_name``.
 
@@ -262,15 +293,18 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     """
     base_url = app().make("config").get("fastapi.app_url")
 
-    # Remove any stale worktree/branch from a prior session to avoid git conflicts
-    _cleanup_stale_worktree(agent, cwd)
+    if getattr(agent, "provider", None) == "codex":
+        agent_cwd = ensure_codex_worktree(agent, cwd)
+    else:
+        _cleanup_stale_worktree(agent, cwd)
+        agent_cwd = cwd
 
     session_id = str(uuid.uuid4())
     await Agent.where("id", agent.id).update({"session_id": session_id})
     await _mark_agent_working(agent.id, initial_message)
 
     terminal_manager: TerminalManager = app().make("terminal")
-    terminal_manager.create(cwd=cwd, session_id=session_id)
+    terminal_manager.create(cwd=agent_cwd, session_id=session_id)
     terminal = terminal_manager.get(session_id)
 
     # Give the shell time to start, then launch claude
@@ -283,7 +317,7 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
         .get()
     )
 
-    relay_instructions = _build_relay_instructions(agent, cwd, base_url, siblings)
+    relay_instructions = _build_relay_instructions(agent, agent_cwd, base_url, siblings)
 
     # Re-fetch agent so to_command() uses the current has_session value from DB
     fresh_agent = await Agent.find(agent.id)

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { usePage } from '@inertiajs/react'
 import { color } from '@/tokens'
 import type { AgentTemplate, AgentFlags } from '@/types/agent'
-import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, DEFAULT_MODEL } from '@/types/agent'
+import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, DEFAULT_MODEL, DEFAULT_PROVIDER } from '@/types/agent'
 import type { GlobalSettings } from '@/types/provider'
 import { FALLBACK_PROVIDERS, modelsForProvider } from '@/types/provider'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
@@ -35,7 +35,7 @@ export function ProjectTemplatesModal({
     const [name, setName] = useState('')
     const [desc, setDesc] = useState('')
     const [type, setType] = useState('software_engineer')
-    const [provider, setProvider] = useState('claude')
+    const [provider, setProvider] = useState(DEFAULT_PROVIDER)
     const [model, setModel] = useState(DEFAULT_MODEL)
     const [prompt, setPrompt] = useState('')
     const [flags, setFlags] = useState<AgentFlags>({})
@@ -57,14 +57,14 @@ export function ProjectTemplatesModal({
     function load(tpl: AgentTemplate) {
         setSelected(tpl); setIsNew(false); setError('')
         setName(tpl.name); setDesc(tpl.description ?? ''); setType(tpl.agent_type)
-        setProvider(tpl.provider ?? 'claude'); setModel(tpl.model ?? DEFAULT_MODEL); setPrompt(tpl.system_prompt ?? '')
+        setProvider(tpl.provider ?? DEFAULT_PROVIDER); setModel(tpl.model ?? DEFAULT_MODEL); setPrompt(tpl.system_prompt ?? '')
         setFlags(tpl.flags ?? {}); setPlanMode(!!tpl.plan_mode)
     }
 
     function startNew() {
         setSelected(null); setIsNew(true); setError('')
         setName(''); setDesc(''); setType('software_engineer')
-        setProvider('claude'); setModel(modelsForProvider(providers, 'claude')[0] ?? DEFAULT_MODEL); setPrompt(''); setFlags({}); setPlanMode(false)
+        setProvider(DEFAULT_PROVIDER); setModel(modelsForProvider(providers, DEFAULT_PROVIDER)[0] ?? DEFAULT_MODEL); setPrompt(''); setFlags({}); setPlanMode(false)
     }
 
     async function save() {

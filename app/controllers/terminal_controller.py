@@ -152,7 +152,17 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
     session_id = str(uuid.uuid4())
     await Agent.where("id", agent_record.id).update({"session_id": session_id})
 
-    terminal_manager.create(cwd=cwd, session_id=session_id)
+    from app.controllers.agent_trigger_controller import ensure_codex_worktree
+
+    try:
+        agent_cwd = ensure_codex_worktree(agent_record, cwd)
+    except RuntimeError as exc:
+        await Agent.where("id", agent_record.id).update({"session_id": None})
+        await websocket.send_text(json.dumps({"type": "error", "message": str(exc)}))
+        await websocket.close(code=1011, reason="worktree creation failed")
+        return
+
+    terminal_manager.create(cwd=agent_cwd, session_id=session_id)
     terminal = terminal_manager.get(session_id)
 
     ready_event = claude_ready.setdefault(session_id, asyncio.Event())

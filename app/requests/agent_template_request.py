@@ -4,15 +4,12 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.ai import providers
 from app.constant.agent_types import ALLOWED_AGENT_TYPES
-from app.constant.complexity import DEFAULT_MODEL
-
-
 class AgentTemplateStoreRequest(BaseModel):
     name: str
     description: Optional[str] = None
     agent_type: str = "software_engineer"
-    provider: str = "claude"
-    model: str = DEFAULT_MODEL
+    provider: str = "codex"
+    model: str = "gpt-5.6-terra"
     system_prompt: Optional[str] = None
     flags: dict = Field(default_factory=dict)
     permissions_allow: list[str] = Field(default_factory=list)

@@ -7,7 +7,7 @@ import { useProjectStore } from '@/stores/projectStore'
 import type { ProjectAgent, AgentFlags } from '@/queries/agentQuery'
 import { normalizeAgent } from '@/queries/agentQuery'
 import type { AgentTemplate } from '@/types/agent'
-import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS } from '@/types/agent'
+import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, DEFAULT_MODEL } from '@/types/agent'
 import type { GlobalSettings } from '@/types/provider'
 import { FALLBACK_PROVIDERS, modelsForProvider } from '@/types/provider'
 import { labelClass, inputClass, cancelBtnClass, submitBtnClass, flagRowClass, toggleClass } from '@/components/ui/styles'
@@ -33,12 +33,16 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
 }) {
     const { props } = usePage<{ global_settings?: GlobalSettings }>()
     const providers = props.global_settings?.providers ?? FALLBACK_PROVIDERS
-    const initialProvider = providers[0]?.slug ?? 'claude'
+    const initialProvider = providers[0]?.slug ?? 'codex'
     const [name, setName] = useState('')
     const [agentType, setAgentType] = useState<string>('software_engineer')
     const [description, setDescription] = useState(() => findBuiltinForType(templates, 'software_engineer')?.description ?? '')
     const [provider, setProvider] = useState(initialProvider)
-    const [model, setModel] = useState(modelsForProvider(providers, initialProvider)[0] ?? '')
+    const [model, setModel] = useState(
+        modelsForProvider(providers, initialProvider).includes(DEFAULT_MODEL)
+            ? DEFAULT_MODEL
+            : (modelsForProvider(providers, initialProvider)[0] ?? '')
+    )
     const [systemPrompt, setSystemPrompt] = useState(() => findBuiltinForType(templates, 'software_engineer')?.system_prompt ?? '')
     const [complexity, setComplexity] = useState('medium')
     const [flags, setFlags] = useState<AgentFlags>({})
@@ -58,7 +62,7 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
             if (tpl) {
                 setDescription(prev => prev || (tpl.description ?? ''))
                 setSystemPrompt(prev => prev || (tpl.system_prompt ?? ''))
-                setProvider(tpl.provider ?? 'claude')
+                setProvider(tpl.provider ?? 'codex')
                 setModel(tpl.model)
             }
         }
@@ -70,7 +74,9 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
             setAgentType('software_engineer')
             setDescription('')
             setProvider(initialProvider)
-            setModel(modelsForProvider(providers, initialProvider)[0] ?? '')
+            setModel(modelsForProvider(providers, initialProvider).includes(DEFAULT_MODEL)
+                ? DEFAULT_MODEL
+                : (modelsForProvider(providers, initialProvider)[0] ?? ''))
             setSystemPrompt('')
             setFlags({})
             setPlanMode(false)
@@ -78,7 +84,7 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
         }
         setSelectedTemplateId(tpl.id)
         setAgentType(tpl.agent_type)
-        setProvider(tpl.provider ?? 'claude')
+        setProvider(tpl.provider ?? 'codex')
         setModel(tpl.model)
         setFlags(tpl.flags ?? {})
         setPlanMode(!!tpl.plan_mode)
@@ -198,8 +204,13 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
                 <label className="w-[160px] flex flex-col gap-1">
                     <span className={labelClass}>Provider</span>
                     <select value={provider} onChange={e => {
-                        setProvider(e.target.value)
-                        setModel(modelsForProvider(providers, e.target.value)[0] ?? '')
+                        const nextProvider = e.target.value
+                        setProvider(nextProvider)
+                        if (nextProvider === 'codex') {
+                            setModel({ easy: 'gpt-5.6-luna', medium: 'gpt-5.6-terra', hard: 'gpt-5.6-sol' }[complexity] ?? DEFAULT_MODEL)
+                        } else {
+                            setModel(modelsForProvider(providers, nextProvider)[0] ?? '')
+                        }
                     }} className={inputClass}>
                         {providers.map(item => <option key={item.slug} value={item.slug}>{item.name}</option>)}
                     </select>
@@ -214,7 +225,17 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
 
             <label className="flex flex-col gap-1">
                 <span className={labelClass}>Complexity</span>
-                <select value={complexity} onChange={e => setComplexity(e.target.value)} className={inputClass}>
+                <select value={complexity} onChange={e => {
+                    const nextComplexity = e.target.value
+                    setComplexity(nextComplexity)
+                    if (provider === 'codex') {
+                        setModel({
+                            easy: 'gpt-5.6-luna',
+                            medium: 'gpt-5.6-terra',
+                            hard: 'gpt-5.6-sol',
+                        }[nextComplexity] ?? 'gpt-5.6-terra')
+                    }
+                }} className={inputClass}>
                     <option value="easy">Easy</option>
                     <option value="medium">Medium</option>
                     <option value="hard">Hard</option>

@@ -231,7 +231,6 @@ async def store(request: Request):
     # Create a default PM agent for every new project
     import json as _json
 
-    from app.constant.complexity import DEFAULT_MODEL
     from app.models.Agent import Agent
     from app.services.permissions.permission import read_default_permissions
     from app.utils.system_prompts import default_system_prompt
@@ -243,7 +242,8 @@ async def store(request: Request):
             "name": "PM",
             "agent_type": "pm",
             "description": "Project manager agent that coordinates work across the team.",
-            "model": DEFAULT_MODEL,
+            "provider": "codex",
+            "model": "gpt-5.6-terra",
             "system_prompt": default_system_prompt("pm"),
             "permissions_allow": _json.dumps(_dp.get("allow", [])),
             "permissions_deny": _json.dumps(_dp.get("deny", [])),

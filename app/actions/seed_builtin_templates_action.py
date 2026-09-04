@@ -16,6 +16,7 @@ def global_template_fields(tpl: AgentTemplateSeed) -> dict:
         "name": tpl.name,
         "description": tpl.description,
         "agent_type": tpl.agent_type,
+        "provider": tpl.provider,
         "system_prompt": default_system_prompt(tpl.agent_type),
         "model": tpl.model,
         "flags": _json.dumps(tpl.flags),

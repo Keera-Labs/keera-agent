@@ -227,7 +227,8 @@ class TestGlobalTemplateSync(TestCase, DatabaseTransaction):
         await SyncGlobalTemplatesAction().execute()
 
         pm = await AgentTemplate.where("name", "PM").where_null("project_id").first()
-        self.assertEqual(pm.model, "claude-opus-5")  # code default
+        self.assertEqual(pm.provider, "codex")
+        self.assertEqual(pm.model, "gpt-5.6-terra")
         self.assertFalse(bool(pm.plan_mode))  # PM is not a plan-mode role
 
     async def test_sync_leaves_project_overrides_untouched(self):

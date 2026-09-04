@@ -11,6 +11,7 @@ class AgentTemplateFactory(Factory):
             "name": self.fake.unique.slug(),
             "description": "orig desc",
             "agent_type": "software_engineer",
+            "provider": "claude",
             "system_prompt": "orig prompt",
             "model": "claude-sonnet-5",
             "flags": {},
