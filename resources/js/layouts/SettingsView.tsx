@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { router, usePage } from '@inertiajs/react'
 import { color } from '@/tokens'
-import { DEFAULT_MODEL } from '@/types/agent'
+import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '@/types/agent'
 import type { GlobalSettings } from '@/types/provider'
 import { FALLBACK_PROVIDERS, modelsForProvider } from '@/types/provider'
 import PluginsTab from './views/PluginsTab'
@@ -129,7 +129,7 @@ function TemplatesTab() {
     const [tplName, setTplName] = useState('')
     const [tplDesc, setTplDesc] = useState('')
     const [tplType, setTplType] = useState('software_engineer')
-    const [tplProvider, setTplProvider] = useState('claude')
+    const [tplProvider, setTplProvider] = useState(DEFAULT_PROVIDER)
     const [tplModel, setTplModel] = useState(DEFAULT_MODEL)
     const [tplPrompt, setTplPrompt] = useState('')
     const [tplFlags, setTplFlags] = useState<AgentFlags>({})
@@ -159,7 +159,7 @@ function TemplatesTab() {
     function loadTemplate(tpl: AgentTemplate) {
         setSelected(tpl); setIsNew(false)
         setTplName(tpl.name); setTplDesc(tpl.description ?? '')
-        setTplType(tpl.agent_type); setTplProvider(tpl.provider ?? 'claude'); setTplModel(tpl.model)
+        setTplType(tpl.agent_type); setTplProvider(tpl.provider ?? DEFAULT_PROVIDER); setTplModel(tpl.model)
         setTplPrompt(tpl.system_prompt ?? ''); setTplFlags(tpl.flags ?? {})
         setTplPlanMode(!!tpl.plan_mode)
         setFormError('')
@@ -168,7 +168,7 @@ function TemplatesTab() {
     function startNew() {
         setSelected(null); setIsNew(true)
         setTplName(''); setTplDesc(''); setTplType('software_engineer')
-        setTplProvider('claude'); setTplModel(modelsForProvider(providers, 'claude')[0] ?? DEFAULT_MODEL); setTplPrompt(''); setTplFlags({})
+        setTplProvider(DEFAULT_PROVIDER); setTplModel(modelsForProvider(providers, DEFAULT_PROVIDER)[0] ?? DEFAULT_MODEL); setTplPrompt(''); setTplFlags({})
         setTplPlanMode(false)
         setFormError('')
     }

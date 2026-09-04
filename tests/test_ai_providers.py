@@ -5,7 +5,10 @@ from app.ai import ProviderCommand, providers
 
 class TestAIProviders(unittest.TestCase):
     def test_builtin_providers_are_registered(self):
-        self.assertEqual([provider.slug for provider in providers.all()], ["claude", "codex"])
+        self.assertEqual([provider.slug for provider in providers.all()], ["codex", "claude"])
+        self.assertIn("gpt-5.6-luna", providers.get("codex").default_models)
+        self.assertIn("gpt-5.6-terra", providers.get("codex").default_models)
+        self.assertIn("gpt-5.6-sol", providers.get("codex").default_models)
 
     def test_unknown_provider_raises_clear_error(self):
         with self.assertRaisesRegex(ValueError, "Unknown AI provider: missing"):

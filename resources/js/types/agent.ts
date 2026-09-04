@@ -43,5 +43,5 @@ export const MODELS = [
 ]
 
 // Default model when a selector needs a starting value (matches the backend DEFAULT_MODEL).
-export const DEFAULT_MODEL = 'claude-opus-5'
-export const DEFAULT_PROVIDER = 'claude'
+export const DEFAULT_MODEL = 'gpt-5.6-terra'
+export const DEFAULT_PROVIDER = 'codex'

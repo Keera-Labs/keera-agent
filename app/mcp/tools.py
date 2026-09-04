@@ -525,7 +525,6 @@ class SpawnAgentTool(Tool):
         from fastapi_startkit.application import app as _app
 
         from app.actions.agent_create_action import AgentCreateAction
-        from app.constant.complexity import DEFAULT_MODEL
         from app.controllers.global_settings_controller import read_global_settings
         from app.models.Agent import Agent as _Agent
         from app.requests.agent_requests import AgentStoreRequest
@@ -573,12 +572,18 @@ class SpawnAgentTool(Tool):
         # Build the request outside the try so a validation error (e.g. a missing
         # or invalid complexity) surfaces instead of being swallowed as an
         # "Error:" string — only the limit ValueError from execute() is caught.
+        complexity = arguments.get("complexity")
+        model = {
+            "easy": "gpt-5.6-luna",
+            "medium": "gpt-5.6-terra",
+            "hard": "gpt-5.6-sol",
+        }.get(complexity, "gpt-5.6-terra")
         request = AgentStoreRequest(
             name=name,
             agent_type=arguments.get("agent_type", "software_engineer"),
-            model=arguments.get("model") or DEFAULT_MODEL,
-            # complexity is required and its model validator overrides `model`.
-            complexity=arguments.get("complexity"),
+            provider="codex",
+            model=model,
+            complexity=complexity,
             description=f"{name} agent",
             # system_prompt is intentionally not forwarded: spawned agents
             # always use their role-based default prompt and a caller must

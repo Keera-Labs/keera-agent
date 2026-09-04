@@ -4,7 +4,7 @@ import { color } from '@/tokens'
 import Modal from '@/components/ui/Modal'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import { type ProjectAgent, type AgentFlags, normalizeAgent } from '@/queries/agentQuery'
-import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, DEFAULT_MODEL } from '@/types/agent'
+import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, DEFAULT_MODEL, DEFAULT_PROVIDER } from '@/types/agent'
 import type { GlobalSettings } from '@/types/provider'
 import { FALLBACK_PROVIDERS, modelsForProvider } from '@/types/provider'
 import { labelClass, inputClass, cancelBtnClass, submitBtnClass, flagRowClass, toggleClass } from '@/components/ui/styles'
@@ -19,7 +19,7 @@ function EditAgentForm({ agent, onSaved, close }: {
     const [name, setName] = useState(agent.name)
     const [agentType, setAgentType] = useState(agent.agent_type)
     const [description, setDescription] = useState(agent.description ?? '')
-    const [provider, setProvider] = useState(agent.provider ?? 'claude')
+    const [provider, setProvider] = useState(agent.provider ?? DEFAULT_PROVIDER)
     const [model, setModel] = useState(agent.model ?? DEFAULT_MODEL)
     const [systemPrompt, setSystemPrompt] = useState(agent.system_prompt ?? '')
     const [flags, setFlags] = useState<AgentFlags>(agent.flags ?? {})
@@ -32,7 +32,7 @@ function EditAgentForm({ agent, onSaved, close }: {
         setName(agent.name)
         setAgentType(agent.agent_type)
         setDescription(agent.description ?? '')
-        setProvider(agent.provider ?? 'claude')
+        setProvider(agent.provider ?? DEFAULT_PROVIDER)
         setModel(agent.model ?? DEFAULT_MODEL)
         setSystemPrompt(agent.system_prompt ?? '')
         setFlags(agent.flags ?? {})

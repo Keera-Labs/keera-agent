@@ -10,6 +10,7 @@ class AgentFactory(Factory):
         return {
             "name": self.fake.unique.name(),
             "agent_type": "software_engineer",
+            "provider": "claude",
             "model": "claude-sonnet-5",
             "system_prompt": "You are a Senior Software Engineer.",
             "status": "idle",

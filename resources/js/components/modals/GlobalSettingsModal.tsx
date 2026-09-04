@@ -3,7 +3,7 @@ import { router, usePage } from '@inertiajs/react'
 import { color } from '@/tokens'
 import type { AgentTemplate } from '@/types/agent'
 import type { AgentFlags } from '@/queries/agentQuery'
-import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, DEFAULT_MODEL } from '@/types/agent'
+import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, DEFAULT_MODEL, DEFAULT_PROVIDER } from '@/types/agent'
 import { labelClass, inputClass, cancelBtnClass, submitBtnClass, flagRowClass, toggleClass } from '@/components/ui/styles'
 import { TagInput } from '@/components/ui/TagInput'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
@@ -98,7 +98,7 @@ export function GlobalSettingsModal({
     const [tplName, setTplName] = useState('')
     const [tplDesc, setTplDesc] = useState('')
     const [tplType, setTplType] = useState('software_engineer')
-    const [tplProvider, setTplProvider] = useState('claude')
+    const [tplProvider, setTplProvider] = useState(DEFAULT_PROVIDER)
     const [tplModel, setTplModel] = useState(DEFAULT_MODEL)
     const [tplPrompt, setTplPrompt] = useState('')
     const [tplFlags, setTplFlags] = useState<AgentFlags>({})
@@ -125,7 +125,7 @@ export function GlobalSettingsModal({
     function loadTemplate(tpl: AgentTemplate) {
         setSelected(tpl); setIsNew(false)
         setTplName(tpl.name); setTplDesc(tpl.description ?? '')
-        setTplType(tpl.agent_type); setTplProvider(tpl.provider ?? 'claude'); setTplModel(tpl.model)
+        setTplType(tpl.agent_type); setTplProvider(tpl.provider ?? DEFAULT_PROVIDER); setTplModel(tpl.model)
         setTplPrompt(tpl.system_prompt ?? ''); setTplFlags(tpl.flags ?? {})
         setTplPlanMode(!!tpl.plan_mode)
         setFormError('')
@@ -134,8 +134,8 @@ export function GlobalSettingsModal({
     function startNew() {
         setSelected(null); setIsNew(true)
         setTplName(''); setTplDesc(''); setTplType('software_engineer')
-        setTplProvider('claude')
-        setTplModel(modelsForProvider(configuredProviders, 'claude')[0] ?? DEFAULT_MODEL); setTplPrompt(''); setTplFlags({})
+        setTplProvider(DEFAULT_PROVIDER)
+        setTplModel(modelsForProvider(configuredProviders, DEFAULT_PROVIDER)[0] ?? DEFAULT_MODEL); setTplPrompt(''); setTplFlags({})
         setTplPlanMode(false)
         setFormError('')
     }

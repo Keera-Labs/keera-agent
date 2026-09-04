@@ -57,4 +57,4 @@ class Agent(Model):
             verbose=bool(flags.get("verbose")),
             max_turns=max_turns,
         )
-        return providers.get(getattr(self, "provider", None) or "claude").build_command(command)
+        return providers.get(getattr(self, "provider", None) or "codex").build_command(command)

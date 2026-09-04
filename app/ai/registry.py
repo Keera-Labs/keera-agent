@@ -23,4 +23,4 @@ class ProviderRegistry:
         return list(self._providers.values())
 
 
-providers = ProviderRegistry((ClaudeProvider(), CodexProvider()))
+providers = ProviderRegistry((CodexProvider(), ClaudeProvider()))

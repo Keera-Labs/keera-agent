@@ -1,7 +1,5 @@
 from pydantic import BaseModel, Field
 
-from app.constant.complexity import DEFAULT_MODEL
-
 
 class AgentTemplateSeed(BaseModel):
     """A built-in agent template definition seeded into the agent_templates table."""
@@ -9,13 +7,14 @@ class AgentTemplateSeed(BaseModel):
     name: str
     description: str
     agent_type: str
-    model: str = DEFAULT_MODEL
+    provider: str = "codex"
+    model: str = "gpt-5.6-terra"
     dangerously_skip_permissions: bool = True
     plan_mode: bool = False
     flags: dict = Field(default_factory=dict)
 
 
-# All built-ins seed on DEFAULT_MODEL (the "Opus 5" tier); omit `model` to inherit it.
+# All built-ins use Codex unless explicitly configured otherwise.
 AGENT_TEMPLATES: list[AgentTemplateSeed] = [
     AgentTemplateSeed(
         name="PM",

@@ -17,7 +17,7 @@ class TestAgentProviders(TestCase, DatabaseTransaction):
             json={
                 "name": "Codex worker",
                 "provider": "codex",
-                "model": "gpt-5.3-codex",
+                "model": "gpt-5.6-terra",
                 "complexity": "medium",
             },
         )
@@ -25,10 +25,21 @@ class TestAgentProviders(TestCase, DatabaseTransaction):
         response.assert_ok()
         attributes = response.json()["data"]["attributes"]
         self.assertEqual(attributes["provider"], "codex")
-        self.assertEqual(attributes["model"], "gpt-5.3-codex")
+        self.assertEqual(attributes["model"], "gpt-5.6-terra")
 
         agent = await Agent.find(int(response.json()["data"]["id"]))
-        self.assertTrue(agent.to_command().startswith("codex --model gpt-5.3-codex"))
+        self.assertTrue(agent.to_command().startswith("codex --model gpt-5.6-terra"))
+
+    async def test_create_defaults_to_codex(self):
+        response = await self.post(
+            f"/api/projects/{self.project.id}/agents",
+            json={"name": "Default worker", "complexity": "medium"},
+        )
+
+        response.assert_ok()
+        attributes = response.json()["data"]["attributes"]
+        self.assertEqual(attributes["provider"], "codex")
+        self.assertEqual(attributes["model"], "gpt-5.6-terra")
 
     async def test_create_rejects_model_from_another_provider(self):
         response = await self.post(
@@ -53,7 +64,7 @@ class TestAgentProviders(TestCase, DatabaseTransaction):
 
         response = await self.patch(
             f"/api/agents/{agent_id}",
-            json={"provider": "codex", "model": "gpt-5.3-codex"},
+            json={"provider": "codex", "model": "gpt-5.6-terra"},
         )
 
         response.assert_ok()
