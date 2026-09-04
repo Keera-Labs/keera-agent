@@ -4,6 +4,8 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.ai import providers
 from app.constant.agent_types import ALLOWED_AGENT_TYPES
+
+
 class AgentTemplateStoreRequest(BaseModel):
     name: str
     description: Optional[str] = None

@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 
+
 class AgentTemplateSeed(BaseModel):
     """A built-in agent template definition seeded into the agent_templates table."""
 
