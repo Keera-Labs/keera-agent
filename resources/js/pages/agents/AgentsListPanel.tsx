@@ -151,6 +151,9 @@ export function AgentsListPanel({ project }: { project: Project }) {
                                     <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: statusColor }} />
                                     {isRunning ? 'Active' : 'Waiting'}
                                 </div>
+                                <div className="text-[9px] text-zinc-400 mt-1 truncate font-mono" title={`${agent.provider} / ${agent.model}`}>
+                                    {agent.provider} · {agent.model}
+                                </div>
                             </div>
                         </div>
 

@@ -427,6 +427,31 @@ class TestGlobalSettings(TestCase):
         data = response.json()
         self.assertIn("max_agents_per_project", data)
         self.assertEqual(data["max_agents_per_project"], 10)
+        self.assertEqual([provider["slug"] for provider in data["providers"]], ["claude", "codex"])
+        self.assertIn("gpt-5.3-codex", data["provider_models"]["codex"])
+
+    async def test_patch_global_provider_models(self):
+        response = await self.client.patch(
+            "/api/global-settings",
+            json={
+                "provider_models": {
+                    "claude": ["claude-custom", "claude-custom"],
+                    "codex": ["codex-custom"],
+                }
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["provider_models"]["claude"], ["claude-custom"])
+        self.assertEqual(response.json()["providers"][1]["models"], ["codex-custom"])
+
+    async def test_patch_rejects_empty_provider_model_list(self):
+        response = await self.client.patch(
+            "/api/global-settings",
+            json={"provider_models": {"claude": [], "codex": ["codex-custom"]}},
+        )
+
+        self.assertEqual(response.status_code, 422)
 
     async def test_patch_global_settings_updates_value(self):
         """PATCH /api/global-settings persists the new value."""

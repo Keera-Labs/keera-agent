@@ -6,6 +6,7 @@ from app.ai.provider import Provider, ProviderCommand
 class CodexProvider(Provider):
     slug = "codex"
     display_name = "Codex"
+    default_models = ("gpt-5.3-codex",)
 
     def build_command(self, command: ProviderCommand) -> str:
         parts = ["codex"]

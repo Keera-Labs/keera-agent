@@ -1,8 +1,25 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+from app.actions.provider_model_validate_action import ProviderModelValidateAction
 from app.constant.complexity import DEFAULT_MODEL
 from app.models.AgentTemplate import AgentTemplate
+from app.requests.agent_template_request import (
+    AgentTemplateStoreRequest,
+    AgentTemplateUpdateRequest,
+)
+
+
+async def _validate_configured_model(
+    body: dict, template: AgentTemplate | None = None
+) -> JSONResponse | None:
+    provider = body.get("provider") or getattr(template, "provider", None) or "claude"
+    model = body.get("model") or getattr(template, "model", None) or DEFAULT_MODEL
+    try:
+        await ProviderModelValidateAction(provider, model).execute()
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=422)
+    return None
 
 
 def _serialize(t: AgentTemplate) -> dict:
@@ -13,6 +30,7 @@ def _serialize(t: AgentTemplate) -> dict:
         "description": t.description,
         "agent_type": t.agent_type,
         "system_prompt": t.system_prompt,
+        "provider": getattr(t, "provider", "claude"),
         "model": t.model,
         "permissions_allow": getattr(t, "permissions_allow", None) or [],
         "permissions_deny": getattr(t, "permissions_deny", None) or [],
@@ -33,6 +51,7 @@ _COPYABLE_COLUMNS = (
     "description",
     "agent_type",
     "system_prompt",
+    "provider",
     "model",
     "flags",
     "permissions_allow",
@@ -55,6 +74,8 @@ def _apply_body(template: AgentTemplate, body: dict) -> None:
         template.system_prompt = (body["system_prompt"] or "").strip() or None
     if "model" in body:
         template.model = (body["model"] or DEFAULT_MODEL).strip()
+    if "provider" in body:
+        template.provider = (body["provider"] or "claude").strip()
     if "flags" in body:
         template.flags = body["flags"] or {}
     if "permissions_allow" in body:
@@ -72,6 +93,7 @@ def _new_template_fields(body: dict) -> dict:
         "name": (body.get("name") or "").strip(),
         "description": (body.get("description") or "").strip() or None,
         "agent_type": (body.get("agent_type") or "software_engineer").strip(),
+        "provider": (body.get("provider") or "claude").strip(),
         "model": (body.get("model") or DEFAULT_MODEL).strip(),
         "system_prompt": (body.get("system_prompt") or "").strip() or None,
         "flags": body.get("flags") or {},
@@ -96,15 +118,15 @@ async def index(request: Request):
     return JSONResponse([_serialize(t) for t in templates])
 
 
-async def store(request: Request):
+async def store(request: Request, body: AgentTemplateStoreRequest):
     """Create a new user-defined GLOBAL template."""
-    body = await request.json()
-    if not (body.get("name") or "").strip():
-        return JSONResponse({"error": "name is required"}, status_code=422)
+    fields = body.model_dump()
+    if error := await _validate_configured_model(fields):
+        return error
 
     template = await AgentTemplate.create(
         {
-            **_new_template_fields(body),
+            **_new_template_fields(fields),
             "is_builtin": False,
             "project_id": None,
             "source_template_id": None,
@@ -113,12 +135,15 @@ async def store(request: Request):
     return JSONResponse(_serialize(template), status_code=201)
 
 
-async def update(request: Request, template_id: int):
+async def update(request: Request, body: AgentTemplateUpdateRequest, template_id: int):
     """Update a GLOBAL template. Built-ins are editable too; startup seeding is
     insert-if-missing only, so edits survive a re-seed (use Sync to revert)."""
     template = await AgentTemplate.find_or_fail(template_id)
 
-    _apply_body(template, await request.json())
+    fields = body.model_dump(exclude_unset=True)
+    if error := await _validate_configured_model(fields, template):
+        return error
+    _apply_body(template, fields)
     await template.save()
     return JSONResponse(_serialize(template))
 
@@ -169,15 +194,15 @@ async def project_index(request: Request, project_id: int):
     return JSONResponse([_serialize(t) for t in effective])
 
 
-async def project_store(request: Request, project_id: int):
+async def project_store(request: Request, body: AgentTemplateStoreRequest, project_id: int):
     """Create a template that lives only inside this project."""
-    body = await request.json()
-    if not (body.get("name") or "").strip():
-        return JSONResponse({"error": "name is required"}, status_code=422)
+    fields = body.model_dump()
+    if error := await _validate_configured_model(fields):
+        return error
 
     template = await AgentTemplate.create(
         {
-            **_new_template_fields(body),
+            **_new_template_fields(fields),
             "is_builtin": False,
             "project_id": project_id,
             "source_template_id": None,
@@ -186,7 +211,9 @@ async def project_store(request: Request, project_id: int):
     return JSONResponse(_serialize(template), status_code=201)
 
 
-async def project_update(request: Request, project_id: int, template_id: int):
+async def project_update(
+    request: Request, body: AgentTemplateUpdateRequest, project_id: int, template_id: int
+):
     """Copy-on-write edit within a project.
 
     - Editing an existing project override updates it in place.
@@ -194,12 +221,14 @@ async def project_update(request: Request, project_id: int, template_id: int):
     """
     template = await AgentTemplate.find_or_fail(template_id)
 
-    body = await request.json()
+    fields = body.model_dump(exclude_unset=True)
+    if error := await _validate_configured_model(fields, template):
+        return error
     tpl_project = getattr(template, "project_id", None)
 
     # Already a project row for THIS project → update in place.
     if tpl_project == project_id:
-        _apply_body(template, body)
+        _apply_body(template, fields)
         await template.save()
         return JSONResponse(_serialize(template))
 
@@ -214,18 +243,18 @@ async def project_update(request: Request, project_id: int, template_id: int):
         .first()
     )
     if existing:
-        _apply_body(existing, body)
+        _apply_body(existing, fields)
         await existing.save()
         return JSONResponse(_serialize(existing))
 
-    fields = {col: getattr(template, col, None) for col in _COPYABLE_COLUMNS}
+    copied_fields = {col: getattr(template, col, None) for col in _COPYABLE_COLUMNS}
     override = AgentTemplate()
-    for key, value in fields.items():
+    for key, value in copied_fields.items():
         setattr(override, key, value)
     override.is_builtin = False
     override.project_id = project_id
     override.source_template_id = template.id
-    _apply_body(override, body)
+    _apply_body(override, fields)
     await override.save()
     return JSONResponse(_serialize(override), status_code=201)
 

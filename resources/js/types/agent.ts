@@ -8,6 +8,7 @@ export interface AgentTemplate {
     description: string | null
     agent_type: string
     system_prompt: string | null
+    provider: string
     model: string
     flags: AgentFlags
     dangerously_skip_permissions: boolean
@@ -43,4 +44,4 @@ export const MODELS = [
 
 // Default model when a selector needs a starting value (matches the backend DEFAULT_MODEL).
 export const DEFAULT_MODEL = 'claude-opus-5'
-
+export const DEFAULT_PROVIDER = 'claude'
