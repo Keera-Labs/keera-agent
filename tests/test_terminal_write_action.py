@@ -12,6 +12,7 @@ import pty
 import select
 import tty
 import unittest
+from unittest.mock import AsyncMock
 
 from fastapi_startkit.application import app
 
@@ -167,6 +168,17 @@ class TestTerminalSend(unittest.IsolatedAsyncioTestCase):
             os.close(master_fd)
 
         self.assertEqual(received, expected)
+
+    async def test_send_delivers_a_long_message_exactly_once(self):
+        term = Terminal.__new__(Terminal)
+        term.write = AsyncMock()
+        message = ("long task line\n" * 20_000) + "complete"
+
+        await term.send(message)
+
+        self.assertEqual(term.write.await_count, 2)
+        term.write.assert_any_await(message.encode())
+        term.write.assert_any_await(b"\r")
 
 
 if __name__ == "__main__":

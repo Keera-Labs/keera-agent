@@ -7,7 +7,10 @@ spawn path that was broken when to_command() signature changed.
 
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
-from app.controllers.agent_trigger_controller import _build_relay_instructions
+from app.controllers.agent_trigger_controller import (
+    _build_initial_prompt,
+    _build_relay_instructions,
+)
 from app.controllers.terminal_controller import _build_identity_suffix
 from app.models.Agent import Agent
 from databases.factories.agent_factory import AgentFactory
@@ -137,6 +140,29 @@ class TestBuildRelayInstructions(TestCase, DatabaseTransaction):
         )
         self.assertIn("PM Agent", instructions)
         self.assertIn("99", instructions)
+
+
+class TestBuildInitialPrompt(TestCase):
+    def test_initial_prompt_separates_protocol_from_assigned_task(self):
+        protocol = "AGENT COMMUNICATION PROTOCOL\nYour agent ID is: 42"
+        task = "Implement the requested change."
+
+        prompt = _build_initial_prompt(protocol, task)
+
+        self.assertEqual(
+            prompt,
+            "AGENT COMMUNICATION PROTOCOL\nYour agent ID is: 42"
+            "\n\n---\nASSIGNED TASK\nImplement the requested change.",
+        )
+
+    def test_initial_prompt_preserves_a_long_task_exactly_once(self):
+        protocol = "AGENT COMMUNICATION PROTOCOL"
+        task = "work item\n" * 10_000
+
+        prompt = _build_initial_prompt(protocol, task)
+
+        self.assertEqual(prompt.count(task), 1)
+        self.assertTrue(prompt.endswith(task))
 
 
 class TestRelayRosterExcludesDeleted(TestCase, DatabaseTransaction):

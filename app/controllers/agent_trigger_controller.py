@@ -273,6 +273,11 @@ def _build_relay_instructions(agent, cwd: str, base_url: str, siblings) -> str:
     )
 
 
+def _build_initial_prompt(relay_instructions: str, task_message: str) -> str:
+    """Keep startup context and the assigned task in one submitted prompt."""
+    return f"{relay_instructions}\n\n---\nASSIGNED TASK\n{task_message}"
+
+
 def _make_after_restart(terminal, initial_message: str):
     """Return an async callable that re-injects the initial message after a Claude restart."""
 
@@ -331,14 +336,16 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
         return a.to_command(system_prompt_suffix=suffix)
 
     # Parts 1 & 3: monitor PTY output via WebsocketTerminal (no WS connection)
-    # after_restart re-injects the initial message so the agent has a task after recovery
+    initial_prompt = _build_initial_prompt(relay_instructions, initial_message)
+
+    # after_restart re-injects the initial prompt so the agent has its context after recovery
     monitor = make_claude_session_monitor(
         agent_id=agent.id,
         terminal=terminal,
         terminal_manager=terminal_manager,
         session_id=session_id,
         build_cmd=_build_cmd_with_identity,
-        after_restart=_make_after_restart(terminal, initial_message),
+        after_restart=_make_after_restart(terminal, initial_prompt),
     )
     bridge = WebsocketTerminal(None, terminal, on_output=monitor)
     asyncio.create_task(
@@ -350,17 +357,12 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
 
     start_time = time.monotonic()
 
-    # Signal ready and inject relay context + initial message.
-    # relay_instructions (agent identity, roster, project dir, communication
-    # protocol) was previously injected via --system-prompt; now that
-    # system_prompt_file() is removed we prepend it to the first user message so
-    # the agent still has its full context before acting on the task.
+    # Signal ready and inject context and task as a single, delimited user message.
     ready_event = claude_ready.setdefault(session_id, asyncio.Event())
     await asyncio.sleep(1.5)
     ready_event.set()
 
-    await TerminalWriteAction.prepare(session_id, relay_instructions).execute()
-    await TerminalWriteAction.prepare(session_id, initial_message).execute()
+    await TerminalWriteAction.prepare(session_id, initial_prompt).execute()
 
     # Notify the frontend if it's already connected
     conn_manager: ConnectionManager = app().make("connections")
