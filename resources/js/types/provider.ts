@@ -21,3 +21,20 @@ export const FALLBACK_PROVIDERS: AIProvider[] = [
 export function modelsForProvider(providers: AIProvider[], slug: string): string[] {
     return providers.find(provider => provider.slug === slug)?.models ?? []
 }
+
+const COMPLEXITY_MODELS: Record<string, Record<string, string>> = {
+    codex: {
+        easy: 'gpt-5.6-luna',
+        medium: 'gpt-5.6-terra',
+        hard: 'gpt-5.6-sol',
+    },
+    claude: {
+        easy: 'claude-sonnet-5',
+        medium: 'claude-opus-5',
+        hard: 'claude-fable-5',
+    },
+}
+
+export function modelForProviderComplexity(provider: string, complexity: string): string {
+    return COMPLEXITY_MODELS[provider]?.[complexity] ?? ''
+}
