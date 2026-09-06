@@ -6,12 +6,7 @@ from app.ai.provider import Provider, ProviderCommand
 class ClaudeProvider(Provider):
     slug = "claude"
     display_name = "Claude"
-    default_models = (
-        "claude-opus-5",
-        "claude-opus-4-8",
-        "claude-sonnet-5",
-        "claude-fable-5",
-    )
+    default_models = ("claude-opus-5", "claude-sonnet-5", "claude-fable-5")
 
     def build_command(self, command: ProviderCommand) -> str:
         parts = ["claude"]
