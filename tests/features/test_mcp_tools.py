@@ -5,6 +5,9 @@ DeleteTaskTool, and SendMessageTool against a real test database to catch
 schema-drift bugs (e.g. writing a dropped column).
 """
 
+import datetime
+from unittest.mock import patch
+
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
 from app.mcp.tools import (
@@ -137,6 +140,99 @@ class TestListTasksTool(TestCase, DatabaseTransaction):
         self.assertIn("Pending one", text)
         self.assertNotIn("Done one", text)
 
+    async def test_completed_filter_returns_only_tasks_completed_within_a_week(self):
+        await TaskFactory.new().create(
+            project_id=self.project.id,
+            title="Recent completed",
+            status="completed",
+            completed_at=(datetime.datetime.now() - datetime.timedelta(days=6)).isoformat(),
+        )
+        await TaskFactory.new().create(
+            project_id=self.project.id,
+            title="Old completed",
+            status="completed",
+            completed_at=(datetime.datetime.now() - datetime.timedelta(days=14)).isoformat(),
+        )
+
+        response = await self.tool.handle(
+            {"project_path": self.project.path, "status": "completed"}
+        )
+        text = _text(response)
+        self.assertIn("Recent completed", text)
+        self.assertNotIn("Old completed", text)
+
+    async def test_completed_filter_includes_completion_at_the_seven_day_cutoff(self):
+        now = datetime.datetime(2026, 9, 6, 12, 0, 0)
+        cutoff = now - datetime.timedelta(days=7)
+        await TaskFactory.new().create(
+            project_id=self.project.id,
+            title="At cutoff",
+            status="completed",
+            completed_at=cutoff.isoformat(),
+        )
+        await TaskFactory.new().create(
+            project_id=self.project.id,
+            title="Before cutoff",
+            status="completed",
+            completed_at=(cutoff - datetime.timedelta(microseconds=1)).isoformat(),
+        )
+
+        with patch("app.mcp.tools.datetime.datetime") as mocked_datetime:
+            mocked_datetime.now.return_value = now
+            response = await self.tool.handle(
+                {"project_path": self.project.path, "status": "completed"}
+            )
+
+        text = _text(response)
+        self.assertIn("At cutoff", text)
+        self.assertNotIn("Before cutoff", text)
+
+    async def test_unfiltered_list_excludes_old_and_legacy_completed_tasks(self):
+        now = datetime.datetime(2026, 9, 6, 12, 0, 0)
+        await TaskFactory.new().create(project_id=self.project.id, title="Active", status="pending")
+        await TaskFactory.new().create(
+            project_id=self.project.id,
+            title="Recent completed",
+            status="completed",
+            completed_at=(now - datetime.timedelta(days=6)).isoformat(),
+        )
+        await TaskFactory.new().create(
+            project_id=self.project.id,
+            title="At cutoff",
+            status="completed",
+            completed_at=(now - datetime.timedelta(days=7)).isoformat(),
+        )
+        await TaskFactory.new().create(
+            project_id=self.project.id,
+            title="Before cutoff",
+            status="completed",
+            completed_at=(now - datetime.timedelta(days=7, microseconds=1)).isoformat(),
+        )
+        await TaskFactory.new().create(
+            project_id=self.project.id,
+            title="Old completed",
+            status="completed",
+            completed_at=(now - datetime.timedelta(days=14)).isoformat(),
+        )
+        await TaskFactory.new().create(
+            project_id=self.project.id,
+            title="Legacy completed",
+            status="completed",
+            completed_at=None,
+        )
+
+        with patch("app.mcp.tools.datetime.datetime") as mocked_datetime:
+            mocked_datetime.now.return_value = now
+            response = await self.tool.handle({"project_path": self.project.path})
+
+        text = _text(response)
+        self.assertIn("Active", text)
+        self.assertIn("Recent completed", text)
+        self.assertIn("At cutoff", text)
+        self.assertNotIn("Before cutoff", text)
+        self.assertNotIn("Old completed", text)
+        self.assertNotIn("Legacy completed", text)
+
     async def test_no_tasks_returns_message(self):
         response = await self.tool.handle({"project_path": self.project.path})
         self.assertIn("No tasks found", _text(response))
@@ -215,6 +311,15 @@ class TestUpdateTaskStatusTool(TestCase, DatabaseTransaction):
         text = _text(response)
         self.assertNotIn("Error", text)
         self.assertIn("in_progress", text)
+
+    async def test_completing_task_records_completion_timestamp(self):
+        task = await TaskFactory.new().create(project_id=self.project.id, title="In flight")
+
+        await self.tool.handle({"task_id": task.id, "status": "completed"})
+
+        completed = await Task.find(task.id)
+        self.assertEqual(completed.status, "completed")
+        self.assertIsNotNone(completed.completed_at)
 
     async def test_update_status_not_found(self):
         response = await self.tool.handle({"task_id": 999999, "status": "completed"})

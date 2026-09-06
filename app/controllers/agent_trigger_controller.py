@@ -134,9 +134,7 @@ def _cleanup_stale_worktree(agent, cwd: str) -> None:
 
 
 def ensure_codex_worktree(agent, cwd: str) -> str:
-    if getattr(agent, "provider", None) != "codex" or not getattr(
-        agent, "use_worktree", True
-    ):
+    if getattr(agent, "provider", None) != "codex" or not getattr(agent, "use_worktree", True):
         return cwd
 
     worktree_name = f"agent-{agent.id}"
