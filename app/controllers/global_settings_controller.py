@@ -2,17 +2,24 @@
 
 import json
 
-from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from app.ai import providers
 from app.models.GlobalSettings import GlobalSettings
+from app.requests.global_settings_request import GlobalSettingsUpdateRequest
+from app.resources.global_settings_resource import GlobalSettingsResource
 
 DEFAULT_SETTINGS: dict = {
     "max_agents_per_project": 10,
     "provider_models": {
         provider.slug: list(provider.default_models) for provider in providers.all()
     },
+}
+
+DEFAULT_PROVIDER = "codex"
+DEFAULT_COMPLEXITY_MODELS = {
+    "codex": {"easy": "gpt-5.6-luna", "medium": "gpt-5.6-terra", "hard": "gpt-5.6-sol"},
+    "claude": {"easy": "claude-sonnet-5", "medium": "claude-opus-5", "hard": "claude-fable-5"},
 }
 
 
@@ -33,6 +40,7 @@ async def read_global_settings() -> dict:
     result = {
         "max_agents_per_project": DEFAULT_SETTINGS["max_agents_per_project"],
         "provider_models": dict(DEFAULT_SETTINGS["provider_models"]),
+        "default_provider": DEFAULT_PROVIDER,
     }
     for row in rows:
         key = row.key
@@ -54,6 +62,29 @@ async def read_global_settings() -> dict:
                     }
             except (TypeError, ValueError, json.JSONDecodeError):
                 pass
+        elif key == "default_provider" and row.value in {"codex", "claude"}:
+            result[key] = row.value
+        elif key == "complexity_models":
+            try:
+                stored = json.loads(row.value)
+                if isinstance(stored, dict) and all(
+                    isinstance(stored.get(level), str) for level in ("easy", "medium", "hard")
+                ):
+                    result[key] = {level: stored[level] for level in ("easy", "medium", "hard")}
+            except (TypeError, ValueError, json.JSONDecodeError):
+                pass
+
+    configured_models = result["provider_models"].get(result["default_provider"], [])
+    defaults = DEFAULT_COMPLEXITY_MODELS[result["default_provider"]]
+    saved_complexity = result.get("complexity_models", {})
+    result["complexity_models"] = {
+        level: saved_complexity.get(level)
+        if saved_complexity.get(level) in configured_models
+        else defaults[level]
+        if defaults[level] in configured_models
+        else configured_models[0]
+        for level in ("easy", "medium", "hard")
+    }
     result["providers"] = _provider_payload(result["provider_models"])
     return result
 
@@ -78,43 +109,15 @@ async def provider_model_is_configured(provider: str, model: str) -> bool:
     return model in settings["provider_models"].get(provider, [])
 
 
-async def get_global_settings(request: Request):
-    return JSONResponse(await read_global_settings())
+async def index() -> GlobalSettingsResource:
+    return GlobalSettingsResource(await read_global_settings())
 
 
-async def update_global_settings(request: Request):
-    body = await request.json()
+async def update(body: GlobalSettingsUpdateRequest):
+    from app.actions.global_settings_update_action import GlobalSettingsUpdateAction
 
-    if "max_agents_per_project" in body:
-        val = body["max_agents_per_project"]
-        if not isinstance(val, int) or val < 1 or val > 100:
-            return JSONResponse(
-                {"error": "max_agents_per_project must be an integer between 1 and 100"},
-                status_code=422,
-            )
-        await write_global_setting("max_agents_per_project", val)
-
-    if "provider_models" in body:
-        configured = body["provider_models"]
-        known = {provider.slug for provider in providers.all()}
-        if not isinstance(configured, dict) or set(configured) != known:
-            return JSONResponse(
-                {"error": "provider_models must define every registered provider"}, status_code=422
-            )
-        normalized: dict[str, list[str]] = {}
-        for slug, models in configured.items():
-            if not isinstance(models, list):
-                return JSONResponse({"error": f"Models for {slug} must be a list"}, status_code=422)
-            cleaned = list(
-                dict.fromkeys(
-                    model.strip() for model in models if isinstance(model, str) and model.strip()
-                )
-            )
-            if not cleaned:
-                return JSONResponse(
-                    {"error": f"Add at least one model for {slug}"}, status_code=422
-                )
-            normalized[slug] = cleaned
-        await write_global_setting("provider_models", normalized)
-
-    return JSONResponse(await read_global_settings())
+    try:
+        settings = await GlobalSettingsUpdateAction.prepare(body).execute()
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=422)
+    return GlobalSettingsResource(settings)
