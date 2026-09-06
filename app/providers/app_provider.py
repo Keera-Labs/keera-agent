@@ -6,6 +6,12 @@ class AppProvider(Provider):
     provider_key = "keera"
 
     def register(self) -> None:
+        from app.utils.db_concurrency import serialize_connection_queries
+
+        # Guard the ORM's shared async connection before anything can query it
+        # (#1370: concurrent coroutines corrupted the shared transaction).
+        serialize_connection_queries()
+
         templates = Jinja2Templates(directory=str(self.app.base_path / "resources" / "templates"))
         self.app.bind("templates", templates)
 
