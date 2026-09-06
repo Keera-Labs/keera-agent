@@ -23,6 +23,40 @@ function findBuiltinForType(templates: AgentTemplate[], agentType: string): Agen
     )
 }
 
+export function agentCreatePayload({
+    name,
+    agentType,
+    description,
+    provider,
+    model,
+    systemPrompt,
+    complexity,
+    flags,
+    planMode,
+}: {
+    name: string
+    agentType: string
+    description: string
+    provider: string
+    model: string
+    systemPrompt: string
+    complexity: string
+    flags: AgentFlags
+    planMode: boolean
+}) {
+    return {
+        name,
+        agent_type: agentType,
+        description,
+        provider,
+        model,
+        system_prompt: systemPrompt,
+        complexity,
+        flags,
+        plan_mode: planMode,
+    }
+}
+
 function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxAgents }: {
     projectId: number
     onCreated: (a: ProjectAgent) => void
@@ -96,7 +130,7 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
             const res = await fetch(`/api/projects/${projectId}/agents`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, agent_type: agentType, description, provider, model, system_prompt: systemPrompt, complexity, flags, plan_mode: planMode }),
+                body: JSON.stringify(agentCreatePayload({ name, agentType, description, provider, model, systemPrompt, complexity, flags, planMode })),
             })
             const data = await res.json()
             if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
