@@ -14,19 +14,14 @@ describe('agent provider complexity model selection', () => {
         expect(modelForProviderComplexity(provider, complexity)).toBe(model)
     })
 
-    it('includes the derived Claude model, provider, and complexity in the create payload', () => {
-        const provider = 'claude'
-        const complexity = 'hard'
-        const model = modelForProviderComplexity(provider, complexity)
-
+    it('submits the derived Claude model with the provider and complexity', () => {
         expect(agentCreatePayload({
             name: 'Reviewer',
             agentType: 'code_reviewer',
             description: 'Reviews pull requests',
-            provider,
-            model,
+            provider: 'claude',
             systemPrompt: 'Review carefully.',
-            complexity,
+            complexity: 'hard',
             flags: {},
             planMode: false,
         })).toMatchObject({

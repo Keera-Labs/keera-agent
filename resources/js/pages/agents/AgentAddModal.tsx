@@ -28,7 +28,6 @@ export function agentCreatePayload({
     agentType,
     description,
     provider,
-    model,
     systemPrompt,
     complexity,
     flags,
@@ -38,7 +37,6 @@ export function agentCreatePayload({
     agentType: string
     description: string
     provider: string
-    model: string
     systemPrompt: string
     complexity: string
     flags: AgentFlags
@@ -49,7 +47,7 @@ export function agentCreatePayload({
         agent_type: agentType,
         description,
         provider,
-        model,
+        model: modelForProviderComplexity(provider, complexity),
         system_prompt: systemPrompt,
         complexity,
         flags,
@@ -130,7 +128,7 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
             const res = await fetch(`/api/projects/${projectId}/agents`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(agentCreatePayload({ name, agentType, description, provider, model, systemPrompt, complexity, flags, planMode })),
+                body: JSON.stringify(agentCreatePayload({ name, agentType, description, provider, systemPrompt, complexity, flags, planMode })),
             })
             const data = await res.json()
             if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
