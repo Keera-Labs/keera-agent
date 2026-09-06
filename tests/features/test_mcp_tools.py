@@ -198,6 +198,18 @@ class TestListTasksTool(TestCase, DatabaseTransaction):
         )
         await TaskFactory.new().create(
             project_id=self.project.id,
+            title="At cutoff",
+            status="completed",
+            completed_at=(now - datetime.timedelta(days=7)).isoformat(),
+        )
+        await TaskFactory.new().create(
+            project_id=self.project.id,
+            title="Before cutoff",
+            status="completed",
+            completed_at=(now - datetime.timedelta(days=7, microseconds=1)).isoformat(),
+        )
+        await TaskFactory.new().create(
+            project_id=self.project.id,
             title="Old completed",
             status="completed",
             completed_at=(now - datetime.timedelta(days=14)).isoformat(),
@@ -216,6 +228,8 @@ class TestListTasksTool(TestCase, DatabaseTransaction):
         text = _text(response)
         self.assertIn("Active", text)
         self.assertIn("Recent completed", text)
+        self.assertIn("At cutoff", text)
+        self.assertNotIn("Before cutoff", text)
         self.assertNotIn("Old completed", text)
         self.assertNotIn("Legacy completed", text)
 
