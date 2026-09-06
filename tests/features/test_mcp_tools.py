@@ -262,6 +262,35 @@ class TestGetTaskTool(TestCase, DatabaseTransaction):
         response = await self.tool.handle({"task_id": 999999})
         self.assertIn("Error", _text(response))
 
+    async def test_get_task_survives_legacy_literal_timestamp_rows(self):
+        """Legacy rows captured the string 'CURRENT_TIMESTAMP' from a broken
+        quoted DDL default; get_task must still return full task details
+        instead of failing on the unparseable timestamp."""
+        import json as _json
+
+        from fastapi_startkit.masoniteorm.models import Model
+
+        task = await Task.create(
+            {
+                "project_id": self.project.id,
+                "title": "Legacy Task",
+                "body": "Legacy body.",
+                "assignees": _json.dumps(["Sam"]),
+                "status": "pending",
+            }
+        )
+        conn = Model.db_manager.connection(None)
+        await conn.statement(
+            "UPDATE tasks SET created_at = ?, updated_at = ? WHERE id = ?",
+            ["CURRENT_TIMESTAMP", "CURRENT_TIMESTAMP", task.id],
+        )
+
+        response = await self.tool.handle({"task_id": task.id})
+        text = _text(response)
+        self.assertIn("Legacy Task", text)
+        self.assertIn("Sam", text)
+        self.assertIn("Legacy body.", text)
+
 
 class TestUpdateTaskTool(TestCase, DatabaseTransaction):
     async def asyncSetUp(self):

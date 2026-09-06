@@ -17,6 +17,10 @@ from app.models.Task import TERMINAL_STATUSES, Task
 def _load_json(value) -> list:
     if not value:
         return []
+    # The model may already cast JSON columns to a list; legacy rows and
+    # raw paths hand us the JSON string instead.
+    if isinstance(value, list):
+        return value
     try:
         return json.loads(value)
     except (ValueError, TypeError):
