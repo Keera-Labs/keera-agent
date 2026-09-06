@@ -1,4 +1,5 @@
 import datetime
+from unittest.mock import patch
 
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
@@ -158,6 +159,30 @@ class TestTaskController(TestCase, DatabaseTransaction):
         response = await self.get(self.tasks_url)
         titles = {row["attributes"]["title"] for row in response.json()["data"]}
         self.assertNotIn("legacy-completed-task", titles)
+
+    async def test_index_includes_completion_at_the_seven_day_cutoff(self):
+        now = datetime.datetime(2026, 9, 6, 12, 0, 0)
+        cutoff = now - datetime.timedelta(days=7)
+        await TaskFactory.new().create(
+            project_id=self.project.id,
+            title="at-cutoff",
+            status="completed",
+            completed_at=cutoff.isoformat(),
+        )
+        await TaskFactory.new().create(
+            project_id=self.project.id,
+            title="before-cutoff",
+            status="completed",
+            completed_at=(cutoff - datetime.timedelta(microseconds=1)).isoformat(),
+        )
+
+        with patch("app.controllers.task_controller.datetime.datetime") as mocked_datetime:
+            mocked_datetime.now.return_value = now
+            response = await self.get(self.tasks_url)
+
+        titles = {row["attributes"]["title"] for row in response.json()["data"]}
+        self.assertIn("at-cutoff", titles)
+        self.assertNotIn("before-cutoff", titles)
 
     # --- update ---
 

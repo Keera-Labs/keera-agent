@@ -154,11 +154,19 @@ class ListTasksTool(Tool):
             )
 
         q = Task.where("project_id", project.id)
-        if arguments.get("status"):
-            q = q.where("status", arguments["status"])
-            if arguments["status"] == "completed":
-                cutoff = (datetime.datetime.now() - datetime.timedelta(days=7)).isoformat()
+        status = arguments.get("status")
+        cutoff = (datetime.datetime.now() - datetime.timedelta(days=7)).isoformat()
+        if status:
+            q = q.where("status", status)
+            if status == "completed":
                 q = q.where("completed_at", ">=", cutoff)
+        else:
+            q = q.where(
+                lambda query: (
+                    query.where_not_in("tasks.status", ["completed", "cancelled"])
+                    .or_where("tasks.completed_at", ">=", cutoff)
+                )
+            )
         tasks = await q.get()
 
         if not tasks:
