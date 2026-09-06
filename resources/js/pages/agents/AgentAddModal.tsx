@@ -7,9 +7,9 @@ import { useProjectStore } from '@/stores/projectStore'
 import type { ProjectAgent, AgentFlags } from '@/queries/agentQuery'
 import { normalizeAgent } from '@/queries/agentQuery'
 import type { AgentTemplate } from '@/types/agent'
-import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, DEFAULT_MODEL } from '@/types/agent'
+import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS } from '@/types/agent'
 import type { GlobalSettings } from '@/types/provider'
-import { FALLBACK_PROVIDERS, modelsForProvider } from '@/types/provider'
+import { FALLBACK_PROVIDERS, modelForProviderComplexity } from '@/types/provider'
 import { labelClass, inputClass, cancelBtnClass, submitBtnClass, flagRowClass, toggleClass } from '@/components/ui/styles'
 
 /**
@@ -21,6 +21,38 @@ function findBuiltinForType(templates: AgentTemplate[], agentType: string): Agen
         templates.find(t => t.is_builtin && t.agent_type === agentType && !t.flags?.dangerously_skip_permissions && !t.plan_mode)
         ?? templates.find(t => t.is_builtin && t.agent_type === agentType)
     )
+}
+
+export function agentCreatePayload({
+    name,
+    agentType,
+    description,
+    provider,
+    systemPrompt,
+    complexity,
+    flags,
+    planMode,
+}: {
+    name: string
+    agentType: string
+    description: string
+    provider: string
+    systemPrompt: string
+    complexity: string
+    flags: AgentFlags
+    planMode: boolean
+}) {
+    return {
+        name,
+        agent_type: agentType,
+        description,
+        provider,
+        model: modelForProviderComplexity(provider, complexity),
+        system_prompt: systemPrompt,
+        complexity,
+        flags,
+        plan_mode: planMode,
+    }
 }
 
 function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxAgents }: {
@@ -38,11 +70,6 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
     const [agentType, setAgentType] = useState<string>('software_engineer')
     const [description, setDescription] = useState(() => findBuiltinForType(templates, 'software_engineer')?.description ?? '')
     const [provider, setProvider] = useState(initialProvider)
-    const [model, setModel] = useState(
-        modelsForProvider(providers, initialProvider).includes(DEFAULT_MODEL)
-            ? DEFAULT_MODEL
-            : (modelsForProvider(providers, initialProvider)[0] ?? '')
-    )
     const [systemPrompt, setSystemPrompt] = useState(() => findBuiltinForType(templates, 'software_engineer')?.system_prompt ?? '')
     const [complexity, setComplexity] = useState('medium')
     const [flags, setFlags] = useState<AgentFlags>({})
@@ -50,6 +77,8 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
     const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null)
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
+
+    const model = modelForProviderComplexity(provider, complexity)
 
     const isAtLimit = agentCount !== undefined && maxAgents !== undefined && agentCount >= maxAgents
 
@@ -63,7 +92,6 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
                 setDescription(prev => prev || (tpl.description ?? ''))
                 setSystemPrompt(prev => prev || (tpl.system_prompt ?? ''))
                 setProvider(tpl.provider ?? 'codex')
-                setModel(tpl.model)
             }
         }
     }, [templates]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -74,9 +102,6 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
             setAgentType('software_engineer')
             setDescription('')
             setProvider(initialProvider)
-            setModel(modelsForProvider(providers, initialProvider).includes(DEFAULT_MODEL)
-                ? DEFAULT_MODEL
-                : (modelsForProvider(providers, initialProvider)[0] ?? ''))
             setSystemPrompt('')
             setFlags({})
             setPlanMode(false)
@@ -85,7 +110,6 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
         setSelectedTemplateId(tpl.id)
         setAgentType(tpl.agent_type)
         setProvider(tpl.provider ?? 'codex')
-        setModel(tpl.model)
         setFlags(tpl.flags ?? {})
         setPlanMode(!!tpl.plan_mode)
         setDescription(tpl.description ?? '')
@@ -104,7 +128,7 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
             const res = await fetch(`/api/projects/${projectId}/agents`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, agent_type: agentType, description, provider, model, system_prompt: systemPrompt, complexity, flags, plan_mode: planMode }),
+                body: JSON.stringify(agentCreatePayload({ name, agentType, description, provider, systemPrompt, complexity, flags, planMode })),
             })
             const data = await res.json()
             if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
@@ -203,39 +227,19 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
             <div className="flex gap-2.5">
                 <label className="w-[160px] flex flex-col gap-1">
                     <span className={labelClass}>Provider</span>
-                    <select value={provider} onChange={e => {
-                        const nextProvider = e.target.value
-                        setProvider(nextProvider)
-                        if (nextProvider === 'codex') {
-                            setModel({ easy: 'gpt-5.6-luna', medium: 'gpt-5.6-terra', hard: 'gpt-5.6-sol' }[complexity] ?? DEFAULT_MODEL)
-                        } else {
-                            setModel(modelsForProvider(providers, nextProvider)[0] ?? '')
-                        }
-                    }} className={inputClass}>
+                    <select value={provider} onChange={e => setProvider(e.target.value)} className={inputClass}>
                         {providers.map(item => <option key={item.slug} value={item.slug}>{item.name}</option>)}
                     </select>
                 </label>
                 <label className="flex-1 flex flex-col gap-1">
-                    <span className={labelClass}>Model</span>
-                    <select value={model} onChange={e => setModel(e.target.value)} className={`${inputClass} w-full`}>
-                        {modelsForProvider(providers, provider).map(item => <option key={item} value={item}>{item}</option>)}
-                    </select>
+                    <span className={labelClass}>Model (derived)</span>
+                    <output className={`${inputClass} w-full text-zinc-500 cursor-default`}>{model}</output>
                 </label>
             </div>
 
             <label className="flex flex-col gap-1">
                 <span className={labelClass}>Complexity</span>
-                <select value={complexity} onChange={e => {
-                    const nextComplexity = e.target.value
-                    setComplexity(nextComplexity)
-                    if (provider === 'codex') {
-                        setModel({
-                            easy: 'gpt-5.6-luna',
-                            medium: 'gpt-5.6-terra',
-                            hard: 'gpt-5.6-sol',
-                        }[nextComplexity] ?? 'gpt-5.6-terra')
-                    }
-                }} className={inputClass}>
+                <select value={complexity} onChange={e => setComplexity(e.target.value)} className={inputClass}>
                     <option value="easy">Easy</option>
                     <option value="medium">Medium</option>
                     <option value="hard">Hard</option>
