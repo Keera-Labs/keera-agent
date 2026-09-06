@@ -9,6 +9,7 @@ class TestAIProviders(unittest.TestCase):
         self.assertIn("gpt-5.6-luna", providers.get("codex").default_models)
         self.assertIn("gpt-5.6-terra", providers.get("codex").default_models)
         self.assertIn("gpt-5.6-sol", providers.get("codex").default_models)
+        self.assertIn("claude-opus-4-8", providers.get("claude").default_models)
 
     def test_unknown_provider_raises_clear_error(self):
         with self.assertRaisesRegex(ValueError, "Unknown AI provider: missing"):

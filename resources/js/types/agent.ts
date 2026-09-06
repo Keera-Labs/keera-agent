@@ -38,6 +38,7 @@ export const AGENT_TYPE_COLORS: Record<string, string> = {
 // verbatim to `claude --model`, so each must be a real model id the CLI accepts.
 export const MODELS = [
     { value: 'claude-opus-5', label: 'Claude Opus 5' },
+    { value: 'claude-opus-4-8', label: 'Claude Opus 4.8' },
     { value: 'claude-sonnet-5', label: 'Claude Sonnet 5' },
     { value: 'claude-fable-5', label: 'Claude Fable 5' },
 ]
