@@ -1,5 +1,6 @@
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
+from app.ai import providers
 from app.controllers.global_settings_controller import write_global_setting
 from app.models.Agent import Agent
 from databases.factories.project_factory import ProjectFactory
@@ -40,6 +41,40 @@ class TestAgentProviders(TestCase, DatabaseTransaction):
         attributes = response.json()["data"]["attributes"]
         self.assertEqual(attributes["provider"], "codex")
         self.assertEqual(attributes["model"], "gpt-5.6-terra")
+
+    async def test_create_claude_agent_with_configured_model(self):
+        retired_model = "-".join(("claude", "opus", "4", "8"))
+        self.assertNotIn(retired_model, providers.get("claude").default_models)
+
+        response = await self.post(
+            f"/api/projects/{self.project.id}/agents",
+            json={
+                "name": "Claude worker",
+                "provider": "claude",
+                "model": "claude-opus-5",
+                "complexity": "medium",
+            },
+        )
+
+        response.assert_ok()
+        attributes = response.json()["data"]["attributes"]
+        self.assertEqual(attributes["provider"], "claude")
+        self.assertEqual(attributes["model"], "claude-opus-5")
+
+    async def test_create_rejects_retired_claude_model(self):
+        retired_model = "-".join(("claude", "opus", "4", "8"))
+        response = await self.post(
+            f"/api/projects/{self.project.id}/agents",
+            json={
+                "name": "Retired model worker",
+                "provider": "claude",
+                "model": retired_model,
+                "complexity": "medium",
+            },
+        )
+
+        response.assert_status(422)
+        self.assertIn("not configured for claude", response.json()["error"])
 
     async def test_create_rejects_model_from_another_provider(self):
         response = await self.post(

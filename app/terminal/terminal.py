@@ -31,7 +31,7 @@ class Terminal:
         self._cwd = cwd or os.path.expanduser("~")
         self._cols = cols
         self._rows = rows
-        self._env = _with_color_env(env or os.environ.copy())
+        self._env = _with_color_env(env if env is not None else os.environ.copy())
         self._proc: subprocess.Popen | None = None
         self.master_fd: int | None = None
         self._write_lock: asyncio.Lock | None = None
