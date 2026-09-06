@@ -14,7 +14,7 @@ export const FALLBACK_PROVIDERS: AIProvider[] = [
     {
         slug: 'claude',
         name: 'Claude',
-        models: ['claude-opus-5', 'claude-sonnet-5', 'claude-fable-5'],
+        models: ['claude-opus-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-fable-5'],
     },
 ]
 

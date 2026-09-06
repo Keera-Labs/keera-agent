@@ -41,6 +41,22 @@ class TestAgentProviders(TestCase, DatabaseTransaction):
         self.assertEqual(attributes["provider"], "codex")
         self.assertEqual(attributes["model"], "gpt-5.6-terra")
 
+    async def test_create_accepts_claude_opus_4_8(self):
+        response = await self.post(
+            f"/api/projects/{self.project.id}/agents",
+            json={
+                "name": "Opus worker",
+                "provider": "claude",
+                "model": "claude-opus-4-8",
+                "complexity": "medium",
+            },
+        )
+
+        response.assert_ok()
+        attributes = response.json()["data"]["attributes"]
+        self.assertEqual(attributes["provider"], "claude")
+        self.assertEqual(attributes["model"], "claude-opus-4-8")
+
     async def test_create_rejects_model_from_another_provider(self):
         response = await self.post(
             f"/api/projects/{self.project.id}/agents",
