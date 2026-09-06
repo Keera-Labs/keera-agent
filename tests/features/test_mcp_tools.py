@@ -5,6 +5,8 @@ DeleteTaskTool, and SendMessageTool against a real test database to catch
 schema-drift bugs (e.g. writing a dropped column).
 """
 
+import datetime
+
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
 from app.mcp.tools import (
@@ -137,6 +139,27 @@ class TestListTasksTool(TestCase, DatabaseTransaction):
         self.assertIn("Pending one", text)
         self.assertNotIn("Done one", text)
 
+    async def test_completed_filter_returns_only_tasks_completed_within_a_week(self):
+        await TaskFactory.new().create(
+            project_id=self.project.id,
+            title="Recent completed",
+            status="completed",
+            completed_at=(datetime.datetime.now() - datetime.timedelta(days=6)).isoformat(),
+        )
+        await TaskFactory.new().create(
+            project_id=self.project.id,
+            title="Old completed",
+            status="completed",
+            completed_at=(datetime.datetime.now() - datetime.timedelta(days=14)).isoformat(),
+        )
+
+        response = await self.tool.handle(
+            {"project_path": self.project.path, "status": "completed"}
+        )
+        text = _text(response)
+        self.assertIn("Recent completed", text)
+        self.assertNotIn("Old completed", text)
+
     async def test_no_tasks_returns_message(self):
         response = await self.tool.handle({"project_path": self.project.path})
         self.assertIn("No tasks found", _text(response))
@@ -215,6 +238,15 @@ class TestUpdateTaskStatusTool(TestCase, DatabaseTransaction):
         text = _text(response)
         self.assertNotIn("Error", text)
         self.assertIn("in_progress", text)
+
+    async def test_completing_task_records_completion_timestamp(self):
+        task = await TaskFactory.new().create(project_id=self.project.id, title="In flight")
+
+        await self.tool.handle({"task_id": task.id, "status": "completed"})
+
+        completed = await Task.find(task.id)
+        self.assertEqual(completed.status, "completed")
+        self.assertIsNotNone(completed.completed_at)
 
     async def test_update_status_not_found(self):
         response = await self.tool.handle({"task_id": 999999, "status": "completed"})

@@ -1,5 +1,6 @@
 """MCP tool definitions — Tool subclasses for all 11 Keera tools."""
 
+import datetime
 import json
 import os
 from typing import Optional, Union
@@ -8,7 +9,7 @@ from fastapi_startkit.mcp import Response, Tool
 from pydantic import BaseModel, Field
 
 from app.models.Project import Project
-from app.models.Task import Task
+from app.models.Task import TERMINAL_STATUSES, Task
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -155,6 +156,9 @@ class ListTasksTool(Tool):
         q = Task.where("project_id", project.id)
         if arguments.get("status"):
             q = q.where("status", arguments["status"])
+            if arguments["status"] == "completed":
+                cutoff = (datetime.datetime.now() - datetime.timedelta(days=7)).isoformat()
+                q = q.where("completed_at", ">=", cutoff)
         tasks = await q.get()
 
         if not tasks:
@@ -262,8 +266,15 @@ class UpdateTaskStatusTool(Tool):
         task = await Task.find(arguments["task_id"])
         if not task:
             return Response.text(f"Error: task #{arguments['task_id']} not found")
-        task.status = arguments["status"]
-        await task.save()
+        status = arguments["status"]
+        await task.update(
+            {
+                "status": status,
+                "completed_at": (
+                    datetime.datetime.now().isoformat() if status in TERMINAL_STATUSES else None
+                ),
+            }
+        )
         return Response.text(f"Task #{task.id} '{task.title or task.body}' → {task.status}")
 
 

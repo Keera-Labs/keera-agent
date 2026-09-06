@@ -124,8 +124,15 @@ class TestTaskController(TestCase, DatabaseTransaction):
         titles = {row["attributes"]["title"] for row in response.json()["data"]}
         self.assertNotIn("mine", titles)
 
-    async def test_index_excludes_old_completed_tasks(self):
-        stale = (datetime.datetime.now() - datetime.timedelta(days=30)).isoformat()
+    async def test_index_includes_recent_completed_tasks_and_excludes_old_ones(self):
+        recent = (datetime.datetime.now() - datetime.timedelta(days=6)).isoformat()
+        stale = (datetime.datetime.now() - datetime.timedelta(days=14)).isoformat()
+        await TaskFactory.new().create(
+            project_id=self.project.id,
+            title="recent-task",
+            status="completed",
+            completed_at=recent,
+        )
         await TaskFactory.new().create(
             project_id=self.project.id,
             title="stale-task",
@@ -137,7 +144,20 @@ class TestTaskController(TestCase, DatabaseTransaction):
         response = await self.get(self.tasks_url)
         titles = {row["attributes"]["title"] for row in response.json()["data"]}
         self.assertIn("active-task", titles)
+        self.assertIn("recent-task", titles)
         self.assertNotIn("stale-task", titles)
+
+    async def test_index_excludes_completed_tasks_without_a_completion_timestamp(self):
+        await TaskFactory.new().create(
+            project_id=self.project.id,
+            title="legacy-completed-task",
+            status="completed",
+            completed_at=None,
+        )
+
+        response = await self.get(self.tasks_url)
+        titles = {row["attributes"]["title"] for row in response.json()["data"]}
+        self.assertNotIn("legacy-completed-task", titles)
 
     # --- update ---
 
