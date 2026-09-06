@@ -13,6 +13,7 @@ export interface ProjectAgent {
     name: string
     slug: string
     description: string | null
+    provider: string
     model: string
     system_prompt: string | null
     agent_type: string
@@ -56,6 +57,7 @@ export function normalizeAgent(resource: AgentResource): ProjectAgent {
         name: attr.name as string,
         slug: attr.slug as string,
         description: (attr.description as string | null) ?? null,
+        provider: (attr.provider as string) || 'claude',
         model: attr.model as string,
         system_prompt: (attr.system_prompt as string | null) ?? null,
         agent_type: attr.agent_type as string,
@@ -127,7 +129,7 @@ export function useAgents(projectId: number | null) {
         mutationFn: async ({
             agentId,
             ...fields
-        }: { agentId: number } & Partial<Pick<ProjectAgent, 'name' | 'description' | 'agent_type' | 'model' | 'system_prompt'> & { flags: AgentFlags }>) => {
+        }: { agentId: number } & Partial<Pick<ProjectAgent, 'name' | 'description' | 'agent_type' | 'provider' | 'model' | 'system_prompt'> & { flags: AgentFlags }>) => {
             const res = await fetch(`/api/agents/${agentId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },

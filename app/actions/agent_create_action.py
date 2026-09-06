@@ -32,6 +32,11 @@ class AgentCreateAction:
             )
 
         req = self.request
+        provider_models = settings.get("provider_models", {})
+        available_models = provider_models.get(req.provider, [])
+        model = req.model or (available_models[0] if available_models else None)
+        if not model or model not in available_models:
+            raise ValueError(f"Model '{model or ''}' is not configured for {req.provider}")
 
         # Resolve system prompt: caller value wins, fall back to type default
         system_prompt = (req.system_prompt or "").strip() or default_system_prompt(req.agent_type)
@@ -62,7 +67,8 @@ class AgentCreateAction:
             "slug": f"{Str.slugify(req.name)}-{int(datetime.datetime.now().timestamp())}",
             "agent_type": req.agent_type,
             "description": req.description,
-            "model": req.model,
+            "provider": req.provider,
+            "model": model,
             "system_prompt": system_prompt,
             "task_id": req.task_id,
             "permissions_allow": perms_allow,

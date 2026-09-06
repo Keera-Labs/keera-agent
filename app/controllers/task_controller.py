@@ -14,10 +14,8 @@ async def index(project_id: int) -> ResourceCollection:
     tasks = await (
         Task.where("project_id", project_id)
         .where(
-            lambda q: (
-                q.where_not_in("tasks.status", ["completed", "cancelled"])
-                .or_where("tasks.completed_at", ">=", cutoff)
-                .or_where_raw("tasks.completed_at IS NULL")
+            lambda q: q.where_not_in("tasks.status", ["completed", "cancelled"]).or_where(
+                "tasks.completed_at", ">=", cutoff
             )
         )
         .paginate()

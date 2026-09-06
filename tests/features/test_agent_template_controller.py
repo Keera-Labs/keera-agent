@@ -20,11 +20,11 @@ class TestAgentTemplateController(TestCase, DatabaseTransaction):
 
     async def test_patch_builtin_updates_model(self):
         tpl = await AgentTemplateFactory.new().create(
-            name="tmpl190-builtin-model", is_builtin=True, model="claude-sonnet-4-6"
+            name="tmpl190-builtin-model", is_builtin=True, model="claude-sonnet-5"
         )
-        res = await self.patch(f"/api/agent-templates/{tpl.id}", json={"model": "claude-opus-4-8"})
+        res = await self.patch(f"/api/agent-templates/{tpl.id}", json={"model": "claude-opus-5"})
         res.assert_ok().assert_json(
-            lambda j: j.where("model", "claude-opus-4-8").where("is_builtin", True).etc()
+            lambda j: j.where("model", "claude-opus-5").where("is_builtin", True).etc()
         )
 
     async def test_patch_builtin_updates_full_fields(self):
@@ -34,14 +34,14 @@ class TestAgentTemplateController(TestCase, DatabaseTransaction):
             json={
                 "system_prompt": "edited prompt",
                 "description": "edited desc",
-                "model": "claude-haiku-4-5-20251001",
+                "model": "claude-fable-5",
             },
         )
         res.assert_ok().assert_json(
             lambda j: (
                 j.where("system_prompt", "edited prompt")
                 .where("description", "edited desc")
-                .where("model", "claude-haiku-4-5-20251001")
+                .where("model", "claude-fable-5")
                 .etc()
             )
         )
@@ -57,8 +57,8 @@ class TestAgentTemplateController(TestCase, DatabaseTransaction):
 
     async def test_patch_user_template_updates(self):
         tpl = await AgentTemplateFactory.new().create(name="tmpl190-user-edit", is_builtin=False)
-        res = await self.patch(f"/api/agent-templates/{tpl.id}", json={"model": "claude-opus-4-8"})
-        res.assert_ok().assert_json(lambda j: j.where("model", "claude-opus-4-8").etc())
+        res = await self.patch(f"/api/agent-templates/{tpl.id}", json={"model": "claude-opus-5"})
+        res.assert_ok().assert_json(lambda j: j.where("model", "claude-opus-5").etc())
 
     async def test_delete_user_template_ok(self):
         tpl = await AgentTemplateFactory.new().create(name="tmpl190-user-del", is_builtin=False)
@@ -66,7 +66,7 @@ class TestAgentTemplateController(TestCase, DatabaseTransaction):
         res.assert_ok()
 
     async def test_patch_missing_template_returns_404(self):
-        res = await self.patch("/api/agent-templates/99999999", json={"model": "claude-opus-4-8"})
+        res = await self.patch("/api/agent-templates/99999999", json={"model": "claude-opus-5"})
         res.assert_status(404)
 
     # ── seeding is insert-if-missing only ─────────────────────────────────────
@@ -77,12 +77,12 @@ class TestAgentTemplateController(TestCase, DatabaseTransaction):
         edited = await AgentTemplateFactory.new().create(
             name=seed_name,
             is_builtin=True,
-            model="claude-haiku-4-5-20251001",
+            model="claude-fable-5",
             system_prompt="USER EDITED PROMPT",
         )
 
         await SeedBuiltinTemplatesAction().execute()
 
         refreshed = await AgentTemplate.find(edited.id)
-        self.assertEqual(refreshed.model, "claude-haiku-4-5-20251001")
+        self.assertEqual(refreshed.model, "claude-fable-5")
         self.assertEqual(refreshed.system_prompt, "USER EDITED PROMPT")

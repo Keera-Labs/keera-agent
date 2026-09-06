@@ -178,12 +178,12 @@ class TestAgents(TestCase):
         self.assertNotIn("plan_mode", json.loads(attrs["flags"]))
 
     async def test_update_omitted_fields_unchanged(self):
-        # complexity=hard maps the created agent to claude-fable-5; a PATCH that
+        # complexity=hard maps the created agent to gpt-5.6-sol; a PATCH that
         # omits model must leave that resolved model untouched.
         agent = await self._create_agent(complexity="hard")
         response = await self.client.patch(f"/api/agents/{agent['id']}", json={"name": "New Name"})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(_attrs(response)["model"], "claude-fable-5")
+        self.assertEqual(_attrs(response)["model"], "gpt-5.6-sol")
 
     async def test_update_nonexistent_agent_returns_404(self):
         response = await self.client.patch("/api/agents/999999", json={"name": "Ghost"})
@@ -427,6 +427,33 @@ class TestGlobalSettings(TestCase):
         data = response.json()
         self.assertIn("max_agents_per_project", data)
         self.assertEqual(data["max_agents_per_project"], 10)
+        self.assertEqual([provider["slug"] for provider in data["providers"]], ["codex", "claude"])
+        self.assertIn("gpt-5.6-luna", data["provider_models"]["codex"])
+        self.assertIn("gpt-5.6-terra", data["provider_models"]["codex"])
+        self.assertIn("gpt-5.6-sol", data["provider_models"]["codex"])
+
+    async def test_patch_global_provider_models(self):
+        response = await self.client.patch(
+            "/api/global-settings",
+            json={
+                "provider_models": {
+                    "claude": ["claude-custom", "claude-custom"],
+                    "codex": ["codex-custom"],
+                }
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["provider_models"]["claude"], ["claude-custom"])
+        self.assertEqual(response.json()["providers"][0]["models"], ["codex-custom"])
+
+    async def test_patch_rejects_empty_provider_model_list(self):
+        response = await self.client.patch(
+            "/api/global-settings",
+            json={"provider_models": {"claude": [], "codex": ["codex-custom"]}},
+        )
+
+        self.assertEqual(response.status_code, 422)
 
     async def test_patch_global_settings_updates_value(self):
         """PATCH /api/global-settings persists the new value."""

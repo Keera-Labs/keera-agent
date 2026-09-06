@@ -11,6 +11,7 @@ import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import { useProjectStore } from '@/stores/projectStore'
 import { DotsIndicator } from '@/layouts/sidebar/Project'
 import { AgentsListPanel } from './AgentsListPanel'
+import { PmCheckinControl } from './PmCheckinControl'
 import { ProjectOverview } from './ProjectOverview'
 import { agentRoleLabel } from './presentation'
 
@@ -175,7 +176,10 @@ export default function AgentDetail() {
                         )}
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-3 shrink-0">
+                        {activeAgent?.agent_type === 'pm' && (
+                            <PmCheckinControl agentId={activeAgent.id} compact />
+                        )}
                         <ClaudeStatusBadge status={claudeStatus[activeProject.id]} />
                     </div>
                 </div>

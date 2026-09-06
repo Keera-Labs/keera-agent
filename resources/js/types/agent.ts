@@ -8,6 +8,7 @@ export interface AgentTemplate {
     description: string | null
     agent_type: string
     system_prompt: string | null
+    provider: string
     model: string
     flags: AgentFlags
     dangerously_skip_permissions: boolean
@@ -36,10 +37,11 @@ export const AGENT_TYPE_COLORS: Record<string, string> = {
 // Model options offered in the agent/template selectors. The `value` is passed
 // verbatim to `claude --model`, so each must be a real model id the CLI accepts.
 export const MODELS = [
-    { value: 'claude-fable-5', label: 'Claude Fable 5' },
+    { value: 'claude-opus-5', label: 'Claude Opus 5' },
     { value: 'claude-sonnet-5', label: 'Claude Sonnet 5' },
-    { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
-    { value: 'claude-opus-4-8', label: 'Claude Opus 4.8' },
-    { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
+    { value: 'claude-fable-5', label: 'Claude Fable 5' },
 ]
 
+// Default model when a selector needs a starting value (matches the backend DEFAULT_MODEL).
+export const DEFAULT_MODEL = 'gpt-5.6-terra'
+export const DEFAULT_PROVIDER = 'codex'

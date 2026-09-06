@@ -1,6 +1,7 @@
 from fastapi_startkit.fastapi import Router
 
 from app.controllers import (
+    agent_checkin_controller,
     agent_controller,
     agent_default_controller,
     agent_dispatch_controller,
@@ -93,6 +94,10 @@ router.post("/api/agents/{agent_id}/trigger", agent_trigger_controller.trigger)
 
 router.get("/api/agents/{agent_id}/permissions", agent_permission_controller.show)
 router.patch("/api/agents/{agent_id}/permissions", agent_permission_controller.update)
+
+# PM check-in scheduler (start/stop + interval)
+router.get("/api/agents/{agent_id}/checkin", agent_checkin_controller.show)
+router.patch("/api/agents/{agent_id}/checkin", agent_checkin_controller.update)
 router.get("/api/default-permissions", default_permission_controller.show)
 router.patch("/api/default-permissions", default_permission_controller.update)
 

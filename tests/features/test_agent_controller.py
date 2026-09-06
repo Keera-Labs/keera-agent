@@ -15,6 +15,7 @@ from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 from app.controllers.agent_trigger_controller import (
     discover_agent_worktree,
     discover_worktree_path,
+    ensure_codex_worktree,
 )
 from databases.factories.agent_factory import AgentFactory
 from databases.factories.project_factory import ProjectFactory
@@ -93,6 +94,28 @@ class TestAdoptWork(TestCase, DatabaseTransaction):
 
     def test_discover_agent_worktree_returns_none_when_absent(self):
         self.assertIsNone(discover_agent_worktree(self._tmpdir, self.agent.id))
+
+    async def test_codex_worker_uses_worktree_while_pm_stays_in_project(self):
+        worker = await AgentFactory.new().create(
+            project_id=self.project.id,
+            provider="codex",
+            model="gpt-5.6-terra",
+            use_worktree=True,
+        )
+        pm = await AgentFactory.new().create(
+            project_id=self.project.id,
+            agent_type="pm",
+            provider="codex",
+            model="gpt-5.6-terra",
+            use_worktree=False,
+        )
+
+        worker_cwd = ensure_codex_worktree(worker, self._tmpdir)
+        pm_cwd = ensure_codex_worktree(pm, self._tmpdir)
+
+        self.assertNotEqual(os.path.realpath(worker_cwd), os.path.realpath(pm_cwd))
+        self.assertEqual(os.path.realpath(pm_cwd), os.path.realpath(self._tmpdir))
+        self.assertTrue(os.path.isdir(worker_cwd))
 
     # ── POST /api/agents/:id/adopt-work ───────────────────────────────────────
 

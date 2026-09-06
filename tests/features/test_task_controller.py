@@ -1,4 +1,5 @@
 import datetime
+from unittest.mock import patch
 
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
@@ -124,8 +125,15 @@ class TestTaskController(TestCase, DatabaseTransaction):
         titles = {row["attributes"]["title"] for row in response.json()["data"]}
         self.assertNotIn("mine", titles)
 
-    async def test_index_excludes_old_completed_tasks(self):
-        stale = (datetime.datetime.now() - datetime.timedelta(days=30)).isoformat()
+    async def test_index_includes_recent_completed_tasks_and_excludes_old_ones(self):
+        recent = (datetime.datetime.now() - datetime.timedelta(days=6)).isoformat()
+        stale = (datetime.datetime.now() - datetime.timedelta(days=14)).isoformat()
+        await TaskFactory.new().create(
+            project_id=self.project.id,
+            title="recent-task",
+            status="completed",
+            completed_at=recent,
+        )
         await TaskFactory.new().create(
             project_id=self.project.id,
             title="stale-task",
@@ -137,7 +145,44 @@ class TestTaskController(TestCase, DatabaseTransaction):
         response = await self.get(self.tasks_url)
         titles = {row["attributes"]["title"] for row in response.json()["data"]}
         self.assertIn("active-task", titles)
+        self.assertIn("recent-task", titles)
         self.assertNotIn("stale-task", titles)
+
+    async def test_index_excludes_completed_tasks_without_a_completion_timestamp(self):
+        await TaskFactory.new().create(
+            project_id=self.project.id,
+            title="legacy-completed-task",
+            status="completed",
+            completed_at=None,
+        )
+
+        response = await self.get(self.tasks_url)
+        titles = {row["attributes"]["title"] for row in response.json()["data"]}
+        self.assertNotIn("legacy-completed-task", titles)
+
+    async def test_index_includes_completion_at_the_seven_day_cutoff(self):
+        now = datetime.datetime(2026, 9, 6, 12, 0, 0)
+        cutoff = now - datetime.timedelta(days=7)
+        await TaskFactory.new().create(
+            project_id=self.project.id,
+            title="at-cutoff",
+            status="completed",
+            completed_at=cutoff.isoformat(),
+        )
+        await TaskFactory.new().create(
+            project_id=self.project.id,
+            title="before-cutoff",
+            status="completed",
+            completed_at=(cutoff - datetime.timedelta(microseconds=1)).isoformat(),
+        )
+
+        with patch("app.controllers.task_controller.datetime.datetime") as mocked_datetime:
+            mocked_datetime.now.return_value = now
+            response = await self.get(self.tasks_url)
+
+        titles = {row["attributes"]["title"] for row in response.json()["data"]}
+        self.assertIn("at-cutoff", titles)
+        self.assertNotIn("before-cutoff", titles)
 
     # --- update ---
 

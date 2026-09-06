@@ -3,6 +3,7 @@ import { RotateCw, CircleDot, GitMerge, ArrowRight } from 'lucide-react'
 import { color } from '@/tokens'
 import type { ProjectAgent } from '@/queries/agentQuery'
 import { AgentEditModal } from './AgentEditModal'
+import { PmCheckinControl } from './PmCheckinControl'
 import { agentAvatarColor, agentInitials, agentRoleLabel, PLACEHOLDER } from './presentation'
 
 // ─── Footer action icon button (carried over from PR #207) ────────────────────
@@ -66,6 +67,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 export interface AgentCardStats {
     runtime: string
+    provider: string
     model: string
     branch: string
     usage: string
@@ -114,13 +116,21 @@ export function AgentCard({
 
             <hr className={dividerClass} />
 
-            {/* Stats: RUNTIME · MODEL / BRANCH · USAGE */}
+            {/* Runtime and provider configuration */}
             <div className="grid grid-cols-2 gap-4">
                 <Stat label="Runtime" value={stats.runtime} />
+                <Stat label="Provider" value={stats.provider} />
                 <Stat label="Model" value={stats.model} />
                 <Stat label="Branch" value={stats.branch} />
                 <Stat label="Usage" value={stats.usage} />
             </div>
+
+            {agent.agent_type === 'pm' && (
+                <>
+                    <hr className={dividerClass} />
+                    <PmCheckinControl agentId={agent.id} />
+                </>
+            )}
 
             <hr className={dividerClass} />
 

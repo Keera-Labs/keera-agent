@@ -1,5 +1,6 @@
 """MCP tool definitions — Tool subclasses for all 11 Keera tools."""
 
+import datetime
 import json
 import os
 from typing import Optional, Union
@@ -8,7 +9,7 @@ from fastapi_startkit.mcp import Response, Tool
 from pydantic import BaseModel, Field
 
 from app.models.Project import Project
-from app.models.Task import Task
+from app.models.Task import TERMINAL_STATUSES, Task
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -153,8 +154,18 @@ class ListTasksTool(Tool):
             )
 
         q = Task.where("project_id", project.id)
-        if arguments.get("status"):
-            q = q.where("status", arguments["status"])
+        status = arguments.get("status")
+        cutoff = (datetime.datetime.now() - datetime.timedelta(days=7)).isoformat()
+        if status:
+            q = q.where("status", status)
+            if status == "completed":
+                q = q.where("completed_at", ">=", cutoff)
+        else:
+            q = q.where(
+                lambda query: query.where_not_in(
+                    "tasks.status", ["completed", "cancelled"]
+                ).or_where("tasks.completed_at", ">=", cutoff)
+            )
         tasks = await q.get()
 
         if not tasks:
@@ -262,8 +273,15 @@ class UpdateTaskStatusTool(Tool):
         task = await Task.find(arguments["task_id"])
         if not task:
             return Response.text(f"Error: task #{arguments['task_id']} not found")
-        task.status = arguments["status"]
-        await task.save()
+        status = arguments["status"]
+        await task.update(
+            {
+                "status": status,
+                "completed_at": (
+                    datetime.datetime.now().isoformat() if status in TERMINAL_STATUSES else None
+                ),
+            }
+        )
         return Response.text(f"Task #{task.id} '{task.title or task.body}' → {task.status}")
 
 
@@ -489,13 +507,13 @@ class SpawnAgentInput(BaseModel):
         description="Initial task or instruction to send to the agent after it starts. Omit to create an idle agent.",
     )
     model: Optional[str] = Field(
-        default=None, description="Claude model to use. Defaults to claude-opus-4-8."
+        default=None, description="Claude model to use. Defaults to claude-opus-5."
     )
     complexity: str = Field(
         pattern="^(easy|medium|hard)$",
         description=(
             "Task complexity (easy|medium|hard). REQUIRED — it selects the model "
-            "automatically (easy → claude-sonnet-5, medium → claude-opus-4-8, "
+            "automatically (easy → claude-sonnet-5, medium → claude-opus-5, "
             "hard → claude-fable-5) and OVERRIDES any explicit `model`."
         ),
     )
@@ -572,12 +590,18 @@ class SpawnAgentTool(Tool):
         # Build the request outside the try so a validation error (e.g. a missing
         # or invalid complexity) surfaces instead of being swallowed as an
         # "Error:" string — only the limit ValueError from execute() is caught.
+        complexity = arguments.get("complexity")
+        model = {
+            "easy": "gpt-5.6-luna",
+            "medium": "gpt-5.6-terra",
+            "hard": "gpt-5.6-sol",
+        }.get(complexity, "gpt-5.6-terra")
         request = AgentStoreRequest(
             name=name,
             agent_type=arguments.get("agent_type", "software_engineer"),
-            model=arguments.get("model") or "claude-opus-4-8",
-            # complexity is required and its model validator overrides `model`.
-            complexity=arguments.get("complexity"),
+            provider="codex",
+            model=model,
+            complexity=complexity,
             description=f"{name} agent",
             # system_prompt is intentionally not forwarded: spawned agents
             # always use their role-based default prompt and a caller must

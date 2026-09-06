@@ -1,4 +1,5 @@
-import shlex
+from app.ai.provider import ProviderCommand
+from app.ai.providers.claude import ClaudeProvider
 
 
 class ClaudeCommand:
@@ -55,25 +56,17 @@ class ClaudeCommand:
         return self
 
     def to_command(self) -> str:
-        parts = ["claude"]
-        if self._worktree:
-            parts.append(f"--worktree {shlex.quote(self._worktree)}")
-        if self._continue:
-            parts.append("--continue")
-        if self._system_prompt_file:
-            parts.append(f'--system-prompt "$(cat {shlex.quote(self._system_prompt_file)})"')
-        if self._model:
-            parts.append(f"--model {shlex.quote(self._model)}")
-        if self._allowed_tools:
-            parts.append(f"--allowedTools {shlex.quote(','.join(self._allowed_tools))}")
-        if self._disallowed_tools:
-            parts.append(f"--disallowedTools {shlex.quote(','.join(self._disallowed_tools))}")
-        if self._permission_mode:
-            parts.append(f"--permission-mode {shlex.quote(self._permission_mode)}")
-        if self._skip_permissions:
-            parts.append("--dangerously-skip-permissions")
-        if self._verbose:
-            parts.append("--verbose")
-        if self._max_turns is not None:
-            parts.append(f"--max-turns {self._max_turns}")
-        return " ".join(parts)
+        return ClaudeProvider().build_command(
+            ProviderCommand(
+                model=self._model,
+                worktree=self._worktree,
+                continue_session=self._continue,
+                system_prompt_file=self._system_prompt_file,
+                allowed_tools=self._allowed_tools or [],
+                disallowed_tools=self._disallowed_tools or [],
+                skip_permissions=self._skip_permissions,
+                permission_mode=self._permission_mode,
+                verbose=self._verbose,
+                max_turns=self._max_turns,
+            )
+        )

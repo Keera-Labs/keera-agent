@@ -30,6 +30,18 @@ class AppProvider(Provider):
 
             await SeedBuiltinTemplatesAction().execute()
 
+            # Resume PM check-in schedulers that were left enabled so their state
+            # survives a server restart, not just a browser reload.
+            try:
+                from app import checkin_scheduler
+                from app.models.Agent import Agent
+
+                pms = await Agent.where("agent_type", "pm").where("checkin_enabled", True).get()
+                for pm in pms:
+                    checkin_scheduler.start(pm.project_id, int(pm.checkin_interval_minutes or 5))
+            except Exception:
+                pass
+
         self.app.fastapi.add_event_handler("startup", on_startup)
 
         async def on_shutdown():

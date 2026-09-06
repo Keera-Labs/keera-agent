@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react'
+import { usePage } from '@inertiajs/react'
 import { color } from '@/tokens'
 import Modal from '@/components/ui/Modal'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
@@ -7,6 +8,8 @@ import type { ProjectAgent, AgentFlags } from '@/queries/agentQuery'
 import { normalizeAgent } from '@/queries/agentQuery'
 import type { AgentTemplate } from '@/types/agent'
 import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS } from '@/types/agent'
+import type { GlobalSettings } from '@/types/provider'
+import { FALLBACK_PROVIDERS, modelForProviderComplexity } from '@/types/provider'
 import { labelClass, inputClass, cancelBtnClass, submitBtnClass, flagRowClass, toggleClass } from '@/components/ui/styles'
 
 /**
@@ -20,6 +23,38 @@ function findBuiltinForType(templates: AgentTemplate[], agentType: string): Agen
     )
 }
 
+export function agentCreatePayload({
+    name,
+    agentType,
+    description,
+    provider,
+    systemPrompt,
+    complexity,
+    flags,
+    planMode,
+}: {
+    name: string
+    agentType: string
+    description: string
+    provider: string
+    systemPrompt: string
+    complexity: string
+    flags: AgentFlags
+    planMode: boolean
+}) {
+    return {
+        name,
+        agent_type: agentType,
+        description,
+        provider,
+        model: modelForProviderComplexity(provider, complexity),
+        system_prompt: systemPrompt,
+        complexity,
+        flags,
+        plan_mode: planMode,
+    }
+}
+
 function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxAgents }: {
     projectId: number
     onCreated: (a: ProjectAgent) => void
@@ -28,9 +63,13 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
     agentCount?: number
     maxAgents?: number
 }) {
+    const { props } = usePage<{ global_settings?: GlobalSettings }>()
+    const providers = props.global_settings?.providers ?? FALLBACK_PROVIDERS
+    const initialProvider = providers[0]?.slug ?? 'codex'
     const [name, setName] = useState('')
     const [agentType, setAgentType] = useState<string>('software_engineer')
     const [description, setDescription] = useState(() => findBuiltinForType(templates, 'software_engineer')?.description ?? '')
+    const [provider, setProvider] = useState(initialProvider)
     const [systemPrompt, setSystemPrompt] = useState(() => findBuiltinForType(templates, 'software_engineer')?.system_prompt ?? '')
     const [complexity, setComplexity] = useState('medium')
     const [flags, setFlags] = useState<AgentFlags>({})
@@ -38,6 +77,8 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
     const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null)
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
+
+    const model = modelForProviderComplexity(provider, complexity)
 
     const isAtLimit = agentCount !== undefined && maxAgents !== undefined && agentCount >= maxAgents
 
@@ -50,6 +91,7 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
             if (tpl) {
                 setDescription(prev => prev || (tpl.description ?? ''))
                 setSystemPrompt(prev => prev || (tpl.system_prompt ?? ''))
+                setProvider(tpl.provider ?? 'codex')
             }
         }
     }, [templates]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -59,6 +101,7 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
             setSelectedTemplateId(null)
             setAgentType('software_engineer')
             setDescription('')
+            setProvider(initialProvider)
             setSystemPrompt('')
             setFlags({})
             setPlanMode(false)
@@ -66,6 +109,7 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
         }
         setSelectedTemplateId(tpl.id)
         setAgentType(tpl.agent_type)
+        setProvider(tpl.provider ?? 'codex')
         setFlags(tpl.flags ?? {})
         setPlanMode(!!tpl.plan_mode)
         setDescription(tpl.description ?? '')
@@ -84,7 +128,7 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
             const res = await fetch(`/api/projects/${projectId}/agents`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, agent_type: agentType, description, system_prompt: systemPrompt, complexity, flags, plan_mode: planMode }),
+                body: JSON.stringify(agentCreatePayload({ name, agentType, description, provider, systemPrompt, complexity, flags, planMode })),
             })
             const data = await res.json()
             if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
@@ -179,6 +223,19 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
                     className={inputClass}
                 />
             </label>
+
+            <div className="flex gap-2.5">
+                <label className="w-[160px] flex flex-col gap-1">
+                    <span className={labelClass}>Provider</span>
+                    <select value={provider} onChange={e => setProvider(e.target.value)} className={inputClass}>
+                        {providers.map(item => <option key={item.slug} value={item.slug}>{item.name}</option>)}
+                    </select>
+                </label>
+                <label className="flex-1 flex flex-col gap-1">
+                    <span className={labelClass}>Model (derived)</span>
+                    <output className={`${inputClass} w-full text-zinc-500 cursor-default`}>{model}</output>
+                </label>
+            </div>
 
             <label className="flex flex-col gap-1">
                 <span className={labelClass}>Complexity</span>

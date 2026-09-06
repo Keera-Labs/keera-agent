@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
+import { usePage } from '@inertiajs/react'
 import { color } from '@/tokens'
 import type { AgentTemplate, AgentFlags } from '@/types/agent'
-import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, MODELS } from '@/types/agent'
+import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS, DEFAULT_MODEL, DEFAULT_PROVIDER } from '@/types/agent'
+import type { GlobalSettings } from '@/types/provider'
+import { FALLBACK_PROVIDERS, modelsForProvider } from '@/types/provider'
 import { useAppLayout } from '@/layouts/context/AppLayoutContext'
 import { labelClass, inputClass, cancelBtnClass, submitBtnClass, flagRowClass, toggleClass } from '@/components/ui/styles'
 
@@ -21,6 +24,8 @@ export function ProjectTemplatesModal({
     projectName: string
     onClose: () => void
 }) {
+    const { props } = usePage<{ global_settings?: GlobalSettings }>()
+    const providers = props.global_settings?.providers ?? FALLBACK_PROVIDERS
     const { refetchAgentTemplates } = useAppLayout()
     const [templates, setTemplates] = useState<AgentTemplate[]>([])
     const [loading, setLoading] = useState(true)
@@ -30,7 +35,8 @@ export function ProjectTemplatesModal({
     const [name, setName] = useState('')
     const [desc, setDesc] = useState('')
     const [type, setType] = useState('software_engineer')
-    const [model, setModel] = useState('claude-opus-4-8')
+    const [provider, setProvider] = useState(DEFAULT_PROVIDER)
+    const [model, setModel] = useState(DEFAULT_MODEL)
     const [prompt, setPrompt] = useState('')
     const [flags, setFlags] = useState<AgentFlags>({})
     const [planMode, setPlanMode] = useState(false)
@@ -51,14 +57,14 @@ export function ProjectTemplatesModal({
     function load(tpl: AgentTemplate) {
         setSelected(tpl); setIsNew(false); setError('')
         setName(tpl.name); setDesc(tpl.description ?? ''); setType(tpl.agent_type)
-        setModel(tpl.model ?? 'claude-opus-4-8'); setPrompt(tpl.system_prompt ?? '')
+        setProvider(tpl.provider ?? DEFAULT_PROVIDER); setModel(tpl.model ?? DEFAULT_MODEL); setPrompt(tpl.system_prompt ?? '')
         setFlags(tpl.flags ?? {}); setPlanMode(!!tpl.plan_mode)
     }
 
     function startNew() {
         setSelected(null); setIsNew(true); setError('')
         setName(''); setDesc(''); setType('software_engineer')
-        setModel('claude-opus-4-8'); setPrompt(''); setFlags({}); setPlanMode(false)
+        setProvider(DEFAULT_PROVIDER); setModel(modelsForProvider(providers, DEFAULT_PROVIDER)[0] ?? DEFAULT_MODEL); setPrompt(''); setFlags({}); setPlanMode(false)
     }
 
     async function save() {
@@ -66,7 +72,7 @@ export function ProjectTemplatesModal({
         setSaving(true); setError('')
         const payload = {
             name: name.trim(), description: desc.trim() || null, agent_type: type,
-            model, system_prompt: prompt.trim() || null, flags, plan_mode: planMode,
+            provider, model, system_prompt: prompt.trim() || null, flags, plan_mode: planMode,
         }
         try {
             // Copy-on-write: PATCH against the effective row id forks/updates the
@@ -174,12 +180,23 @@ export function ProjectTemplatesModal({
                                         <span className={labelClass}>Description</span>
                                         <input value={desc} onChange={e => setDesc(e.target.value)} className={inputClass} />
                                     </label>
-                                    <label className="flex flex-col gap-1">
-                                        <span className={labelClass}>Model</span>
-                                        <select value={model} onChange={e => setModel(e.target.value)} className={inputClass}>
-                                            {MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                                        </select>
-                                    </label>
+                                    <div className="flex gap-2.5">
+                                        <label className="w-[150px] flex flex-col gap-1">
+                                            <span className={labelClass}>Provider</span>
+                                            <select value={provider} onChange={e => {
+                                                setProvider(e.target.value)
+                                                setModel(modelsForProvider(providers, e.target.value)[0] ?? '')
+                                            }} className={inputClass}>
+                                                {providers.map(item => <option key={item.slug} value={item.slug}>{item.name}</option>)}
+                                            </select>
+                                        </label>
+                                        <label className="flex-1 flex flex-col gap-1">
+                                            <span className={labelClass}>Model</span>
+                                            <select value={model} onChange={e => setModel(e.target.value)} className={inputClass}>
+                                                {modelsForProvider(providers, provider).map(item => <option key={item} value={item}>{item}</option>)}
+                                            </select>
+                                        </label>
+                                    </div>
                                     <label className="flex flex-col gap-1">
                                         <span className={labelClass}>System Prompt</span>
                                         <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={6} className={`${inputClass} resize-y leading-normal`} />
