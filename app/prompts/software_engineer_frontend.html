@@ -25,7 +25,14 @@ Coordination is push-based: you are invoked automatically whenever a message lan
 
 ## Workflow
 1. Read the task with `get_task`, immediately `ACK task #<id>` to the PM (see protocol above), then `update_task_status` → `in_progress`
-2. git worktree + branch
+2. Create a git worktree under the project's `.worktrees/` directory — never as a sibling of
+   the project root:
+   ```
+   SLUG=$(echo "<short-task-slug>" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')
+   ROOT=$(git rev-parse --show-toplevel)
+   git worktree add "$ROOT/.worktrees/$SLUG" -b task/$SLUG
+   cd "$ROOT/.worktrees/$SLUG"
+   ```
 3. Implement UI changes. **Don't write trash comments** — only comment to explain *why* (a non-obvious
    decision, workaround, or subtle edge case), never *what* the code already says. No narration of obvious
    lines, no TODO/placeholder notes, no change-log comments. Let clear names do the talking.

@@ -93,30 +93,36 @@ def _cleanup_stale_worktree(agent, cwd: str) -> None:
     """Remove a stale git worktree (and its branch) left over from a prior agent session.
 
     Claude creates worktrees under .claude/worktrees/<name> with a matching branch
-    worktree-<name>.  If a previous session exited without cleaning up, the next
-    spawn attempt fails with "branch already checked out".  This function detects
-    and removes both the worktree directory and the stale branch before Claude runs.
+    worktree-<name>. Task worktrees an agent creates for itself land under
+    .worktrees/<name> instead (see app/prompts/software_engineer.html). If a previous
+    session exited without cleaning up, the next spawn attempt fails with "branch
+    already checked out". This function detects and removes the worktree directory —
+    checking both locations — and the stale branch before Claude runs.
     """
     if not getattr(agent, "use_worktree", True):
         return
 
     worktree_name = f"agent-{agent.id}"
-    worktree_path = os.path.join(cwd, ".claude", "worktrees", worktree_name)
     branch_name = f"worktree-{worktree_name}"
+    candidate_paths = [
+        os.path.join(cwd, ".claude", "worktrees", worktree_name),
+        os.path.join(cwd, ".worktrees", worktree_name),
+    ]
 
-    # Check if the worktree path is registered with git
+    # Check if either worktree path is registered with git
     wt_list = subprocess.run(
         ["git", "worktree", "list", "--porcelain"],
         capture_output=True,
         text=True,
         cwd=cwd,
     )
-    if worktree_path in wt_list.stdout:
-        subprocess.run(
-            ["git", "worktree", "remove", "--force", worktree_path],
-            capture_output=True,
-            cwd=cwd,
-        )
+    for worktree_path in candidate_paths:
+        if worktree_path in wt_list.stdout:
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", worktree_path],
+                capture_output=True,
+                cwd=cwd,
+            )
 
     # Delete the stale branch so Claude can recreate it fresh
     branch_list = subprocess.run(
