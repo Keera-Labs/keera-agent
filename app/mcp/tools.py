@@ -162,10 +162,9 @@ class ListTasksTool(Tool):
                 q = q.where("completed_at", ">=", cutoff)
         else:
             q = q.where(
-                lambda query: (
-                    query.where_not_in("tasks.status", ["completed", "cancelled"])
-                    .or_where("tasks.completed_at", ">=", cutoff)
-                )
+                lambda query: query.where_not_in(
+                    "tasks.status", ["completed", "cancelled"]
+                ).or_where("tasks.completed_at", ">=", cutoff)
             )
         tasks = await q.get()
 
