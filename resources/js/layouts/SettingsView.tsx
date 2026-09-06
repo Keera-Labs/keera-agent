@@ -3,7 +3,7 @@ import { router, usePage } from '@inertiajs/react'
 import { color } from '@/tokens'
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '@/types/agent'
 import type { GlobalSettings } from '@/types/provider'
-import { FALLBACK_PROVIDERS, modelsForProvider } from '@/types/provider'
+import { FALLBACK_PROVIDERS, modelForProviderComplexity, modelsForProvider } from '@/types/provider'
 import PluginsTab from './views/PluginsTab'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -459,9 +459,24 @@ function DefaultPermissionsTab() {
 function ProviderModelsTab() {
     const { props } = usePage<{ global_settings?: GlobalSettings }>()
     const providers = props.global_settings?.providers ?? FALLBACK_PROVIDERS
+    const configuredDefaultProvider = props.global_settings?.default_provider
+    const initialProvider = configuredDefaultProvider === 'claude' ? 'claude' : 'codex'
+    const providerModels = modelsForProvider(providers, initialProvider)
+    const preferredModel = (complexity: 'easy' | 'medium' | 'hard') => {
+        const saved = props.global_settings?.complexity_models?.[complexity]
+        if (saved && providerModels.includes(saved)) return saved
+        const defaultModel = modelForProviderComplexity(initialProvider, complexity)
+        return providerModels.includes(defaultModel) ? defaultModel : (providerModels[0] ?? '')
+    }
     const [models, setModels] = useState<Record<string, string[]>>(() =>
         Object.fromEntries(providers.map(provider => [provider.slug, provider.models]))
     )
+    const [defaultProvider, setDefaultProvider] = useState(initialProvider)
+    const [complexityModels, setComplexityModels] = useState({
+        easy: preferredModel('easy'),
+        medium: preferredModel('medium'),
+        hard: preferredModel('hard'),
+    })
     const [saving, setSaving] = useState(false)
     const [saved, setSaved] = useState(false)
     const [error, setError] = useState('')
@@ -478,11 +493,17 @@ function ProviderModelsTab() {
             const response = await fetch('/api/global-settings', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ provider_models: providerModels }),
+                body: JSON.stringify({
+                    provider_models: providerModels,
+                    default_provider: defaultProvider,
+                    complexity_models: complexityModels,
+                }),
             })
             const data = await response.json()
             if (!response.ok) { setError(data.error ?? 'Save failed'); return }
             setModels(data.provider_models)
+            setDefaultProvider(data.default_provider ?? defaultProvider)
+            setComplexityModels(data.complexity_models ?? complexityModels)
             setSaved(true)
             router.reload({ only: ['global_settings'] })
         } catch { setError('Network error') }
@@ -493,12 +514,54 @@ function ProviderModelsTab() {
         <div className="flex-1 overflow-y-auto p-6">
             <div className="max-w-[680px] flex flex-col gap-4">
                 <div>
-                    <h2 className="m-0 text-zinc-900 text-[15px] font-semibold">Provider models</h2>
+                    <h2 className="m-0 text-zinc-900 text-[15px] font-semibold">Provider settings</h2>
                     <p className="mt-1 mb-0 text-zinc-500 text-[12px]">
-                        Define the model identifiers available when creating agents and templates.
+                        Choose the default provider and model used for each task complexity.
                     </p>
                 </div>
                 {error && <span className="text-danger text-[12px]">{error}</span>}
+                <section className="border border-stroke rounded-md bg-canvas p-4 flex flex-col gap-3">
+                    <label className="flex flex-col gap-1.5 max-w-[320px]">
+                        <span className={labelClass}>Default provider</span>
+                        <select
+                            value={defaultProvider}
+                            onChange={event => {
+                                const provider = event.target.value
+                                const availableModels = modelsForProvider(providers, provider)
+                                setDefaultProvider(provider)
+                                setComplexityModels({
+                                    easy: availableModels.includes(modelForProviderComplexity(provider, 'easy')) ? modelForProviderComplexity(provider, 'easy') : (availableModels[0] ?? ''),
+                                    medium: availableModels.includes(modelForProviderComplexity(provider, 'medium')) ? modelForProviderComplexity(provider, 'medium') : (availableModels[0] ?? ''),
+                                    hard: availableModels.includes(modelForProviderComplexity(provider, 'hard')) ? modelForProviderComplexity(provider, 'hard') : (availableModels[0] ?? ''),
+                                })
+                            }}
+                            className={inputClass}
+                        >
+                            <option value="codex">Codex</option>
+                            <option value="claude">Claude</option>
+                        </select>
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {([
+                            ['easy', 'Easy'],
+                            ['medium', 'Medium'],
+                            ['hard', 'Complex / Hard'],
+                        ] as const).map(([complexity, label]) => (
+                            <label key={complexity} className="flex flex-col gap-1.5 min-w-0">
+                                <span className={labelClass}>{label}</span>
+                                <select
+                                    value={complexityModels[complexity]}
+                                    onChange={event => setComplexityModels(current => ({ ...current, [complexity]: event.target.value }))}
+                                    className={`${inputClass} w-full`}
+                                >
+                                    {modelsForProvider(providers, defaultProvider).map(model => (
+                                        <option key={model} value={model}>{model}</option>
+                                    ))}
+                                </select>
+                            </label>
+                        ))}
+                    </div>
+                </section>
                 {providers.map(provider => (
                     <section key={provider.slug} className="border border-stroke rounded-md bg-canvas p-4 flex flex-col gap-2.5">
                         <div className="flex items-center justify-between">
@@ -524,7 +587,7 @@ function ProviderModelsTab() {
                     </section>
                 ))}
                 <button onClick={save} disabled={saving} className={`${submitBtnClass} self-start min-w-[130px]`}>
-                    {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save models'}
+                    {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save provider settings'}
                 </button>
             </div>
         </div>

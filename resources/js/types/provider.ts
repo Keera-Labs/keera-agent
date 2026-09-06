@@ -7,6 +7,8 @@ export interface AIProvider {
 export interface GlobalSettings {
     max_agents_per_project?: number
     providers?: AIProvider[]
+    default_provider?: string
+    complexity_models?: Partial<Record<'easy' | 'medium' | 'hard', string>>
 }
 
 export const FALLBACK_PROVIDERS: AIProvider[] = [
