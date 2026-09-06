@@ -11,6 +11,9 @@ export interface GlobalSettings {
     complexity_models?: Partial<Record<'easy' | 'medium' | 'hard', string>>
 }
 
+export type Complexity = 'easy' | 'medium' | 'hard'
+export type ComplexityModels = Record<Complexity, string>
+
 export const FALLBACK_PROVIDERS: AIProvider[] = [
     { slug: 'codex', name: 'Codex', models: ['gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol'] },
     {
@@ -39,4 +42,19 @@ const COMPLEXITY_MODELS: Record<string, Record<string, string>> = {
 
 export function modelForProviderComplexity(provider: string, complexity: string): string {
     return COMPLEXITY_MODELS[provider]?.[complexity] ?? ''
+}
+
+export function reconcileComplexityModels(
+    provider: string,
+    models: string[],
+    current: Partial<ComplexityModels>,
+): ComplexityModels {
+    return (['easy', 'medium', 'hard'] as const).reduce((resolved, complexity) => {
+        const selected = current[complexity]
+        const defaultModel = modelForProviderComplexity(provider, complexity)
+        resolved[complexity] = models.includes(selected ?? '')
+            ? selected!
+            : (models.includes(defaultModel) ? defaultModel : (models[0] ?? ''))
+        return resolved
+    }, {} as ComplexityModels)
 }

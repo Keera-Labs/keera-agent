@@ -3,7 +3,7 @@ import { router, usePage } from '@inertiajs/react'
 import { color } from '@/tokens'
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '@/types/agent'
 import type { GlobalSettings } from '@/types/provider'
-import { FALLBACK_PROVIDERS, modelForProviderComplexity, modelsForProvider } from '@/types/provider'
+import { FALLBACK_PROVIDERS, reconcileComplexityModels, modelsForProvider } from '@/types/provider'
 import PluginsTab from './views/PluginsTab'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -462,24 +462,27 @@ function ProviderModelsTab() {
     const configuredDefaultProvider = props.global_settings?.default_provider
     const initialProvider = configuredDefaultProvider === 'claude' ? 'claude' : 'codex'
     const providerModels = modelsForProvider(providers, initialProvider)
-    const preferredModel = (complexity: 'easy' | 'medium' | 'hard') => {
-        const saved = props.global_settings?.complexity_models?.[complexity]
-        if (saved && providerModels.includes(saved)) return saved
-        const defaultModel = modelForProviderComplexity(initialProvider, complexity)
-        return providerModels.includes(defaultModel) ? defaultModel : (providerModels[0] ?? '')
-    }
     const [models, setModels] = useState<Record<string, string[]>>(() =>
         Object.fromEntries(providers.map(provider => [provider.slug, provider.models]))
     )
     const [defaultProvider, setDefaultProvider] = useState(initialProvider)
-    const [complexityModels, setComplexityModels] = useState({
-        easy: preferredModel('easy'),
-        medium: preferredModel('medium'),
-        hard: preferredModel('hard'),
-    })
+    const [complexityModels, setComplexityModels] = useState(() =>
+        reconcileComplexityModels(initialProvider, providerModels, props.global_settings?.complexity_models ?? {})
+    )
     const [saving, setSaving] = useState(false)
     const [saved, setSaved] = useState(false)
     const [error, setError] = useState('')
+
+    const selectedProviderModels = models[defaultProvider] ?? []
+
+    useEffect(() => {
+        setComplexityModels(current => {
+            const next = reconcileComplexityModels(defaultProvider, selectedProviderModels, current)
+            return Object.keys(next).every(key => next[key as keyof typeof next] === current[key as keyof typeof current])
+                ? current
+                : next
+        })
+    }, [defaultProvider, selectedProviderModels])
 
     async function save() {
         setSaving(true); setSaved(false); setError('')
@@ -489,6 +492,12 @@ function ProviderModelsTab() {
                 (models[provider.slug] ?? []).map(model => model.trim()).filter(Boolean),
             ])
         )
+        const resolvedComplexityModels = reconcileComplexityModels(
+            defaultProvider,
+            providerModels[defaultProvider] ?? [],
+            complexityModels,
+        )
+        setComplexityModels(resolvedComplexityModels)
         try {
             const response = await fetch('/api/global-settings', {
                 method: 'PATCH',
@@ -496,7 +505,7 @@ function ProviderModelsTab() {
                 body: JSON.stringify({
                     provider_models: providerModels,
                     default_provider: defaultProvider,
-                    complexity_models: complexityModels,
+                    complexity_models: resolvedComplexityModels,
                 }),
             })
             const data = await response.json()
@@ -527,13 +536,8 @@ function ProviderModelsTab() {
                             value={defaultProvider}
                             onChange={event => {
                                 const provider = event.target.value
-                                const availableModels = modelsForProvider(providers, provider)
                                 setDefaultProvider(provider)
-                                setComplexityModels({
-                                    easy: availableModels.includes(modelForProviderComplexity(provider, 'easy')) ? modelForProviderComplexity(provider, 'easy') : (availableModels[0] ?? ''),
-                                    medium: availableModels.includes(modelForProviderComplexity(provider, 'medium')) ? modelForProviderComplexity(provider, 'medium') : (availableModels[0] ?? ''),
-                                    hard: availableModels.includes(modelForProviderComplexity(provider, 'hard')) ? modelForProviderComplexity(provider, 'hard') : (availableModels[0] ?? ''),
-                                })
+                                setComplexityModels(current => reconcileComplexityModels(provider, models[provider] ?? [], current))
                             }}
                             className={inputClass}
                         >
@@ -554,7 +558,7 @@ function ProviderModelsTab() {
                                     onChange={event => setComplexityModels(current => ({ ...current, [complexity]: event.target.value }))}
                                     className={`${inputClass} w-full`}
                                 >
-                                    {modelsForProvider(providers, defaultProvider).map(model => (
+                                    {selectedProviderModels.map(model => (
                                         <option key={model} value={model}>{model}</option>
                                     ))}
                                 </select>
