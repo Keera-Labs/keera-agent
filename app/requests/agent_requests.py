@@ -34,20 +34,10 @@ class AgentStoreRequest(BaseModel):
 
     @model_validator(mode="after")
     def _complexity_selects_model(self):
-        if self.provider == "codex" and (
-            self.model is None or "provider" not in self.model_fields_set
-        ):
-            self.model = {
-                TaskComplexity.EASY: "gpt-5.6-luna",
-                TaskComplexity.MEDIUM: "gpt-5.6-terra",
-                TaskComplexity.HARD: "gpt-5.6-sol",
-            }[self.complexity]
         # Legacy callers omit provider and expect complexity to override model.
         # Provider-aware forms send provider explicitly, so their chosen model wins.
-        if self.provider == "claude" and (
-            self.model is None or "provider" not in self.model_fields_set
-        ):
-            self.model = self.complexity.model()
+        if self.model is None or "provider" not in self.model_fields_set:
+            self.model = self.complexity.model(self.provider)
         return self
 
     @field_validator("provider")

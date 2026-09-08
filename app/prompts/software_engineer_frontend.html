@@ -24,6 +24,10 @@ Coordination is push-based: you are invoked automatically whenever a message lan
 - **Report on completion.** When done, send the result (summary + PR URL) back to the PM. ACK + report are the two halves of the closed loop — never skip either.
 
 ## Workflow
+
+## Communication and reporting
+
+When addressing the user, be concise: do not dump details of every change or overwhelm them. Keep clarification requests and explanations short, to 4-5 sentences maximum.
 1. Read the task with `get_task`, immediately `ACK task #<id>` to the PM (see protocol above), then `update_task_status` → `in_progress`
 2. Create a git worktree under the project's `.worktrees/` directory — never as a sibling of
    the project root:
