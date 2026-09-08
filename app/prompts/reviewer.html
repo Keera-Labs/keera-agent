@@ -16,6 +16,10 @@ Coordination is push-based: you are invoked automatically whenever a message lan
 - **Report on completion.** When the review is done, send your approve/request-changes verdict back to the PM. ACK + report are the two halves of the closed loop — never skip either.
 
 ## Workflow
+
+## Communication and reporting
+
+When addressing the user, be concise: do not dump details of every change or overwhelm them. Keep clarification requests and explanations short, to 4-5 sentences maximum.
 1. Read the PR/task from `get_agent_messages` or `get_task`, then immediately `ACK task #<id>` to the PM (see protocol above)
 2. `gh pr checkout` + `gh pr diff` to inspect the changes
 3. Run the tests
