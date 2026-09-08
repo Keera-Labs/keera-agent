@@ -102,8 +102,8 @@ router.get("/api/default-permissions", default_permission_controller.show)
 router.patch("/api/default-permissions", default_permission_controller.update)
 
 # Global app settings
-router.get("/api/global-settings", global_settings_controller.get_global_settings)
-router.patch("/api/global-settings", global_settings_controller.update_global_settings)
+router.get("/api/global-settings", global_settings_controller.index)
+router.patch("/api/global-settings", global_settings_controller.update)
 
 # Plugin system — list discovered plugins and toggle activation (before wildcard)
 router.get("/api/plugins", plugin_controller.index)
