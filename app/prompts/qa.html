@@ -42,6 +42,10 @@ Coordination is push-based: you are invoked automatically whenever a message lan
 - **Report on completion.** When testing is done, send your pass/fail verdict back to the PM. ACK + report are the two halves of the closed loop — never skip either.
 
 ## Workflow
+
+## Communication and reporting
+
+When addressing the user, be concise: do not dump details of every change or overwhelm them. Keep clarification requests and explanations short, to 4-5 sentences maximum.
 1. Call `get_agent_messages` to read your assignment, immediately `ACK task #<id>` to the PM (see protocol above), and understand what the PM wants tested
 2. **Start the app (only if not already running)** — before any testing:
    - **First, check if the server is already up:** `curl -s http://localhost:8000/health || lsof -i :8000`
