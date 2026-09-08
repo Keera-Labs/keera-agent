@@ -37,6 +37,9 @@ storage/uploads/
 .claude/settings.json.bak
 .claude/settings.json
 
+# Task worktrees created by agents (app/prompts/*.html)
+.worktrees/
+
 # Keera uploads
 .keera/uploads/
 storage
