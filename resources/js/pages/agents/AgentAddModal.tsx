@@ -9,7 +9,7 @@ import { normalizeAgent } from '@/queries/agentQuery'
 import type { AgentTemplate } from '@/types/agent'
 import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS } from '@/types/agent'
 import type { GlobalSettings } from '@/types/provider'
-import { FALLBACK_PROVIDERS, modelForProviderComplexity } from '@/types/provider'
+import { FALLBACK_PROVIDERS, modelForProviderComplexity, modelsForProvider } from '@/types/provider'
 import { labelClass, inputClass, cancelBtnClass, submitBtnClass, flagRowClass, toggleClass } from '@/components/ui/styles'
 
 /**
@@ -30,6 +30,7 @@ export function agentCreatePayload({
     provider,
     systemPrompt,
     complexity,
+    model,
     flags,
     planMode,
 }: {
@@ -39,6 +40,7 @@ export function agentCreatePayload({
     provider: string
     systemPrompt: string
     complexity: string
+    model?: string
     flags: AgentFlags
     planMode: boolean
 }) {
@@ -47,7 +49,7 @@ export function agentCreatePayload({
         agent_type: agentType,
         description,
         provider,
-        model: modelForProviderComplexity(provider, complexity),
+        model: model ?? modelForProviderComplexity(provider, complexity),
         system_prompt: systemPrompt,
         complexity,
         flags,
@@ -65,7 +67,7 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
 }) {
     const { props } = usePage<{ global_settings?: GlobalSettings }>()
     const providers = props.global_settings?.providers ?? FALLBACK_PROVIDERS
-    const initialProvider = providers[0]?.slug ?? 'codex'
+    const initialProvider = props.global_settings?.default_provider === 'claude' ? 'claude' : 'codex'
     const [name, setName] = useState('')
     const [agentType, setAgentType] = useState<string>('software_engineer')
     const [description, setDescription] = useState(() => findBuiltinForType(templates, 'software_engineer')?.description ?? '')
@@ -78,7 +80,10 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
 
-    const model = modelForProviderComplexity(provider, complexity)
+    const savedModel = provider === initialProvider ? props.global_settings?.complexity_models?.[complexity as 'easy' | 'medium' | 'hard'] : undefined
+    const model = savedModel && modelsForProvider(providers, provider).includes(savedModel)
+        ? savedModel
+        : modelForProviderComplexity(provider, complexity)
 
     const isAtLimit = agentCount !== undefined && maxAgents !== undefined && agentCount >= maxAgents
 
@@ -128,7 +133,7 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
             const res = await fetch(`/api/projects/${projectId}/agents`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(agentCreatePayload({ name, agentType, description, provider, systemPrompt, complexity, flags, planMode })),
+                body: JSON.stringify(agentCreatePayload({ name, agentType, description, provider, systemPrompt, complexity, model, flags, planMode })),
             })
             const data = await res.json()
             if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
