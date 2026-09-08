@@ -3,7 +3,7 @@
 import datetime
 import json
 import os
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 from fastapi_startkit.mcp import Response, Tool
 from pydantic import BaseModel, Field
@@ -488,7 +488,10 @@ class ListAgentsTool(Tool):
 
         lines = [f"Agents in '{project.name}' (project_id={project.id}):"]
         for a in agents:
-            lines.append(f"  - {a.name} (ID: {a.id}, type: {a.agent_type}, status: {a.status})")
+            lines.append(
+                f"  - {a.name} (ID: {a.id}, type: {a.agent_type}, provider: {a.provider}, "
+                f"status: {a.status})"
+            )
         return Response.text("\n".join(lines))
 
 
@@ -510,15 +513,17 @@ class SpawnAgentInput(BaseModel):
         default=None,
         description="Initial task or instruction to send to the agent after it starts. Omit to create an idle agent.",
     )
-    model: Optional[str] = Field(
-        default=None, description="Claude model to use. Defaults to claude-opus-5."
+    provider: Optional[Literal["codex", "claude"]] = Field(
+        default=None,
+        description="Agent backend to run (codex or claude). Omit to use the existing Codex default.",
     )
     complexity: str = Field(
         pattern="^(easy|medium|hard)$",
         description=(
             "Task complexity (easy|medium|hard). REQUIRED — it selects the model "
-            "automatically (easy → claude-sonnet-5, medium → claude-opus-5, "
-            "hard → claude-fable-5) and OVERRIDES any explicit `model`."
+            "for the chosen provider automatically: codex uses "
+            "gpt-5.6-luna/gpt-5.6-terra/gpt-5.6-sol and claude uses "
+            "claude-sonnet-5/claude-opus-5/claude-fable-5."
         ),
     )
     task_id: Optional[int] = Field(
@@ -535,7 +540,10 @@ class SpawnAgentTool(Tool):
     description = (
         "Create a new agent in the current project and optionally start it with an initial task. "
         "The new agent will appear in the sidebar immediately. "
-        "Use this to delegate work to specialist agents (software_engineer, qa, reviewer, pm)."
+        "Use this to delegate work to specialist agents (software_engineer, qa, reviewer, pm). "
+        "Provider defaults to codex; complexity selects that provider's model tier: "
+        "easy/medium/hard maps to gpt-5.6-luna/gpt-5.6-terra/gpt-5.6-sol for codex "
+        "and claude-sonnet-5/claude-opus-5/claude-fable-5 for claude."
     )
 
     def schema(self):
@@ -591,20 +599,22 @@ class SpawnAgentTool(Tool):
                 f"Error: agent limit ({limit}) reached for project '{project.name}'. Delete an agent first."
             )
 
+        provider = arguments.get("provider") or "codex"
+        from app.ai import providers
+
+        try:
+            providers.get(provider)
+        except ValueError as exc:
+            return Response.text(f"Error: {exc}")
+
         # Build the request outside the try so a validation error (e.g. a missing
         # or invalid complexity) surfaces instead of being swallowed as an
         # "Error:" string — only the limit ValueError from execute() is caught.
         complexity = arguments.get("complexity")
-        model = {
-            "easy": "gpt-5.6-luna",
-            "medium": "gpt-5.6-terra",
-            "hard": "gpt-5.6-sol",
-        }.get(complexity, "gpt-5.6-terra")
         request = AgentStoreRequest(
             name=name,
             agent_type=arguments.get("agent_type", "software_engineer"),
-            provider="codex",
-            model=model,
+            provider=provider,
             complexity=complexity,
             description=f"{name} agent",
             # system_prompt is intentionally not forwarded: spawned agents
@@ -629,6 +639,7 @@ class SpawnAgentTool(Tool):
                     "project_id": agent.project_id,
                     "name": agent.name,
                     "description": agent.description,
+                    "provider": agent.provider,
                     "model": agent.model,
                     "system_prompt": agent.system_prompt,
                     "agent_type": agent.agent_type,

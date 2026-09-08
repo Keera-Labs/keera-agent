@@ -16,6 +16,7 @@ from app.mcp.tools import (
     DeleteAgentTool,
     DeleteTaskTool,
     GetTaskTool,
+    ListAgentsTool,
     ListTasksTool,
     SendMessageTool,
     SpawnAgentTool,
@@ -720,6 +721,12 @@ class TestSpawnAgentInputSchema(TestCase):
 
         self.assertNotIn("system_prompt", SpawnAgentInput.model_fields)
 
+    def test_schema_exposes_provider_but_not_model(self):
+        from app.mcp.tools import SpawnAgentInput
+
+        self.assertIn("provider", SpawnAgentInput.model_fields)
+        self.assertNotIn("model", SpawnAgentInput.model_fields)
+
 
 class TestMcpToolNames(TestCase):
     """Verify MCP tool names are consistent — relay_to_agent must NOT be registered."""
@@ -744,10 +751,13 @@ class TestMcpToolNames(TestCase):
 
 
 class TestSpawnAgentComplexity(TestCase, DatabaseTransaction):
-    """spawn_agent selects the model from task complexity."""
+    """spawn_agent selects the model from provider and task complexity."""
 
     async def asyncSetUp(self):
         await super().asyncSetUp()
+        from app.controllers.global_settings_controller import write_global_setting
+
+        await write_global_setting("max_agents_per_project", 6)
         self.project = await ProjectFactory.new().create()
         self.tool = SpawnAgentTool()
 
@@ -758,22 +768,56 @@ class TestSpawnAgentComplexity(TestCase, DatabaseTransaction):
         agent_id = int(text.split("ID: ")[1].split(")")[0])
         return await Agent.find(agent_id)
 
-    async def test_easy_selects_standard_codex(self):
-        agent = await self._spawn(complexity="easy")
-        self.assertEqual(agent.provider, "codex")
-        self.assertEqual(agent.model, "gpt-5.6-luna")
+    async def test_provider_complexity_matrix_selects_model_and_command(self):
+        expected = {
+            "codex": {
+                "easy": "gpt-5.6-luna",
+                "medium": "gpt-5.6-terra",
+                "hard": "gpt-5.6-sol",
+            },
+            "claude": {
+                "easy": "claude-sonnet-5",
+                "medium": "claude-opus-5",
+                "hard": "claude-fable-5",
+            },
+        }
 
-    async def test_medium_selects_standard_codex(self):
+        for provider, models in expected.items():
+            for complexity, model in models.items():
+                agent = await self._spawn(provider=provider, complexity=complexity)
+                self.assertEqual(agent.provider, provider)
+                self.assertEqual(agent.model, model)
+                self.assertTrue(agent.to_command().startswith(f"{provider} "))
+
+    async def test_omitted_provider_defaults_to_codex(self):
         agent = await self._spawn(complexity="medium")
+        self.assertEqual(agent.provider, "codex")
         self.assertEqual(agent.model, "gpt-5.6-terra")
 
-    async def test_hard_selects_sol(self):
-        agent = await self._spawn(complexity="hard")
+    async def test_list_agents_returns_provider(self):
+        await self._spawn(provider="claude", complexity="medium")
+
+        response = await ListAgentsTool().handle({"project_path": self.project.path})
+
+        self.assertIn("provider: claude", _text(response))
+
+    async def test_legacy_model_key_is_ignored(self):
+        agent = await self._spawn(complexity="hard", model="claude-sonnet-5")
+        self.assertEqual(agent.provider, "codex")
         self.assertEqual(agent.model, "gpt-5.6-sol")
 
-    async def test_complexity_overrides_explicit_model(self):
-        agent = await self._spawn(complexity="hard", model="claude-sonnet-5")
-        self.assertEqual(agent.model, "gpt-5.6-sol")
+    async def test_invalid_provider_returns_clear_error(self):
+        text = _text(
+            await self.tool.handle(
+                {
+                    "project_path": self.project.path,
+                    "name": "Worker",
+                    "provider": "missing",
+                    "complexity": "medium",
+                }
+            )
+        )
+        self.assertEqual(text, "Error: Unknown AI provider: missing")
 
     async def test_omitted_complexity_raises(self):
         from pydantic import ValidationError
