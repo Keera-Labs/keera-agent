@@ -23,13 +23,6 @@ export default function AppHeader() {
 
             {/* Center flex zone — reserved for project-level nav tabs (rendered by ProjectLayout) */}
             <div className="flex items-stretch flex-1"/>
-
-            {/* Right: avatar */}
-            <div className="flex items-center gap-1 pr-3">
-                <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white cursor-pointer ml-1 shrink-0 bg-[#7c6af7]">
-                    B
-                </div>
-            </div>
         </header>
     )
 }
