@@ -8,11 +8,15 @@ export interface GlobalSettings {
     max_agents_per_project?: number
     providers?: AIProvider[]
     default_provider?: string
-    complexity_models?: Partial<Record<'easy' | 'medium' | 'hard', string>>
+    complexity_models?: Record<string, ComplexityModels>
 }
 
 export type Complexity = 'easy' | 'medium' | 'hard'
 export type ComplexityModels = Record<Complexity, string>
+
+export function savedModelForComplexity(settings: GlobalSettings | undefined, provider: string, complexity: string): string | undefined {
+    return settings?.complexity_models?.[provider]?.[complexity as Complexity]
+}
 
 export const FALLBACK_PROVIDERS: AIProvider[] = [
     { slug: 'codex', name: 'Codex', models: ['gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol'] },

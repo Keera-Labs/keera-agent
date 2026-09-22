@@ -36,8 +36,9 @@ class AgentStoreRequest(BaseModel):
     def _complexity_selects_model(self):
         # Legacy callers omit provider and expect complexity to override model.
         # Provider-aware forms send provider explicitly, so their chosen model wins.
-        if self.model is None or "provider" not in self.model_fields_set:
-            self.model = self.complexity.model(self.provider)
+        # A None model is resolved from the saved complexity settings at create time.
+        if "provider" not in self.model_fields_set:
+            self.model = None
         return self
 
     @field_validator("provider")

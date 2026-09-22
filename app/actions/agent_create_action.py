@@ -18,7 +18,10 @@ class AgentCreateAction:
 
     async def execute(self) -> Agent:
         from app.controllers.agent_controller import _default_permissions
-        from app.controllers.global_settings_controller import read_global_settings
+        from app.controllers.global_settings_controller import (
+            complexity_model,
+            read_global_settings,
+        )
         from app.utils.system_prompts import default_system_prompt
 
         # Enforce per-project agent limit
@@ -34,8 +37,8 @@ class AgentCreateAction:
         req = self.request
         provider_models = settings.get("provider_models", {})
         available_models = provider_models.get(req.provider, [])
-        model = req.model or (available_models[0] if available_models else None)
-        if not model or model not in available_models:
+        model = req.model or await complexity_model(req.provider, req.complexity)
+        if model not in available_models:
             raise ValueError(f"Model '{model or ''}' is not configured for {req.provider}")
 
         # Resolve system prompt: caller value wins, fall back to type default

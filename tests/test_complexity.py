@@ -45,18 +45,16 @@ class TestAgentRequestComplexity(unittest.TestCase):
 
         return AgentStoreRequest(name="Worker", **kwargs)
 
-    def test_easy_selects_luna(self):
-        self.assertEqual(self._req(complexity="easy").model, "gpt-5.6-luna")
-
-    def test_medium_selects_terra(self):
-        self.assertEqual(self._req(complexity="medium").model, "gpt-5.6-terra")
-
-    def test_hard_selects_sol(self):
-        self.assertEqual(self._req(complexity="hard").model, "gpt-5.6-sol")
+    def test_complexity_leaves_model_to_saved_settings(self):
+        # Resolved against global settings at create time (see test_complexity_model_settings).
+        self.assertIsNone(self._req(complexity="easy").model)
 
     def test_complexity_overrides_explicit_model(self):
-        req = self._req(complexity="hard", model="claude-sonnet-5")
-        self.assertEqual(req.model, "gpt-5.6-sol")
+        self.assertIsNone(self._req(complexity="hard", model="claude-sonnet-5").model)
+
+    def test_explicit_provider_keeps_chosen_model(self):
+        req = self._req(complexity="hard", provider="claude", model="claude-sonnet-5")
+        self.assertEqual(req.model, "claude-sonnet-5")
 
     def test_missing_complexity_raises(self):
         from pydantic import ValidationError
