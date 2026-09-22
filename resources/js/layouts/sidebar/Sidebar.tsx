@@ -51,10 +51,6 @@ export default function Sidebar({
 
     const { projects } = useProjects()
 
-    const filteredProjects = filterWorkspaceId !== null
-        ? projects.filter(p => Number(p.workspace_id) === filterWorkspaceId)
-        : projects
-
     return (
         <aside className="w-[220px] shrink-0 bg-canvas border-r border-stroke flex flex-col overflow-hidden">
             <WorkspacePicker
@@ -84,12 +80,12 @@ export default function Sidebar({
                 </div>
 
                 <ul className="list-none m-0 py-0 px-0.5">
-                    {filteredProjects.length === 0 && (
+                    {projects.length === 0 && (
                         <li className="py-1 px-4 text-zinc-400 text-[11px] italic">
                             No projects
                         </li>
                     )}
-                    {filteredProjects.map(project => (
+                    {projects.map(project => (
                         <li key={project.id}>
                             <ProjectItem
                                 project={project}
@@ -98,7 +94,7 @@ export default function Sidebar({
                             />
                         </li>
                     ))}
-                    {filteredProjects.length === 0 && (
+                    {projects.length === 0 && (
                         <li>
                             <ProjectCreateModal
                                 defaultWorkspaceId={filterWorkspaceId}

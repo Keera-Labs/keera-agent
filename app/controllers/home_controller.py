@@ -30,34 +30,19 @@ async def _stamp_opened(slug: str) -> None:
 
 async def _shared_props(**extra) -> dict:
     """Props that every page render includes."""
-    # Build workspaces with embedded projects (same shape as workspace_controller.index)
+    # The picker only needs workspace metadata. Project lists are loaded through
+    # the scoped project endpoint, avoiding an N+1 query and full nested payload.
     workspaces_raw = await Workspace.all()
-    workspaces = []
-    for w in workspaces_raw:
-        projects_in_ws = await Project.where("workspace_id", w.id).get()
-        workspaces.append(
-            {
-                "id": w.id,
-                "name": w.name,
-                "description": w.description,
-                "projects": [
-                    {
-                        "id": p.id,
-                        "name": p.name,
-                        "slug": p.slug,
-                        "path": p.path,
-                        "language": p.language,
-                        "workspace_id": p.workspace_id,
-                    }
-                    for p in projects_in_ws
-                ],
-            }
-        )
+    workspaces = [
+        {"id": w.id, "name": w.name, "description": w.description} for w in workspaces_raw
+    ]
 
     # Build flat projects list (same shape as project_controller.index),
     # most-recently-opened first and capped the same way, so the sidebar's
     # first paint already matches what the /api/projects refetch returns.
-    all_projects = await Project.order_by_raw("updated_at DESC").limit(SIDEBAR_PROJECTS_LIMIT).get()
+    all_projects = await Project.order_by_raw("updated_at DESC, id DESC").limit(
+        SIDEBAR_PROJECTS_LIMIT
+    ).get()
     projects = [
         {
             "id": p.id,

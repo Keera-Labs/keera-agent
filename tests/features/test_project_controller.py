@@ -2,6 +2,7 @@ from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
 from app.controllers.project_controller import PROJECTS_PER_PAGE_MAX
 from databases.factories.project_factory import ProjectFactory
+from databases.factories.workspace_factory import WorkspaceFactory
 from tests.test_case import TestCase
 
 
@@ -62,3 +63,74 @@ class TestProjectController(TestCase, DatabaseTransaction):
         response.assert_ok()
 
         self.assertEqual(len(response.json()), PROJECTS_PER_PAGE_MAX)
+
+    async def test_index_scopes_to_selected_workspace_and_limits_in_query(self):
+        workspace = await WorkspaceFactory.new().create()
+        projects = [
+            await ProjectFactory.new().create(
+                workspace_id=workspace.id,
+                updated_at=f"2099-09-{i + 1:02d} 00:00:00",
+            )
+            for i in range(15)
+        ]
+        await ProjectFactory.new().create(updated_at="2100-01-01 00:00:00")
+
+        response = await self.get(f"/api/projects?workspace_id={workspace.id}")
+        response.assert_ok()
+
+        rows = response.json()
+        self.assertEqual(len(rows), PROJECTS_PER_PAGE_MAX)
+        self.assertEqual({row["workspace_id"] for row in rows}, {workspace.id})
+        self.assertEqual(
+            [row["slug"] for row in rows], [project.slug for project in reversed(projects[-10:])]
+        )
+
+    async def test_index_scopes_to_workspace_without_leaking_other_projects(self):
+        workspace = await WorkspaceFactory.new().create()
+        own_projects = [
+            await ProjectFactory.new().create(
+                workspace_id=workspace.id,
+                updated_at=f"2099-10-0{i + 1} 00:00:00",
+            )
+            for i in range(3)
+        ]
+        other_workspace = await WorkspaceFactory.new().create()
+        other = await ProjectFactory.new().create(
+            workspace_id=other_workspace.id, updated_at="2100-01-01 00:00:00"
+        )
+        unassigned = await ProjectFactory.new().create(updated_at="2100-01-02 00:00:00")
+
+        response = await self.get(f"/api/projects?workspace_id={workspace.id}")
+        response.assert_ok()
+
+        self.assertEqual(
+            {row["slug"] for row in response.json()}, {project.slug for project in own_projects}
+        )
+        self.assertNotIn(other.slug, {row["slug"] for row in response.json()})
+        self.assertNotIn(unassigned.slug, {row["slug"] for row in response.json()})
+
+    async def test_index_selected_workspace_with_no_projects_returns_empty_list(self):
+        workspace = await WorkspaceFactory.new().create()
+        await ProjectFactory.new().create(updated_at="2100-01-01 00:00:00")
+
+        response = await self.get(f"/api/projects?workspace_id={workspace.id}")
+        response.assert_ok()
+
+        self.assertEqual(response.json(), [])
+
+    async def test_index_without_workspace_keeps_global_top_ten_behavior(self):
+        workspace = await WorkspaceFactory.new().create()
+        projects = [
+            await ProjectFactory.new().create(
+                workspace_id=workspace.id if i % 2 else None,
+                updated_at=f"2099-11-{i + 1:02d} 00:00:00",
+            )
+            for i in range(12)
+        ]
+
+        response = await self.get("/api/projects")
+        response.assert_ok()
+
+        rows = response.json()
+        mine = [row["slug"] for row in rows if row["slug"] in {p.slug for p in projects}]
+        self.assertEqual(mine, [project.slug for project in reversed(projects[-10:])])

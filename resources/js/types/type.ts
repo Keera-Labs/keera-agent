@@ -2,7 +2,6 @@ export interface Workspace {
     id: number
     name: string
     description: string | null
-    projects: Project[]
 }
 
 export interface Project {
