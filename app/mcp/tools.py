@@ -521,8 +521,8 @@ class SpawnAgentInput(BaseModel):
         pattern="^(easy|medium|hard)$",
         description=(
             "Task complexity (easy|medium|hard). REQUIRED — it selects the model "
-            "for the chosen provider automatically: codex uses "
-            "gpt-5.6-luna/gpt-5.6-terra/gpt-5.6-sol and claude uses "
+            "configured for that tier in Settings > Providers; without a saved choice "
+            "codex uses gpt-5.6-luna/gpt-5.6-terra/gpt-5.6-sol and claude uses "
             "claude-sonnet-5/claude-opus-5/claude-fable-5."
         ),
     )
@@ -541,8 +541,9 @@ class SpawnAgentTool(Tool):
         "Create a new agent in the current project and optionally start it with an initial task. "
         "The new agent will appear in the sidebar immediately. "
         "Use this to delegate work to specialist agents (software_engineer, qa, reviewer, pm). "
-        "Provider defaults to codex; complexity selects that provider's model tier: "
-        "easy/medium/hard maps to gpt-5.6-luna/gpt-5.6-terra/gpt-5.6-sol for codex "
+        "Provider defaults to codex; complexity selects the model configured for that "
+        "tier in Settings > Providers, defaulting to "
+        "gpt-5.6-luna/gpt-5.6-terra/gpt-5.6-sol for codex "
         "and claude-sonnet-5/claude-opus-5/claude-fable-5 for claude."
     )
 
