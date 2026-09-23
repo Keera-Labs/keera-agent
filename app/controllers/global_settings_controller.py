@@ -172,11 +172,15 @@ async def update_global_settings(request: Request):
 
     if "default_provider" in body:
         if body["default_provider"] not in {provider.slug for provider in providers.all()}:
-            return JSONResponse({"error": "default_provider is not a registered provider"}, status_code=422)
+            return JSONResponse(
+                {"error": "default_provider is not a registered provider"}, status_code=422
+            )
         pending["default_provider"] = body["default_provider"]
 
     if "complexity_models" in body:
-        provider_models = pending.get("provider_models") or (await read_global_settings())["provider_models"]
+        provider_models = (
+            pending.get("provider_models") or (await read_global_settings())["provider_models"]
+        )
         error = _complexity_models_error(body["complexity_models"], provider_models)
         if error:
             return JSONResponse({"error": error}, status_code=422)
