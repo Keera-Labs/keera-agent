@@ -473,6 +473,9 @@ function ProviderModelsTab() {
         Object.fromEntries(providers.map(provider => [provider.slug, provider.models]))
     )
     const [defaultProvider, setDefaultProvider] = useState(props.global_settings?.default_provider === 'claude' ? 'claude' : 'codex')
+    const [enforceDefaultProvider, setEnforceDefaultProvider] = useState(
+        props.global_settings?.enforce_default_provider ?? false
+    )
     const [complexityModels, setComplexityModels] = useState<Record<string, Partial<ComplexityModels>>>(
         () => props.global_settings?.complexity_models ?? {}
     )
@@ -493,6 +496,7 @@ function ProviderModelsTab() {
                 body: JSON.stringify({
                     provider_models: Object.fromEntries(providers.map(provider => [provider.slug, cleanModels(models[provider.slug])])),
                     default_provider: defaultProvider,
+                    enforce_default_provider: enforceDefaultProvider,
                     complexity_models: Object.fromEntries(providers.map(provider => [provider.slug, resolvedComplexityModels(provider.slug)])),
                 }),
             })
@@ -500,6 +504,7 @@ function ProviderModelsTab() {
             if (!response.ok) { setError(data.error ?? 'Save failed'); return }
             setModels(data.provider_models)
             setDefaultProvider(data.default_provider)
+            setEnforceDefaultProvider(data.enforce_default_provider)
             setComplexityModels(data.complexity_models)
             setSaved(true)
             router.reload({ only: ['global_settings'] })
@@ -526,6 +531,27 @@ function ProviderModelsTab() {
                             ))}
                         </select>
                     </label>
+                    <div
+                        className={flagRowClass}
+                        onClick={() => setEnforceDefaultProvider(current => !current)}
+                    >
+                        <div>
+                            <div className="text-[12px] font-medium text-zinc-700">Enforce default provider</div>
+                            <div className="text-[10px] text-zinc-400">New agents must use the configured default provider.</div>
+                        </div>
+                        <button
+                            type="button"
+                            aria-label="Enforce default provider"
+                            aria-pressed={enforceDefaultProvider}
+                            className={toggleClass(enforceDefaultProvider)}
+                            onClick={event => {
+                                event.stopPropagation()
+                                setEnforceDefaultProvider(current => !current)
+                            }}
+                        >
+                            <span className={`absolute top-[3px] w-3 h-3 rounded-full bg-white transition-[left] duration-150 ${enforceDefaultProvider ? 'left-[17px]' : 'left-[3px]'}`} />
+                        </button>
+                    </div>
                 </section>
                 {providers.map(provider => {
                     const selectable = cleanModels(models[provider.slug])
