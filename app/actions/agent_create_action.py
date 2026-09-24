@@ -35,6 +35,16 @@ class AgentCreateAction:
             )
 
         req = self.request
+        default_provider = settings["default_provider"]
+        if settings.get("enforce_default_provider", False):
+            if "provider" in req.model_fields_set and req.provider != default_provider:
+                raise ValueError(
+                    f"Provider {req.provider} is not allowed: settings enforce default provider "
+                    f"{default_provider}"
+                )
+            if "provider" not in req.model_fields_set:
+                req.provider = default_provider
+
         provider_models = settings.get("provider_models", {})
         available_models = provider_models.get(req.provider, [])
         model = req.model or await complexity_model(req.provider, req.complexity)

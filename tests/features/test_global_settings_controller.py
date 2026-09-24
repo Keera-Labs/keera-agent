@@ -1,3 +1,4 @@
+from app.models.GlobalSettings import GlobalSettings
 from tests.test_case import TestCase
 
 URL = "/api/global-settings"
@@ -12,6 +13,10 @@ class TestGlobalSettingsController(TestCase):
     """
 
     # --- GET ---
+
+    async def asyncTearDown(self):
+        await GlobalSettings.where("key", "enforce_default_provider").delete()
+        await super().asyncTearDown()
 
     async def test_get_returns_settings(self):
         response = await self.get(URL)
@@ -35,6 +40,19 @@ class TestGlobalSettingsController(TestCase):
         response = await self.client.patch(URL, json={"max_agents_per_project": 100})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["max_agents_per_project"], 100)
+
+    async def test_patch_persists_enforce_default_provider(self):
+        response = await self.client.patch(URL, json={"enforce_default_provider": True})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["enforce_default_provider"])
+        self.assertTrue((await self.get(URL)).json()["enforce_default_provider"])
+
+    async def test_enforce_default_provider_defaults_to_false(self):
+        response = await self.client.patch(URL, json={"enforce_default_provider": False})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["enforce_default_provider"])
 
     # --- PATCH: invalid values (must return 422) ---
 
@@ -60,6 +78,10 @@ class TestGlobalSettingsController(TestCase):
 
     async def test_patch_rejects_float(self):
         response = await self.client.patch(URL, json={"max_agents_per_project": 5.5})
+        self.assertEqual(response.status_code, 422)
+
+    async def test_patch_rejects_non_boolean_enforce_default_provider(self):
+        response = await self.client.patch(URL, json={"enforce_default_provider": "yes"})
         self.assertEqual(response.status_code, 422)
 
     async def test_patch_422_returns_error_message(self):

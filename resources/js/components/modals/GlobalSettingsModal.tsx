@@ -29,6 +29,9 @@ export function GlobalSettingsModal({
     const serverMax = pageProps.global_settings?.max_agents_per_project ?? 10
     const configuredProviders = pageProps.global_settings?.providers ?? FALLBACK_PROVIDERS
     const [maxAgents, setMaxAgents] = useState<number>(serverMax)
+    const [enforceDefaultProvider, setEnforceDefaultProvider] = useState(
+        pageProps.global_settings?.enforce_default_provider ?? false
+    )
     const [providerModels, setProviderModels] = useState<Record<string, string[]>>(() =>
         Object.fromEntries(configuredProviders.map(provider => [provider.slug, provider.models]))
     )
@@ -71,6 +74,7 @@ export function GlobalSettingsModal({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     max_agents_per_project: maxAgents,
+                    enforce_default_provider: enforceDefaultProvider,
                     provider_models: Object.fromEntries(
                         configuredProviders.map(provider => [
                             provider.slug,
@@ -221,6 +225,21 @@ export function GlobalSettingsModal({
                                 />
                                 <span className="text-zinc-400 text-[10px] leading-normal">
                                     Maximum number of agents (excluding deleted) allowed in a single project. Default: 10.
+                                </span>
+                            </label>
+                            <div className="h-px bg-stroke" />
+                            <label className="flex items-start gap-2.5 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={enforceDefaultProvider}
+                                    onChange={e => setEnforceDefaultProvider(e.target.checked)}
+                                    className="mt-0.5"
+                                />
+                                <span className="flex flex-col gap-0.5">
+                                    <span className={labelClass}>Enforce default provider</span>
+                                    <span className="text-zinc-400 text-[10px] leading-normal">
+                                        New agents must use the configured default provider.
+                                    </span>
                                 </span>
                             </label>
                             <div className="h-px bg-stroke" />

@@ -8,6 +8,7 @@ export interface GlobalSettings {
     max_agents_per_project?: number
     providers?: AIProvider[]
     default_provider?: string
+    enforce_default_provider?: boolean
     complexity_models?: Record<string, ComplexityModels>
 }
 
