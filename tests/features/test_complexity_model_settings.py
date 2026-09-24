@@ -17,7 +17,12 @@ class TestComplexityModelSettingsController(TestCase):
     """PATCH commits on its own connection, so each test restores the keys it touched."""
 
     async def asyncTearDown(self):
-        for key in ("provider_models", "complexity_models", "default_provider"):
+        for key in (
+            "provider_models",
+            "complexity_models",
+            "default_provider",
+            "enforce_default_provider",
+        ):
             await GlobalSettings.where("key", key).delete()
         await super().asyncTearDown()
 
@@ -133,3 +138,34 @@ class TestSpawnModelResolution(TestCase, DatabaseTransaction):
         agent = await self._spawn("claude", "medium")
 
         self.assertEqual(agent.model, "claude-sonnet-5")
+
+
+class TestProviderEnforcementHttpSpawn(TestCase, DatabaseTransaction):
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        self.project = await ProjectFactory.new().create()
+        await write_global_setting("default_provider", "claude")
+        await write_global_setting("enforce_default_provider", True)
+
+    async def test_omitted_provider_uses_default_provider(self):
+        response = await self.client.post(
+            f"/api/projects/{self.project.id}/agents/spawn",
+            json={"name": "Worker", "complexity": "medium"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        attributes = response.json()["data"]["attributes"]
+        self.assertEqual(attributes["provider"], "claude")
+        self.assertEqual(attributes["model"], "claude-opus-5")
+
+    async def test_different_provider_is_rejected_without_creating_agent(self):
+        response = await self.client.post(
+            f"/api/projects/{self.project.id}/agents/spawn",
+            json={"name": "Worker", "provider": "codex", "complexity": "medium"},
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(
+            response.json()["error"],
+            "Provider codex is not allowed: settings enforce default provider claude",
+        )

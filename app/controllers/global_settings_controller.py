@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from app.ai import providers
 from app.constant.complexity import TaskComplexity
 from app.models.GlobalSettings import GlobalSettings
+from app.requests.global_settings_request import GlobalSettingsUpdateRequest
 
 DEFAULT_SETTINGS: dict = {
     "max_agents_per_project": 10,
@@ -15,6 +16,7 @@ DEFAULT_SETTINGS: dict = {
         provider.slug: list(provider.default_models) for provider in providers.all()
     },
     "default_provider": "codex",
+    "enforce_default_provider": False,
 }
 
 
@@ -69,6 +71,7 @@ async def read_global_settings() -> dict:
         "max_agents_per_project": DEFAULT_SETTINGS["max_agents_per_project"],
         "provider_models": dict(DEFAULT_SETTINGS["provider_models"]),
         "default_provider": DEFAULT_SETTINGS["default_provider"],
+        "enforce_default_provider": DEFAULT_SETTINGS["enforce_default_provider"],
     }
     saved_complexity_models: dict = {}
     for row in rows:
@@ -94,6 +97,8 @@ async def read_global_settings() -> dict:
         elif key == "default_provider":
             if row.value in {provider.slug for provider in providers.all()}:
                 result[key] = row.value
+        elif key == "enforce_default_provider":
+            result[key] = row.value.lower() == "true"
         elif key == "complexity_models":
             stored = _load_json(row.value)
             if isinstance(stored, dict):
@@ -134,8 +139,8 @@ async def get_global_settings(request: Request):
     return JSONResponse(await read_global_settings())
 
 
-async def update_global_settings(request: Request):
-    body = await request.json()
+async def update_global_settings(body: GlobalSettingsUpdateRequest):
+    body = body.model_dump(exclude_unset=True)
     pending: dict = {}
 
     if "max_agents_per_project" in body:
@@ -176,6 +181,13 @@ async def update_global_settings(request: Request):
                 {"error": "default_provider is not a registered provider"}, status_code=422
             )
         pending["default_provider"] = body["default_provider"]
+
+    if "enforce_default_provider" in body:
+        if not isinstance(body["enforce_default_provider"], bool):
+            return JSONResponse(
+                {"error": "enforce_default_provider must be a boolean"}, status_code=422
+            )
+        pending["enforce_default_provider"] = body["enforce_default_provider"]
 
     if "complexity_models" in body:
         provider_models = (

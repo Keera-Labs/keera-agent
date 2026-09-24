@@ -840,6 +840,53 @@ class TestSpawnAgentComplexity(TestCase, DatabaseTransaction):
         self.assertEqual(agent.provider, "codex")
         self.assertEqual(agent.model, "gpt-5.6-terra")
 
+    async def test_enforcement_uses_default_provider_when_omitted(self):
+        from app.controllers.global_settings_controller import write_global_setting
+
+        await write_global_setting("default_provider", "claude")
+        await write_global_setting("enforce_default_provider", True)
+
+        agent = await self._spawn(complexity="medium")
+
+        self.assertEqual(agent.provider, "claude")
+        self.assertEqual(agent.model, "claude-opus-5")
+
+    async def test_enforcement_allows_matching_provider(self):
+        from app.controllers.global_settings_controller import write_global_setting
+
+        await write_global_setting("default_provider", "claude")
+        await write_global_setting("enforce_default_provider", True)
+
+        agent = await self._spawn(provider="claude", complexity="medium")
+
+        self.assertEqual(agent.provider, "claude")
+
+    async def test_enforcement_rejects_different_provider_without_creating_agent(self):
+        from app.controllers.global_settings_controller import write_global_setting
+
+        await write_global_setting("default_provider", "claude")
+        await write_global_setting("enforce_default_provider", True)
+
+        text = _text(
+            await self.tool.handle(
+                {
+                    "project_path": self.project.path,
+                    "name": "Rejected Worker",
+                    "provider": "codex",
+                    "complexity": "medium",
+                }
+            )
+        )
+
+        self.assertEqual(
+            text, "Error: Provider codex is not allowed: settings enforce default provider claude"
+        )
+        self.assertIsNone(
+            await Agent.where("project_id", self.project.id)
+            .where("name", "Rejected Worker")
+            .first()
+        )
+
     async def test_list_agents_returns_provider(self):
         await self._spawn(provider="claude", complexity="medium")
 
