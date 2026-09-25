@@ -1,6 +1,7 @@
 import asyncio
 import re
 
+from app.actions.agent_startup import wait_for_agent_cli
 from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.models.Agent import Agent
 from app.terminal.readiness import mark_booting
@@ -65,7 +66,7 @@ async def _restart(
     agent = await Agent.find(agent_id)
     if agent:
         await terminal.write(build_cmd(agent).encode().rstrip(b"\r\n") + b"\r")
-        await terminal.wait_for_cli_ready()
+        await wait_for_agent_cli(terminal, agent_id)
         await Agent.where("id", agent_id).update({"has_session": True})
         if after_restart:
             await after_restart()

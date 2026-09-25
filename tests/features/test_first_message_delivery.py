@@ -20,9 +20,11 @@ from fastapi_startkit.application import app
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
 from app.actions.agent_message_send_action import AgentMessageSendAction
+from app.actions.agent_startup import wait_for_agent_cli
 from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.controllers.agent_trigger_controller import first_message
 from app.controllers.claude_hook_controller import _deliver_agent_relay_messages
+from app.models.Agent import Agent
 from app.models.AgentRelayMessage import AgentRelayMessage
 from app.terminal.manager import TerminalManager
 from app.terminal.readiness import claude_ready, mark_booting
@@ -46,7 +48,33 @@ with open(os.environ["FAKE_CLI_LOG"], "ab", buffering=0) as log:
             break
         log.write(len(chunk).to_bytes(4, "big") + chunk)
         os.write(1, b"echo " + str(len(chunk)).encode() + b"\\r\\n")
+        if b"\\r" in chunk and os.environ.get("FAKE_CLI_ANSWER"):
+            os.write(1, os.environ.pop("FAKE_CLI_ANSWER").encode())
 """
+
+# Byte-for-byte shape of claude's real trust dialog: words placed with cursor
+# moves, then terminal queries after the footer.
+CLAUDE_TRUST_DIALOG = (
+    b"\x1b[2GQuick\x1b[8Gsafety\x1b[15Gcheck:\x1b[22GIs\x1b[25Gthis\x1b[30Ga\x1b[32Gproject"
+    b"\x1b[40Gyou\x1b[44Gtrust?\r\r\n\r\r\n"
+    b"\x1b[2G\x1b[38;2;87;105;247m\xe2\x9d\xaf\x1b[4GNo,\x1b[8Gexit\x1b[39m\r\r\n"
+    b"\x1b[4GYes,\x1b[9GI\x1b[11Gtrust\x1b[17Gthis\x1b[22Gfolder\r\r\n\r\r\n"
+    b"\x1b[2G\x1b[38;2;102;102;102mEnter\x1b[8Gto\x1b[11Gconfirm\x1b[19G\xc2\xb7\x1b[21GEsc"
+    b"\x1b[25Gto\x1b[28Gcancel\x1b[39m\r\r\n"
+    b"\x1b[1C\x1b[4A\x1b[>0q\x1b[?u\x1b[c"
+)
+CODEX_TRUST_DIALOG = (
+    b"\x1b[8;1HTrust this folder? Codex can read, edit, and run files here."
+    b"\x1b[10;1H\x1b[7m\x1b[1m\xe2\x80\xba 1. Trust and continue    \x1b[11;3H\x1b[27m2.\x1b[11;6HQuit"
+    b"\x1b[13;3H\x1b[1menter\x1b[22m continue \xc2\xb7 \x1b[1mesc\x1b[22m quit\x1b[?2026l"
+)
+CODEX_UPDATE_DIALOG = (
+    b"Update available! 0.1.0 -> 0.2.0\r\n\xe2\x80\xba 1. Update now\r\n  2. Skip\r\n"
+    b"  3. Skip until next version\r\n\r\n  Press enter to continue"
+)
+MAIN_SCREEN = (
+    "\u2500" * 120 + "\r\n> \r\n" + "\u2500" * 120 + "\r\n  ? for shortcuts\r\n"
+).encode()
 
 
 def _read_chunks(path: str) -> list[bytes]:
@@ -84,16 +112,18 @@ class FakeCliSession:
         self.session_id = str(uuid.uuid4())
         self.manager: TerminalManager = app().make("terminal")
 
-    def start(self, banner: str = "fake cli banner"):
+    def start(self, banner: bytes = b"fake cli banner", answer: bytes = b"", websocket=None):
+        """answer is drawn the first time Enter is pressed, like a dismissed dialog."""
         env = dict(
             os.environ,
             FAKE_CLI_LOG=self.log,
             FAKE_CLI_BOOT=str(BOOT_SECONDS),
-            FAKE_CLI_BANNER=banner,
+            FAKE_CLI_BANNER=banner.decode(),
+            FAKE_CLI_ANSWER=answer.decode(),
         )
         self.manager.create(shell=self.script, cwd=self.dir, env=env, session_id=self.session_id)
         self.terminal = self.manager.get(self.session_id)
-        bridge = WebsocketTerminal(None, self.terminal)
+        bridge = WebsocketTerminal(websocket, self.terminal)
         self.reader = asyncio.create_task(bridge.run(stop_on_disconnect=False))
         return self
 
@@ -273,51 +303,149 @@ class TestFirstMessage(TestCase):
         self.assertEqual(message, "---\nPROTOCOL\nYour agent ID is: 7\n\nDo task #1")
 
 
-class TestStartupDialog(TestCase):
-    def test_known_dialogs_are_detected_even_when_split_across_reads(self):
-        term = Terminal()
-        term.mark_output(b"\x1b[1mQuick safety\x1b[0m")
-        term.mark_output(b" check: Is this a project you created or one you trust?")
-        self.assertEqual(term.startup_prompt, "Quick safety check")
+def _feed(terminal: Terminal, data: bytes, size: int) -> None:
+    for i in range(0, len(data), size):
+        terminal.mark_output(data[i : i + size])
 
-        term.mark_input()
-        self.assertIsNone(term.startup_prompt)
 
-        term.mark_output(b"  1. Update now\r\n  2. Skip\r\n\x1b[3C3. Skip until next version")
-        self.assertEqual(term.startup_prompt, "Skip until next version")
+class TestStartupDialogDetection(TestCase):
+    def test_dialogs_are_detected_at_any_read_size(self):
+        cases = [
+            (CLAUDE_TRUST_DIALOG, "Yes, I trust this folder"),
+            (CODEX_TRUST_DIALOG, "Trust and continue"),
+            (CODEX_UPDATE_DIALOG, "Skip until next version"),
+        ]
+        for dialog, option in cases:
+            for size in (1, 7, 64, len(dialog)):
+                with self.subTest(option=option, size=size):
+                    terminal = Terminal()
+                    _feed(terminal, dialog, size)
+                    self.assertEqual(terminal.startup_prompt, option)
+
+    def test_replayed_history_quoting_a_dialog_does_not_hold(self):
+        # claude --continue replays a conversation that discussed the dialog,
+        # footer included, and then draws its main screen.
+        history = (
+            b"> What does the trust prompt say?\r\n"
+            b"It shows 'Yes, I trust this folder' and "
+            b"'Enter to confirm \xc2\xb7 Esc to cancel'.\r\n"
+        )
+        for size in (7, 64, len(history)):
+            with self.subTest(size=size):
+                terminal = Terminal()
+                _feed(terminal, history + MAIN_SCREEN, size)
+                self.assertIsNone(terminal.startup_prompt)
+
+    def test_option_text_without_a_footer_never_holds(self):
+        terminal = Terminal()
+        terminal.mark_output(b"Pick 'Yes, I trust this folder' or 'Trust and continue' next time")
+        self.assertIsNone(terminal.startup_prompt)
+
+    def test_hold_is_released_once_the_main_screen_replaces_the_dialog(self):
+        terminal = Terminal()
+        terminal.mark_output(CLAUDE_TRUST_DIALOG)
+        terminal.mark_output(b"\x1b[4GYes,\x1b[9GI\x1b[11Gtrust\x1b[17Gthis\x1b[22Gfolder")
+        self.assertEqual(terminal.startup_prompt, "Yes, I trust this folder")
+
+        terminal.mark_output(MAIN_SCREEN)
+        self.assertIsNone(terminal.startup_prompt)
+
+    def test_dialog_text_after_boot_is_ignored(self):
+        terminal = Terminal()
+        terminal._booting = False
+        terminal.mark_output(CLAUDE_TRUST_DIALOG)
+        self.assertIsNone(terminal.startup_prompt)
 
     def test_ordinary_output_is_not_a_dialog(self):
-        term = Terminal()
-        term.mark_output(b"Welcome to the CLI\r\n> ")
-        self.assertIsNone(term.startup_prompt)
-
-    async def test_dialog_text_after_boot_is_ignored(self):
-        term = Terminal()
-        await term.wait_for_cli_ready(min_wait=0, quiet=0.05, timeout=1)
-
-        term.mark_output(b"the trust dialog shows 'Yes, I trust this folder'")
-
-        self.assertIsNone(term.startup_prompt)
+        terminal = Terminal()
+        terminal.mark_output(b"Welcome back!\r\n" + MAIN_SCREEN)
+        self.assertIsNone(terminal.startup_prompt)
 
 
-class TestNoEnterIntoStartupDialog(TestCase):
+class FakeWebSocket:
+    """Stands in for the xterm.js bridge: tests push the messages it would send."""
+
+    def __init__(self):
+        self.inbox: asyncio.Queue = asyncio.Queue()
+
+    async def receive(self) -> dict:
+        return await self.inbox.get()
+
+    async def send_bytes(self, data: bytes) -> None:
+        pass
+
+    def push_text(self, text: str) -> None:
+        self.inbox.put_nowait({"type": "websocket.receive", "text": text})
+
+
+class TestStartupDialogHold(TestCase):
     async def asyncSetUp(self):
         await super().asyncSetUp()
+        self.ws = FakeWebSocket()
         self.cli = FakeCliSession().start(
-            banner="Quick safety check: Is this a project you trust? 1. Yes, I trust this folder"
+            banner=CLAUDE_TRUST_DIALOG, answer=MAIN_SCREEN, websocket=self.ws
         )
 
     async def asyncTearDown(self):
         await self.cli.stop()
         await super().asyncTearDown()
 
-    async def test_first_message_is_held_until_the_dialog_is_answered(self):
-        ready = asyncio.create_task(self.cli.boot())
+    async def test_resize_and_terminal_replies_do_not_release_the_hold(self):
+        ready = asyncio.create_task(self.cli.terminal.wait_for_cli_ready(min_wait=0.2, quiet=0.3))
+        await asyncio.sleep(BOOT_SECONDS + 0.5)
+        self.ws.push_text('{"type": "resize", "cols": 100, "rows": 30}')
+        self.ws.push_text("\x1b[?1;2c")
+        await asyncio.sleep(1.5)
 
-        await asyncio.sleep(1.0)
-        self.assertFalse(ready.done(), "boot finished while a startup dialog was on screen")
+        self.assertFalse(ready.done())
+        self.assertEqual(self.cli.terminal.startup_prompt, "Yes, I trust this folder")
+        self.assertNotIn(b"\r", b"".join(_read_chunks(self.cli.log)))
+
+        self.ws.push_text("\r")
+        self.assertTrue(await asyncio.wait_for(ready, 5))
+        self.assertIsNone(self.cli.terminal.startup_prompt)
+
+    async def test_readiness_wait_gives_up_after_the_dialog_timeout(self):
+        self.cli.terminal.dialog_timeout = 0.5
+
+        ready = await asyncio.wait_for(
+            self.cli.terminal.wait_for_cli_ready(min_wait=0.2, quiet=0.3), 10
+        )
+
+        self.assertFalse(ready)
+        self.assertEqual(self.cli.terminal.startup_prompt, "Yes, I trust this folder")
         self.assertEqual(_read_chunks(self.cli.log), [])
 
-        self.cli.terminal.mark_input()
-        await asyncio.wait_for(ready, timeout=3)
-        self.assertIsNone(self.cli.terminal.startup_prompt)
+
+class TestAgentBlockedOnStartupDialog(TestCase, DatabaseTransaction):
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        self.cli = FakeCliSession().start(banner=CLAUDE_TRUST_DIALOG, answer=MAIN_SCREEN)
+        self.cli.terminal.dialog_timeout = 0.5
+        project = await ProjectFactory.new().create(path=self.cli.dir)
+        self.agent = await AgentFactory.new().create(
+            project_id=project.id, session_id=self.cli.session_id, current_activity="Booting"
+        )
+
+    async def asyncTearDown(self):
+        await self.cli.stop()
+        await super().asyncTearDown()
+
+    async def _activity(self) -> str | None:
+        return (await Agent.find(self.agent.id)).current_activity
+
+    async def test_timeout_flags_the_agent_and_delivery_resumes_once_answered(self):
+        waiting = asyncio.create_task(wait_for_agent_cli(self.cli.terminal, self.agent.id))
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + 10
+        while not (await self._activity() or "").startswith("Blocked on a startup dialog"):
+            self.assertLess(loop.time(), deadline, "agent was never flagged as blocked")
+            await asyncio.sleep(0.1)
+
+        self.assertIn("Yes, I trust this folder", await self._activity())
+        self.assertFalse(waiting.done())
+        self.assertEqual(_read_chunks(self.cli.log), [])
+
+        await self.cli.terminal.write(b"\r")
+        self.assertTrue(await asyncio.wait_for(waiting, 10))
+        self.assertEqual(await self._activity(), "Booting")

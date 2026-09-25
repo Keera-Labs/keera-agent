@@ -7,6 +7,7 @@ import uuid
 from fastapi import Query, WebSocket
 from fastapi_startkit.application import app
 
+from app.actions.agent_startup import wait_for_agent_cli
 from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.models.Agent import Agent
 from app.models.Project import Project
@@ -163,6 +164,6 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
 
 
 async def _signal_ready_and_relay(event: asyncio.Event, agent_id: int, terminal) -> None:
-    await terminal.wait_for_cli_ready()
+    await wait_for_agent_cli(terminal, agent_id)
     event.set()
     await deliver_pending_relay_messages(agent_id)

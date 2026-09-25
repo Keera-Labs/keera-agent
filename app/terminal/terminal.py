@@ -1,4 +1,5 @@
 import asyncio
+import codecs
 import fcntl
 import os
 import pty as _pty
@@ -24,20 +25,59 @@ PASTE_END = b"\x1b[201~"
 
 # CLI startup dialogs that wait for a choice. Enter picks the highlighted
 # option (codex's update prompt defaults to running a global npm install), so
-# nothing is submitted while one is on screen.
-STARTUP_PROMPTS = re.compile(
-    r"Quick safety check|Yes, I trust this folder|Yes, I accept"
-    r"|Trust this folder\?|Skip until next version"
+# nothing is submitted while one is on screen. A dialog counts only when it is
+# fully drawn — one of its options followed by its key-hint footer — so the
+# same words quoted in replayed conversation history don't match.
+DIALOG_OPTIONS = re.compile(
+    r"Yes, I trust this folder|Yes, I accept|Trust and continue|Skip until next version"
 )
+DIALOG_FOOTERS = re.compile(
+    r"Enter to confirm · Esc to (?:cancel|exit)|enter continue · esc quit|Press enter to continue"
+)
+_DIALOG_MARKERS = re.compile(f"{DIALOG_OPTIONS.pattern}|{DIALOG_FOOTERS.pattern}")
+# How far before its footer a dialog's option may appear.
+_DIALOG_SPAN = 400
+# Visible characters drawn after the last dialog text before the dialog counts as
+# replaced by other screen content (e.g. the CLI's main UI once it is answered).
+_DIALOG_RELEASE_CHARS = 200
 _ESCAPES = re.compile(rb"\x1b\[[0-9;?<>=]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b.")
-# Plain text kept from the previous chunk so a phrase split across reads still matches.
-_TAIL_CHARS = 200
+_PARTIAL_ESCAPE = re.compile(rb"\x1b(?:\[[0-9;?<>=]*[ -/]*|\][^\x07\x1b]*)?\Z")
+# Plain text kept from previous chunks so a dialog split across reads still matches.
+_TAIL_CHARS = _DIALOG_SPAN + 100
 
 
-def _plain_text(data: bytes) -> str:
-    # Escapes become spaces: TUIs often move the cursor instead of printing blanks.
-    text = _ESCAPES.sub(b" ", data).decode("utf-8", errors="replace")
-    return re.sub(r"\s+", " ", text)
+def _visible_len(text: str) -> int:
+    return len(text) - text.count(" ")
+
+
+def _drawn_dialog(text: str, fresh: int) -> str | None:
+    """The option of a dialog whose footer was just drawn, if one is on screen."""
+    for footer in reversed(list(DIALOG_FOOTERS.finditer(text))):
+        if footer.end() <= fresh:
+            break
+        options = list(
+            DIALOG_OPTIONS.finditer(text, max(0, footer.start() - _DIALOG_SPAN), footer.start())
+        )
+        if options:
+            return options[-1].group(0)
+    return None
+
+
+class _PlainText:
+    """Turns PTY output into plain text, carrying escapes and UTF-8 split across reads."""
+
+    def __init__(self):
+        self._pending = b""
+        self._decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+
+    def feed(self, data: bytes) -> str:
+        data = self._pending + data
+        partial = _PARTIAL_ESCAPE.search(data)
+        cut = partial.start() if partial else len(data)
+        data, self._pending = data[:cut], data[cut:]
+        # Escapes become spaces: TUIs often move the cursor instead of printing blanks.
+        text = self._decoder.decode(_ESCAPES.sub(b" ", data))
+        return re.sub(r"\s+", " ", text)
 
 
 class Terminal:
@@ -45,6 +85,8 @@ class Terminal:
     # echo_settle seconds of silence as the echo having finished rendering.
     echo_timeout = 3.0
     echo_settle = 0.3
+    # How long wait_for_cli_ready() holds for an unanswered startup dialog.
+    dialog_timeout = 120.0
 
     def __init__(
         self,
@@ -68,9 +110,11 @@ class Terminal:
         # Dialogs are only looked for while the CLI boots, so a reply that
         # quotes one mid-session can't block delivery.
         self._booting = True
-        # The startup dialog currently on screen, if any. Cleared by user input,
-        # which is the only thing that dismisses one.
+        # The option text of the startup dialog on screen, if any. Only output
+        # clears it: resizes and terminal query replies also arrive as input.
         self.startup_prompt: str | None = None
+        self._chars_since_dialog = 0
+        self._plain = _PlainText()
 
     def start(self) -> None:
         master_fd, slave_fd = _pty.openpty()
@@ -144,18 +188,22 @@ class Terminal:
         self._output_seq += 1
         if not self._booting:
             return
-        plain = _plain_text(data)
+        plain = self._plain.feed(data)
         if self._output_tail.endswith(" "):
             plain = plain.lstrip(" ")
         text = self._output_tail + plain
-        matches = [m for m in STARTUP_PROMPTS.finditer(text) if m.end() > len(self._output_tail)]
-        if matches:
-            self.startup_prompt = matches[-1].group(0)
+        fresh = len(self._output_tail)
+        markers = [m for m in _DIALOG_MARKERS.finditer(text) if m.end() > fresh]
+        if markers:
+            self._chars_since_dialog = _visible_len(text[markers[-1].end() :])
+            dialog = _drawn_dialog(text, fresh)
+            if dialog:
+                self.startup_prompt = dialog
+        else:
+            self._chars_since_dialog += _visible_len(plain)
+        if self._chars_since_dialog > _DIALOG_RELEASE_CHARS:
+            self.startup_prompt = None
         self._output_tail = text[-_TAIL_CHARS:]
-
-    def mark_input(self) -> None:
-        """Record that the user typed into the terminal, e.g. to answer a startup dialog."""
-        self.startup_prompt = None
 
     async def send(self, message: str) -> None:
         """Type `message` into the CLI and submit it.
@@ -183,24 +231,37 @@ class Terminal:
         await self.wait_until_quiet(self.echo_settle, max(0.0, deadline - loop.time()))
 
     async def wait_for_cli_ready(
-        self, min_wait: float = 2.0, quiet: float = 1.0, timeout: float = 15.0
-    ) -> None:
+        self,
+        min_wait: float = 2.0,
+        quiet: float = 1.0,
+        timeout: float = 15.0,
+        until_answered: bool = False,
+    ) -> bool:
         """Wait for a just-launched CLI to finish its startup render.
 
         Before the CLI puts the TTY in raw mode the kernel echoes input itself,
         which would fool send()'s echo check, so the first delivery waits until
         startup output has gone quiet. A startup dialog also goes quiet while it
-        waits for a choice, so this keeps waiting until someone answers it.
+        waits for a choice, so this keeps waiting until someone answers it: for
+        at most dialog_timeout seconds, or with until_answered for as long as
+        the CLI runs.
+
+        Returns False if a startup dialog is still waiting for an answer.
         """
+        loop = asyncio.get_running_loop()
         self._booting = True
         await asyncio.sleep(min_wait)
+        deadline = None if until_answered else loop.time() + self.dialog_timeout
         while True:
             await self.wait_until_quiet(quiet, timeout)
             if not self.startup_prompt or not self.is_alive():
                 break
+            if deadline is not None and loop.time() >= deadline:
+                return False
             await asyncio.sleep(quiet)
         self._booting = False
         self._output_tail = ""
+        return True
 
     async def wait_until_quiet(self, quiet: float, timeout: float) -> None:
         """Return once no output has arrived for `quiet` seconds, or after `timeout`."""

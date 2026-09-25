@@ -10,6 +10,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi_startkit.application import app
 
+from app.actions.agent_startup import wait_for_agent_cli
 from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.actions.terminal_write_action import TerminalWriteAction
 from app.models.Agent import Agent
@@ -364,7 +365,7 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     # task always lands first and that backlog is flushed right after it. If
     # the monitor restarted the CLI meanwhile, it registered a new event and
     # its restart path delivers the first message instead.
-    await terminal.wait_for_cli_ready()
+    await wait_for_agent_cli(terminal, agent.id)
     if claude_ready.get(session_id) is ready_event:
         await terminal.send(message)
         ready_event.set()

@@ -89,8 +89,6 @@ class WebsocketTerminal:
                 msg = await self._ws.receive()
                 if msg.get("type") == "websocket.disconnect":
                     break
-                if msg.get("bytes") or msg.get("text"):
-                    self._terminal.mark_input()
                 if msg.get("bytes"):
                     # Binary = a composed message to type in and submit.
                     text = msg["bytes"].decode(errors="replace")
