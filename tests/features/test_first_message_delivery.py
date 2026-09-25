@@ -20,11 +20,13 @@ from fastapi_startkit.application import app
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
 from app.actions.agent_message_send_action import AgentMessageSendAction
+from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.controllers.agent_trigger_controller import first_message
-from app.controllers.terminal_controller import claude_ready, deliver_pending_relay_messages
+from app.controllers.claude_hook_controller import _deliver_agent_relay_messages
 from app.models.AgentRelayMessage import AgentRelayMessage
 from app.terminal.manager import TerminalManager
-from app.terminal.terminal import PASTE_END, PASTE_START
+from app.terminal.readiness import claude_ready, mark_booting
+from app.terminal.terminal import PASTE_END, PASTE_START, Terminal
 from app.terminal.websocket_terminal import WebsocketTerminal
 from databases.factories.agent_factory import AgentFactory
 from databases.factories.project_factory import ProjectFactory
@@ -35,7 +37,7 @@ BOOT_SECONDS = 1.5
 FAKE_CLI = f"""#!{sys.executable}
 import os, termios, time, tty
 tty.setraw(0, termios.TCSADRAIN)
-os.write(1, b"fake cli banner\\r\\n")
+os.write(1, os.environ["FAKE_CLI_BANNER"].encode() + b"\\r\\n")
 time.sleep(float(os.environ["FAKE_CLI_BOOT"]))
 with open(os.environ["FAKE_CLI_LOG"], "ab", buffering=0) as log:
     while True:
@@ -82,8 +84,13 @@ class FakeCliSession:
         self.session_id = str(uuid.uuid4())
         self.manager: TerminalManager = app().make("terminal")
 
-    def start(self):
-        env = dict(os.environ, FAKE_CLI_LOG=self.log, FAKE_CLI_BOOT=str(BOOT_SECONDS))
+    def start(self, banner: str = "fake cli banner"):
+        env = dict(
+            os.environ,
+            FAKE_CLI_LOG=self.log,
+            FAKE_CLI_BOOT=str(BOOT_SECONDS),
+            FAKE_CLI_BANNER=banner,
+        )
         self.manager.create(shell=self.script, cwd=self.dir, env=env, session_id=self.session_id)
         self.terminal = self.manager.get(self.session_id)
         bridge = WebsocketTerminal(None, self.terminal)
@@ -94,6 +101,9 @@ class FakeCliSession:
         # Returns once the banner has rendered and gone quiet — while the fake
         # CLI is still busy, like a real CLI shortly after startup.
         await self.terminal.wait_for_cli_ready(min_wait=0.2, quiet=0.3, timeout=5)
+
+    def mark_ready(self):
+        mark_booting(self.session_id).set()
 
     async def stop(self):
         self.reader.cancel()
@@ -153,7 +163,7 @@ class TestRelayMessageToNewAgent(TestCase, DatabaseTransaction):
         await super().asyncSetUp()
         self.cli = FakeCliSession().start()
         await self.cli.boot()
-        project = await ProjectFactory.new().create(path=self.cli.dir)
+        self.project = project = await ProjectFactory.new().create(path=self.cli.dir)
         self.pm = await AgentFactory.new().create(project_id=project.id, name="PM")
         self.agent = await AgentFactory.new().create(
             project_id=project.id, session_id=self.cli.session_id
@@ -163,8 +173,19 @@ class TestRelayMessageToNewAgent(TestCase, DatabaseTransaction):
         await self.cli.stop()
         await super().asyncTearDown()
 
+    async def _queue(self, content: str) -> int:
+        msg = await AgentRelayMessage.create(
+            {
+                "from_agent_id": self.pm.id,
+                "to_agent_id": self.agent.id,
+                "content": content,
+                "status": "pending",
+            }
+        )
+        return msg.id
+
     async def test_message_to_booting_agent_is_queued_then_flushed_once_ready(self):
-        claude_ready[self.cli.session_id] = asyncio.Event()
+        mark_booting(self.cli.session_id)
 
         msg_id, delivered = await AgentMessageSendAction.prepare(
             self.pm, self.agent, "first task\nwith two lines"
@@ -184,9 +205,53 @@ class TestRelayMessageToNewAgent(TestCase, DatabaseTransaction):
         self.assertEqual(received.count(b"first task\nwith two lines"), 1)
         self.assertIn(b"[Message from Agent 'PM']: first task", received)
 
+    async def test_concurrent_flushes_deliver_each_message_once(self):
+        ids = [await self._queue(f"queued message {i}") for i in range(3)]
+        self.cli.mark_ready()
+
+        counts = await asyncio.gather(
+            deliver_pending_relay_messages(self.agent.id),
+            deliver_pending_relay_messages(self.agent.id),
+        )
+
+        received = b"".join(await _wait_for_submit(self.cli.log))
+        self.assertEqual(sum(counts), 3)
+        for i, msg_id in enumerate(ids):
+            self.assertEqual(received.count(f"queued message {i}".encode()), 1, received)
+            self.assertEqual((await AgentRelayMessage.find(msg_id)).status, "delivered")
+
+    async def test_stop_hook_leaves_messages_for_a_booting_agent_pending(self):
+        mark_booting(self.cli.session_id)
+        msg_id = await self._queue("wait for my first task")
+
+        await _deliver_agent_relay_messages(self.project, self.cli.dir)
+
+        self.assertEqual((await AgentRelayMessage.find(msg_id)).status, "pending")
+        self.assertEqual(_read_chunks(self.cli.log), [])
+
+    async def test_stop_hook_flushes_messages_for_a_ready_agent(self):
+        self.cli.mark_ready()
+        msg_id = await self._queue("next step")
+
+        await _deliver_agent_relay_messages(self.project, self.cli.dir)
+
+        received = b"".join(await _wait_for_submit(self.cli.log))
+        self.assertEqual((await AgentRelayMessage.find(msg_id)).status, "delivered")
+        self.assertEqual(received.count(b"next step"), 1)
+
+    async def test_live_session_without_ready_event_is_treated_as_booting(self):
+        claude_ready.pop(self.cli.session_id, None)
+
+        msg_id, delivered = await AgentMessageSendAction.prepare(
+            self.pm, self.agent, "too early"
+        ).execute()
+
+        self.assertFalse(delivered)
+        self.assertEqual((await AgentRelayMessage.find(msg_id)).status, "pending")
+        self.assertEqual(_read_chunks(self.cli.log), [])
+
     async def test_message_to_ready_agent_is_delivered_and_submitted(self):
-        claude_ready[self.cli.session_id] = asyncio.Event()
-        claude_ready[self.cli.session_id].set()
+        self.cli.mark_ready()
 
         msg_id, delivered = await AgentMessageSendAction.prepare(
             self.pm, self.agent, "hello"
@@ -206,3 +271,53 @@ class TestFirstMessage(TestCase):
         message = first_message("\n\n---\nPROTOCOL\nYour agent ID is: 7", "Do task #1")
 
         self.assertEqual(message, "---\nPROTOCOL\nYour agent ID is: 7\n\nDo task #1")
+
+
+class TestStartupDialog(TestCase):
+    def test_known_dialogs_are_detected_even_when_split_across_reads(self):
+        term = Terminal()
+        term.mark_output(b"\x1b[1mQuick safety\x1b[0m")
+        term.mark_output(b" check: Is this a project you created or one you trust?")
+        self.assertEqual(term.startup_prompt, "Quick safety check")
+
+        term.mark_input()
+        self.assertIsNone(term.startup_prompt)
+
+        term.mark_output(b"  1. Update now\r\n  2. Skip\r\n\x1b[3C3. Skip until next version")
+        self.assertEqual(term.startup_prompt, "Skip until next version")
+
+    def test_ordinary_output_is_not_a_dialog(self):
+        term = Terminal()
+        term.mark_output(b"Welcome to the CLI\r\n> ")
+        self.assertIsNone(term.startup_prompt)
+
+    async def test_dialog_text_after_boot_is_ignored(self):
+        term = Terminal()
+        await term.wait_for_cli_ready(min_wait=0, quiet=0.05, timeout=1)
+
+        term.mark_output(b"the trust dialog shows 'Yes, I trust this folder'")
+
+        self.assertIsNone(term.startup_prompt)
+
+
+class TestNoEnterIntoStartupDialog(TestCase):
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        self.cli = FakeCliSession().start(
+            banner="Quick safety check: Is this a project you trust? 1. Yes, I trust this folder"
+        )
+
+    async def asyncTearDown(self):
+        await self.cli.stop()
+        await super().asyncTearDown()
+
+    async def test_first_message_is_held_until_the_dialog_is_answered(self):
+        ready = asyncio.create_task(self.cli.boot())
+
+        await asyncio.sleep(1.0)
+        self.assertFalse(ready.done(), "boot finished while a startup dialog was on screen")
+        self.assertEqual(_read_chunks(self.cli.log), [])
+
+        self.cli.terminal.mark_input()
+        await asyncio.wait_for(ready, timeout=3)
+        self.assertIsNone(self.cli.terminal.startup_prompt)

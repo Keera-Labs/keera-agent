@@ -10,13 +10,14 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi_startkit.application import app
 
+from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.actions.terminal_write_action import TerminalWriteAction
-from app.controllers.terminal_controller import claude_ready, deliver_pending_relay_messages
 from app.models.Agent import Agent
 from app.models.Project import Project
 from app.terminal.claude_monitor import make_claude_session_monitor
 from app.terminal.connection_manager import ConnectionManager
 from app.terminal.manager import TerminalManager
+from app.terminal.readiness import claude_ready, mark_booting
 from app.terminal.websocket_terminal import WebsocketTerminal
 
 # Minimum lifetime (seconds) for a Claude process to count as a successful session
@@ -277,11 +278,11 @@ def first_message(relay_instructions: str, initial_message: str) -> str:
     return f"{relay_instructions.strip()}\n\n{initial_message}"
 
 
-def _make_after_restart(terminal, initial_message: str):
-    """Return an async callable that re-injects the initial message after a Claude restart."""
+def _make_after_restart(terminal, message: str):
+    """Return an async callable that re-injects the first message after a Claude restart."""
 
     async def _after_restart():
-        await terminal.send(initial_message)
+        await terminal.send(message)
 
     return _after_restart
 
@@ -301,6 +302,9 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
         agent_cwd = cwd
 
     session_id = str(uuid.uuid4())
+    # Registered before the session becomes visible (DB row, terminal), so a
+    # relay message sent meanwhile is queued instead of typed into the shell.
+    ready_event = mark_booting(session_id)
     await Agent.where("id", agent.id).update({"session_id": session_id})
     await _mark_agent_working(agent.id, initial_message)
 
@@ -319,6 +323,11 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     )
 
     relay_instructions = _build_relay_instructions(agent, agent_cwd, base_url, siblings)
+    # relay_instructions (agent identity, roster, project dir, communication
+    # protocol) is prepended to the first user message so the agent has its
+    # full context before acting on the task. Sending both as one submission
+    # keeps them in a single turn instead of racing two Enters at a booting CLI.
+    message = first_message(relay_instructions, initial_message)
 
     # Re-fetch agent so to_command() uses the current has_session value from DB
     fresh_agent = await Agent.find(agent.id)
@@ -339,7 +348,7 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
         terminal_manager=terminal_manager,
         session_id=session_id,
         build_cmd=_build_cmd_with_identity,
-        after_restart=_make_after_restart(terminal, initial_message),
+        after_restart=_make_after_restart(terminal, message),
     )
     bridge = WebsocketTerminal(None, terminal, on_output=monitor)
     asyncio.create_task(
@@ -351,19 +360,15 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
 
     start_time = time.monotonic()
 
-    # relay_instructions (agent identity, roster, project dir, communication
-    # protocol) is prepended to the first user message so the agent has its
-    # full context before acting on the task. Sending both as one submission
-    # keeps them in a single turn instead of racing two Enters at a booting CLI.
     # Messages sent while booting stay pending until ready_event is set, so the
-    # task always lands first and that backlog is flushed right after it.
-    ready_event = claude_ready.setdefault(session_id, asyncio.Event())
+    # task always lands first and that backlog is flushed right after it. If
+    # the monitor restarted the CLI meanwhile, it registered a new event and
+    # its restart path delivers the first message instead.
     await terminal.wait_for_cli_ready()
-    await TerminalWriteAction.prepare(
-        session_id, first_message(relay_instructions, initial_message)
-    ).execute()
-    ready_event.set()
-    await deliver_pending_relay_messages(agent.id)
+    if claude_ready.get(session_id) is ready_event:
+        await terminal.send(message)
+        ready_event.set()
+        await deliver_pending_relay_messages(agent.id)
 
     # Notify the frontend if it's already connected
     conn_manager: ConnectionManager = app().make("connections")

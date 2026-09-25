@@ -137,10 +137,8 @@ class TestTerminalSend(unittest.IsolatedAsyncioTestCase):
         # Raw slave: no echo or CR/LF translation, so bytes read back equal
         # exactly what send() wrote.
         tty.setraw(slave_fd)
-        term = Terminal.__new__(Terminal)
-        term._proc = None
+        term = Terminal()
         term.master_fd = master_fd
-        term._write_lock = None
         term.echo_timeout = 0.1  # no reader is attached, so no echo will arrive
         expected = PASTE_START + b"deploy now" + PASTE_END + b"\r"
         try:
@@ -155,10 +153,8 @@ class TestTerminalSend(unittest.IsolatedAsyncioTestCase):
     async def test_send_preserves_inner_spaces(self):
         master_fd, slave_fd = pty.openpty()
         tty.setraw(slave_fd)
-        term = Terminal.__new__(Terminal)
-        term._proc = None
+        term = Terminal()
         term.master_fd = master_fd
-        term._write_lock = None
         term.echo_timeout = 0.1  # no reader is attached, so no echo will arrive
         expected = PASTE_START + b"Hello World this is one line" + PASTE_END + b"\r"
         try:

@@ -70,7 +70,7 @@ class WebsocketTerminal:
             while not self._stopped.is_set():
                 try:
                     data = await asyncio.wait_for(queue.get(), timeout=0.1)
-                    self._terminal.mark_output()
+                    self._terminal.mark_output(data)
                     if self._ws is not None:
                         await self._ws.send_bytes(data)
                     if self._on_output:
@@ -89,6 +89,8 @@ class WebsocketTerminal:
                 msg = await self._ws.receive()
                 if msg.get("type") == "websocket.disconnect":
                     break
+                if msg.get("bytes") or msg.get("text"):
+                    self._terminal.mark_input()
                 if msg.get("bytes"):
                     # Binary = a composed message to type in and submit.
                     text = msg["bytes"].decode(errors="replace")

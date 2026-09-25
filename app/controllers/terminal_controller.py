@@ -7,15 +7,14 @@ import uuid
 from fastapi import Query, WebSocket
 from fastapi_startkit.application import app
 
+from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.models.Agent import Agent
 from app.models.Project import Project
 from app.terminal.claude_monitor import make_claude_session_monitor
 from app.terminal.connection_manager import ConnectionManager
 from app.terminal.manager import TerminalManager
+from app.terminal.readiness import claude_ready, mark_booting
 from app.terminal.websocket_terminal import WebsocketTerminal
-
-# Registry: session_id (UUID) -> Event set when Claude has finished starting up
-claude_ready: dict[str, asyncio.Event] = {}
 
 
 def _build_identity_suffix(agent_id: int) -> str:
@@ -72,35 +71,6 @@ async def _ensure_repo_once(project: Project, path: str) -> None:
 
     _ensure_git_repo(path)
     await Project.where("id", project.id).update({"is_repository": True})
-
-
-async def deliver_pending_relay_messages(agent_id: int) -> None:
-    """Inject any queued agent-to-agent relay messages into the running PTY."""
-    from app.models.AgentRelayMessage import AgentRelayMessage
-
-    pending = (
-        await AgentRelayMessage.where("to_agent_id", agent_id)
-        .where("status", "pending")
-        .order_by("id", "asc")
-        .get()
-    )
-    if not pending:
-        return
-
-    from app.actions.terminal_write_action import TerminalWriteAction
-
-    agent = await Agent.find(agent_id)
-    session_id = agent.session_id if agent else None
-    terminal = TerminalWriteAction.prepare(session_id, "").resolve_terminal()
-    if not terminal:
-        return
-
-    for msg in pending:
-        # Claim before the (slow) send so a concurrent flush can't deliver it twice.
-        await AgentRelayMessage.where("id", msg.id).update({"status": "delivered"})
-        from_agent = await Agent.find(msg.from_agent_id)
-        sender_name = from_agent.name if from_agent else f"Agent #{msg.from_agent_id}"
-        await terminal.send(f"[Message from Agent '{sender_name}']: {msg.content}")
 
 
 async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query()):
@@ -161,7 +131,7 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
     terminal_manager.create(cwd=agent_cwd, session_id=session_id)
     terminal = terminal_manager.get(session_id)
 
-    ready_event = claude_ready.setdefault(session_id, asyncio.Event())
+    ready_event = mark_booting(session_id)
     asyncio.create_task(_signal_ready_and_relay(ready_event, agent_record.id, terminal))
 
     claude_cmd = agent_record.to_command(

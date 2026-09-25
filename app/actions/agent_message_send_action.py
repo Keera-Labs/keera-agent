@@ -1,16 +1,11 @@
 import asyncio
 import os
 
+from app.actions.relay_delivery import claim_relay_message, relay_text
 from app.actions.terminal_write_action import TerminalWriteAction
 from app.models.Agent import Agent
 from app.models.AgentRelayMessage import AgentRelayMessage
-
-
-def is_cli_ready(session_id: str | None) -> bool:
-    from app.controllers.terminal_controller import claude_ready
-
-    event = claude_ready.get(session_id) if session_id else None
-    return event is None or event.is_set()
+from app.terminal.readiness import is_cli_ready
 
 
 class AgentMessageSendAction:
@@ -37,16 +32,16 @@ class AgentMessageSendAction:
             }
         )
 
-        text = f"[Message from Agent '{self.from_agent.name}']: {self.content}"
+        text = relay_text(self.from_agent.name, self.content)
         terminal = TerminalWriteAction.prepare(self.to_agent.session_id, text).resolve_terminal()
 
         if terminal:
             if not is_cli_ready(self.to_agent.session_id):
                 # Still booting: leave it pending; the spawn path flushes it once ready.
                 return msg.id, False
-            # Claim before the (slow) send so a concurrent flush can't deliver it twice.
-            await AgentRelayMessage.where("id", msg.id).update({"status": "delivered"})
-            await terminal.send(text)
+            # A flush that started meanwhile may already have delivered it.
+            if await claim_relay_message(msg.id):
+                await terminal.send(text)
             return msg.id, True
 
         # Receivers idle — spawn headlessly with the message as its initial task

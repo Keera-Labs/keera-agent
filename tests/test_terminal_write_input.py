@@ -48,9 +48,8 @@ def _read_nonblocking(fd: int, n: int = 1024, timeout: float = 1.0) -> bytes:
 def _make_terminal_with_pty():
     """Return (terminal, slave_fd, master_fd) with the terminal wired to a real PTY."""
     master_fd, slave_fd = pty.openpty()
-    # Construct a Terminal without starting a shell process.
-    term = Terminal.__new__(Terminal)
-    term._proc = None
+    # A Terminal that is never start()ed has no shell process.
+    term = Terminal()
     term.master_fd = master_fd
     return term, slave_fd, master_fd
 
@@ -192,8 +191,7 @@ class TestWriteHandlesFullBuffer(unittest.IsolatedAsyncioTestCase):
         # equal the bytes written.
         tty.setraw(slave_fd)
 
-        term = Terminal.__new__(Terminal)
-        term._proc = None
+        term = Terminal()
         term.master_fd = master_fd
 
         payload = b"".join(b"line-%06d\n" % i for i in range(20000))  # ~180 KB
@@ -214,8 +212,7 @@ class TestWriteHandlesFullBuffer(unittest.IsolatedAsyncioTestCase):
         fcntl.fcntl(master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
         tty.setraw(slave_fd)
 
-        term = Terminal.__new__(Terminal)
-        term._proc = None
+        term = Terminal()
         term.master_fd = master_fd
 
         payload = b"x" * 200000

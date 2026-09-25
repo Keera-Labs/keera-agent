@@ -2,6 +2,7 @@ import asyncio
 import fcntl
 import os
 import pty as _pty
+import re
 import struct
 import subprocess
 import termios
@@ -20,6 +21,23 @@ def _with_color_env(env: dict) -> dict:
 
 PASTE_START = b"\x1b[200~"
 PASTE_END = b"\x1b[201~"
+
+# CLI startup dialogs that wait for a choice. Enter picks the highlighted
+# option (codex's update prompt defaults to running a global npm install), so
+# nothing is submitted while one is on screen.
+STARTUP_PROMPTS = re.compile(
+    r"Quick safety check|Yes, I trust this folder|Yes, I accept"
+    r"|Trust this folder\?|Skip until next version"
+)
+_ESCAPES = re.compile(rb"\x1b\[[0-9;?<>=]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b.")
+# Plain text kept from the previous chunk so a phrase split across reads still matches.
+_TAIL_CHARS = 200
+
+
+def _plain_text(data: bytes) -> str:
+    # Escapes become spaces: TUIs often move the cursor instead of printing blanks.
+    text = _ESCAPES.sub(b" ", data).decode("utf-8", errors="replace")
+    return re.sub(r"\s+", " ", text)
 
 
 class Terminal:
@@ -43,9 +61,16 @@ class Terminal:
         self._env = _with_color_env(env or os.environ.copy())
         self._proc: subprocess.Popen | None = None
         self.master_fd: int | None = None
-        self._write_lock: asyncio.Lock | None = None
-        self._send_lock: asyncio.Lock | None = None
+        self._write_lock = asyncio.Lock()
+        self._send_lock = asyncio.Lock()
         self._output_seq = 0
+        self._output_tail = ""
+        # Dialogs are only looked for while the CLI boots, so a reply that
+        # quotes one mid-session can't block delivery.
+        self._booting = True
+        # The startup dialog currently on screen, if any. Cleared by user input,
+        # which is the only thing that dismisses one.
+        self.startup_prompt: str | None = None
 
     def start(self) -> None:
         master_fd, slave_fd = _pty.openpty()
@@ -92,10 +117,7 @@ class Terminal:
         # become writable between chunks. The lock serializes concurrent writers
         # so an interleaved caller (e.g. the trailing submit "\r") can't splice
         # bytes into the middle of another message.
-        lock = getattr(self, "_write_lock", None)
-        if lock is None:
-            lock = self._write_lock = asyncio.Lock()
-        async with lock:
+        async with self._write_lock:
             await self._drain_write(data)
 
     async def _drain_write(self, data: bytes) -> None:
@@ -117,9 +139,23 @@ class Terminal:
                 # fd closed or child gone — nothing more we can deliver.
                 return
 
-    def mark_output(self) -> None:
-        """Record that the PTY produced output; the reader bridge calls this per chunk."""
-        self._output_seq = getattr(self, "_output_seq", 0) + 1
+    def mark_output(self, data: bytes) -> None:
+        """Record PTY output; the reader bridge calls this per chunk."""
+        self._output_seq += 1
+        if not self._booting:
+            return
+        plain = _plain_text(data)
+        if self._output_tail.endswith(" "):
+            plain = plain.lstrip(" ")
+        text = self._output_tail + plain
+        matches = [m for m in STARTUP_PROMPTS.finditer(text) if m.end() > len(self._output_tail)]
+        if matches:
+            self.startup_prompt = matches[-1].group(0)
+        self._output_tail = text[-_TAIL_CHARS:]
+
+    def mark_input(self) -> None:
+        """Record that the user typed into the terminal, e.g. to answer a startup dialog."""
+        self.startup_prompt = None
 
     async def send(self, message: str) -> None:
         """Type `message` into the CLI and submit it.
@@ -132,12 +168,9 @@ class Terminal:
         sits unsubmitted in the input box until the next message's Enter.
         """
         body = message.encode().rstrip(b"\r\n").replace(PASTE_END, b"")
-        lock = getattr(self, "_send_lock", None)
-        if lock is None:
-            lock = self._send_lock = asyncio.Lock()
-        async with lock:
+        async with self._send_lock:
             if body:
-                seen = getattr(self, "_output_seq", 0)
+                seen = self._output_seq
                 await self.write(PASTE_START + body + PASTE_END)
                 await self._wait_for_echo(seen)
             await self.write(b"\r")
@@ -145,7 +178,7 @@ class Terminal:
     async def _wait_for_echo(self, seen: int) -> None:
         loop = asyncio.get_running_loop()
         deadline = loop.time() + self.echo_timeout
-        while getattr(self, "_output_seq", 0) == seen and loop.time() < deadline:
+        while self._output_seq == seen and loop.time() < deadline:
             await asyncio.sleep(0.02)
         await self.wait_until_quiet(self.echo_settle, max(0.0, deadline - loop.time()))
 
@@ -156,19 +189,27 @@ class Terminal:
 
         Before the CLI puts the TTY in raw mode the kernel echoes input itself,
         which would fool send()'s echo check, so the first delivery waits until
-        startup output has gone quiet.
+        startup output has gone quiet. A startup dialog also goes quiet while it
+        waits for a choice, so this keeps waiting until someone answers it.
         """
+        self._booting = True
         await asyncio.sleep(min_wait)
-        await self.wait_until_quiet(quiet, timeout)
+        while True:
+            await self.wait_until_quiet(quiet, timeout)
+            if not self.startup_prompt or not self.is_alive():
+                break
+            await asyncio.sleep(quiet)
+        self._booting = False
+        self._output_tail = ""
 
     async def wait_until_quiet(self, quiet: float, timeout: float) -> None:
         """Return once no output has arrived for `quiet` seconds, or after `timeout`."""
         loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout
-        last = getattr(self, "_output_seq", 0)
+        last = self._output_seq
         while loop.time() < deadline:
             await asyncio.sleep(min(quiet, max(0.0, deadline - loop.time())))
-            current = getattr(self, "_output_seq", 0)
+            current = self._output_seq
             if current == last:
                 return
             last = current
