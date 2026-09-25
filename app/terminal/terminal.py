@@ -18,7 +18,16 @@ def _with_color_env(env: dict) -> dict:
     return env
 
 
+PASTE_START = b"\x1b[200~"
+PASTE_END = b"\x1b[201~"
+
+
 class Terminal:
+    # send() waits at most echo_timeout for the CLI to echo a paste, and treats
+    # echo_settle seconds of silence as the echo having finished rendering.
+    echo_timeout = 3.0
+    echo_settle = 0.3
+
     def __init__(
         self,
         shell: str | None = None,
@@ -35,6 +44,8 @@ class Terminal:
         self._proc: subprocess.Popen | None = None
         self.master_fd: int | None = None
         self._write_lock: asyncio.Lock | None = None
+        self._send_lock: asyncio.Lock | None = None
+        self._output_seq = 0
 
     def start(self) -> None:
         master_fd, slave_fd = _pty.openpty()
@@ -106,11 +117,61 @@ class Terminal:
                 # fd closed or child gone — nothing more we can deliver.
                 return
 
+    def mark_output(self) -> None:
+        """Record that the PTY produced output; the reader bridge calls this per chunk."""
+        self._output_seq = getattr(self, "_output_seq", 0) + 1
+
     async def send(self, message: str) -> None:
-        text_bytes = message.encode().rstrip(b"\r\n")
-        await self.write(text_bytes)
-        await asyncio.sleep(0.05)
-        await self.write(b"\r")
+        """Type `message` into the CLI and submit it.
+
+        The text goes in as a bracketed paste so embedded newlines stay part of
+        the message instead of acting as keystrokes. Enter is only sent once the
+        CLI has echoed the paste: a CLI that is still busy booting reads all
+        pending stdin in one chunk, and when the text and the CR land in the
+        same read the CR is swallowed as part of the paste — the message then
+        sits unsubmitted in the input box until the next message's Enter.
+        """
+        body = message.encode().rstrip(b"\r\n").replace(PASTE_END, b"")
+        lock = getattr(self, "_send_lock", None)
+        if lock is None:
+            lock = self._send_lock = asyncio.Lock()
+        async with lock:
+            if body:
+                seen = getattr(self, "_output_seq", 0)
+                await self.write(PASTE_START + body + PASTE_END)
+                await self._wait_for_echo(seen)
+            await self.write(b"\r")
+
+    async def _wait_for_echo(self, seen: int) -> None:
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self.echo_timeout
+        while getattr(self, "_output_seq", 0) == seen and loop.time() < deadline:
+            await asyncio.sleep(0.02)
+        await self.wait_until_quiet(self.echo_settle, max(0.0, deadline - loop.time()))
+
+    async def wait_for_cli_ready(
+        self, min_wait: float = 2.0, quiet: float = 1.0, timeout: float = 15.0
+    ) -> None:
+        """Wait for a just-launched CLI to finish its startup render.
+
+        Before the CLI puts the TTY in raw mode the kernel echoes input itself,
+        which would fool send()'s echo check, so the first delivery waits until
+        startup output has gone quiet.
+        """
+        await asyncio.sleep(min_wait)
+        await self.wait_until_quiet(quiet, timeout)
+
+    async def wait_until_quiet(self, quiet: float, timeout: float) -> None:
+        """Return once no output has arrived for `quiet` seconds, or after `timeout`."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        last = getattr(self, "_output_seq", 0)
+        while loop.time() < deadline:
+            await asyncio.sleep(min(quiet, max(0.0, deadline - loop.time())))
+            current = getattr(self, "_output_seq", 0)
+            if current == last:
+                return
+            last = current
 
     @staticmethod
     async def _wait_writable(loop: asyncio.AbstractEventLoop, fd: int) -> None:

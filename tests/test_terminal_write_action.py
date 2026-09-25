@@ -4,7 +4,7 @@ TerminalWriteAction.resolve_terminal() picks the live PTY for a session across
 four paths: (1) no session id, (2) an active WebSocket bridge, (3) a detached
 TerminalManager session, (4) nothing found. execute() sends the message only
 when a terminal resolves. Terminal.send() strips a trailing CR/LF from the
-message and appends a single CR so the target treats it as one submitted line.
+message, types it as a bracketed paste, then submits it with a single CR.
 """
 
 import os
@@ -16,7 +16,7 @@ import unittest
 from fastapi_startkit.application import app
 
 from app.actions.terminal_write_action import TerminalWriteAction
-from app.terminal.terminal import Terminal
+from app.terminal.terminal import PASTE_END, PASTE_START, Terminal
 from tests.test_case import TestCase
 
 
@@ -130,7 +130,7 @@ class TestTerminalWriteActionResolution(TestCase):
 
 class TestTerminalSend(unittest.IsolatedAsyncioTestCase):
     """Terminal.send() strips a trailing newline from the message and appends a
-    single CR so the message is submitted as one line."""
+    single CR after the pasted text so the message is submitted as one line."""
 
     async def test_send_strips_trailing_newline_and_appends_cr(self):
         master_fd, slave_fd = pty.openpty()
@@ -141,7 +141,8 @@ class TestTerminalSend(unittest.IsolatedAsyncioTestCase):
         term._proc = None
         term.master_fd = master_fd
         term._write_lock = None
-        expected = b"deploy now\r"
+        term.echo_timeout = 0.1  # no reader is attached, so no echo will arrive
+        expected = PASTE_START + b"deploy now" + PASTE_END + b"\r"
         try:
             await term.send("deploy now\r\n")
             received = _read_until(slave_fd, len(expected))
@@ -158,7 +159,8 @@ class TestTerminalSend(unittest.IsolatedAsyncioTestCase):
         term._proc = None
         term.master_fd = master_fd
         term._write_lock = None
-        expected = b"Hello World this is one line\r"
+        term.echo_timeout = 0.1  # no reader is attached, so no echo will arrive
+        expected = PASTE_START + b"Hello World this is one line" + PASTE_END + b"\r"
         try:
             await term.send("Hello World this is one line")
             received = _read_until(slave_fd, len(expected))

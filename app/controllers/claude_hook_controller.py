@@ -182,22 +182,19 @@ async def _deliver_agent_relay_messages(project, cwd: str) -> None:
             continue
 
         terminal_manager: TerminalManager = app().make("terminal")
-        if not (agent.session_id and terminal_manager.find(agent.session_id)):
+        terminal = terminal_manager.find(agent.session_id) if agent.session_id else None
+        if not terminal:
             continue
 
         # Small delay so Claude has time to return to the prompt
         await asyncio.sleep(1.0)
 
         for msg in pending:
+            # Claim before the (slow) send so a concurrent flush can't deliver it twice.
+            await AgentRelayMessage.where("id", msg.id).update({"status": "delivered"})
             from_agent = await Agent.find(msg.from_agent_id)
             sender_name = from_agent.name if from_agent else f"Agent #{msg.from_agent_id}"
-            relay_bytes = f"[Message from Agent '{sender_name}']: {msg.content}".encode().rstrip(
-                b"\r\n"
-            )
-            await terminal_manager.write(agent.session_id, relay_bytes)
-            await asyncio.sleep(0.05)
-            await terminal_manager.write(agent.session_id, b"\r")
-            await AgentRelayMessage.where("id", msg.id).update({"status": "delivered"})
+            await terminal.send(f"[Message from Agent '{sender_name}']: {msg.content}")
 
         # Notify frontend about the delivered messages
         bridge = _find_project_bridge(cwd)

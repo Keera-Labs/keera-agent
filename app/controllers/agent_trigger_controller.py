@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi_startkit.application import app
 
 from app.actions.terminal_write_action import TerminalWriteAction
-from app.controllers.terminal_controller import claude_ready
+from app.controllers.terminal_controller import claude_ready, deliver_pending_relay_messages
 from app.models.Agent import Agent
 from app.models.Project import Project
 from app.terminal.claude_monitor import make_claude_session_monitor
@@ -53,11 +53,7 @@ async def _inject_when_ready(session_id: str, message: str, timeout: float = 30.
             await asyncio.wait_for(event.wait(), timeout=timeout)
         except asyncio.TimeoutError:
             pass
-    terminal_manager: TerminalManager = app().make("terminal")
-    data = message.encode() if isinstance(message, str) else message
-    await terminal_manager.write(session_id, data.rstrip(b"\r\n"))
-    await asyncio.sleep(0.05)
-    await terminal_manager.write(session_id, b"\r")
+    await TerminalWriteAction.prepare(session_id, message).execute()
 
 
 async def trigger(request: Request, agent_id: int):
@@ -277,14 +273,15 @@ def _build_relay_instructions(agent, cwd: str, base_url: str, siblings) -> str:
     )
 
 
+def first_message(relay_instructions: str, initial_message: str) -> str:
+    return f"{relay_instructions.strip()}\n\n{initial_message}"
+
+
 def _make_after_restart(terminal, initial_message: str):
     """Return an async callable that re-injects the initial message after a Claude restart."""
 
     async def _after_restart():
-        data = initial_message.encode().rstrip(b"\r\n")
-        await terminal.write(data)
-        await asyncio.sleep(0.05)
-        await terminal.write(b"\r")
+        await terminal.send(initial_message)
 
     return _after_restart
 
@@ -354,17 +351,19 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
 
     start_time = time.monotonic()
 
-    # Signal ready and inject relay context + initial message.
     # relay_instructions (agent identity, roster, project dir, communication
-    # protocol) was previously injected via --system-prompt; now that
-    # system_prompt_file() is removed we prepend it to the first user message so
-    # the agent still has its full context before acting on the task.
+    # protocol) is prepended to the first user message so the agent has its
+    # full context before acting on the task. Sending both as one submission
+    # keeps them in a single turn instead of racing two Enters at a booting CLI.
+    # Messages sent while booting stay pending until ready_event is set, so the
+    # task always lands first and that backlog is flushed right after it.
     ready_event = claude_ready.setdefault(session_id, asyncio.Event())
-    await asyncio.sleep(1.5)
+    await terminal.wait_for_cli_ready()
+    await TerminalWriteAction.prepare(
+        session_id, first_message(relay_instructions, initial_message)
+    ).execute()
     ready_event.set()
-
-    await TerminalWriteAction.prepare(session_id, relay_instructions).execute()
-    await TerminalWriteAction.prepare(session_id, initial_message).execute()
+    await deliver_pending_relay_messages(agent.id)
 
     # Notify the frontend if it's already connected
     conn_manager: ConnectionManager = app().make("connections")

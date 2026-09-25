@@ -6,6 +6,13 @@ from app.models.Agent import Agent
 from app.models.AgentRelayMessage import AgentRelayMessage
 
 
+def is_cli_ready(session_id: str | None) -> bool:
+    from app.controllers.terminal_controller import claude_ready
+
+    event = claude_ready.get(session_id) if session_id else None
+    return event is None or event.is_set()
+
+
 class AgentMessageSendAction:
     def __init__(self, from_agent: Agent, to_agent: Agent, content: str):
         self.from_agent = from_agent
@@ -31,10 +38,15 @@ class AgentMessageSendAction:
         )
 
         text = f"[Message from Agent '{self.from_agent.name}']: {self.content}"
-        status = await TerminalWriteAction.prepare(self.to_agent.session_id, text).execute()
+        terminal = TerminalWriteAction.prepare(self.to_agent.session_id, text).resolve_terminal()
 
-        if status:
+        if terminal:
+            if not is_cli_ready(self.to_agent.session_id):
+                # Still booting: leave it pending; the spawn path flushes it once ready.
+                return msg.id, False
+            # Claim before the (slow) send so a concurrent flush can't deliver it twice.
             await AgentRelayMessage.where("id", msg.id).update({"status": "delivered"})
+            await terminal.send(text)
             return msg.id, True
 
         # Receivers idle — spawn headlessly with the message as its initial task

@@ -70,6 +70,7 @@ class WebsocketTerminal:
             while not self._stopped.is_set():
                 try:
                     data = await asyncio.wait_for(queue.get(), timeout=0.1)
+                    self._terminal.mark_output()
                     if self._ws is not None:
                         await self._ws.send_bytes(data)
                     if self._on_output:
@@ -89,13 +90,10 @@ class WebsocketTerminal:
                 if msg.get("type") == "websocket.disconnect":
                     break
                 if msg.get("bytes"):
-                    # Binary = message send: strip trailing CR/LF, write atomically,
-                    # sleep 0.05 s so the TUI registers the text, then send Enter.
-                    data = msg["bytes"].rstrip(b"\r\n")
-                    if data:
-                        await self._terminal.write(data)
-                        await asyncio.sleep(0.05)
-                        await self._terminal.write(b"\r")
+                    # Binary = a composed message to type in and submit.
+                    text = msg["bytes"].decode(errors="replace")
+                    if text.strip("\r\n"):
+                        await self._terminal.send(text)
                 elif msg.get("text"):
                     text: str = msg["text"]
                     try:

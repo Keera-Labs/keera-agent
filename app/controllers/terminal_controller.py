@@ -74,7 +74,7 @@ async def _ensure_repo_once(project: Project, path: str) -> None:
     await Project.where("id", project.id).update({"is_repository": True})
 
 
-async def _deliver_pending_relay_messages(agent_id: int) -> None:
+async def deliver_pending_relay_messages(agent_id: int) -> None:
     """Inject any queued agent-to-agent relay messages into the running PTY."""
     from app.models.AgentRelayMessage import AgentRelayMessage
 
@@ -87,24 +87,20 @@ async def _deliver_pending_relay_messages(agent_id: int) -> None:
     if not pending:
         return
 
-    await asyncio.sleep(2.0)  # Let Claude finish starting up
+    from app.actions.terminal_write_action import TerminalWriteAction
 
     agent = await Agent.find(agent_id)
     session_id = agent.session_id if agent else None
-    conn_manager: ConnectionManager = app().make("connections")
-    bridge = conn_manager.get(session_id) if session_id else None
+    terminal = TerminalWriteAction.prepare(session_id, "").resolve_terminal()
+    if not terminal:
+        return
 
     for msg in pending:
+        # Claim before the (slow) send so a concurrent flush can't deliver it twice.
+        await AgentRelayMessage.where("id", msg.id).update({"status": "delivered"})
         from_agent = await Agent.find(msg.from_agent_id)
         sender_name = from_agent.name if from_agent else f"Agent #{msg.from_agent_id}"
-        if bridge:
-            text_bytes = f"[Message from Agent '{sender_name}']: {msg.content}".encode().rstrip(
-                b"\r\n"
-            )
-            await bridge.write(text_bytes)
-            await asyncio.sleep(0.05)
-            await bridge.write(b"\r")
-        await AgentRelayMessage.where("id", msg.id).update({"status": "delivered"})
+        await terminal.send(f"[Message from Agent '{sender_name}']: {msg.content}")
 
 
 async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query()):
@@ -166,7 +162,7 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
     terminal = terminal_manager.get(session_id)
 
     ready_event = claude_ready.setdefault(session_id, asyncio.Event())
-    asyncio.create_task(_signal_ready_and_relay(ready_event, agent_record.id))
+    asyncio.create_task(_signal_ready_and_relay(ready_event, agent_record.id, terminal))
 
     claude_cmd = agent_record.to_command(
         system_prompt_suffix=_build_identity_suffix(agent_record.id)
@@ -196,7 +192,7 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
         await Agent.where("id", agent_record.id).update({"session_id": None})
 
 
-async def _signal_ready_and_relay(event: asyncio.Event, agent_id: int) -> None:
-    await asyncio.sleep(2.0)
+async def _signal_ready_and_relay(event: asyncio.Event, agent_id: int, terminal) -> None:
+    await terminal.wait_for_cli_ready()
     event.set()
-    await _deliver_pending_relay_messages(agent_id)
+    await deliver_pending_relay_messages(agent_id)
