@@ -124,7 +124,10 @@ function openDiff(file: GitFileChange, staged: boolean) {
     const nested = staged ? undefined : nestedWorktrees.value[file.path]
     if (nested) return selectWorktree(nested.path)
     const worktree = selectedWorktree.value
-    diffs.open(target.value, file.path, staged, worktree && !worktree.is_current ? worktreeLabel(worktree) : null)
+    diffs.open(target.value, file.path, staged, {
+        worktreeLabel: worktree && !worktree.is_current ? worktreeLabel(worktree) : null,
+        untracked: file.untracked,
+    })
 }
 
 function openFile(file: GitFileChange) {

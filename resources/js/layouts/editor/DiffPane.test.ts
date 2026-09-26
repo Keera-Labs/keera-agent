@@ -4,7 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installPinia } from '@/pages/agents/testing'
 import { gitKeys, type GitDiff } from '@/queries/gitQuery'
-import { useDiffStore } from '@/stores/diffStore'
+import { useDiffStore, type DiffTabOptions } from '@/stores/diffStore'
 import { useEditorSettingsStore } from '@/stores/editorSettingsStore'
 import { useProjectStore } from '@/stores/projectStore'
 import type { Project } from '@/types/type'
@@ -67,10 +67,10 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals())
 
-async function mountPane(path = 'src/promo.ts', staged = false, worktreeLabel: string | null = null) {
+async function mountPane(path = 'src/promo.ts', staged = false, options: DiffTabOptions = {}) {
     const wrapper = mount(DiffPane, { global: { plugins: [...installPinia()] }, attachTo: document.body })
     useProjectStore().setActiveProject(PROJECT)
-    useDiffStore().open(MAIN, path, staged, worktreeLabel)
+    useDiffStore().open(MAIN, path, staged, options)
     await flushPromises()
     return wrapper
 }
@@ -104,7 +104,7 @@ describe('DiffPane', () => {
     })
 
     it('compares HEAD with the index for a staged file and names another worktree', async () => {
-        const w = await mountPane('src/promo.ts', true, 'Diff Frontend')
+        const w = await mountPane('src/promo.ts', true, { worktreeLabel: 'Diff Frontend' })
         expect(fetchMock).toHaveBeenCalledWith('/api/projects/1/git/diff?path=src%2Fpromo.ts&staged=true', expect.anything())
         expect(w.get('[data-testid="diff-compared"]').text()).toBe('HEAD ↔ Index')
         expect(w.text()).toContain('Diff Frontend')
@@ -125,11 +125,18 @@ describe('DiffPane', () => {
         [{ status: 'A', original: null, modified: 'new' }, 'New file'],
         [{ status: 'D', original: 'old', modified: null }, 'Deleted file'],
         [{ status: 'R', original_path: 'src/discount.ts' }, 'Renamed from src/discount.ts'],
+        [{ status: 'C', original_path: 'src/discount.ts' }, 'Copied from src/discount.ts'],
         [{ status: 'U' }, 'Merge conflict: the working file is compared with HEAD.'],
     ] as const)('explains a %o diff', async (overrides, notice) => {
         reply = () => ({ status: 200, body: diffBody(overrides as Partial<GitDiff>) })
         const w = await mountPane()
         expect(w.get('[data-testid="diff-notice"]').text()).toBe(`· ${notice}`)
+    })
+
+    it('calls an untracked file new, not a merge conflict, although both report U', async () => {
+        reply = () => ({ status: 200, body: diffBody({ status: 'U', original: null, modified: 'new' }) })
+        const w = await mountPane('src/promo.test.ts', false, { untracked: true })
+        expect(w.get('[data-testid="diff-notice"]').text()).toBe('· New file')
     })
 
     it('shows an empty side for a new file', async () => {

@@ -31,8 +31,8 @@ const placeholder = computed(() => {
 const notice = computed(() => {
     const current = diff.value
     if (!current) return null
-    if (current.status === 'U') return 'Merge conflict: the working file is compared with HEAD.'
-    if (current.original_path) return `Renamed from ${current.original_path}`
+    if (current.status === 'U' && !activeTab.value?.untracked) return 'Merge conflict: the working file is compared with HEAD.'
+    if (current.original_path) return `${current.status === 'C' ? 'Copied' : 'Renamed'} from ${current.original_path}`
     if (current.original === null && current.modified !== null) return 'New file'
     if (current.modified === null && current.original !== null) return 'Deleted file'
     return null

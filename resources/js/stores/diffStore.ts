@@ -10,6 +10,13 @@ export type DiffTab = GitDiffRequest & {
     name: string
     /** Names the worktree in the tab when it is not the project's own checkout. */
     worktreeLabel: string | null
+    /** Status reports untracked files and conflicts alike as "U"; only the status row can tell them apart. */
+    untracked: boolean
+}
+
+export interface DiffTabOptions {
+    worktreeLabel?: string | null
+    untracked?: boolean
 }
 
 const tabId = ({ target, path, staged }: GitDiffRequest) =>
@@ -35,13 +42,13 @@ export const useDiffStore = defineStore('diff', () => {
         activeId.value = tab?.id ?? null
     }
 
-    function open(target: GitTarget, path: string, staged: boolean, worktreeLabel: string | null = null) {
+    function open(target: GitTarget, path: string, staged: boolean, { worktreeLabel = null, untracked = false }: DiffTabOptions = {}) {
         const request = { target, path, staged }
         const id = tabId(request)
         const tabs = (tabsByProject[target.projectId] ??= [])
         let tab = tabs.find(t => t.id === id)
         if (!tab) {
-            tab = { ...request, id, name: path.split('/').pop() || path, worktreeLabel }
+            tab = { ...request, id, name: path.split('/').pop() || path, worktreeLabel, untracked }
             tabs.push(tab)
         }
         activate(tab)

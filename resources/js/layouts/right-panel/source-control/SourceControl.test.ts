@@ -253,11 +253,14 @@ describe('SourceControl', () => {
         const diffs = useDiffStore()
 
         await w.get('[data-testid="changes"]').findAll('li')[1].get('button[title^="Show changes"]').trigger('click')
-        expect(diffs.activeTab).toMatchObject({ path: 'app/tasks.py', staged: false, target: { projectId: 9, worktree: null } })
+        expect(diffs.activeTab).toMatchObject({ path: 'app/tasks.py', staged: false, untracked: false, target: { projectId: 9, worktree: null } })
+
+        await w.get('[data-testid="changes"]').findAll('li')[2].get('button[title^="Show changes"]').trigger('click')
+        expect(diffs.activeTab).toMatchObject({ path: 'app/bootstrap.py', untracked: true })
 
         await w.get('[data-testid="staged-changes"]').findAll('li')[0].get('button[title^="Show changes"]').trigger('click')
         expect(diffs.activeTab).toMatchObject({ path: 'src/checkout/promo.ts', staged: true })
-        expect(diffs.tabsByProject[9]).toHaveLength(2)
+        expect(diffs.tabsByProject[9]).toHaveLength(3)
     })
 
     it('opens deleted files as diffs, and the file itself only from the explicit Open file action', async () => {

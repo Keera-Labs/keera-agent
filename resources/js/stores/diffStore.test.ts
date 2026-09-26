@@ -64,7 +64,7 @@ describe('useDiffStore', () => {
     it('keeps one tab per file, side and worktree, and re-activates it', () => {
         diffs.open(MAIN, 'app/tasks.py', false)
         diffs.open(MAIN, 'app/tasks.py', true)
-        diffs.open(AGENT, 'app/tasks.py', false, 'Diff Frontend')
+        diffs.open(AGENT, 'app/tasks.py', false, { worktreeLabel: 'Diff Frontend' })
         diffs.open(MAIN, 'app/tasks.py', false)
 
         expect(diffs.projectTabs.map(t => [t.name, t.staged, t.worktreeLabel])).toEqual([
