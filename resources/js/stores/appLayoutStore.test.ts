@@ -2,7 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { createApp, reactive } from 'vue'
-import { PiniaColada } from '@pinia/colada'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { playSound } from '@/composables/useAudio'
 import { disposeProjectSessions, type Session } from '@/composables/useTerminalSessions'
 import { flushPromises } from '@vue/test-utils'
 import type { Project } from '@/types/type'
@@ -13,6 +14,25 @@ vi.mock('@inertiajs/vue3', () => ({
     usePage: () => reactive({ component: 'Home', props: {} }),
     router: { visit: vi.fn() },
 }))
+
+// Real xterm cannot render in happy-dom; the PM session only needs its surface.
+vi.mock('@xterm/xterm', () => ({
+    Terminal: class {
+        cols = 80
+        rows = 24
+        element?: HTMLElement
+        open(el: HTMLElement) { this.element = document.createElement('div'); el.append(this.element) }
+        loadAddon() {}
+        onData() {}
+        onResize() {}
+        attachCustomKeyEventHandler() {}
+        focus() {}
+        write() {}
+        dispose() {}
+    },
+}))
+vi.mock('@xterm/addon-fit', () => ({ FitAddon: class { fit() {} } }))
+vi.mock('@/composables/useAudio', () => ({ playSound: vi.fn() }))
 
 function fakeSession(): Session {
     const element = document.createElement('div')
@@ -158,5 +178,44 @@ describe('terminal navigation keys', () => {
         for (const key of NAV_KEYS) expect(press(helper, key)).toBe(true)
         expect(press(helper, 'a')).toBe(false)
         terminal.remove()
+    })
+})
+
+describe('agent status pushes', () => {
+    type FakeSocket = { onmessage?: (e: { data: unknown }) => void }
+
+    it('refreshes the agent queries when a terminal socket pushes agent_status', async () => {
+        const sockets: FakeSocket[] = []
+        vi.stubGlobal('WebSocket', class {
+            static OPEN = 1
+            readyState = 1
+            constructor() { sockets.push(this as FakeSocket) }
+            send() {}
+            close() {}
+        })
+        vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+        vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(url === '/api/projects/9/agents'
+                ? { data: [{ type: 'agents', id: '3', attributes: { project_id: 9, name: 'PM', agent_type: 'pm', provider: 'claude' } }] }
+                : []),
+        })))
+        const pinia = createPinia()
+        createApp({}).use(pinia).use(PiniaColada)
+        setActivePinia(pinia)
+        useProjectStore().setActiveProject({ id: 9, slug: 'nine' } as Project)
+        store = useAppLayoutStore()
+        await flushPromises()
+        store.setContainer(9, document.createElement('div'))
+        await flushPromises()
+        expect(sockets).toHaveLength(1)
+
+        const invalidate = vi.spyOn(useQueryCache(), 'invalidateQueries')
+        sockets[0].onmessage!({ data: JSON.stringify({ type: 'agent_status', agent_id: 3, status: 'needs_input' }) })
+
+        expect(invalidate).toHaveBeenCalledWith({ key: ['agent-summaries'] })
+        expect(invalidate).toHaveBeenCalledWith({ key: ['agents'] })
+        expect(playSound).toHaveBeenCalledWith('input')
+        disposeProjectSessions(9, [])
     })
 })

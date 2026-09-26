@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
-import DotsIndicator from '@/components/ui/DotsIndicator.vue'
+import AgentStatusIndicator from '@/components/ui/AgentStatusIndicator.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { attachTerminal } from '@/composables/useTerminalSessions'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
@@ -43,6 +43,11 @@ const subtitle = computed(() => {
 const status = computed(() => (activeProject.value ? claudeStatus.value[activeProject.value.id] : undefined))
 
 const terminalSlot = ref<HTMLElement | null>(null)
+
+/** Reply: put the cursor in the agent's terminal, where the question or permission prompt is showing. */
+function focusTerminal() {
+    terminalSlot.value?.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')?.focus()
+}
 
 function showAgentTerminal(agentId: number, el: HTMLElement) {
     layout.setAgentContainer(agentId, el)
@@ -145,9 +150,27 @@ function onDrop(e: DragEvent) {
 
                     <div class="flex items-center gap-3 shrink-0">
                         <PmCheckinControl v-if="activeAgent?.agent_type === 'pm'" :agent-id="activeAgent.id" compact />
-                        <span v-if="status === 'running'" class="flex items-center gap-1.5 ml-2">
-                            <DotsIndicator />
-                            <span class="text-amber-700 text-[11px] font-mono">running</span>
+                        <span
+                            v-if="activeAgent?.status === 'needs_input'"
+                            data-testid="agent-needs-input"
+                            class="flex items-center gap-2 ml-2 max-w-[360px] py-1 pl-1.5 pr-1 rounded-md bg-amber-50 border border-amber-200"
+                        >
+                            <AgentStatusIndicator status="needs_input" :size="14" />
+                            <span class="text-amber-800 text-[12px] truncate" :title="activeAgent.attention_prompt ?? undefined">
+                                {{ activeAgent.attention_prompt ?? 'Needs input' }}
+                            </span>
+                            <button
+                                type="button"
+                                data-testid="agent-reply"
+                                class="shrink-0 h-6 px-2 rounded bg-amber-500 text-white text-[11px] font-semibold cursor-pointer border-0 hover:bg-amber-600"
+                                @click="focusTerminal"
+                            >
+                                Reply
+                            </button>
+                        </span>
+                        <span v-else-if="status === 'running' || activeAgent?.status === 'running'" class="flex items-center gap-1.5 ml-2">
+                            <AgentStatusIndicator status="running" :size="12" />
+                            <span class="text-success text-[11px] font-mono">running</span>
                         </span>
                         <span v-else-if="status === 'done'" class="flex items-center gap-[5px] ml-1.5">
                             <span class="w-[7px] h-[7px] rounded-full bg-success" />

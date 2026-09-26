@@ -10,6 +10,10 @@ export interface AgentFlags {
     max_turns?: number | null
 }
 
+/** `needs_input`: blocked on a question or permission prompt (Claude agents only). */
+export type AgentStatus = 'idle' | 'running' | 'waiting' | 'needs_input'
+export type AttentionKind = 'question' | 'permission'
+
 export interface ProjectAgent {
     id: number
     project_id: number
@@ -20,7 +24,9 @@ export interface ProjectAgent {
     model: string
     system_prompt: string | null
     agent_type: string
-    status: 'idle' | 'running' | 'waiting'
+    status: AgentStatus
+    attention_kind: AttentionKind | null
+    attention_prompt: string | null
     flags: AgentFlags
     dangerously_skip_permissions: boolean
     plan_mode: boolean
@@ -64,7 +70,9 @@ export function normalizeAgent(resource: AgentResource): ProjectAgent {
         model: attr.model as string,
         system_prompt: (attr.system_prompt as string | null) ?? null,
         agent_type: attr.agent_type as string,
-        status: attr.status as ProjectAgent['status'],
+        status: attr.status as AgentStatus,
+        attention_kind: (attr.attention_kind as AttentionKind | null) ?? null,
+        attention_prompt: (attr.attention_prompt as string | null) ?? null,
         flags,
         dangerously_skip_permissions: Boolean(attr.dangerously_skip_permissions),
         plan_mode: Boolean(attr.plan_mode),

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import AgentStatusIndicator from '@/components/ui/AgentStatusIndicator.vue'
 import Icon from '@/components/ui/Icon.vue'
 import type { ProjectAgent } from '@/queries/agentQuery'
 import { color } from '@/tokens'
@@ -26,10 +27,18 @@ const props = defineProps<{
 const emit = defineEmits<{ open: []; restart: []; adopt: []; remove: [] }>()
 
 
-const statusTone = computed(() =>
-    props.running
-        ? { bg: '#e7f6ec', fg: '#16a34a', label: 'Active' }
-        : { bg: color.warningSubtle, fg: color.warningBright, label: 'Waiting' },
+const needsInput = computed(() => props.agent.status === 'needs_input')
+// A live session is "Active"; the spinner only turns while the agent is actually mid-turn.
+const statusTone = computed(() => {
+    if (needsInput.value) return { bg: '#fef3c7', fg: '#b45309', label: 'Needs input', indicator: 'needs_input' as const }
+    if (props.running) {
+        const working = props.agent.status === 'running'
+        return { bg: '#e7f6ec', fg: '#16a34a', label: working ? 'Working' : 'Active', indicator: working ? 'running' as const : null }
+    }
+    return { bg: color.warningSubtle, fg: color.warningBright, label: 'Waiting', indicator: null }
+})
+const promptLine = computed(() =>
+    needsInput.value ? (props.agent.attention_prompt ?? 'Waiting for your answer in the terminal.') : null,
 )
 
 const statCells = computed(() => [
@@ -59,15 +68,32 @@ const iconButtonClass = 'bg-transparent border border-stroke text-zinc-500 curso
             </div>
             <span
                 data-testid="agent-status"
+                :data-status="agent.status"
                 class="inline-flex items-center gap-1.5 text-[12px] font-semibold py-1 px-2.5 rounded-full shrink-0"
                 :style="{ background: statusTone.bg, color: statusTone.fg }"
             >
-                <span class="w-1.5 h-1.5 rounded-full" :style="{ background: statusTone.fg }" />
+                <AgentStatusIndicator v-if="statusTone.indicator" :status="statusTone.indicator" :size="11" />
+                <span v-else class="w-1.5 h-1.5 rounded-full" :style="{ background: statusTone.fg }" />
                 {{ statusTone.label }}
             </span>
         </div>
 
-        <p :class="['m-0 text-[13.5px] leading-[1.55]', statusLine ? 'text-zinc-700' : 'text-zinc-400']">
+        <div
+            v-if="promptLine"
+            data-testid="agent-card-prompt"
+            class="flex items-start gap-3 py-2.5 px-3 rounded-lg bg-amber-50 border border-amber-200"
+        >
+            <p class="m-0 flex-1 min-w-0 text-[13.5px] leading-[1.55] text-amber-900 line-clamp-3">{{ promptLine }}</p>
+            <button
+                type="button"
+                data-testid="agent-card-reply"
+                class="shrink-0 h-7 px-3 rounded-md bg-amber-500 text-white text-[12.5px] font-semibold cursor-pointer border-0 hover:bg-amber-600"
+                @click.stop="emit('open')"
+            >
+                Reply
+            </button>
+        </div>
+        <p v-else :class="['m-0 text-[13.5px] leading-[1.55]', statusLine ? 'text-zinc-700' : 'text-zinc-400']">
             {{ statusLine ?? 'No status reported.' }}
         </p>
 

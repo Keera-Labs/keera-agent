@@ -16,10 +16,12 @@ vi.mock('@inertiajs/vue3', () => ({
 
 let wrapper: VueWrapper | undefined
 
-async function mountDetail(agentId?: number) {
+async function mountDetail(agentId?: number, builder: Record<string, unknown> = {}) {
     page.props.agent_id = agentId
+    const builderResource = agentResource(11, 'Builder')
+    Object.assign(builderResource.attributes, builder)
     stubFetch({
-        '/api/projects/1/agents': { data: [agentResource(10, 'Planner', 'pm'), agentResource(11, 'Builder')] },
+        '/api/projects/1/agents': { data: [agentResource(10, 'Planner', 'pm'), builderResource] },
         '/api/workspaces': [{ id: 7, name: 'Labs' }],
     })
     const plugins = installPinia()
@@ -57,6 +59,28 @@ describe('Detail', () => {
         expect(header).toContain('Builder')
         expect(header).toContain('SOFTWARE ENGINEER')
         expect(wrapper.find('[data-testid="agent-terminal"]').exists()).toBe(true)
+    })
+
+    it('shows a spinner in the header while the agent works', async () => {
+        const { wrapper } = await mountDetail(11, { status: 'running' })
+
+        const indicator = wrapper.get('[data-testid="agent-execution"] [data-testid="agent-status-indicator"]')
+        expect(indicator.attributes('data-status')).toBe('running')
+        expect(wrapper.find('[data-testid="agent-needs-input"]').exists()).toBe(false)
+    })
+
+    it('shows the pending permission prompt and focuses the terminal on Reply', async () => {
+        const { wrapper } = await mountDetail(11, {
+            status: 'needs_input', attention_kind: 'permission', attention_prompt: 'Allow Bash: npm test?',
+        })
+
+        const badge = wrapper.get('[data-testid="agent-needs-input"]')
+        expect(badge.text()).toContain('Allow Bash: npm test?')
+        ;(document.activeElement as HTMLElement | null)?.blur()
+        await badge.get('[data-testid="agent-reply"]').trigger('click')
+
+        const helper = wrapper.get('.xterm-helper-textarea').element
+        expect(document.activeElement).toBe(helper)
     })
 
     it('moves a live agent terminal into the slot and parks it on unmount', async () => {

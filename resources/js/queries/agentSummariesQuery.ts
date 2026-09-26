@@ -12,6 +12,8 @@ export interface AgentSummary {
     provider: string
     agent_type: string
     status: ProjectAgent['status']
+    attention_kind: ProjectAgent['attention_kind']
+    attention_prompt: string | null
     last_message: string | null
     last_activity_at: string | null
 }
