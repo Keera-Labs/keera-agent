@@ -14,6 +14,7 @@ class AppProvider(Provider):
         from app.console.mcp_sync_command import McpSyncCommand
         from app.console.queue_work_command import QueueWorkCommand
         from app.console.seed_templates_command import SeedTemplatesCommand
+        from app.console.worktrees_prune_command import WorktreesPruneCommand
         from app.exceptions.handlers import register_exception_handlers
         from routes.api import router as api_router
         from routes.web import router as web_router
@@ -22,7 +23,15 @@ class AppProvider(Provider):
         self.app.fastapi.include_router(api_router.router)
 
         register_exception_handlers(self.app)
-        self.commands([QueueWorkCommand, SeedTemplatesCommand, McpSyncCommand, ClaudeHookCommand])
+        self.commands(
+            [
+                QueueWorkCommand,
+                SeedTemplatesCommand,
+                McpSyncCommand,
+                ClaudeHookCommand,
+                WorktreesPruneCommand,
+            ]
+        )
 
         async def on_startup():
             """Ensure built-in templates are seeded."""

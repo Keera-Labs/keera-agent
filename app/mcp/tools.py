@@ -757,19 +757,25 @@ class DeleteAgentTool(Tool):
         agent.deleted_at = datetime.datetime.utcnow()
         await agent.save()
 
-        # Remove the agent's git worktree and branch so they don't accumulate
-        # (mirrors app/controllers/agent_controller.py::destroy)
-        from app.controllers.agent_trigger_controller import _cleanup_stale_worktree
+        import asyncio
 
+        from app.controllers.agent_controller import stop_agent_session
+        from app.services.worktree_cleanup import cleanup_agent_worktree
+
+        # The CLI holds a lock on its worktree until it exits, so stop it first.
+        await stop_agent_session(agent.session_id)
+        await Agent.where("id", agent.id).update({"session_id": None})
+
+        text = f"Agent '{agent.name}' (ID: {agent_id}) has been deleted."
         project = await Project.find(agent.project_id)
         if project:
-            cwd = os.path.expanduser(project.path)
-            try:
-                _cleanup_stale_worktree(agent, cwd)
-            except Exception:
-                pass
-
-        return Response.text(f"Agent '{agent.name}' (ID: {agent_id}) has been deleted.")
+            results = await asyncio.to_thread(
+                cleanup_agent_worktree, os.path.expanduser(project.path), agent.id
+            )
+            kept = [r["error"] for r in results if r["error"]]
+            if kept:
+                text += " Worktree kept: " + "; ".join(kept)
+        return Response.text(text)
 
 
 # ── tool list ─────────────────────────────────────────────────────────────────

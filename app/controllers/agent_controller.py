@@ -75,8 +75,8 @@ async def update(body: AgentUpdateRequest, agent_id: int):
 
 
 async def destroy(request: Request, agent_id: int):
-    from app.controllers.agent_trigger_controller import _cleanup_stale_worktree
     from app.models.Project import Project
+    from app.services.worktree_cleanup import cleanup_agent_worktree
 
     agent = await Agent.find_or_fail(agent_id)
 
@@ -104,15 +104,13 @@ async def destroy(request: Request, agent_id: int):
         new_default = remaining[0].id if remaining else None
         await _set_project_default(project_id, new_default)
 
-    # Remove the agent's git worktree and branch so it doesn't accumulate
+    worktree_cleanup = []
     if project:
-        cwd = os.path.expanduser(project.path)
-        try:
-            await asyncio.to_thread(_cleanup_stale_worktree, agent, cwd)
-        except Exception:
-            pass
+        worktree_cleanup = await asyncio.to_thread(
+            cleanup_agent_worktree, os.path.expanduser(project.path), agent_id
+        )
 
-    return JSONResponse({"ok": True})
+    return JSONResponse({"ok": True, "worktree_cleanup": worktree_cleanup})
 
 
 async def stop_agent_session(session_id: str | None) -> None:
