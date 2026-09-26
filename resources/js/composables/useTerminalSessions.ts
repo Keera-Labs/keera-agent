@@ -320,6 +320,15 @@ export function useTerminalSessions(params: UseTerminalSessionsParams) {
         setTimeout(() => sendIfOpen(session.ws, 'claude --continue\n'), 800)
     }
 
+    /** Close one agent's terminal; its container stays registered so it can be relaunched. */
+    function disposeAgentSession(agentId: number) {
+        const session = agentSessions.get(agentId)
+        if (!session) return
+        disposeSession(session)
+        agentSessions.delete(agentId)
+        syncLiveSessionCount()
+    }
+
     function setClaudeStatus(projectId: number, status: ClaudeStatus) {
         claudeStatus[projectId] = status
     }
@@ -342,6 +351,7 @@ export function useTerminalSessions(params: UseTerminalSessionsParams) {
         setContainer,
         setAgentContainer,
         launchAgentSession,
+        disposeAgentSession,
         restartClaude,
         uploadImage,
         claudeStatus,
