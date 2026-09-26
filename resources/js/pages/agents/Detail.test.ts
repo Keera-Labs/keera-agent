@@ -69,6 +69,16 @@ describe('Detail', () => {
         expect(wrapper.find('[data-testid="agent-needs-input"]').exists()).toBe(false)
     })
 
+    it('shows no status badge once the project session has stopped', async () => {
+        const { wrapper, layout } = await mountDetail(11)
+        layout.setClaudeStatus(project.id, 'done')
+        await flushPromises()
+
+        const header = wrapper.get('[data-testid="agent-execution"]')
+        expect(header.text()).not.toContain('done')
+        expect(header.find('[data-testid="agent-status-indicator"]').exists()).toBe(false)
+    })
+
     it('shows the pending permission prompt and focuses the terminal on Reply', async () => {
         const { wrapper } = await mountDetail(11, {
             status: 'needs_input', attention_kind: 'permission', attention_prompt: 'Allow Bash: npm test?',

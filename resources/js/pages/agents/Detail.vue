@@ -172,10 +172,6 @@ function onDrop(e: DragEvent) {
                             <AgentStatusIndicator status="running" :size="12" />
                             <span class="text-success text-[11px] font-mono">running</span>
                         </span>
-                        <span v-else-if="status === 'done'" class="flex items-center gap-[5px] ml-1.5">
-                            <span class="w-[7px] h-[7px] rounded-full bg-success" />
-                            <span class="text-success text-[11px] font-mono">done</span>
-                        </span>
                     </div>
                 </div>
 
