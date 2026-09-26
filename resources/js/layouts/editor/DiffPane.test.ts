@@ -80,7 +80,7 @@ describe('DiffPane', () => {
         await mountPane()
         const settings = useEditorSettingsStore()
 
-        settings.saved = { font_family: 'fira-code', font_size: 15 }
+        settings.saved = { font_family: 'fira-code', font_size: 15, hide_hidden: false, hide_ignored: false, hidden_patterns: [] }
         await flushPromises()
 
         expect(monaco.editor.updateOptions).toHaveBeenCalledWith(settings.font)
