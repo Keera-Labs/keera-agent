@@ -181,8 +181,10 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
             showProjectSearch.value = !showProjectSearch.value
         }
     }
+    // Scoped to xterm so forms, inputs and the editor keep Enter/Tab/arrow behaviour.
     function blockTerminalNavKeys(e: KeyboardEvent) {
-        if (TERMINAL_NAV_KEYS.includes(e.key)) e.preventDefault()
+        if (!TERMINAL_NAV_KEYS.includes(e.key)) return
+        if (e.target instanceof Element && e.target.closest('.xterm')) e.preventDefault()
     }
     function warnOnUnload(e: BeforeUnloadEvent) {
         if (terminals.sessions.size > 0) e.preventDefault()
