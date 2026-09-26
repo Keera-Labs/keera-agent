@@ -1,8 +1,12 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { installPinia } from '@/pages/agents/testing'
+import { useEditorStore } from '@/stores/editorStore'
 import type { Project } from '@/types/type'
 import FileExplorer from './FileExplorer.vue'
+
+vi.mock('@inertiajs/vue3', () => ({ router: { on: vi.fn(() => () => {}) } }))
 
 const project = { id: 3, name: 'salut-ai', path: '/code/salut-ai' } as Project
 
@@ -25,7 +29,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 async function mountExplorer() {
-    const wrapper = mount(FileExplorer, { props: { project } })
+    const wrapper = mount(FileExplorer, { props: { project }, global: { plugins: [...installPinia()] } })
     await flushPromises()
     return wrapper
 }
@@ -78,5 +82,25 @@ describe('FileExplorer', () => {
         const w = await mountExplorer()
         const contents = w.findAll('button').find(b => b.text() === 'Contents')!
         expect(contents.attributes('disabled')).toBeDefined()
+    })
+
+    it('opens a clicked file in the editor', async () => {
+        const w = await mountExplorer()
+        const open = vi.spyOn(useEditorStore(), 'open').mockResolvedValue()
+        await w.findAll('[role="treeitem"]')[2].trigger('click')
+
+        expect(open).toHaveBeenCalledWith(3, 'README.md')
+    })
+
+    it('shows why a file could not be opened, for this project only', async () => {
+        const w = await mountExplorer()
+        const editor = useEditorStore()
+        editor.openError = { projectId: 99, path: 'x.bin', message: 'File is not UTF-8 text' }
+        await flushPromises()
+        expect(w.find('[data-testid="file-open-error"]').exists()).toBe(false)
+
+        editor.openError = { projectId: 3, path: 'data/x.bin', message: 'File is not UTF-8 text' }
+        await flushPromises()
+        expect(w.get('[data-testid="file-open-error"]').text()).toContain("Can't open x.bin: File is not UTF-8 text")
     })
 })

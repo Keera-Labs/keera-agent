@@ -1,11 +1,15 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
 import { computed, onMounted, ref } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
+import { useEditorStore } from '@/stores/editorStore'
 import type { Project } from '@/types/type'
 import { isIgnored, isMuted, useFileTree, type FileEntry } from './useFileTree'
 
 const props = defineProps<{ project: Project }>()
 
+const editor = useEditorStore()
+const { openError } = storeToRefs(editor)
 const tree = useFileTree(() => props.project.id)
 const { rootError } = tree
 const query = ref('')
@@ -13,12 +17,14 @@ const hideIgnored = ref(false)
 const selectedPath = ref<string | null>(null)
 
 const rows = computed(() => tree.visibleRows(query.value, hideIgnored.value))
+const projectOpenError = computed(() => openError.value?.projectId === props.project.id ? openError.value : null)
 
 onMounted(tree.refresh)
 
 function onEntryClick(entry: FileEntry) {
     selectedPath.value = entry.path
-    tree.toggle(entry)
+    if (entry.type === 'file') editor.open(props.project.id, entry.path)
+    else tree.toggle(entry)
 }
 
 const indent = (depth: number) => ({ paddingLeft: `${8 + depth * 12}px` })
@@ -64,6 +70,20 @@ const iconButton = 'p-1 rounded text-zinc-400 hover:text-zinc-700 hover:bg-zinc-
                     Contents
                 </button>
             </div>
+        </div>
+
+        <div
+            v-if="projectOpenError"
+            role="alert"
+            data-testid="file-open-error"
+            class="flex items-start gap-1.5 mx-2 mb-2 px-2 py-1.5 shrink-0 rounded-md bg-red-50 text-danger"
+        >
+            <span class="flex-1 min-w-0 break-words">
+                Can't open {{ projectOpenError.path.split('/').pop() }}: {{ projectOpenError.message }}
+            </span>
+            <button type="button" aria-label="Dismiss" class="p-0.5 rounded hover:bg-red-100 cursor-pointer" @click="openError = null">
+                <Icon name="x" :size="11" />
+            </button>
         </div>
 
         <div class="flex-1 overflow-y-auto overflow-x-hidden border-t border-stroke py-1 font-mono" role="tree" :aria-label="`${project.name} files`">

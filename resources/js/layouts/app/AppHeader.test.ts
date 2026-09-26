@@ -5,6 +5,7 @@ import { reactive } from 'vue'
 import { router } from '@inertiajs/vue3'
 import { agentResource, fakeSession, installPinia, project, stubFetch } from '@/pages/agents/testing'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
+import { useEditorStore } from '@/stores/editorStore'
 import { useProjectStore } from '@/stores/projectStore'
 import AppHeader from './AppHeader.vue'
 import StatusBar from './StatusBar.vue'
@@ -13,7 +14,7 @@ const page = reactive<{ component: string; props: Record<string, unknown> }>({ c
 
 vi.mock('@inertiajs/vue3', () => ({
     usePage: () => page,
-    router: { visit: vi.fn() },
+    router: { visit: vi.fn(), on: vi.fn(() => () => {}) },
 }))
 
 const PM = 10
@@ -114,6 +115,31 @@ describe('SessionTabs', () => {
         expect(store.activeAgentId).toBeNull()
         expect(router.visit).not.toHaveBeenCalled()
         expect(tabNames(w)).toEqual(['PM'])
+    })
+
+    it('shows open files as tabs beside the terminals, with a dirty marker', async () => {
+        const w = await mountHeader()
+        store.setActiveAgentId(PM)
+        const editor = useEditorStore()
+        editor.tabsByProject[project.id] = [
+            { projectId: project.id, path: 'src/app.ts', name: 'app.ts', etag: 'e1', dirty: true, saving: false, conflict: false, error: null },
+            { projectId: project.id, path: 'README.md', name: 'README.md', etag: 'e2', dirty: false, saving: false, conflict: false, error: null },
+        ]
+        editor.activate(project.id, 'src/app.ts')
+        await flushPromises()
+
+        const fileTabs = w.findAll('[data-testid="editor-tab"]')
+        expect(fileTabs.map(t => t.text())).toEqual(['app.ts', 'README.md'])
+        expect(fileTabs.map(t => t.attributes('data-dirty'))).toEqual(['true', 'false'])
+        const selected = w.findAll('[role="tab"][aria-selected="true"]')
+        expect(selected.map(t => t.text())).toEqual(['app.ts'])
+
+        await fileTabs[1].trigger('click')
+        expect(editor.activeTab?.path).toBe('README.md')
+
+        const close = vi.spyOn(editor, 'close').mockReturnValue(true)
+        await fileTabs[0].get('[data-testid="editor-tab-close"]').trigger('click')
+        expect(close).toHaveBeenCalledWith(project.id, 'src/app.ts')
     })
 })
 

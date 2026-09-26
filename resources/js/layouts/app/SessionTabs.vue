@@ -6,6 +6,7 @@ import Icon from '@/components/ui/Icon.vue'
 import AgentAddModal from '@/pages/agents/AgentAddModal.vue'
 import type { ProjectAgent } from '@/queries/agentQuery'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
+import { useEditorStore, type EditorTab } from '@/stores/editorStore'
 import { useProjectStore } from '@/stores/projectStore'
 
 type TabState = 'running' | 'live' | 'off'
@@ -17,6 +18,8 @@ const page = usePage()
 const layout = useAppLayoutStore()
 const { activeAgentId, claudeStatus, liveSessionCount } = storeToRefs(layout)
 const { activeProject } = storeToRefs(useProjectStore())
+const editor = useEditorStore()
+const { projectTabs: fileTabs, activeTab: activeFileTab } = storeToRefs(editor)
 
 const isPm = (agent: ProjectAgent) => agent.agent_type === 'pm'
 
@@ -50,8 +53,21 @@ const DOT_CLASS: Record<TabState, string> = {
 }
 
 function isActive(agent: ProjectAgent) {
-    return agent.id === activeAgentId.value && TERMINAL_PAGES.includes(page.component)
+    return activeFileTab.value === null && agent.id === activeAgentId.value && TERMINAL_PAGES.includes(page.component)
 }
+
+const isFileActive = (tab: EditorTab) => activeFileTab.value?.path === tab.path
+
+function tabClass(active: boolean) {
+    return [
+        'group relative flex items-center gap-1.5 shrink-0 max-w-[200px] pl-3 pr-1.5 text-[12.5px] border-x -mb-px cursor-pointer transition-colors',
+        active
+            ? 'bg-white text-zinc-900 border-stroke'
+            : 'text-zinc-500 border-transparent hover:text-zinc-800 hover:bg-black/[0.03]',
+    ]
+}
+
+const closeButtonClass = 'shrink-0 w-4 h-4 flex items-center justify-center rounded text-zinc-400 hover:text-zinc-800 hover:bg-black/[0.06]'
 
 function select(agent: ProjectAgent) {
     const project = activeProject.value
@@ -73,12 +89,7 @@ function close(agent: ProjectAgent) {
                 v-for="agent in tabs"
                 :key="agent.id"
                 data-testid="session-tab"
-                :class="[
-                    'group relative flex items-center gap-1.5 shrink-0 max-w-[200px] pl-3 pr-1.5 text-[12.5px] border-x -mb-px cursor-pointer transition-colors',
-                    isActive(agent)
-                        ? 'bg-white text-zinc-900 border-stroke'
-                        : 'text-zinc-500 border-transparent hover:text-zinc-800 hover:bg-black/[0.03]',
-                ]"
+                :class="tabClass(isActive(agent))"
                 :title="agent.name"
                 @click="select(agent)"
             >
@@ -101,15 +112,44 @@ function close(agent: ProjectAgent) {
                     data-testid="session-tab-close"
                     :aria-label="`Close ${agent.name} terminal`"
                     title="Close terminal"
-                    :class="[
-                        'shrink-0 w-4 h-4 flex items-center justify-center rounded text-zinc-400 hover:text-zinc-800 hover:bg-black/[0.06]',
-                        isActive(agent) ? 'visible' : 'invisible group-hover:visible',
-                    ]"
+                    :class="[closeButtonClass, isActive(agent) ? 'visible' : 'invisible group-hover:visible']"
                     @click.stop="close(agent)"
                 >
                     <Icon name="x" :size="11" />
                 </button>
                 <span v-else class="w-1" />
+            </div>
+
+            <div
+                v-for="tab in fileTabs"
+                :key="`file:${tab.path}`"
+                data-testid="editor-tab"
+                :data-dirty="tab.dirty"
+                :class="tabClass(isFileActive(tab))"
+                :title="tab.path"
+                @click="editor.activate(tab.projectId, tab.path)"
+            >
+                <Icon name="file-text" :size="12" class="shrink-0 text-accent" />
+                <button
+                    type="button"
+                    role="tab"
+                    :aria-selected="isFileActive(tab)"
+                    class="truncate bg-transparent border-0 p-0 text-inherit cursor-pointer"
+                >
+                    {{ tab.name }}
+                </button>
+                <button
+                    type="button"
+                    data-testid="editor-tab-close"
+                    :aria-label="`Close ${tab.name}`"
+                    :title="tab.dirty ? 'Unsaved changes' : 'Close file'"
+                    :class="[closeButtonClass, isFileActive(tab) || tab.dirty ? 'visible' : 'invisible group-hover:visible']"
+                    @click.stop="editor.close(tab.projectId, tab.path)"
+                >
+                    <!-- The unsaved dot turns into the close cross on hover, as in most editors. -->
+                    <span v-if="tab.dirty" class="w-2 h-2 rounded-full bg-zinc-500 group-hover:hidden" />
+                    <Icon name="x" :size="11" :class="tab.dirty && 'hidden group-hover:block'" />
+                </button>
             </div>
         </div>
 
