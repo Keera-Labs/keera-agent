@@ -71,12 +71,13 @@ describe('AgentsListPanel', () => {
         expect(launch.mock.calls).toEqual([[11, true]])
     })
 
-    it('does not drill into the agent when its edit button is clicked', async () => {
+    it('opens the edit modal without drilling into the agent', async () => {
         const { wrapper, layout } = await mountPanel()
 
         await button(wrapper, 'Edit agent', 1).trigger('click')
+        await flushPromises()
 
-        expect(layout.migratingModal).toBe('Edit agent')
+        expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Edit Agent')
         expect(layout.activeAgentId).toBeNull()
         expect(router.visit).not.toHaveBeenCalled()
     })

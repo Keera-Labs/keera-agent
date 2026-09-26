@@ -3,6 +3,7 @@ import { router, usePage } from '@inertiajs/vue3'
 import { storeToRefs } from 'pinia'
 import { computed } from 'vue'
 import Icon, { type IconName } from '@/components/ui/Icon.vue'
+import AgentAddModal from '@/pages/agents/AgentAddModal.vue'
 import useProjects from '@/queries/projectsQuery'
 import { useAppLayoutStore, type ProjectView } from '@/stores/appLayoutStore'
 import { useProjectStore } from '@/stores/projectStore'
@@ -37,7 +38,7 @@ function changeView(view: ProjectView) {
     if (isTasksPage.value || isConfigPage.value) router.visit(`/${project.slug}`)
 }
 
-// The project-create and new-agent modals are ported separately.
+// The project-create modal is ported separately.
 function openPendingModal(name: string) {
     layout.migratingModal = name
 }
@@ -131,21 +132,24 @@ const navClass = (active: boolean) => [
                 <span>Settings</span>
             </button>
 
-            <!-- Always shown; inert until a project is active. -->
-            <button
-                type="button"
-                :disabled="!activeProject"
-                :class="[
-                    'w-full py-2 px-3 rounded-[7px] text-[13px] font-semibold flex items-center justify-center gap-1.5 transition-opacity duration-100',
-                    activeProject
-                        ? 'bg-blue-600 border-0 text-white cursor-pointer opacity-100 hover:opacity-[0.88]'
-                        : 'bg-surface border border-stroke text-zinc-400 cursor-default opacity-50',
-                ]"
-                @click="openPendingModal('New agent')"
-            >
-                <Icon name="plus" :size="12" />
-                + New Agent
-            </button>
+            <!-- Always shown; inert until a project is active (AgentAddModal then renders no modal). -->
+            <AgentAddModal>
+                <template #trigger>
+                    <button
+                        type="button"
+                        :disabled="!activeProject"
+                        :class="[
+                            'w-full py-2 px-3 rounded-[7px] text-[13px] font-semibold flex items-center justify-center gap-1.5 transition-opacity duration-100',
+                            activeProject
+                                ? 'bg-blue-600 border-0 text-white cursor-pointer opacity-100 hover:opacity-[0.88]'
+                                : 'bg-surface border border-stroke text-zinc-400 cursor-default opacity-50',
+                        ]"
+                    >
+                        <Icon name="plus" :size="12" />
+                        + New Agent
+                    </button>
+                </template>
+            </AgentAddModal>
         </div>
     </aside>
 </template>

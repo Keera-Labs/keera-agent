@@ -31,10 +31,16 @@ const activeView = computed<ProjectView>(() =>
 )
 const activeStatus = computed(() => (activeProject.value ? claudeStatus.value[activeProject.value.id] : undefined))
 const showAgentsView = computed(() => !!activeProject.value && activeView.value === 'agents')
-// The Dashboard view shows the project overview until an agent is drilled into.
-// agents/Detail is not ported yet, so a drilled-in agent shows the PM terminal meanwhile.
-const showOverview = computed(() => showAgentsView.value && activeAgentId.value === null)
-const showPmTerminal = computed(() => showAgentsView.value && activeAgentId.value !== null)
+// agents/Detail renders the whole agents view itself (overview included).
+const isAgentDetail = computed(() => page.component === 'agents/Detail')
+const showOverview = computed(() => showAgentsView.value && !isAgentDetail.value && activeAgentId.value === null)
+const showPmTerminal = computed(() => showAgentsView.value && !isAgentDetail.value && activeAgentId.value !== null)
+// The PM agent's terminal is the project's PM session, so while the detail page
+// shows the PM it borrows the session; this layout takes it back afterwards.
+const pmShownByPage = computed(() =>
+    isAgentDetail.value
+    && layout.agentHook.agents.value.some(a => a.id === activeAgentId.value && a.agent_type === 'pm'),
+)
 
 function selectTab(view: ProjectView) {
     const project = activeProject.value
@@ -51,11 +57,11 @@ function selectTab(view: ProjectView) {
 const terminalSlot = ref<HTMLElement | null>(null)
 
 watch(
-    [() => activeProject.value?.id, terminalSlot],
-    ([projectId, slot], previous) => {
+    [() => activeProject.value?.id, terminalSlot, pmShownByPage],
+    ([projectId, slot, borrowed], previous) => {
         const previousId = previous?.[0]
         if (previousId !== undefined && previousId !== projectId) layout.parkPmTerminal(previousId)
-        if (projectId !== undefined && slot) layout.showPmTerminal(projectId, slot)
+        if (projectId !== undefined && slot && !borrowed) layout.showPmTerminal(projectId, slot)
     },
     { flush: 'post', immediate: true },
 )
@@ -114,7 +120,7 @@ onBeforeUnmount(() => {
                 <span class="text-zinc-400 text-[13px]">No project selected</span>
             </div>
 
-            <slot v-if="!showAgentsView" />
+            <slot v-if="!showAgentsView || isAgentDetail" />
         </div>
     </div>
 </template>

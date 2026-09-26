@@ -2,16 +2,15 @@
 import { computed } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import useWorkspaces from '@/queries/workspacesQuery'
-import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import { color } from '@/tokens'
 import type { Project } from '@/types/type'
+import AgentAddModal from './AgentAddModal.vue'
 import AgentCard from './AgentCard.vue'
 import { PLACEHOLDER } from './presentation'
 import { useAgentActions } from './useAgentActions'
 
 const props = defineProps<{ project: Project }>()
 
-const layout = useAppLayoutStore()
 const { workspaces } = useWorkspaces()
 const { agents, isPending, adoptPending, isRunning, open, restart, adopt } = useAgentActions(() => props.project)
 
@@ -55,14 +54,17 @@ const pillClass = 'inline-flex items-center gap-1.5 bg-surface border border-str
                     </div>
                 </div>
 
-                <button
-                    type="button"
-                    class="shrink-0 flex items-center gap-[7px] bg-[#111318] border-0 rounded-lg text-white text-[13.5px] font-semibold py-2.5 px-4 cursor-pointer transition-opacity duration-100 hover:opacity-[0.88]"
-                    @click="layout.migratingModal = 'New agent'"
-                >
-                    <Icon name="plus" :size="13" />
-                    New Agent
-                </button>
+                <AgentAddModal>
+                    <template #trigger>
+                        <button
+                            type="button"
+                            class="shrink-0 flex items-center gap-[7px] bg-[#111318] border-0 rounded-lg text-white text-[13.5px] font-semibold py-2.5 px-4 cursor-pointer transition-opacity duration-100 hover:opacity-[0.88]"
+                        >
+                            <Icon name="plus" :size="13" />
+                            New Agent
+                        </button>
+                    </template>
+                </AgentAddModal>
             </div>
 
             <div

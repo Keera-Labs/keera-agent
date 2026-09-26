@@ -87,11 +87,12 @@ describe('ProjectOverview', () => {
         expect(router.visit).toHaveBeenCalledWith('/keera/agents/12')
     })
 
-    it('shows the migration notice from New Agent', async () => {
-        const { wrapper, layout } = await mountOverview()
+    it('opens the add-agent modal from New Agent', async () => {
+        const { wrapper } = await mountOverview()
 
         await wrapper.findAll('button').find(b => b.text() === 'New Agent')!.trigger('click')
+        await flushPromises()
 
-        expect(layout.migratingModal).toBe('New agent')
+        expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Add Agent')
     })
 })
