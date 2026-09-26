@@ -8,6 +8,7 @@ import signal
 import struct
 import subprocess
 import termios
+import threading
 import time
 
 
@@ -133,6 +134,44 @@ def _wait_for_groups(groups: set[int], timeout: float) -> set[int]:
         time.sleep(0.02)
 
 
+def _process_groups(shell_pid: int, master_fd: int | None) -> set[int]:
+    """Every process group started from a terminal's shell.
+
+    The shell runs in its own session (setsid), but with job control each
+    command it launches (the claude/codex CLI, background jobs) gets its own
+    process group, so killing only the shell's group would orphan them.
+    """
+    groups = {shell_pid} | _descendant_process_groups(shell_pid)
+    if master_fd is not None:
+        try:
+            groups.add(os.tcgetpgrp(master_fd))
+        except OSError:
+            pass
+    return groups - {0, 1, os.getpgrp()}
+
+
+def _shutdown(proc: subprocess.Popen | None, master_fd: int | None, grace: float) -> None:
+    """Kill everything a terminal started and release its PTY. Blocks for up to seconds."""
+    groups = _process_groups(proc.pid, master_fd) if proc else set()
+    _signal_groups(groups, signal.SIGTERM)
+    # Close the master before reaping the shell: a session leader's exit waits for
+    # unread tty output to drain, and nothing reads the master once we're stopping.
+    if master_fd is not None:
+        try:
+            os.close(master_fd)
+        except OSError:
+            pass
+    if proc:
+        # Interactive shells ignore SIGTERM, and the shell holds no state worth a
+        # graceful exit; reaping it also stops its zombie keeping its group "alive".
+        try:
+            proc.kill()
+            proc.wait(timeout=5)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        _signal_groups(_wait_for_groups(groups, grace), signal.SIGKILL)
+
+
 class Terminal:
     # send() waits at most echo_timeout for the CLI to echo a paste, and treats
     # echo_settle seconds of silence as the echo having finished rendering.
@@ -158,6 +197,7 @@ class Terminal:
         self._env = _with_color_env(env or os.environ.copy())
         self._proc: subprocess.Popen | None = None
         self.master_fd: int | None = None
+        self._stop_lock = threading.Lock()
         self._write_lock = asyncio.Lock()
         self._send_lock = asyncio.Lock()
         self._output_seq = 0
@@ -190,27 +230,24 @@ class Terminal:
         self._proc = proc
         self.master_fd = master_fd
 
+    def _detach(self) -> tuple[subprocess.Popen | None, int | None]:
+        # Taking ownership under a lock makes stop()/aclose() idempotent and safe to
+        # race: only the first caller gets the process and fd to tear down.
+        with self._stop_lock:
+            proc, self._proc = self._proc, None
+            master_fd, self.master_fd = self.master_fd, None
+        return proc, master_fd
+
     def stop(self) -> None:
-        groups = self._process_groups() if self._proc else set()
-        _signal_groups(groups, signal.SIGTERM)
-        # Close the master before reaping the shell: a session leader's exit waits for
-        # unread tty output to drain, and nothing reads the master once we're stopping.
-        if self.master_fd is not None:
-            try:
-                os.close(self.master_fd)
-            except OSError:
-                pass
-            self.master_fd = None
-        if self._proc:
-            # Interactive shells ignore SIGTERM, and the shell holds no state worth a
-            # graceful exit; reaping it also stops its zombie keeping its group "alive".
-            try:
-                self._proc.kill()
-                self._proc.wait(timeout=5)
-            except (OSError, subprocess.TimeoutExpired):
-                pass
-            _signal_groups(_wait_for_groups(groups, self.stop_grace), signal.SIGKILL)
-            self._proc = None
+        """Blocking teardown (can take seconds); on the event loop use aclose()."""
+        _shutdown(*self._detach(), self.stop_grace)
+
+    async def aclose(self) -> None:
+        # Detach on the loop thread so writers and readers see a stopped terminal at
+        # once, then do the slow signalling and reaping off the loop.
+        proc, master_fd = self._detach()
+        if proc is not None or master_fd is not None:
+            await asyncio.to_thread(_shutdown, proc, master_fd, self.stop_grace)
 
     async def write(self, data: bytes) -> None:
         if self.master_fd is None or not data:
@@ -360,21 +397,6 @@ class Terminal:
     def wait(self) -> None:
         if self._proc is not None:
             self._proc.wait()
-
-    def _process_groups(self) -> set[int]:
-        """Every process group started from this terminal.
-
-        The shell runs in its own session (setsid), but with job control each
-        command it launches (the claude/codex CLI, background jobs) gets its own
-        process group, so killing only the shell's group would orphan them.
-        """
-        groups = {self._proc.pid} | _descendant_process_groups(self._proc.pid)
-        if self.master_fd is not None:
-            try:
-                groups.add(os.tcgetpgrp(self.master_fd))
-            except OSError:
-                pass
-        return groups - {0, 1, os.getpgrp()}
 
     def is_alive(self) -> bool:
         return self._proc is not None and self._proc.poll() is None

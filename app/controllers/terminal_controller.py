@@ -159,7 +159,7 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
     finally:
         conn_manager.remove(session_id)
         claude_ready.pop(session_id, None)
-        terminal_manager.close(session_id)
+        await terminal_manager.close(session_id)
         await Agent.where("id", agent_record.id).update({"session_id": None})
 
 

@@ -394,7 +394,7 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
 
     elapsed = time.monotonic() - start_time
 
-    terminal_manager.close(session_id)
+    await terminal_manager.close(session_id)
     claude_ready.pop(session_id, None)
 
     # Part 2: Reset has_session if process exited too quickly — it never established a real session

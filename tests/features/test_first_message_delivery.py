@@ -137,7 +137,7 @@ class FakeCliSession:
 
     async def stop(self):
         self.reader.cancel()
-        self.manager.close(self.session_id)
+        await self.manager.close(self.session_id)
         claude_ready.pop(self.session_id, None)
 
 

@@ -1,16 +1,18 @@
-"""Regression tests for Terminal.stop() killing everything the terminal started.
+"""Regression tests for Terminal.stop()/aclose() killing everything the terminal started.
 
 The agent CLI is typed into an interactive shell whose job control puts each
-command in its own process group, so stop() must take down every group under
+command in its own process group, so teardown must take down every group under
 the terminal — not just the shell — or the CLI is orphaned (reparented to init).
+Teardown can take seconds, so the async path must keep the event loop responsive.
 """
 
+import asyncio
 import os
 import subprocess
 import time
 import unittest
 
-from app.terminal.terminal import Terminal
+from app.terminal.terminal import Terminal, _process_groups
 
 
 def _descendants(root_pid: int) -> dict[int, str]:
@@ -71,41 +73,93 @@ class TestTerminalStop(unittest.IsolatedAsyncioTestCase):
         )
         return list(started())
 
-    async def test_stop_kills_foreground_and_background_children(self):
+    def assert_all_gone(self, pids: list[int]) -> None:
+        for pid in pids:
+            self.assertTrue(
+                _wait_until(lambda: not _is_running(pid), 2.0), f"{pid} survived teardown"
+            )
+
+    async def test_aclose_kills_foreground_and_background_children(self):
         pids = await self._run("sleep 4321 & sleep 4322", "sleep 4321", "sleep 4322")
         shell_pid = self.terminal.pid
 
+        await self.terminal.aclose()
+
+        self.assert_all_gone([shell_pid, *pids])
+
+    async def test_blocking_stop_kills_children(self):
+        pids = await self._run("sleep 4325 &", "sleep 4325")
+
         self.terminal.stop()
 
-        for pid in [shell_pid, *pids]:
-            self.assertTrue(
-                _wait_until(lambda: not _is_running(pid), 2.0), f"{pid} survived stop()"
-            )
+        self.assert_all_gone(pids)
 
-    async def test_stop_sigkills_children_that_ignore_sigterm(self):
+    async def test_aclose_sigkills_children_that_ignore_sigterm(self):
         self.terminal.stop_grace = 0.2
         # Ignored signals are inherited across exec, so sleep ignores TERM and HUP too.
-        (pid,) = await self._run("trap '' TERM HUP; sleep 4323", "sleep 4323")
+        pids = await self._run("trap '' TERM HUP; sleep 4323", "sleep 4323")
 
-        self.terminal.stop()
+        await self.terminal.aclose()
 
-        self.assertTrue(
-            _wait_until(lambda: not _is_running(pid), 2.0), "SIGTERM-immune child survived"
+        self.assert_all_gone(pids)
+
+    async def test_event_loop_stays_responsive_during_aclose(self):
+        # A SIGTERM-immune child forces the full grace period, so teardown takes
+        # about a second — the loop must keep running other tasks throughout.
+        self.terminal.stop_grace = 1.0
+        pids = await self._run("trap '' TERM HUP; sleep 4326", "sleep 4326")
+
+        ticks: list[float] = []
+
+        async def ticker():
+            while True:
+                ticks.append(time.monotonic())
+                await asyncio.sleep(0.01)
+
+        task = asyncio.create_task(ticker())
+        await asyncio.sleep(0.05)
+        started = time.monotonic()
+        await self.terminal.aclose()
+        elapsed = time.monotonic() - started
+        task.cancel()
+
+        during = [t for t in ticks if t >= started]
+        gaps = [b - a for a, b in zip(during, during[1:])]
+        self.assertGreaterEqual(elapsed, 0.9, "teardown should have waited out the grace period")
+        self.assertGreater(len(during), 30)
+        self.assertLess(max(gaps), 0.2, "event loop was blocked during aclose()")
+        self.assert_all_gone(pids)
+
+    async def test_concurrent_teardown_is_safe(self):
+        pids = await self._run("sleep 4327 &", "sleep 4327")
+
+        results = await asyncio.gather(
+            self.terminal.aclose(),
+            self.terminal.aclose(),
+            asyncio.to_thread(self.terminal.stop),
+            return_exceptions=True,
         )
 
-    async def test_stop_after_shell_exited_is_safe(self):
+        self.assertEqual(results, [None, None, None])
+        self.assertIsNone(self.terminal.master_fd)
+        self.assertFalse(self.terminal.is_alive())
+        self.assert_all_gone(pids)
+
+    async def test_teardown_after_shell_exited_is_safe(self):
         await self.terminal.write(b"exit\n")
         self.assertTrue(_wait_until(lambda: not self.terminal.is_alive()))
 
-        self.terminal.stop()
+        await self.terminal.aclose()
+        await self.terminal.aclose()
         self.terminal.stop()
 
         self.assertFalse(self.terminal.is_alive())
 
-    async def test_stop_leaves_the_calling_process_group_alone(self):
+    async def test_teardown_leaves_the_calling_process_group_alone(self):
         await self._run("sleep 4324 &", "sleep 4324")
 
-        self.assertNotIn(os.getpgrp(), self.terminal._process_groups())
-        self.terminal.stop()
+        groups = _process_groups(self.terminal.pid, self.terminal.master_fd)
+        self.assertNotIn(os.getpgrp(), groups)
+        await self.terminal.aclose()
 
         os.killpg(os.getpgrp(), 0)
