@@ -28,5 +28,6 @@ export function useAgentTemplates() {
         agentTemplates: computed(() => query.data.value ?? []),
         setAgentTemplates,
         isLoading: query.isLoading,
+        refetch: query.refetch,
     }
 }
