@@ -56,15 +56,15 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
             @click="open = !open"
         >
             <div class="w-6 h-6 rounded-md bg-violet-600 flex items-center justify-center text-[12px] font-semibold text-white shrink-0">
-                {{ (current?.name[0] ?? 'P').toUpperCase() }}
+                {{ (current?.name[0] ?? 'A').toUpperCase() }}
             </div>
             <div class="flex-1 min-w-0">
-                <div class="text-zinc-900 text-[12.5px] font-semibold truncate leading-tight">
-                    {{ current?.name ?? 'Personal Workspace' }}
+                <div data-testid="workspace-title" class="text-zinc-900 text-[12.5px] font-semibold truncate leading-tight">
+                    {{ current?.name ?? 'All Projects' }}
                 </div>
                 <!-- No project count: the projects query is paginated, so its length is not a total. -->
                 <div data-testid="workspace-subtitle" class="text-zinc-500 text-[11px] truncate leading-tight">
-                    {{ current ? 'Workspace' : 'All projects' }}
+                    {{ current ? 'Workspace' : 'All workspaces' }}
                 </div>
             </div>
             <Icon name="chevrons-up-down" :size="12" class="shrink-0 text-zinc-400" />

@@ -30,10 +30,13 @@ beforeEach(() => {
     vi.stubGlobal('fetch', fetchMock)
 })
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+    vi.unstubAllGlobals()
+    document.body.innerHTML = ''
+})
 
 async function mountTab() {
-    const w = mount(TemplatesTab, { global: { plugins: [createPinia(), PiniaColada] } })
+    const w = mount(TemplatesTab, { attachTo: document.body, global: { plugins: [createPinia(), PiniaColada] } })
     await flushPromises()
     return w
 }
@@ -101,9 +104,30 @@ describe('TemplatesTab', () => {
 
         await w.get('[data-template="1"]').trigger('click')
         await buttonByText(w, 'Delete').trigger('click')
+        document.querySelector<HTMLElement>('[data-testid="confirm-delete-template"]')!.click()
         await flushPromises()
 
         expect(fetchMock).toHaveBeenCalledWith('/api/agent-templates/1', { method: 'DELETE' })
         expect(w.find('[data-template="1"]').exists()).toBe(false)
+        expect(document.querySelector('[role="dialog"]')).toBeNull()
+        w.unmount()
+    })
+
+    it('asks for confirmation before deleting and keeps the template on cancel', async () => {
+        const w = await mountTab()
+        await w.get('[data-template="1"]').trigger('click')
+        await buttonByText(w, 'Delete').trigger('click')
+
+        const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!
+        expect(dialog.textContent).toContain('Delete Engineer?')
+        expect(fetchMock).not.toHaveBeenCalledWith('/api/agent-templates/1', { method: 'DELETE' })
+
+        ;[...dialog.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Cancel')!.click()
+        await flushPromises()
+
+        expect(document.querySelector('[role="dialog"]')).toBeNull()
+        expect(fetchMock).not.toHaveBeenCalledWith('/api/agent-templates/1', { method: 'DELETE' })
+        expect(w.find('[data-template="1"]').exists()).toBe(true)
+        w.unmount()
     })
 })

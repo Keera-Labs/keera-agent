@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { usePage } from '@inertiajs/vue3'
 import { computed, reactive, ref } from 'vue'
+import Modal from '@/components/ui/Modal.vue'
 import { cancelBtnClass, flagRowClass, inputClass, labelClass, submitBtnClass, toggleClass } from '@/components/ui/styles'
 import { useAgentTemplates } from '@/queries/agentTemplatesQuery'
 import { color } from '@/tokens'
@@ -132,6 +133,11 @@ async function deleteTemplate() {
     setAgentTemplates(templates.value.filter(t => t.id !== tpl.id))
     selected.value = null
     isNew.value = false
+}
+
+async function confirmDelete(close: () => void) {
+    await deleteTemplate()
+    close()
 }
 </script>
 
@@ -284,9 +290,36 @@ async function deleteTemplate() {
                 </div>
             </div>
             <div class="py-3 px-6 border-t border-stroke flex gap-2 justify-end shrink-0">
-                <button v-if="canDelete" type="button" :class="[cancelBtnClass, 'text-danger border-danger']" @click="deleteTemplate">
-                    Delete
-                </button>
+                <Modal v-if="canDelete" aria-label="Delete template">
+                    <template #trigger>
+                        <button type="button" :class="[cancelBtnClass, 'text-danger border-danger']">Delete</button>
+                    </template>
+                    <template #default="{ close }">
+                        <h2 class="m-0 text-zinc-900 text-[15px] font-semibold">Delete Template</h2>
+                        <p class="m-0 text-zinc-700 text-[13px] leading-normal">
+                            Delete
+                            <span class="text-zinc-900 font-mono text-[12px]">{{ selected?.name }}</span>?
+                            This can’t be undone.
+                        </p>
+                        <div class="flex gap-2 justify-end">
+                            <button
+                                type="button"
+                                class="bg-transparent border border-stroke rounded text-zinc-700 text-[12px] py-1.5 px-3.5 cursor-pointer"
+                                @click="close"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                data-testid="confirm-delete-template"
+                                class="bg-[#da3633] border border-danger rounded text-white text-[12px] py-1.5 px-3.5 cursor-pointer"
+                                @click="confirmDelete(close)"
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </template>
+                </Modal>
                 <button
                     type="button"
                     :disabled="saving"

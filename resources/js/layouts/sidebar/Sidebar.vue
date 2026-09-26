@@ -28,9 +28,16 @@ const { currentWorkspaceId } = storeToRefs(useWorkspaceStore())
 const isSettingsPage = computed(() => page.component.startsWith('settings/'))
 const isTasksPage = computed(() => page.component === 'Tasks')
 const isConfigPage = computed(() => page.component === 'Configurations')
-const activeView = computed<ProjectView>(() =>
-    isTasksPage.value ? 'tasks' : isConfigPage.value ? 'commands' : projectView.value,
+// A project's agents view renders as "Home" (no agents yet) or "agents/*".
+const isAgentsPage = computed(() =>
+    !!activeProject.value && (page.component === 'Home' || page.component.startsWith('agents/')),
 )
+// null on pages outside a project (dashboard, settings, broadcasting): no nav item is current.
+const activeView = computed<ProjectView | null>(() => {
+    if (isTasksPage.value) return 'tasks'
+    if (isConfigPage.value) return 'commands'
+    return isAgentsPage.value ? projectView.value : null
+})
 
 function changeView(view: ProjectView) {
     const project = activeProject.value
@@ -38,7 +45,7 @@ function changeView(view: ProjectView) {
     if (view === 'tasks') { router.visit(`/${project.slug}/tasks`); return }
     if (view === 'commands') { router.visit(`/${project.slug}/configurations`); return }
     projectView.value = 'agents'
-    if (isTasksPage.value || isConfigPage.value) router.visit(`/${project.slug}`)
+    if (!isAgentsPage.value) router.visit(`/${project.slug}`)
 }
 
 const navClass = (active: boolean) => [
