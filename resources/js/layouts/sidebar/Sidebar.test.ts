@@ -124,10 +124,11 @@ describe('Sidebar', () => {
         await flushPromises()
 
         const items = w.findAll('[data-testid="project-item"]')
-        expect(items[0].classes()).toContain('bg-[#EEF2FF]')
-        expect(items[1].classes()).not.toContain('bg-[#EEF2FF]')
-        expect(items[1].find('.bg-success').exists()).toBe(true)
-        expect(w.text()).toContain('AI Coding Manager')
+        expect(items[0].attributes('aria-current')).toBe('page')
+        expect(items[0].text()).toContain('/tmp/p-10')
+        expect(items[1].attributes('aria-current')).toBeUndefined()
+        expect(items[1].get('[data-testid="project-status"]').attributes('data-status')).toBe('done')
+        expect(items[2].get('[data-testid="project-status"]').attributes('data-status')).toBe('idle')
     })
 
     it('confirms before deleting a workspace and falls back to "All Projects"', async () => {
@@ -154,7 +155,7 @@ describe('Sidebar', () => {
         const w = await mountSidebar()
 
         await w.get('[data-testid="workspace-picker"]').trigger('click')
-        await w.get('[aria-label="New workspace"]').trigger('click')
+        await w.get('[data-testid="workspace-menu"] [aria-label="New workspace"]').trigger('click')
         expect(w.get('[data-testid="workspace-menu"]').isVisible()).toBe(false)
 
         const input = document.querySelector<HTMLInputElement>('input[name="name"]')!
@@ -219,6 +220,35 @@ describe('Sidebar', () => {
         expect(calls).toContainEqual({ url: '/api/projects/10', method: 'DELETE' })
         expect(document.querySelector('[role="dialog"]')).toBeNull()
         expect(w.find('[aria-label="Edit project"]').exists()).toBe(false)
+    })
+
+    it('creates a workspace from the Workspaces header', async () => {
+        const w = await mountSidebar()
+
+        await w.get('[title="New workspace"]').trigger('click')
+
+        expect(document.querySelector('form')!.textContent).toContain('New Workspace')
+        expect(w.get('[data-testid="workspace-menu"]').isVisible()).toBe(false)
+    })
+
+    it('opens the project search palette from the Search button', async () => {
+        const w = await mountSidebar()
+
+        await w.get('[data-testid="sidebar-search"]').trigger('click')
+        await flushPromises()
+
+        expect(useAppLayoutStore().showProjectSearch).toBe(true)
+        expect(document.querySelector('[aria-label="Search projects"]')).not.toBeNull()
+    })
+
+    it('marks Settings as current on the settings page', async () => {
+        page.component = 'settings/Index'
+        const w = await mountSidebar()
+
+        const settings = w.get('[title="Settings"]')
+        expect(settings.attributes('aria-current')).toBe('page')
+        await settings.trigger('click')
+        expect(router.visit).toHaveBeenCalledWith('/settings')
     })
 
     it('opens the project search palette from the store', async () => {
