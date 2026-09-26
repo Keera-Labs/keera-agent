@@ -37,6 +37,7 @@ class FakeModel {
         return { dispose: () => { this.listeners = this.listeners.filter(l => l !== listener) } }
     }
     dispose() { this.disposed = true }
+    isDisposed() { return this.disposed }
 }
 
 const models = vi.hoisted(() => new Map<string, unknown>())
@@ -179,6 +180,46 @@ describe('useEditorStore', () => {
     })
 
     describe('closing', () => {
+        it('closes a deleted project\'s tabs without asking and stops the unload warning', async () => {
+            const first = await openFile('a.ts')
+            const second = await openFile('b.ts')
+            first.edit('unsaved')
+            fetchMock.mockImplementationOnce(() => jsonResponse(415, { error: 'File is not UTF-8 text' }))
+            await store.open(1, 'logo.png')
+            const confirm = vi.fn()
+            vi.stubGlobal('confirm', confirm)
+
+            store.closeProject(1)
+
+            expect(confirm).not.toHaveBeenCalled()
+            expect(first.disposed && second.disposed).toBe(true)
+            expect(store.tabsByProject[1]).toBeUndefined()
+            expect(store.activeTab).toBeNull()
+            expect(store.openError).toBeNull()
+            expect(store.hasDirtyTabs()).toBe(false)
+            const event = new Event('beforeunload', { cancelable: true })
+            window.dispatchEvent(event)
+            expect(event.defaultPrevented).toBe(false)
+        })
+
+        it('leaves a closed tab\'s disposed model alone when its save finishes afterwards', async () => {
+            const model = await openFile()
+            model.edit('two')
+            let respond!: (value: unknown) => void
+            fetchMock.mockImplementationOnce(() => new Promise(resolve => { respond = resolve }))
+            const saving = store.save(1, 'src/app.ts')
+            const tab = store.activeTab!
+            vi.stubGlobal('confirm', vi.fn(() => true))
+
+            store.close(1, 'src/app.ts')
+            const getVersion = vi.spyOn(model, 'getAlternativeVersionId')
+            respond({ ok: true, status: 200, json: () => Promise.resolve({ path: 'src/app.ts', etag: 'e2', size: 3 }) })
+            await saving
+
+            expect(getVersion).not.toHaveBeenCalled()
+            expect(tab.etag).toBe('e1')
+        })
+
         it('asks before discarding unsaved changes and keeps the tab when declined', async () => {
             const model = await openFile()
             model.edit('two')

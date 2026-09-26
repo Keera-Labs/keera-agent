@@ -3,7 +3,7 @@ import { useQueryCache } from '@pinia/colada'
 import { defineStore, storeToRefs } from 'pinia'
 import { computed, onScopeDispose, reactive, ref } from 'vue'
 import { loadMonaco, modelUri, type TextModel } from '@/editor/monaco'
-import { FileContentError, fileContentQuery, saveFileContent, type FileContent } from '@/queries/fileContentQuery'
+import { FileContentError, fileContentQuery, saveFileContent, type FileContent, type SavedFile } from '@/queries/fileContentQuery'
 import { useProjectStore } from '@/stores/projectStore'
 
 export type EditorTab = {
@@ -48,6 +48,11 @@ export const useEditorStore = defineStore('editor', () => {
 
     function findTab(projectId: number, path: string): EditorTab | null {
         return tabsByProject[projectId]?.find(t => t.path === path) ?? null
+    }
+
+    /** False once the buffer's tab was closed, e.g. while a request for it was in flight. */
+    function isLive(buffer: Buffer): boolean {
+        return !buffer.model.isDisposed()
     }
 
     function modelFor(tab: EditorTab): TextModel | null {
@@ -120,20 +125,27 @@ export const useEditorStore = defineStore('editor', () => {
         const { model } = buffer
         const version = model.getAlternativeVersionId()
         tab.saving = true
+        let outcome: { saved: SavedFile } | { error: unknown }
         try {
-            const saved = await saveFileContent(projectId, path, model.getValue(), tab.etag)
-            tab.etag = saved.etag
-            buffer.savedVersion = version
-            // Edits typed while the request was in flight keep the tab dirty.
-            tab.dirty = model.getAlternativeVersionId() !== version
-            tab.conflict = false
-            tab.error = null
-        } catch (e) {
-            if (e instanceof FileContentError && e.status === 409) tab.conflict = true
-            else tab.error = e instanceof Error ? e.message : String(e)
-        } finally {
-            tab.saving = false
+            outcome = { saved: await saveFileContent(projectId, path, model.getValue(), tab.etag) }
+        } catch (error) {
+            outcome = { error }
         }
+        tab.saving = false
+        if (!isLive(buffer)) return
+
+        if ('error' in outcome) {
+            const { error } = outcome
+            if (error instanceof FileContentError && error.status === 409) tab.conflict = true
+            else tab.error = error instanceof Error ? error.message : String(error)
+            return
+        }
+        tab.etag = outcome.saved.etag
+        buffer.savedVersion = version
+        // Edits typed while the request was in flight keep the tab dirty.
+        tab.dirty = model.getAlternativeVersionId() !== version
+        tab.conflict = false
+        tab.error = null
     }
 
     async function resolveConflict(projectId: number, path: string, choice: 'reload' | 'overwrite') {
@@ -142,6 +154,7 @@ export const useEditorStore = defineStore('editor', () => {
         if (!tab || !buffer) return
         try {
             const file = await readFile(projectId, path)
+            if (!isLive(buffer)) return
             tab.etag = file.etag
             tab.conflict = false
             tab.error = null
@@ -175,6 +188,18 @@ export const useEditorStore = defineStore('editor', () => {
             activate(projectId, neighbour?.path ?? null)
         }
         return true
+    }
+
+    /** Drops a deleted project's tabs without asking: there is nothing left to save them to. */
+    function closeProject(projectId: number) {
+        for (const tab of tabsByProject[projectId] ?? []) {
+            const key = bufferKey(projectId, tab.path)
+            buffers.get(key)?.dispose()
+            buffers.delete(key)
+        }
+        delete tabsByProject[projectId]
+        if (active.value?.projectId === projectId) active.value = null
+        if (openError.value?.projectId === projectId) openError.value = null
     }
 
     function warnOnUnload(e: BeforeUnloadEvent) {
@@ -213,5 +238,6 @@ export const useEditorStore = defineStore('editor', () => {
         save,
         resolveConflict,
         close,
+        closeProject,
     }
 })

@@ -5,6 +5,7 @@ import { computed } from "vue"
 import type { Project } from "@/types/type"
 import type { ProjectAgent } from "@/queries/agentQuery"
 import { disposeProjectSessions } from "@/composables/useTerminalSessions"
+import { useEditorStore } from "@/stores/editorStore"
 import { useProjectStore } from "@/stores/projectStore"
 import { useWorkspaceStore } from "@/stores/workspaceStore"
 
@@ -82,6 +83,8 @@ export default function useProjects() {
             return projectId
         },
         onSuccess: projectId => {
+            // Before the visit below, so the deleted project's unsaved files don't prompt to leave it.
+            useEditorStore().closeProject(projectId)
             invalidate()
             const project = projects.value.find(p => p.id === projectId)
             if (project && page.props.project === project.slug) router.visit("/")
