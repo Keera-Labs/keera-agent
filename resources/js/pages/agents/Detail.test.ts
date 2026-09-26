@@ -61,6 +61,14 @@ describe('Detail', () => {
         expect(wrapper.find('[data-testid="agent-terminal"]').exists()).toBe(true)
     })
 
+    it('pads the xterm rather than its slot, since FitAddon counts slot padding as space', async () => {
+        const { wrapper } = await mountDetail(11)
+
+        const slot = wrapper.get('[data-testid="agent-terminal"]')
+        expect(slot.classes()).toContain('terminal-host')
+        expect(slot.classes().some(c => /^p[xytrbl]?-/.test(c))).toBe(false)
+    })
+
     it('shows a spinner in the header while the agent works', async () => {
         const { wrapper } = await mountDetail(11, { status: 'running' })
 

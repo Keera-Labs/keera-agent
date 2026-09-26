@@ -269,7 +269,7 @@ async function handleDelete(c: Command) {
                         v-for="c in commands"
                         :key="c.id"
                         :ref="el => setContainer(c.id, el)"
-                        :class="['absolute inset-0 p-2 box-border', c.id === outputCmd.id ? 'block' : 'hidden']"
+                        :class="['absolute inset-0 terminal-host', c.id === outputCmd.id ? 'block' : 'hidden']"
                         @click="sessions.get(c.id)?.term.focus()"
                     />
                 </div>

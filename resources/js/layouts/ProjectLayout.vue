@@ -65,7 +65,7 @@ onBeforeUnmount(() => {
         <div class="flex-1 flex overflow-hidden">
             <!-- Always mounted (display-toggled) so the terminal slot never unmounts under a live xterm. -->
             <div :class="['flex-1 overflow-hidden relative', showPmTerminal ? 'flex' : 'hidden']">
-                <div ref="terminalSlot" data-testid="pm-terminal" class="flex-1 overflow-hidden p-2 box-border bg-[#f6f8fa]" />
+                <div ref="terminalSlot" data-testid="pm-terminal" class="flex-1 overflow-hidden terminal-host bg-[#f6f8fa]" />
                 <div class="absolute top-2 right-3 z-10 flex items-center gap-0.5">
                     <button
                         type="button"

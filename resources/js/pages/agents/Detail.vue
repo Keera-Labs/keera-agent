@@ -185,7 +185,7 @@ function onDrop(e: DragEvent) {
                     </div>
                 </div>
 
-                <div ref="terminalSlot" data-testid="agent-terminal" class="flex-1 relative overflow-hidden bg-canvas p-2 box-border" />
+                <div ref="terminalSlot" data-testid="agent-terminal" class="flex-1 relative overflow-hidden bg-canvas terminal-host" />
             </div>
         </div>
     </template>
