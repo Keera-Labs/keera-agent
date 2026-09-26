@@ -17,13 +17,14 @@ from app.providers.plugin_provider import PluginProvider
 from app.providers.terminal_provider import TerminalProvider
 from config.database import DatabaseConfig
 from config.fastapi import FastAPIConfig
+from config.logging import LoggingConfig
 from config.storage import StorageConfig
 from config.vite import ViteConfig
 
 app = Application(
     base_path=Path(__file__).parent.parent,
     providers=[
-        LogProvider,
+        (LogProvider, LoggingConfig),
         (DatabaseProvider, DatabaseConfig),
         (FastAPIProvider, FastAPIConfig),
         McpProvider,
