@@ -1,5 +1,6 @@
 import asyncio
 import codecs
+import contextlib
 import fcntl
 import os
 import pty as _pty
@@ -210,6 +211,51 @@ class Terminal:
         self.startup_prompt: str | None = None
         self._chars_since_dialog = 0
         self._plain = _PlainText()
+        # asyncio keeps one reader callback per fd, so the terminal owns the only
+        # reader and fans each chunk out; a bridge registering its own would take
+        # the output from every other bridge, and unregistering it would starve them.
+        self._subscribers: list[asyncio.Queue[bytes]] = []
+        self._reader: tuple[asyncio.AbstractEventLoop, int] | None = None
+
+    @property
+    def size(self) -> tuple[int, int]:
+        return self._cols, self._rows
+
+    def subscribe(self) -> "asyncio.Queue[bytes]":
+        """A queue that receives every output chunk until it is unsubscribed."""
+        queue: asyncio.Queue[bytes] = asyncio.Queue()
+        self._subscribers.append(queue)
+        if self._reader is None and self.master_fd is not None:
+            loop = asyncio.get_running_loop()
+            loop.add_reader(self.master_fd, self._on_readable)
+            self._reader = (loop, self.master_fd)
+        return queue
+
+    def unsubscribe(self, queue: "asyncio.Queue[bytes]") -> None:
+        if queue in self._subscribers:
+            self._subscribers.remove(queue)
+        if not self._subscribers:
+            self._stop_reading()
+
+    def _on_readable(self) -> None:
+        if self._reader is None:
+            return
+        try:
+            data = os.read(self._reader[1], 4096)
+        except OSError:
+            return
+        if not data:
+            return
+        self.mark_output(data)
+        for queue in self._subscribers:
+            queue.put_nowait(data)
+
+    def _stop_reading(self) -> None:
+        reader, self._reader = self._reader, None
+        if reader is not None:
+            loop, fd = reader
+            with contextlib.suppress(Exception):
+                loop.remove_reader(fd)
 
     def start(self) -> None:
         master_fd, slave_fd = _pty.openpty()
@@ -240,11 +286,14 @@ class Terminal:
 
     def stop(self) -> None:
         """Blocking teardown (can take seconds); on the event loop use aclose()."""
+        self._stop_reading()
         _shutdown(*self._detach(), self.stop_grace)
 
     async def aclose(self) -> None:
         # Detach on the loop thread so writers and readers see a stopped terminal at
-        # once, then do the slow signalling and reaping off the loop.
+        # once, then do the slow signalling and reaping off the loop. The reader goes
+        # first so the fd is never closed while still registered with the loop.
+        self._stop_reading()
         proc, master_fd = self._detach()
         if proc is not None or master_fd is not None:
             await asyncio.to_thread(_shutdown, proc, master_fd, self.stop_grace)
@@ -253,8 +302,8 @@ class Terminal:
         if self.master_fd is None or not data:
             return
 
-        # The master fd is non-blocking (registered with loop.add_reader by the
-        # websocket bridge), so a single os.write() can (a) write fewer bytes
+        # The master fd is non-blocking (registered with loop.add_reader by
+        # subscribe()), so a single os.write() can (a) write fewer bytes
         # than requested — silently dropping the tail — or (b) raise EAGAIN when
         # the PTY buffer is full. Drain the whole payload, waiting for the fd to
         # become writable between chunks. The lock serializes concurrent writers
@@ -283,7 +332,7 @@ class Terminal:
                 return
 
     def mark_output(self, data: bytes) -> None:
-        """Record PTY output; the reader bridge calls this per chunk."""
+        """Record PTY output; the terminal's reader calls this per chunk."""
         self._output_seq += 1
         if not self._booting:
             return
