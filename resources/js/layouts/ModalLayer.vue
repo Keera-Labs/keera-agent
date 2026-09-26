@@ -18,17 +18,12 @@ const {
     showGlobalSettings,
     showDefaultPermissions,
     showProjectSearch,
-    migratingModal,
     systemPromptProject,
     permissionsProject,
 } = storeToRefs(layout)
 const workspaceStore = useWorkspaceStore()
 const queryCache = useQueryCache()
 const searchProjects = useAllProjects(showProjectSearch)
-
-function closePending() {
-    migratingModal.value = null
-}
 
 function onWorkspaceDeleted(workspaceId: number) {
     // The deleted workspace can't stay selected: its project filter would match nothing.
@@ -63,19 +58,10 @@ function refreshProjects() {
         :project="permissionsProject"
         @close="permissionsProject = null"
     />
-
     <ProjectSearchModal
         v-if="showProjectSearch"
         :projects="searchProjects"
         @close="showProjectSearch = false"
         @select="project => router.visit(`/${project.slug}`)"
     />
-    <div
-        v-if="migratingModal"
-        role="status"
-        class="fixed bottom-4 right-4 z-50 flex items-center gap-3 bg-modal border border-stroke rounded-lg px-4 py-3 text-[13px] text-zinc-500 shadow-lg"
-    >
-        <span><span class="font-semibold text-zinc-900">{{ migratingModal }}</span> is being migrated to Vue.</span>
-        <button type="button" class="cursor-pointer text-zinc-900 font-semibold" @click="closePending">Dismiss</button>
-    </div>
 </template>
