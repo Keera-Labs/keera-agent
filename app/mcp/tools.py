@@ -515,14 +515,14 @@ class SpawnAgentInput(BaseModel):
     )
     provider: Optional[Literal["codex", "claude"]] = Field(
         default=None,
-        description="Agent backend to run (codex or claude). Omit to use the existing Codex default.",
+        description="Agent backend to run (codex or claude). Omit to use the configured default.",
     )
     complexity: str = Field(
         pattern="^(easy|medium|hard)$",
         description=(
             "Task complexity (easy|medium|hard). REQUIRED — it selects the model "
-            "for the chosen provider automatically: codex uses "
-            "gpt-5.6-luna/gpt-5.6-terra/gpt-5.6-sol and claude uses "
+            "configured for that tier in Settings > Providers; without a saved choice "
+            "codex uses gpt-5.6-luna/gpt-5.6-terra/gpt-5.6-sol and claude uses "
             "claude-sonnet-5/claude-opus-5/claude-fable-5."
         ),
     )
@@ -541,8 +541,9 @@ class SpawnAgentTool(Tool):
         "Create a new agent in the current project and optionally start it with an initial task. "
         "The new agent will appear in the sidebar immediately. "
         "Use this to delegate work to specialist agents (software_engineer, qa, reviewer, pm). "
-        "Provider defaults to codex; complexity selects that provider's model tier: "
-        "easy/medium/hard maps to gpt-5.6-luna/gpt-5.6-terra/gpt-5.6-sol for codex "
+        "Provider defaults to the configured default provider; complexity selects the model configured for that "
+        "tier in Settings > Providers, defaulting to "
+        "gpt-5.6-luna/gpt-5.6-terra/gpt-5.6-sol for codex "
         "and claude-sonnet-5/claude-opus-5/claude-fable-5 for claude."
     )
 
@@ -599,31 +600,33 @@ class SpawnAgentTool(Tool):
                 f"Error: agent limit ({limit}) reached for project '{project.name}'. Delete an agent first."
             )
 
-        provider = arguments.get("provider") or "codex"
-        from app.ai import providers
-
-        try:
-            providers.get(provider)
-        except ValueError as exc:
-            return Response.text(f"Error: {exc}")
-
         # Build the request outside the try so a validation error (e.g. a missing
         # or invalid complexity) surfaces instead of being swallowed as an
         # "Error:" string — only the limit ValueError from execute() is caught.
         complexity = arguments.get("complexity")
-        request = AgentStoreRequest(
-            name=name,
-            agent_type=arguments.get("agent_type", "software_engineer"),
-            provider=provider,
-            complexity=complexity,
-            description=f"{name} agent",
+        provider = arguments.get("provider")
+        if provider is not None:
+            from app.ai import providers
+
+            try:
+                providers.get(provider)
+            except ValueError as exc:
+                return Response.text(f"Error: {exc}")
+        request_data = {
+            "name": name,
+            "agent_type": arguments.get("agent_type", "software_engineer"),
+            "complexity": complexity,
+            "description": f"{name} agent",
             # system_prompt is intentionally not forwarded: spawned agents
             # always use their role-based default prompt and a caller must
             # not be able to override an agent's role at spawn time.
-            system_prompt=None,
-            task_id=arguments.get("task_id"),
-            orchestrator_id=arguments.get("from_agent_id"),
-        )
+            "system_prompt": None,
+            "task_id": arguments.get("task_id"),
+            "orchestrator_id": arguments.get("from_agent_id"),
+        }
+        if provider is not None:
+            request_data["provider"] = provider
+        request = AgentStoreRequest(**request_data)
         try:
             agent = await AgentCreateAction(project_id=project.id, request=request).execute()
         except ValueError as e:

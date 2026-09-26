@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import type { Project } from "@/types/type"
 import { AppLayoutContext } from "@/layouts/context/AppLayoutContext"
 import { useProjectStore } from "@/stores/projectStore"
+import { useWorkspaceStore } from "@/stores/workspaceStore"
 
 export const PROJECTS_QUERY_KEY = ["projects"] as const
 
@@ -11,8 +12,11 @@ export const PROJECTS_QUERY_KEY = ["projects"] as const
 // the API clamps per_page to this value regardless, so requesting more is pointless.
 const SIDEBAR_PER_PAGE = 10
 
-async function fetchProjects(): Promise<Project[]> {
-    const res = await fetch(`/api/projects?per_page=${SIDEBAR_PER_PAGE}`)
+async function fetchProjects(workspaceId: number | null): Promise<Project[]> {
+    const params = new URLSearchParams({ per_page: String(SIDEBAR_PER_PAGE) })
+    if (workspaceId !== null) params.set("workspace_id", String(workspaceId))
+
+    const res = await fetch(`/api/projects?${params}`)
     if (!res.ok) throw new Error("Failed to fetch projects")
     return res.json()
 }
@@ -21,17 +25,19 @@ export default function useProjects() {
     const queryClient = useQueryClient()
     const props = usePage<{ project?: string; projects?: Project[] }>().props
     const projectName = props.project
+    const workspaceId = useWorkspaceStore(s => s.currentWorkspaceId)
 
     const query = useQuery<Project[]>({
-        queryKey: PROJECTS_QUERY_KEY,
-        queryFn: fetchProjects,
-        initialData: props.projects,
+        queryKey: [...PROJECTS_QUERY_KEY, workspaceId],
+        queryFn: () => fetchProjects(workspaceId),
+        initialData: workspaceId === null ? props.projects : undefined,
         staleTime: 1000 * 30,
     })
     const projects = query.data ?? []
 
     function setActiveProject(slug?: string) {
-        const active = projects.find(p => p.slug === slug) ?? projects[0] ?? null
+        const active = slug ? projects.find(p => p.slug === slug) ?? null : projects[0] ?? null
+        if (slug && !active) return
         if (useProjectStore.getState().activeProject?.id !== active?.id) {
             useProjectStore.getState().setActiveProject(active)
         }

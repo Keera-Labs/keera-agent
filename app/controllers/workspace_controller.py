@@ -7,28 +7,9 @@ from app.models.Workspace import Workspace
 
 async def index(request: Request):
     workspaces = await Workspace.all()
-    result = []
-    for w in workspaces:
-        projects = await Project.where("workspace_id", w.id).get()
-        result.append(
-            {
-                "id": w.id,
-                "name": w.name,
-                "description": w.description,
-                "projects": [
-                    {
-                        "id": p.id,
-                        "name": p.name,
-                        "slug": p.slug,
-                        "path": p.path,
-                        "language": p.language,
-                        "workspace_id": p.workspace_id,
-                    }
-                    for p in projects
-                ],
-            }
-        )
-    return JSONResponse(result)
+    return JSONResponse(
+        [{"id": w.id, "name": w.name, "description": w.description} for w in workspaces]
+    )
 
 
 async def store(request: Request):
@@ -47,7 +28,6 @@ async def store(request: Request):
             "id": workspace.id,
             "name": workspace.name,
             "description": workspace.description,
-            "projects": [],
         },
         status_code=201,
     )

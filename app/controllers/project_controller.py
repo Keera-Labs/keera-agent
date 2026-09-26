@@ -34,10 +34,17 @@ def _int_param(
 async def index(request: Request):
     per_page = _int_param(request, "per_page", PROJECTS_PER_PAGE_MAX, maximum=PROJECTS_PER_PAGE_MAX)
     page = _int_param(request, "page", 1)
+    workspace_id_raw = request.query_params.get("workspace_id")
 
-    # Recently-touched first — updated_at is always set (from insert onward),
-    # so no fallback column is needed here.
-    projects = await Project.order_by_raw("updated_at DESC").paginate(per_page, page)
+    # Recently-touched first, with id making ties deterministic.
+    query = Project.order_by_raw("updated_at DESC, id DESC")
+    if workspace_id_raw is not None:
+        try:
+            query = query.where("workspace_id", int(workspace_id_raw))
+        except ValueError:
+            return JSONResponse({"error": "workspace_id must be an integer"}, status_code=422)
+
+    projects = await query.paginate(per_page, page)
 
     return JSONResponse(
         [

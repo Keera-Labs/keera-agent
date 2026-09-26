@@ -26,11 +26,16 @@ class TestAIProviders(unittest.TestCase):
         )
         self.assertEqual(
             command,
-            "codex --model gpt-5.3-codex --dangerously-bypass-approvals-and-sandbox",
+            "codex --config check_for_update_on_startup=false"
+            " --model gpt-5.3-codex --dangerously-bypass-approvals-and-sandbox",
         )
 
     def test_codex_builds_resume_command(self):
         command = providers.get("codex").build_command(
             ProviderCommand(model="gpt-5.3-codex", continue_session=True, permission_mode="plan")
         )
-        self.assertEqual(command, "codex resume --last --model gpt-5.3-codex --sandbox read-only")
+        self.assertEqual(
+            command,
+            "codex --config check_for_update_on_startup=false"
+            " resume --last --model gpt-5.3-codex --sandbox read-only",
+        )

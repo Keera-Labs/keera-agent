@@ -9,7 +9,7 @@ import { normalizeAgent } from '@/queries/agentQuery'
 import type { AgentTemplate } from '@/types/agent'
 import { AGENT_TYPE_LABELS, AGENT_TYPE_COLORS } from '@/types/agent'
 import type { GlobalSettings } from '@/types/provider'
-import { FALLBACK_PROVIDERS, modelForProviderComplexity, modelsForProvider } from '@/types/provider'
+import { FALLBACK_PROVIDERS, modelForProviderComplexity, modelsForProvider, savedModelForComplexity } from '@/types/provider'
 import { labelClass, inputClass, cancelBtnClass, submitBtnClass, flagRowClass, toggleClass } from '@/components/ui/styles'
 
 /**
@@ -80,7 +80,7 @@ function AddAgentForm({ projectId, onCreated, close, templates, agentCount, maxA
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
 
-    const savedModel = provider === initialProvider ? props.global_settings?.complexity_models?.[complexity as 'easy' | 'medium' | 'hard'] : undefined
+    const savedModel = savedModelForComplexity(props.global_settings, provider, complexity)
     const model = savedModel && modelsForProvider(providers, provider).includes(savedModel)
         ? savedModel
         : modelForProviderComplexity(provider, complexity)

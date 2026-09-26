@@ -1,7 +1,10 @@
 import asyncio
 import re
 
+from app.actions.agent_startup import wait_for_agent_cli
+from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.models.Agent import Agent
+from app.terminal.readiness import mark_booting
 
 _NO_CONV = re.compile(rb"No conversation found to continue", re.IGNORECASE)
 _ANSI = re.compile(rb"\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[^[]")
@@ -29,9 +32,19 @@ def make_claude_session_monitor(
         plain = _ANSI.sub(b"", bytes(buf))
         if not detected and _NO_CONV.search(plain):
             detected = True
+            # Hold relay messages until the restarted CLI is up.
+            ready_event = mark_booting(session_id)
             await Agent.where("id", agent_id).update({"has_session": False})
             asyncio.create_task(
-                _restart(agent_id, terminal, terminal_manager, session_id, build_cmd, after_restart)
+                _restart(
+                    agent_id,
+                    terminal,
+                    terminal_manager,
+                    session_id,
+                    build_cmd,
+                    ready_event,
+                    after_restart,
+                )
             )
         if not detected and not confirmed and len(plain.strip()) > 20:
             confirmed = True
@@ -40,7 +53,9 @@ def make_claude_session_monitor(
     return on_output
 
 
-async def _restart(agent_id, terminal, terminal_manager, session_id, build_cmd, after_restart=None):
+async def _restart(
+    agent_id, terminal, terminal_manager, session_id, build_cmd, ready_event, after_restart=None
+):
     """Wait for the current process to exit, then restart Claude without --continue."""
     for _ in range(10):
         if not terminal.is_alive():
@@ -51,7 +66,9 @@ async def _restart(agent_id, terminal, terminal_manager, session_id, build_cmd, 
     agent = await Agent.find(agent_id)
     if agent:
         await terminal.write(build_cmd(agent).encode().rstrip(b"\r\n") + b"\r")
-        await asyncio.sleep(2.0)
+        await wait_for_agent_cli(terminal, agent_id)
         await Agent.where("id", agent_id).update({"has_session": True})
         if after_restart:
             await after_restart()
+        ready_event.set()
+        await deliver_pending_relay_messages(agent_id)

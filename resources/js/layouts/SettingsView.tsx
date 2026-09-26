@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { router, usePage } from '@inertiajs/react'
 import { color } from '@/tokens'
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '@/types/agent'
-import type { GlobalSettings } from '@/types/provider'
+import type { ComplexityModels, GlobalSettings } from '@/types/provider'
 import { FALLBACK_PROVIDERS, reconcileComplexityModels, modelsForProvider } from '@/types/provider'
 import PluginsTab from './views/PluginsTab'
 
@@ -456,63 +456,56 @@ function DefaultPermissionsTab() {
     )
 }
 
+const COMPLEXITY_LABELS = [
+    ['easy', 'Easy'],
+    ['medium', 'Medium'],
+    ['hard', 'Complex / Hard'],
+] as const
+
+function cleanModels(models: string[] | undefined): string[] {
+    return (models ?? []).map(model => model.trim()).filter(Boolean)
+}
+
 function ProviderModelsTab() {
     const { props } = usePage<{ global_settings?: GlobalSettings }>()
     const providers = props.global_settings?.providers ?? FALLBACK_PROVIDERS
-    const configuredDefaultProvider = props.global_settings?.default_provider
-    const initialProvider = configuredDefaultProvider === 'claude' ? 'claude' : 'codex'
-    const providerModels = modelsForProvider(providers, initialProvider)
     const [models, setModels] = useState<Record<string, string[]>>(() =>
         Object.fromEntries(providers.map(provider => [provider.slug, provider.models]))
     )
-    const [defaultProvider, setDefaultProvider] = useState(initialProvider)
-    const [complexityModels, setComplexityModels] = useState(() =>
-        reconcileComplexityModels(initialProvider, providerModels, props.global_settings?.complexity_models ?? {})
+    const [defaultProvider, setDefaultProvider] = useState(props.global_settings?.default_provider === 'claude' ? 'claude' : 'codex')
+    const [enforceDefaultProvider, setEnforceDefaultProvider] = useState(
+        props.global_settings?.enforce_default_provider ?? false
+    )
+    const [complexityModels, setComplexityModels] = useState<Record<string, Partial<ComplexityModels>>>(
+        () => props.global_settings?.complexity_models ?? {}
     )
     const [saving, setSaving] = useState(false)
     const [saved, setSaved] = useState(false)
     const [error, setError] = useState('')
 
-    const selectedProviderModels = models[defaultProvider] ?? []
-
-    useEffect(() => {
-        setComplexityModels(current => {
-            const next = reconcileComplexityModels(defaultProvider, selectedProviderModels, current)
-            return Object.keys(next).every(key => next[key as keyof typeof next] === current[key as keyof typeof current])
-                ? current
-                : next
-        })
-    }, [defaultProvider, selectedProviderModels])
+    // Re-resolved on every render so a tier never points at a model that was just removed from the list.
+    const resolvedComplexityModels = (slug: string) =>
+        reconcileComplexityModels(slug, cleanModels(models[slug]), complexityModels[slug] ?? {})
 
     async function save() {
         setSaving(true); setSaved(false); setError('')
-        const providerModels = Object.fromEntries(
-            providers.map(provider => [
-                provider.slug,
-                (models[provider.slug] ?? []).map(model => model.trim()).filter(Boolean),
-            ])
-        )
-        const resolvedComplexityModels = reconcileComplexityModels(
-            defaultProvider,
-            providerModels[defaultProvider] ?? [],
-            complexityModels,
-        )
-        setComplexityModels(resolvedComplexityModels)
         try {
             const response = await fetch('/api/global-settings', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    provider_models: providerModels,
+                    provider_models: Object.fromEntries(providers.map(provider => [provider.slug, cleanModels(models[provider.slug])])),
                     default_provider: defaultProvider,
-                    complexity_models: resolvedComplexityModels,
+                    enforce_default_provider: enforceDefaultProvider,
+                    complexity_models: Object.fromEntries(providers.map(provider => [provider.slug, resolvedComplexityModels(provider.slug)])),
                 }),
             })
             const data = await response.json()
             if (!response.ok) { setError(data.error ?? 'Save failed'); return }
             setModels(data.provider_models)
-            setDefaultProvider(data.default_provider ?? defaultProvider)
-            setComplexityModels(data.complexity_models ?? complexityModels)
+            setDefaultProvider(data.default_provider)
+            setEnforceDefaultProvider(data.enforce_default_provider)
+            setComplexityModels(data.complexity_models)
             setSaved(true)
             router.reload({ only: ['global_settings'] })
         } catch { setError('Network error') }
@@ -525,71 +518,90 @@ function ProviderModelsTab() {
                 <div>
                     <h2 className="m-0 text-zinc-900 text-[15px] font-semibold">Provider settings</h2>
                     <p className="mt-1 mb-0 text-zinc-500 text-[12px]">
-                        Choose the default provider and model used for each task complexity.
+                        Choose the default provider, each provider's models, and the model used for each task complexity.
                     </p>
                 </div>
                 {error && <span className="text-danger text-[12px]">{error}</span>}
                 <section className="border border-stroke rounded-md bg-canvas p-4 flex flex-col gap-3">
                     <label className="flex flex-col gap-1.5 max-w-[320px]">
                         <span className={labelClass}>Default provider</span>
-                        <select
-                            value={defaultProvider}
-                            onChange={event => {
-                                const provider = event.target.value
-                                setDefaultProvider(provider)
-                                setComplexityModels(current => reconcileComplexityModels(provider, models[provider] ?? [], current))
-                            }}
-                            className={inputClass}
-                        >
-                            <option value="codex">Codex</option>
-                            <option value="claude">Claude</option>
+                        <select value={defaultProvider} onChange={event => setDefaultProvider(event.target.value)} className={inputClass}>
+                            {providers.map(provider => (
+                                <option key={provider.slug} value={provider.slug}>{provider.name}</option>
+                            ))}
                         </select>
                     </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        {([
-                            ['easy', 'Easy'],
-                            ['medium', 'Medium'],
-                            ['hard', 'Complex / Hard'],
-                        ] as const).map(([complexity, label]) => (
-                            <label key={complexity} className="flex flex-col gap-1.5 min-w-0">
-                                <span className={labelClass}>{label}</span>
-                                <select
-                                    value={complexityModels[complexity]}
-                                    onChange={event => setComplexityModels(current => ({ ...current, [complexity]: event.target.value }))}
-                                    className={`${inputClass} w-full`}
-                                >
-                                    {selectedProviderModels.map(model => (
-                                        <option key={model} value={model}>{model}</option>
-                                    ))}
-                                </select>
-                            </label>
-                        ))}
+                    <div
+                        className={flagRowClass}
+                        onClick={() => setEnforceDefaultProvider(current => !current)}
+                    >
+                        <div>
+                            <div className="text-[12px] font-medium text-zinc-700">Enforce default provider</div>
+                            <div className="text-[10px] text-zinc-400">New agents must use the configured default provider.</div>
+                        </div>
+                        <button
+                            type="button"
+                            aria-label="Enforce default provider"
+                            aria-pressed={enforceDefaultProvider}
+                            className={toggleClass(enforceDefaultProvider)}
+                            onClick={event => {
+                                event.stopPropagation()
+                                setEnforceDefaultProvider(current => !current)
+                            }}
+                        >
+                            <span className={`absolute top-[3px] w-3 h-3 rounded-full bg-white transition-[left] duration-150 ${enforceDefaultProvider ? 'left-[17px]' : 'left-[3px]'}`} />
+                        </button>
                     </div>
                 </section>
-                {providers.map(provider => (
-                    <section key={provider.slug} className="border border-stroke rounded-md bg-canvas p-4 flex flex-col gap-2.5">
-                        <div className="flex items-center justify-between">
-                            <span className="text-zinc-900 text-[13px] font-semibold">{provider.name}</span>
-                            <span className="font-mono text-zinc-400 text-[10px]">{provider.slug}</span>
-                        </div>
-                        {(models[provider.slug] ?? []).map((model, index) => (
-                            <div key={`${provider.slug}-${index}`} className="flex gap-2">
-                                <input value={model} onChange={event => setModels(current => ({
-                                    ...current,
-                                    [provider.slug]: current[provider.slug].map((value, i) => i === index ? event.target.value : value),
-                                }))} className={`${inputClass} flex-1`} />
-                                <button type="button" onClick={() => setModels(current => ({
-                                    ...current,
-                                    [provider.slug]: current[provider.slug].filter((_, i) => i !== index),
-                                }))} className={`${cancelBtnClass} w-9`} aria-label={`Remove ${model}`}>×</button>
+                {providers.map(provider => {
+                    const selectable = cleanModels(models[provider.slug])
+                    const tiers = resolvedComplexityModels(provider.slug)
+                    return (
+                        <section key={provider.slug} className="border border-stroke rounded-md bg-canvas p-4 flex flex-col gap-2.5">
+                            <div className="flex items-center justify-between">
+                                <span className="text-zinc-900 text-[13px] font-semibold">{provider.name}</span>
+                                <span className="font-mono text-zinc-400 text-[10px]">{provider.slug}</span>
                             </div>
-                        ))}
-                        <button type="button" onClick={() => setModels(current => ({
-                            ...current,
-                            [provider.slug]: [...(current[provider.slug] ?? []), ''],
-                        }))} className={`${cancelBtnClass} self-start`}>+ Add model</button>
-                    </section>
-                ))}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                {COMPLEXITY_LABELS.map(([complexity, label]) => (
+                                    <label key={complexity} className="flex flex-col gap-1.5 min-w-0">
+                                        <span className={labelClass}>{label}</span>
+                                        <select
+                                            aria-label={`${provider.name} ${label} model`}
+                                            value={tiers[complexity]}
+                                            onChange={event => setComplexityModels(current => ({
+                                                ...current,
+                                                [provider.slug]: { ...tiers, [complexity]: event.target.value },
+                                            }))}
+                                            className={`${inputClass} w-full`}
+                                        >
+                                            {selectable.map(model => (
+                                                <option key={model} value={model}>{model}</option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                ))}
+                            </div>
+                            <span className={labelClass}>Models</span>
+                            {(models[provider.slug] ?? []).map((model, index) => (
+                                <div key={`${provider.slug}-${index}`} className="flex gap-2">
+                                    <input value={model} onChange={event => setModels(current => ({
+                                        ...current,
+                                        [provider.slug]: current[provider.slug].map((value, i) => i === index ? event.target.value : value),
+                                    }))} className={`${inputClass} flex-1`} />
+                                    <button type="button" onClick={() => setModels(current => ({
+                                        ...current,
+                                        [provider.slug]: current[provider.slug].filter((_, i) => i !== index),
+                                    }))} className={`${cancelBtnClass} w-9`} aria-label={`Remove ${model}`}>×</button>
+                                </div>
+                            ))}
+                            <button type="button" onClick={() => setModels(current => ({
+                                ...current,
+                                [provider.slug]: [...(current[provider.slug] ?? []), ''],
+                            }))} className={`${cancelBtnClass} self-start`}>+ Add model</button>
+                        </section>
+                    )
+                })}
                 <button onClick={save} disabled={saving} className={`${submitBtnClass} self-start min-w-[130px]`}>
                     {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save provider settings'}
                 </button>

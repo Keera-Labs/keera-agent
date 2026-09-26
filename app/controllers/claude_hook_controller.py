@@ -7,12 +7,14 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi_startkit.application import app
 
+from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.models.Agent import Agent
 from app.models.AgentRelayMessage import AgentRelayMessage
 from app.models.Project import Project
 from app.models.Task import Task
 from app.terminal.connection_manager import ConnectionManager
 from app.terminal.manager import TerminalManager
+from app.terminal.readiness import is_cli_ready
 
 
 def _find_project_bridge(project_cwd: str):
@@ -182,22 +184,17 @@ async def _deliver_agent_relay_messages(project, cwd: str) -> None:
             continue
 
         terminal_manager: TerminalManager = app().make("terminal")
-        if not (agent.session_id and terminal_manager.find(agent.session_id)):
+        terminal = terminal_manager.find(agent.session_id) if agent.session_id else None
+        # A booting agent gets its backlog from the spawn path, after its first task.
+        if not terminal or not is_cli_ready(agent.session_id):
             continue
 
         # Small delay so Claude has time to return to the prompt
         await asyncio.sleep(1.0)
 
-        for msg in pending:
-            from_agent = await Agent.find(msg.from_agent_id)
-            sender_name = from_agent.name if from_agent else f"Agent #{msg.from_agent_id}"
-            relay_bytes = f"[Message from Agent '{sender_name}']: {msg.content}".encode().rstrip(
-                b"\r\n"
-            )
-            await terminal_manager.write(agent.session_id, relay_bytes)
-            await asyncio.sleep(0.05)
-            await terminal_manager.write(agent.session_id, b"\r")
-            await AgentRelayMessage.where("id", msg.id).update({"status": "delivered"})
+        delivered = await deliver_pending_relay_messages(agent.id)
+        if not delivered:
+            continue
 
         # Notify frontend about the delivered messages
         bridge = _find_project_bridge(cwd)
@@ -208,7 +205,7 @@ async def _deliver_agent_relay_messages(project, cwd: str) -> None:
                         {
                             "type": "agent_relay_delivered",
                             "agent_id": agent.id,
-                            "count": len(pending),
+                            "count": delivered,
                         }
                     )
                 )
