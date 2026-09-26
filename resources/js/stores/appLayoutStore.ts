@@ -20,6 +20,20 @@ type PageProps = {
 
 const TERMINAL_NAV_KEYS = ['Enter', 'ArrowUp', 'ArrowDown', 'Tab']
 
+/** A boolean ref mirrored to localStorage; storage failures degrade to in-memory state. */
+function persistedFlag(key: string, initial: boolean) {
+    let stored: boolean = initial
+    try {
+        const item = window.localStorage.getItem(key)
+        if (item !== null) stored = JSON.parse(item) === true
+    } catch { /* unavailable or corrupt: keep the default */ }
+    const flag = ref(stored)
+    watch(flag, value => {
+        try { window.localStorage.setItem(key, JSON.stringify(value)) } catch { /* in-memory only */ }
+    })
+    return flag
+}
+
 // State shared by the persistent AppLayout and everything rendered inside it.
 // A store (not provide/inject) so the terminal sessions it owns live for the
 // app's lifetime, independent of any component.
@@ -50,7 +64,9 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
     const permissionsProject = ref<Project | null>(null)
 
     const projectView = ref<ProjectView>('agents')
-    const rightPanelOpen = ref(false)
+    const sidebarOpen = persistedFlag('keera.layout.sidebarOpen', true)
+    const rightPanelOpen = persistedFlag('keera.layout.rightPanelOpen', false)
+    const statusBarOpen = persistedFlag('keera.layout.statusBarOpen', true)
     const isDraggingOver = ref(false)
 
     // Raw selection — may still name an agent of the previous project right after a switch.
@@ -189,7 +205,9 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
         systemPromptProject,
         permissionsProject,
         projectView,
+        sidebarOpen,
         rightPanelOpen,
+        statusBarOpen,
         activeAgentId,
         setActiveAgentId,
         isDraggingOver,
