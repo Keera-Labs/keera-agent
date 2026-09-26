@@ -3,18 +3,21 @@ import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import DefaultPermissionsTab from '@/pages/settings/DefaultPermissionsTab.vue'
+import PluginsTab from '@/pages/settings/PluginsTab.vue'
 import ProvidersTab from '@/pages/settings/ProvidersTab.vue'
 import TemplatesTab from '@/pages/settings/TemplatesTab.vue'
+import { useAgentSettingsStore } from '@/stores/agentSettingsStore'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import { useEditorSettingsStore } from '@/stores/editorSettingsStore'
+import AgentsTab from './AgentsTab.vue'
 import EditorSection from './EditorSection.vue'
-import GeneralSection from './GeneralSection.vue'
 import { filterSections, SETTINGS_SECTIONS, type SettingsSectionId } from './sections'
 
-type AiTab = 'providers' | 'templates' | 'permissions'
+type AiTab = 'providers' | 'agents' | 'templates' | 'permissions'
 
 const AI_TABS: { id: AiTab; label: string }[] = [
     { id: 'providers', label: 'Providers' },
+    { id: 'agents', label: 'Agents' },
     { id: 'templates', label: 'Agent Templates' },
     { id: 'permissions', label: 'Default Permissions' },
 ]
@@ -22,7 +25,24 @@ const AI_TABS: { id: AiTab; label: string }[] = [
 const layout = useAppLayoutStore()
 const { settingsSection } = storeToRefs(layout)
 const editorSettings = useEditorSettingsStore()
-const { dirty, saveState, error } = storeToRefs(editorSettings)
+const agentSettings = useAgentSettingsStore()
+// Every draft the footer's Save and Discard act on.
+const drafts = [editorSettings, agentSettings]
+
+const dirty = computed(() => drafts.some(d => d.dirty))
+const saveState = computed(() => {
+    const states = drafts.map(d => d.saveState)
+    return states.includes('saving') ? 'saving' : states.includes('error') ? 'error' : 'idle'
+})
+const error = computed(() => drafts.find(d => d.error)?.error ?? '')
+
+async function save() {
+    await Promise.all(drafts.filter(d => d.dirty).map(d => d.save()))
+}
+
+function discard() {
+    drafts.forEach(d => d.discard())
+}
 
 const query = ref('')
 const searchInput = ref<HTMLInputElement | null>(null)
@@ -46,7 +66,7 @@ function select(id: SettingsSectionId) {
 
 function close() {
     // Unsaved edits are dropped, never applied on the way out.
-    editorSettings.discard()
+    discard()
     layout.closeSettings()
 }
 
@@ -154,10 +174,11 @@ const navItem = (active: boolean) => [
                             >{{ tab.label }}</button>
                         </div>
                         <ProvidersTab v-if="aiTab === 'providers'" />
+                        <AgentsTab v-else-if="aiTab === 'agents'" />
                         <TemplatesTab v-else-if="aiTab === 'templates'" />
                         <DefaultPermissionsTab v-else />
                     </template>
-                    <GeneralSection v-else />
+                    <PluginsTab v-else />
                 </div>
 
                 <div v-else class="flex-1 min-w-0 overflow-y-auto px-6 py-5" :data-pane="current.id">
@@ -198,14 +219,14 @@ const navItem = (active: boolean) => [
                     data-testid="settings-discard"
                     class="ml-auto rounded-md border border-stroke bg-white px-3.5 py-1.5 text-[12px] text-zinc-700 cursor-pointer hover:bg-black/[0.03] disabled:opacity-50 disabled:cursor-default"
                     :disabled="!dirty || saveState === 'saving'"
-                    @click="editorSettings.discard()"
+                    @click="discard"
                 >Discard</button>
                 <button
                     type="button"
                     data-testid="settings-save"
                     class="rounded-md border border-accent bg-accent px-3.5 py-1.5 text-[12px] font-medium text-white cursor-pointer hover:opacity-90 disabled:opacity-50 disabled:cursor-default"
                     :disabled="!dirty || saveState === 'saving'"
-                    @click="editorSettings.save()"
+                    @click="save"
                 >Save Preferences</button>
             </footer>
         </div>

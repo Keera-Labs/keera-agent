@@ -201,10 +201,11 @@ describe('SettingsModal', () => {
         expect(router.visit).toHaveBeenCalledWith('/', { replace: true })
     })
 
-    it('saves the max agents limit from General and updates the add-agent limit', async () => {
-        const { w, layout } = await open('general')
+    it('saves the max agents limit from the Agents tab through the footer', async () => {
+        const { w, layout } = await open('ai')
+        await w.get('[data-ai-tab="agents"]').trigger('click')
         const input = w.get('[data-testid="max-agents"]')
-        const save = w.get('[data-testid="max-agents-save"]')
+        const save = w.get('[data-testid="settings-save"]')
 
         expect((input.element as HTMLInputElement).value).toBe('10')
         expect(save.attributes('disabled')).toBeDefined()
@@ -215,25 +216,52 @@ describe('SettingsModal', () => {
 
         await input.setValue('25')
         await input.trigger('change')
+        expect(w.get('[data-testid="settings-status"]').text()).toBe('Unsaved changes')
         await save.trigger('click')
         await flushPromises()
 
-        expect(calls.at(-1)).toEqual({ method: 'PATCH', body: { max_agents_per_project: 25 } })
+        expect(calls.filter(c => c.method === 'PATCH')).toEqual([{ method: 'PATCH', body: { max_agents_per_project: 25 } }])
         expect(layout.maxAgentsPerProject).toBe(25)
         expect(router.reload).toHaveBeenCalledWith({ only: ['global_settings'] })
-        expect(save.text()).toBe('Saved ✓')
+        expect(w.get('[data-testid="settings-status"]').text()).toBe('Saved to Keera settings')
+    })
+
+    it('saves editor and agent edits together, and Discard drops both', async () => {
+        const { w, layout } = await open('ai')
+        await w.get('[data-ai-tab="agents"]').trigger('click')
+        await w.get('[data-testid="max-agents"]').setValue('7')
+        await w.get('[data-testid="max-agents"]').trigger('change')
+        await w.get('[data-section="editor"]').trigger('click')
+        await w.get('[data-preset="16"]').trigger('click')
+
+        await w.get('[data-testid="settings-discard"]').trigger('click')
+        expect(w.get('[data-testid="settings-save"]').attributes('disabled')).toBeDefined()
+
+        await w.get('[data-preset="16"]').trigger('click')
+        await w.get('[data-section="ai"]').trigger('click')
+        await w.get('[data-ai-tab="agents"]').trigger('click')
+        expect((w.get('[data-testid="max-agents"]').element as HTMLInputElement).value).toBe('10')
+        await w.get('[data-testid="max-agents"]').setValue('7')
+        await w.get('[data-testid="max-agents"]').trigger('change')
+        await w.get('[data-testid="settings-save"]').trigger('click')
+        await flushPromises()
+
+        expect(calls.filter(c => c.method === 'PATCH')).toHaveLength(2)
+        expect(calls).toContainEqual({ method: 'PATCH', body: { max_agents_per_project: 7 } })
+        expect(layout.maxAgentsPerProject).toBe(25)
     })
 
     it('shows the server error when the max agents limit is rejected', async () => {
         globalPatch = { status: 422, body: { error: 'max_agents_per_project must be an integer between 1 and 100' } }
-        const { w, layout } = await open('general')
+        const { w, layout } = await open('ai')
+        await w.get('[data-ai-tab="agents"]').trigger('click')
 
         await w.get('[data-testid="max-agents"]').setValue('5')
         await w.get('[data-testid="max-agents"]').trigger('change')
-        await w.get('[data-testid="max-agents-save"]').trigger('click')
+        await w.get('[data-testid="settings-save"]').trigger('click')
         await flushPromises()
 
-        expect(w.get('[data-testid="max-agents-error"]').text()).toContain('between 1 and 100')
+        expect(w.get('[data-testid="settings-status"]').text()).toContain('between 1 and 100')
         expect(layout.maxAgentsPerProject).toBe(10)
         expect(router.reload).not.toHaveBeenCalled()
     })
