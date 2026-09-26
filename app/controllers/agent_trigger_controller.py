@@ -17,6 +17,7 @@ from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.actions.terminal_write_action import TerminalWriteAction
 from app.models.Agent import Agent
 from app.models.Project import Project
+from app.services.worktree_cleanup import cleanup_agent_worktree
 from app.terminal.claude_monitor import make_claude_session_monitor
 from app.terminal.connection_manager import ConnectionManager
 from app.terminal.manager import TerminalManager
@@ -90,56 +91,6 @@ async def trigger(request: Request, agent_id: int):
     return JSONResponse({"status": "starting", "message": "Agent is starting up..."})
 
 
-def _cleanup_stale_worktree(agent, cwd: str) -> None:
-    """Remove a stale git worktree (and its branch) left over from a prior agent session.
-
-    Claude creates worktrees under .claude/worktrees/<name> with a matching branch
-    worktree-<name>. Task worktrees an agent creates for itself land under
-    .worktrees/<name> instead (see app/prompts/software_engineer.html). If a previous
-    session exited without cleaning up, the next spawn attempt fails with "branch
-    already checked out". This function detects and removes the worktree directory —
-    checking both locations — and the stale branch before Claude runs.
-    """
-    if not getattr(agent, "use_worktree", True):
-        return
-
-    worktree_name = f"agent-{agent.id}"
-    branch_name = f"worktree-{worktree_name}"
-    candidate_paths = [
-        os.path.join(cwd, ".claude", "worktrees", worktree_name),
-        os.path.join(cwd, ".worktrees", worktree_name),
-    ]
-
-    # Check if either worktree path is registered with git
-    wt_list = subprocess.run(
-        ["git", "worktree", "list", "--porcelain"],
-        capture_output=True,
-        text=True,
-        cwd=cwd,
-    )
-    for worktree_path in candidate_paths:
-        if worktree_path in wt_list.stdout:
-            subprocess.run(
-                ["git", "worktree", "remove", "--force", worktree_path],
-                capture_output=True,
-                cwd=cwd,
-            )
-
-    # Delete the stale branch so Claude can recreate it fresh
-    branch_list = subprocess.run(
-        ["git", "branch", "--list", branch_name],
-        capture_output=True,
-        text=True,
-        cwd=cwd,
-    )
-    if branch_list.stdout.strip():
-        subprocess.run(
-            ["git", "branch", "-D", branch_name],
-            capture_output=True,
-            cwd=cwd,
-        )
-
-
 def ensure_codex_worktree(agent, cwd: str) -> str:
     if getattr(agent, "provider", None) != "codex" or not getattr(agent, "use_worktree", True):
         return cwd
@@ -172,8 +123,7 @@ def ensure_codex_worktree(agent, cwd: str) -> str:
 def discover_worktree_path(cwd: str, branch_name: str) -> str | None:
     """Return the real filesystem path of the worktree checked out on ``branch_name``.
 
-    Parses ``git worktree list --porcelain`` (the same primitive
-    _cleanup_stale_worktree relies on) instead of reconstructing the path from a
+    Parses ``git worktree list --porcelain`` instead of reconstructing the path from a
     convention, so an agent worktree registered at a non-default location is
     still found. Returns None when no worktree has that branch checked out.
     """
@@ -228,30 +178,6 @@ def discover_agent_worktree(cwd: str, agent_id: int) -> tuple[str, str] | None:
                 branch = ref[len("refs/heads/") :] if ref.startswith("refs/heads/") else ref
                 return current_path, branch
     return None
-
-
-async def _prune_all_orphaned_worktrees() -> None:
-    """One-off startup prune: remove git worktrees for all soft-deleted agents.
-
-    Iterates every soft-deleted Agent row, looks up its project path, and calls
-    _cleanup_stale_worktree() to remove the worktree directory and branch that
-    were left behind when the agent was deleted without cleanup.
-    """
-    from app.models.Agent import Agent as _Agent
-    from app.models.Project import Project as _Project
-
-    deleted_agents = await _Agent.where_not_null("deleted_at").get()
-    for agent in deleted_agents:
-        try:
-            project = await _Project.find(agent.project_id)
-            if not project:
-                continue
-            cwd = os.path.expanduser(project.path)
-            if not os.path.isdir(cwd):
-                continue
-            _cleanup_stale_worktree(agent, cwd)
-        except Exception:
-            pass
 
 
 def _build_relay_instructions(agent, cwd: str, base_url: str, siblings) -> str:
@@ -309,7 +235,10 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     if getattr(agent, "provider", None) == "codex":
         agent_cwd = ensure_codex_worktree(agent, cwd)
     else:
-        _cleanup_stale_worktree(agent, cwd)
+        if getattr(agent, "use_worktree", True):
+            # A leftover worktree/branch blocks `claude --worktree`; one holding
+            # unsaved work is kept, and the CLI reuses it.
+            await asyncio.to_thread(cleanup_agent_worktree, cwd, agent.id, 0)
         agent_cwd = cwd
 
     session_id = str(uuid.uuid4())
