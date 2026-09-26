@@ -87,6 +87,23 @@ describe('ProjectOverview', () => {
         expect(router.visit).toHaveBeenCalledWith('/keera/agents/12')
     })
 
+    it('deletes an agent from its card only after confirmation', async () => {
+        const { wrapper } = await mountOverview()
+        const confirm = vi.fn(() => false)
+        vi.stubGlobal('confirm', confirm)
+        const deleteButtons = wrapper.findAll('[data-testid="agent-card-delete"]')
+
+        await deleteButtons[1].trigger('click')
+        await flushPromises()
+        expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Checker'))
+        expect(fetch).not.toHaveBeenCalledWith('/api/agents/12', expect.anything())
+
+        confirm.mockReturnValue(true)
+        await deleteButtons[1].trigger('click')
+        await flushPromises()
+        expect(fetch).toHaveBeenCalledWith('/api/agents/12', { method: 'DELETE' })
+    })
+
     it('opens the add-agent modal from New Agent', async () => {
         const { wrapper } = await mountOverview()
 

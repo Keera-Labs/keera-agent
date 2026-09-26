@@ -32,6 +32,18 @@ describe('RightPanel', () => {
         expect(w.get('[data-testid="right-panel-empty"]').text()).toBe('Select a project to browse files')
     })
 
+    it('hides itself from the toggle in its own toolbar', async () => {
+        const w = mountPanel()
+        await flushPromises()
+
+        const views = w.get('[data-testid="right-panel-toolbar"]').findAll('button[aria-pressed]')
+        expect(views.map(b => b.attributes('aria-label'))).toEqual([
+            'Files', 'Overview (coming soon)', 'Source control (coming soon)', 'Outline (coming soon)',
+        ])
+        await w.get('[data-testid="toggle-panel-right"]').trigger('click')
+        expect(useAppLayoutStore().rightPanelOpen).toBe(false)
+    })
+
     it('shows the active project files in place of the empty state', async () => {
         const w = mountPanel()
         useProjectStore().setActiveProject({ id: 3, name: 'salut-ai', path: '/code/salut-ai' } as Project)

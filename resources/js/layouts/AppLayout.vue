@@ -29,22 +29,25 @@ function setHolder(el: unknown) {
 <!--
     Persistent Inertia layout: it never unmounts across navigations, so the
     terminal sessions owned by the app layout store survive page changes.
-    Regions: header, left sidebar, center main (page content, or the file
-    editor above it while a file tab is active), a collapsible
-    right panel (the active project's file explorer) and a bottom status bar.
+    Regions: a full-height left sidebar and right panel (the active project's
+    file explorer), a center column with the header above the main area (page
+    content, or the file editor above it while a file tab is active), and a
+    bottom status bar.
 -->
 <template>
     <div class="flex flex-col w-full h-screen overflow-hidden bg-canvas">
-        <AppHeader />
-
         <div class="flex flex-1 overflow-hidden">
             <Sidebar v-show="sidebarOpen" id="app-sidebar" />
 
-            <main class="relative flex-1 flex overflow-hidden bg-white">
-                <slot />
-                <!-- Overlays the page instead of hiding it, so terminals below keep their size. -->
-                <EditorPane v-if="editorMounted" v-show="activeEditorTab" />
-            </main>
+            <div class="flex-1 min-w-0 flex flex-col overflow-hidden">
+                <AppHeader />
+
+                <main class="relative flex-1 flex overflow-hidden bg-white">
+                    <slot />
+                    <!-- Overlays the page instead of hiding it, so terminals below keep their size. -->
+                    <EditorPane v-if="editorMounted" v-show="activeEditorTab" />
+                </main>
+            </div>
 
             <aside
                 v-show="rightPanelOpen"

@@ -290,6 +290,14 @@ describe('Sidebar', () => {
         expect(w.get('[data-testid="workspace-menu"]').isVisible()).toBe(false)
     })
 
+    it('goes to the Dashboard from the logo at the top of the sidebar', async () => {
+        const w = await mountSidebar()
+
+        await w.get('[aria-label="Go to Dashboard"]').trigger('click')
+
+        expect(router.visit).toHaveBeenCalledWith('/')
+    })
+
     it('opens the project search palette from the Search button', async () => {
         const w = await mountSidebar()
 
@@ -336,6 +344,32 @@ describe('Sidebar', () => {
         expect(router.visit).toHaveBeenCalledWith('/p-10')
     })
 
+    it('returns from an agent to the project overview from the Agents nav', async () => {
+        page.component = 'agents/Detail'
+        const w = await mountSidebar()
+        useProjectStore().setActiveProject(projects[0])
+        useAppLayoutStore().setActiveAgentId(5)
+        await flushPromises()
+
+        await w.get('[data-tab="agents"]').trigger('click')
+
+        expect(useAppLayoutStore().activeAgentId).toBeNull()
+        expect(router.visit).toHaveBeenCalledWith('/p-10')
+    })
+
+    it('hides itself and toggles the status bar from its own buttons', async () => {
+        const w = await mountSidebar()
+        const layout = useAppLayoutStore()
+
+        await w.get('[data-testid="toggle-panel-bottom"]').trigger('click')
+        expect(layout.statusBarOpen).toBe(false)
+        expect(localStorage.getItem('keera.layout.statusBarOpen')).toBe('false')
+
+        await w.get('[data-testid="toggle-panel-left"]').trigger('click')
+        expect(layout.sidebarOpen).toBe(false)
+        expect(localStorage.getItem('keera.layout.sidebarOpen')).toBe('false')
+    })
+
     it('opens the project search palette from the store', async () => {
         await mountSidebar()
 
@@ -375,22 +409,13 @@ describe('Sidebar', () => {
             expect(summaryCalls[0].url).toBe('/api/agent-summaries?project_ids=10&project_ids=11&project_ids=12')
         })
 
-        it('groups projects with a running agent under "In progress"', async () => {
+        it('lists every project in order under one "Projects" heading, running or not', async () => {
             summaries = [summary(1, 11, 'running'), summary(2, 10, 'idle')]
             const w = await mountSidebar()
 
-            const inProgress = w.get('[data-testid="group-in-progress"]')
-            expect(inProgress.text()).toBe('In progress')
-            expect(projectNames(w).map(n => n.replace(/\d+$/, ''))).toEqual(['alpha-web', 'alpha-api', 'loose'])
-            const groups = w.findAll('[data-testid^="group-"]').map(g => g.text().trim())
-            expect(groups).toEqual(['In progress', 'Projects'])
-        })
-
-        it('hides the "In progress" group when nothing is running', async () => {
-            summaries = [summary(1, 10, 'waiting')]
-            const w = await mountSidebar()
-
-            expect(w.find('[data-testid="group-in-progress"]').exists()).toBe(false)
+            expect(w.get('[data-testid="section-projects"]').text().trim()).toBe('Projects')
+            expect(w.text()).not.toContain('In progress')
+            expect(projectNames(w).map(n => n.replace(/\d+$/, ''))).toEqual(['alpha-api', 'alpha-web', 'loose'])
         })
 
         it('opens an agent on click and marks it active', async () => {

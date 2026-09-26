@@ -33,7 +33,7 @@ const iconButton = 'p-1 rounded text-zinc-400 hover:text-zinc-700 hover:bg-zinc-
 </script>
 
 <template>
-    <div class="flex flex-col h-full min-w-0 text-[12px] text-zinc-700">
+    <div class="flex-1 min-h-0 flex flex-col min-w-0 text-[12px] text-zinc-700">
         <div class="flex items-center gap-1 h-10 pl-3 pr-2 shrink-0">
             <span class="flex-1 truncate text-[13px] font-medium text-zinc-900" :title="project.path">{{ project.name }}</span>
             <button

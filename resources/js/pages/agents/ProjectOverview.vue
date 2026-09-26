@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
+import type { ProjectAgent } from '@/queries/agentQuery'
 import useWorkspaces from '@/queries/workspacesQuery'
 import { color } from '@/tokens'
 import type { Project } from '@/types/type'
@@ -12,7 +13,11 @@ import { useAgentActions } from './useAgentActions'
 const props = defineProps<{ project: Project }>()
 
 const { workspaces } = useWorkspaces()
-const { agents, isPending, adoptPending, isRunning, open, restart, adopt } = useAgentActions(() => props.project)
+const { agents, isPending, adoptPending, isRunning, open, restart, adopt, remove } = useAgentActions(() => props.project)
+
+function confirmRemove(agent: ProjectAgent) {
+    if (window.confirm(`Delete ${agent.name}? Its terminal session is closed.`)) remove(agent)
+}
 
 const workspaceName = computed(() => workspaces.value.find(w => w.id === props.project.workspace_id)?.name ?? null)
 const activeCount = computed(() => agents.value.filter(a => isRunning(a.id)).length)
@@ -93,6 +98,7 @@ const pillClass = 'inline-flex items-center gap-1.5 bg-surface border border-str
                     @open="open(agent)"
                     @restart="restart(agent)"
                     @adopt="adopt(agent)"
+                    @remove="confirmRemove(agent)"
                 />
             </div>
         </div>

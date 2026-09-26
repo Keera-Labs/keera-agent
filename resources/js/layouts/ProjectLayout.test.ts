@@ -92,7 +92,7 @@ describe('ProjectLayout', () => {
         store = useAppLayoutStore()
         store.setTerminalHolder(document.createElement('div'))
         wrapper = mount(ProjectLayout, {
-            global: { plugins: [...plugins], stubs: { PmCheckinControl: true, AgentsListPanel: true } },
+            global: { plugins: [...plugins], stubs: { PmCheckinControl: true } },
             slots: { default: () => h(Detail) },
             attachTo: document.body,
         })

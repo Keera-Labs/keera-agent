@@ -23,7 +23,7 @@ const props = defineProps<{
     adoptPending: boolean
 }>()
 
-const emit = defineEmits<{ open: []; restart: []; adopt: [] }>()
+const emit = defineEmits<{ open: []; restart: []; adopt: []; remove: [] }>()
 
 
 const statusTone = computed(() =>
@@ -120,6 +120,17 @@ const iconButtonClass = 'bg-transparent border border-stroke text-zinc-500 curso
                 @click.stop="adoptPending || emit('adopt')"
             >
                 <Icon name="git-merge" :size="14" />
+            </button>
+
+            <button
+                type="button"
+                title="Delete agent"
+                data-testid="agent-card-delete"
+                :class="iconButtonClass"
+                :style="{ '--hover': color.danger }"
+                @click.stop="emit('remove')"
+            >
+                <Icon name="trash-2" :size="14" />
             </button>
 
             <button
