@@ -92,11 +92,14 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
             />
 
             <div class="flex-1 min-w-0">
-                <div
-                    :class="['text-[13px] truncate leading-5', props.active ? 'text-zinc-900 font-medium' : 'text-zinc-700']"
-                    :title="props.project.name"
-                >
-                    {{ props.project.name }}
+                <div class="flex items-center gap-1.5 min-w-0">
+                    <div
+                        :class="['text-[13px] truncate leading-5', props.active ? 'text-zinc-900 font-medium' : 'text-zinc-700']"
+                        :title="props.project.name"
+                    >
+                        {{ props.project.name }}
+                    </div>
+                    <slot name="badge" />
                 </div>
                 <div v-if="props.active" class="text-[11px] text-zinc-500 truncate leading-4" :title="props.project.path">
                     {{ props.project.path }}

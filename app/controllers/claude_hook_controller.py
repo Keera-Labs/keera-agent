@@ -115,7 +115,15 @@ async def _handle_claude_stopped(project, project_cwd: str) -> None:
     await (
         Agent.where("project_id", project.id)
         .where("status", "running")
-        .update({"status": "waiting", "current_activity": None})
+        .update(
+            {
+                "status": "waiting",
+                "current_activity": None,
+                # Builder updates skip the timestamp observer; the sidebar reads this as
+                # the agent's last activity.
+                "updated_at": datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        )
     )
 
     # Check for pending tasks and dispatch the next one
