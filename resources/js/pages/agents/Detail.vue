@@ -72,9 +72,16 @@ function parkAgentTerminal(agentId: number) {
 }
 
 watch(
-    [activeAgentId, terminalSlot],
-    ([agentId, el], _previous, onCleanup) => {
-        if (agentId === null || !el) return
+    [activeAgentId, terminalSlot, () => activeAgent.value?.agent_type === 'pm'],
+    ([agentId, el, isPm], _previous, onCleanup) => {
+        const projectId = activeProject.value?.id
+        if (agentId === null || !el || projectId === undefined) return
+        // The PM's PTY is the project's PM session; ProjectLayout reclaims it
+        // once this page stops showing it, so it is not parked from here.
+        if (isPm) {
+            layout.showPmTerminal(projectId, el)
+            return
+        }
         showAgentTerminal(agentId, el)
         onCleanup(() => parkAgentTerminal(agentId))
     },

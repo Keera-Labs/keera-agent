@@ -2,8 +2,8 @@
 import { computed } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import type { ProjectAgent } from '@/queries/agentQuery'
-import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import { color } from '@/tokens'
+import AgentEditModal from './AgentEditModal.vue'
 import PmCheckinControl from './PmCheckinControl.vue'
 import { agentAvatarColor, agentInitials, agentRoleLabel, PLACEHOLDER } from './presentation'
 
@@ -25,7 +25,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{ open: []; restart: []; adopt: [] }>()
 
-const layout = useAppLayoutStore()
 
 const statusTone = computed(() =>
     props.running
@@ -103,15 +102,15 @@ const iconButtonClass = 'bg-transparent border border-stroke text-zinc-500 curso
                 <Icon name="rotate-cw" :size="14" />
             </button>
 
-            <button
-                type="button"
-                title="Edit agent"
-                :class="iconButtonClass"
-                :style="{ '--hover': color.textPrimary }"
-                @click.stop="layout.migratingModal = 'Edit agent'"
-            >
-                <Icon name="circle-dot" :size="14" />
-            </button>
+            <span class="contents" @click.stop>
+                <AgentEditModal :agent="agent">
+                    <template #trigger>
+                        <button type="button" title="Edit agent" :class="iconButtonClass" :style="{ '--hover': color.textPrimary }">
+                            <Icon name="circle-dot" :size="14" />
+                        </button>
+                    </template>
+                </AgentEditModal>
+            </span>
 
             <button
                 type="button"

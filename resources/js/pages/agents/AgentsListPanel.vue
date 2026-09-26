@@ -5,6 +5,8 @@ import type { ProjectAgent } from '@/queries/agentQuery'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import { color } from '@/tokens'
 import type { Project } from '@/types/type'
+import AgentAddModal from './AgentAddModal.vue'
+import AgentEditModal from './AgentEditModal.vue'
 import { agentAvatarColor, agentInitials } from './presentation'
 import { useAgentActions } from './useAgentActions'
 
@@ -72,13 +74,16 @@ const iconButtonClass = 'bg-transparent border-0 text-zinc-400 cursor-pointer p-
                 ✕ all
             </button>
 
-            <button
-                title="Add agent"
-                class="bg-transparent border border-stroke rounded-sm text-zinc-400 text-[13px] leading-none py-px px-1.5 cursor-pointer hover:border-accent hover:text-accent"
-                @click="layout.migratingModal = 'New agent'"
-            >
-                +
-            </button>
+            <AgentAddModal>
+                <template #trigger>
+                    <button
+                        title="Add agent"
+                        class="bg-transparent border border-stroke rounded-sm text-zinc-400 text-[13px] leading-none py-px px-1.5 cursor-pointer hover:border-accent hover:text-accent"
+                    >
+                        +
+                    </button>
+                </template>
+            </AgentAddModal>
         </div>
 
         <div v-if="agents.length === 0" class="py-4 px-3.5">
@@ -144,15 +149,15 @@ const iconButtonClass = 'bg-transparent border-0 text-zinc-400 cursor-pointer p-
                     <Icon name="rotate-cw" :size="14" />
                 </button>
 
-                <button
-                    type="button"
-                    title="Edit agent"
-                    :class="iconButtonClass"
-                    :style="{ '--hover': color.textPrimary }"
-                    @click.stop="layout.migratingModal = 'Edit agent'"
-                >
-                    <Icon name="circle-dot" :size="14" />
-                </button>
+                <span class="contents" @click.stop>
+                    <AgentEditModal :agent="agent">
+                        <template #trigger>
+                            <button type="button" title="Edit agent" :class="iconButtonClass" :style="{ '--hover': color.textPrimary }">
+                                <Icon name="circle-dot" :size="14" />
+                            </button>
+                        </template>
+                    </AgentEditModal>
+                </span>
 
                 <button
                     type="button"
