@@ -6,7 +6,7 @@ import Icon from '@/components/ui/Icon.vue'
 import AgentAddModal from '@/pages/agents/AgentAddModal.vue'
 import type { ProjectAgent } from '@/queries/agentQuery'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
-import { useEditorStore, type EditorTab } from '@/stores/editorStore'
+import { SAVE_STATUS_LABEL, saveStatus, useEditorStore, type EditorTab, type SaveStatus } from '@/stores/editorStore'
 import { useProjectStore } from '@/stores/projectStore'
 
 type TabState = 'running' | 'live' | 'off'
@@ -57,6 +57,14 @@ function isActive(agent: ProjectAgent) {
 }
 
 const isFileActive = (tab: EditorTab) => activeFileTab.value?.path === tab.path
+
+const SAVE_DOT_CLASS: Record<SaveStatus, string> = {
+    saving: 'bg-zinc-500 animate-pulse',
+    conflict: 'bg-amber-500',
+    error: 'bg-red-500',
+    unsaved: 'bg-zinc-500',
+    saved: '',
+}
 
 function tabClass(active: boolean) {
     return [
@@ -125,6 +133,7 @@ function close(agent: ProjectAgent) {
                 :key="`file:${tab.path}`"
                 data-testid="editor-tab"
                 :data-dirty="tab.dirty"
+                :data-save-status="saveStatus(tab)"
                 :class="tabClass(isFileActive(tab))"
                 :title="tab.path"
                 @click="editor.activate(tab.projectId, tab.path)"
@@ -142,12 +151,12 @@ function close(agent: ProjectAgent) {
                     type="button"
                     data-testid="editor-tab-close"
                     :aria-label="`Close ${tab.name}`"
-                    :title="tab.dirty ? 'Unsaved changes' : 'Close file'"
+                    :title="tab.dirty ? SAVE_STATUS_LABEL[saveStatus(tab)] : 'Close file'"
                     :class="[closeButtonClass, isFileActive(tab) || tab.dirty ? 'visible' : 'invisible group-hover:visible']"
                     @click.stop="editor.close(tab.projectId, tab.path)"
                 >
                     <!-- The unsaved dot turns into the close cross on hover, as in most editors. -->
-                    <span v-if="tab.dirty" class="w-2 h-2 rounded-full bg-zinc-500 group-hover:hidden" />
+                    <span v-if="tab.dirty" :class="['w-2 h-2 rounded-full group-hover:hidden', SAVE_DOT_CLASS[saveStatus(tab)]]" />
                     <Icon name="x" :size="11" :class="tab.dirty && 'hidden group-hover:block'" />
                 </button>
             </div>
