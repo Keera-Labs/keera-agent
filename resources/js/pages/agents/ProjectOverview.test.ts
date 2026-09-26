@@ -70,6 +70,26 @@ describe('ProjectOverview', () => {
         expect(checker.text()).not.toContain('tok')
     })
 
+    it('adds the reported context fill to the usage tooltip', async () => {
+        const { wrapper } = await mountOverview(undefined, {
+            '/api/projects/1/usage': {
+                data: { type: 'project_usages', id: '1', attributes: {
+                    today: { input: 0, output: 0, cache_creation: 0, cache_read: 0, total: 0 },
+                    agents: {},
+                    reports: { 12: {
+                        agent_id: 12, model: 'claude-opus-5', five_hour: null, seven_day: null,
+                        context_used_percentage: 41.6, context_window_size: 200_000, updated_at: null,
+                    } },
+                    limits: null,
+                } },
+            },
+        })
+
+        const [builder, checker] = wrapper.findAll('article')
+        expect(checker.find('[title="Context: 42% of 200K tok"]').exists()).toBe(true)
+        expect(builder.find('[title*="Context"]').exists()).toBe(false)
+    })
+
     it('shows the empty state when the project has no agents', async () => {
         const { wrapper } = await mountOverview([])
 

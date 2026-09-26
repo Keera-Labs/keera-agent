@@ -2,7 +2,7 @@
 import { storeToRefs } from 'pinia'
 import { computed } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
-import { formatTokens, tokenBreakdown, useProjectUsage } from '@/queries/usageQuery'
+import { formatTokens, limitDetail, tokenBreakdown, useProjectUsage } from '@/queries/usageQuery'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import { useProjectStore } from '@/stores/projectStore'
 
@@ -14,11 +14,31 @@ const runningCount = computed(() => Object.values(claudeStatus.value).filter(s =
 const { activeProject } = storeToRefs(useProjectStore())
 const { usage } = useProjectUsage(() => activeProject.value?.id)
 const today = computed(() => (usage.value?.today.total ? usage.value.today : null))
+
+const limitBars = computed(() => {
+    const limits = usage.value?.limits
+    if (!limits) return []
+    const windows = [
+        { key: 'five_hour', label: '5h', name: '5-hour limit', window: limits.five_hour },
+        { key: 'seven_day', label: 'Week', name: 'Weekly limit', window: limits.seven_day },
+    ]
+    return windows.flatMap(({ window, ...rest }) =>
+        window
+            ? [{ ...rest, percent: Math.min(100, Math.round(window.used_percentage)), title: limitDetail(rest.name, window) }]
+            : [],
+    )
+})
+
+function barColor(percent: number): string {
+    if (percent >= 90) return 'bg-red-500'
+    if (percent >= 70) return 'bg-amber-500'
+    return 'bg-emerald-500'
+}
 </script>
 
 <!--
-    Plan usage limits and memory are not tracked by Keera yet; their slots are
-    rendered as muted placeholders so the bar keeps its final shape.
+    Memory is not tracked by Keera yet; its slot is a muted placeholder so the
+    bar keeps its final shape.
 -->
 <template>
     <div
@@ -41,6 +61,20 @@ const today = computed(() => (usage.value?.today.total ? usage.value.today : nul
         >
             <span class="w-6 h-[5px] rounded-full bg-zinc-200" />
             <span>Usage —</span>
+        </span>
+
+        <span
+            v-for="bar in limitBars"
+            :key="bar.key"
+            :data-testid="`limit-${bar.key}`"
+            class="flex items-center gap-1.5"
+            :title="bar.title"
+        >
+            {{ bar.label }}
+            <span class="w-10 h-[5px] rounded-full bg-zinc-200 overflow-hidden">
+                <span :class="['block h-full rounded-full', barColor(bar.percent)]" :style="{ width: `${bar.percent}%` }" />
+            </span>
+            {{ bar.percent }}%
         </span>
 
         <div class="ml-auto flex items-center gap-4">
