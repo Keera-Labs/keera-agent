@@ -88,6 +88,23 @@ class TestAgentSummaryController(TestCase, DatabaseTransaction):
 
         self.assertEqual(rows["Timed"]["last_activity_at"], "2026-01-01T10:00:00+00:00")
 
+    async def test_index_exposes_needs_input_attention(self):
+        await AgentFactory.new().create(
+            project_id=self.project.id,
+            name="Blocked",
+            status="needs_input",
+            attention_kind="question",
+            attention_prompt="Which port?",
+        )
+        await AgentFactory.new().create(project_id=self.project.id, name="Calm")
+
+        rows = await self._attributes_by_name(self.project.id)
+
+        self.assertEqual(rows["Blocked"]["status"], "needs_input")
+        self.assertEqual(rows["Blocked"]["attention_kind"], "question")
+        self.assertEqual(rows["Blocked"]["attention_prompt"], "Which port?")
+        self.assertIsNone(rows["Calm"]["attention_kind"])
+
     async def test_index_without_project_ids_returns_empty(self):
         response = await self.get("/api/agent-summaries")
         response.assert_ok()

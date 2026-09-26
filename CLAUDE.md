@@ -85,6 +85,8 @@ bash bin/build.sh --no-build  # skip Vite, just sync files
 
 **Claude Stop hook:** On app startup (`AppProvider.boot`), `app/utils/hook_setup.py` registers an HTTP hook in `~/.claude/settings.json` pointing to `/api/claude-stopped`. The URL is read from `APP_URL` in the environment (so it adjusts automatically between dev :8000 and dist :4545). `bin/build.sh` also patches the URL in `dist/.claude/settings.json` after copying files.
 
+**Agent status hooks:** `ClaudeHookAction` also registers PreToolUse (`AskUserQuestion`), Notification (`permission_prompt|elicitation_dialog`), PostToolUse and UserPromptSubmit hooks pointing to `/api/agent-hook-events`, which move an agent between `running` and `needs_input` (with `attention_kind`/`attention_prompt`). Agent PTYs get `KEERA_AGENT_ID` in their env and the hooks echo it back as the `X-Keera-Agent-Id` header, so events (and Stop) are attributed to one agent; without the header, Stop keeps its project-wide behaviour.
+
 **Route ordering:** In `routes/web.py`, API routes must be registered before the `/{project}` wildcard page route. PATCH and DELETE routes use `router.router.add_api_route` directly — the `Router` wrapper only exposes GET and POST helpers.
 
 **Data model relationships:**

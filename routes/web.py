@@ -5,6 +5,7 @@ from app.controllers import (
     agent_controller,
     agent_default_controller,
     agent_dispatch_controller,
+    agent_hook_event_controller,
     agent_message_controller,
     agent_permission_controller,
     agent_relay_controller,
@@ -56,6 +57,7 @@ router.delete("/api/commands/{command_id}", command_controller.destroy)
 
 router.post("/api/claude-started", claude_hook_controller.claude_started)
 router.post("/api/claude-stopped", claude_hook_controller.claude_stopped)
+router.post("/api/agent-hook-events", agent_hook_event_controller.store)
 
 router.get("/api/projects/{project_id}/messages", agent_message_controller.index)
 router.patch("/api/messages/{message_id}/read", agent_message_controller.mark_read)

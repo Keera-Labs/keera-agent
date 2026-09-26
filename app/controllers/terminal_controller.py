@@ -8,6 +8,7 @@ from fastapi import Query, WebSocket
 from fastapi_startkit.application import app
 
 from app.actions.agent_startup import wait_for_agent_cli
+from app.actions.claude_hook_action import agent_env
 from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.models.Agent import Agent
 from app.models.Project import Project
@@ -129,7 +130,7 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
         await websocket.close(code=1011, reason="worktree creation failed")
         return
 
-    terminal_manager.create(cwd=agent_cwd, session_id=session_id)
+    terminal_manager.create(cwd=agent_cwd, session_id=session_id, env=agent_env(agent_record.id))
     terminal = terminal_manager.get(session_id)
 
     ready_event = mark_booting(session_id)

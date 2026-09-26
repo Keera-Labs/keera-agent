@@ -2,11 +2,13 @@ import asyncio
 import datetime
 import json
 import os
+from typing import Annotated
 
-from fastapi import Request
+from fastapi import Header, Request
 from fastapi.responses import JSONResponse
 from fastapi_startkit.application import app
 
+from app.actions.agent_status_action import CLEARED_ATTENTION, hook_agent_id, utc_now
 from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.models.Agent import Agent
 from app.models.AgentRelayMessage import AgentRelayMessage
@@ -66,12 +68,15 @@ async def claude_started(request: Request):
     return JSONResponse({}, status_code=200)
 
 
-async def claude_stopped(request: Request):
+async def claude_stopped(
+    request: Request, x_keera_agent_id: Annotated[str | None, Header()] = None
+):
     """
     Receives the Claude Code Stop hook POST.
     Payload includes: session_id, cwd, hook_event_name, stop_hook_active, etc.
     We use `cwd` to find the active WebSocket and notify the frontend.
     After marking idle, picks up the next pending task (if any) and sends it to Claude.
+    The agent-id header (set in agent PTYs) narrows the waiting transition to that agent.
     """
     try:
         body = await request.json()
@@ -95,12 +100,32 @@ async def claude_stopped(request: Request):
     # Fire background work and return immediately so the hook client doesn't time out.
     # All deferred I/O (sleeps + PTY writes) runs in the background task.
     if project:
-        asyncio.create_task(_handle_claude_stopped(project, project_cwd))
+        asyncio.create_task(
+            _handle_claude_stopped(project, project_cwd, hook_agent_id(x_keera_agent_id))
+        )
 
     return JSONResponse({}, status_code=200)
 
 
-async def _handle_claude_stopped(project, project_cwd: str) -> None:
+async def _mark_stopped_agents_waiting(project, agent_id: int | None) -> None:
+    if agent_id is not None:
+        # The stopping agent is known: only it returns to its prompt.
+        query = Agent.where("id", agent_id).where_in("status", ["running", "needs_input"])
+    else:
+        # Unattributed stop (e.g. a plain project terminal): any agent of the project
+        # that was actively running is now idle at its prompt.
+        query = Agent.where("project_id", project.id).where("status", "running")
+    await query.update(
+        {
+            "status": "waiting",
+            "current_activity": None,
+            **CLEARED_ATTENTION,
+            "updated_at": utc_now(),
+        }
+    )
+
+
+async def _handle_claude_stopped(project, project_cwd: str, agent_id: int | None = None) -> None:
     """Background work after Claude stops — runs after HTTP 200 is already sent."""
     # Notify the frontend that Claude is idle
     bridge = _find_project_bridge(project_cwd)
@@ -110,21 +135,7 @@ async def _handle_claude_stopped(project, project_cwd: str) -> None:
         except Exception:
             pass
 
-    # Claude finished its turn for this project — any agent that was actively
-    # running is now idle at its prompt (waiting for the next input).
-    await (
-        Agent.where("project_id", project.id)
-        .where("status", "running")
-        .update(
-            {
-                "status": "waiting",
-                "current_activity": None,
-                # Builder updates skip the timestamp observer; the sidebar reads this as
-                # the agent's last activity.
-                "updated_at": datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S"),
-            }
-        )
-    )
+    await _mark_stopped_agents_waiting(project, agent_id)
 
     # Check for pending tasks and dispatch the next one
     next_task = await Task.where("project_id", project.id).where("status", "pending").first()
