@@ -139,7 +139,7 @@ const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded
 
 <template>
     <div class="flex-1 min-h-0 flex flex-col min-w-0 text-[12px] text-zinc-700" data-testid="source-control">
-        <div class="flex items-center gap-2 h-10 pl-3 pr-2 shrink-0">
+        <div class="relative flex items-center gap-2 h-10 pl-3 pr-2 shrink-0">
             <h2 class="shrink-0 text-[13px] font-medium text-zinc-900">Source Control</h2>
             <WorktreePicker
                 v-if="status?.is_repo"

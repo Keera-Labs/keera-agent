@@ -74,7 +74,7 @@ const iconButton = 'p-0.5 rounded text-zinc-500 hover:text-zinc-800 hover:bg-zin
                     <span
                         class="shrink-0 max-w-full truncate text-zinc-900"
                         :class="[staged && 'font-semibold', file.status === 'D' && 'line-through text-zinc-500']"
-                    >{{ file.name }}</span>
+                    >{{ worktreeLabels[file.path] ?? file.name }}</span>
                     <span class="min-w-0 truncate text-zinc-400 text-[11px]">{{ file.dir }}</span>
                 </button>
 

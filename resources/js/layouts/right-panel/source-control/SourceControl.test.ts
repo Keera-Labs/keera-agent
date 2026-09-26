@@ -314,6 +314,7 @@ describe('SourceControl', () => {
 
         const row = w.get('[data-testid="changes"] li')
         expect(row.get('[data-testid="line-stats"]').text()).toBe('worktree')
+        expect(row.text()).toContain('Diff Frontend.claude/worktrees/agent-7')
         expect(row.find('[aria-label^="Open "]').exists()).toBe(false)
 
         await row.get('button[title="Switch to worktree Diff Frontend"]').trigger('click')

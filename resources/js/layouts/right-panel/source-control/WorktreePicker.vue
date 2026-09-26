@@ -13,7 +13,7 @@ const branchOf = (worktree: GitWorktree) =>
 </script>
 
 <template>
-    <PanelMenu label="Worktrees" align="left" menu-class="w-60 max-h-80 overflow-y-auto">
+    <PanelMenu label="Worktrees" full-width menu-class="max-h-80 overflow-y-auto">
         <template #trigger="{ toggle }">
             <button
                 type="button"
