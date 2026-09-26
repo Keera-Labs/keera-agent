@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryCache } from '@pinia/colada'
+import { useHttp } from '@inertiajs/vue3'
 import { toValue, type MaybeRefOrGetter } from 'vue'
 import { useRefetchInterval } from '@/composables/useRefetchInterval'
 
@@ -6,6 +7,22 @@ export interface AgentCheckin {
     enabled: boolean
     interval_minutes: number
     running: boolean
+}
+
+export interface AgentCheckinPayload {
+    enabled: boolean
+    interval_minutes: number
+}
+
+// useHttp rejects on every non-2xx except 422, which it reports via onError and
+// then resolves with undefined. Throwing from onError turns that into a rejection
+// too, so Colada never caches an undefined result.
+function rejectOnValidationError(message: string) {
+    return {
+        onError: () => {
+            throw new Error(message)
+        },
+    }
 }
 
 /**
@@ -17,28 +34,27 @@ export function useAgentCheckin(agentId: MaybeRefOrGetter<number | null>) {
     const queryCache = useQueryCache()
     const key = () => ['agent-checkin', toValue(agentId)]
     const enabled = () => toValue(agentId) !== null
+    const url = () => `/api/agents/${toValue(agentId)}/checkin`
+
+    // Created here, during setup, rather than inside the query/mutation functions:
+    // each useHttp instance owns reactive state and watchers that would leak if
+    // created on every poll. Separate instances keep a poll and a toggle from
+    // sharing one abort controller and processing flag.
+    const fetchRequest = useHttp<Record<string, never>, AgentCheckin>()
+    const updateRequest = useHttp<Record<string, never>, AgentCheckin>()
 
     const query = useQuery({
         key,
-        query: async () => {
-            const res = await fetch(`/api/agents/${toValue(agentId)}/checkin`)
-            if (!res.ok) throw new Error('Failed to fetch check-in state')
-            return (await res.json()) as AgentCheckin
-        },
+        query: () => fetchRequest.get(url(), rejectOnValidationError('Failed to fetch check-in state')),
         enabled,
     })
     useRefetchInterval(query.refetch, 1000 * 15, enabled)
 
     const update = useMutation({
-        mutation: async (payload: { enabled: boolean; interval_minutes: number }) => {
-            const res = await fetch(`/api/agents/${toValue(agentId)}/checkin`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            })
-            if (!res.ok) throw new Error('Failed to update check-in state')
-            return (await res.json()) as AgentCheckin
-        },
+        mutation: (payload: AgentCheckinPayload) =>
+            updateRequest
+                .transform(() => payload)
+                .patch(url(), rejectOnValidationError('Failed to update check-in state')),
         onSuccess: data => queryCache.setQueryData(key(), data),
     })
 
