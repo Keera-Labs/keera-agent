@@ -1,7 +1,13 @@
 @import "tailwindcss";
+@import "@fontsource-variable/roboto/wght.css";
+@import "@fontsource-variable/roboto/wght-italic.css";
 @config "../../tailwind.config.js";
 
 @theme {
+    --font-sans: "Roboto Variable", Roboto, system-ui, -apple-system, "Segoe UI", sans-serif;
+    /* Mono fonts are not shipped (Dank Mono is commercial); each is used only if installed. */
+    --font-mono: "Dank Mono", "Fira Code", Monaco, ui-monospace, SFMono-Regular, Menlo, monospace;
+
     --color-canvas:  #f6f8fa;
     --color-surface: #ffffff;
     --color-modal:   #eaecef;
