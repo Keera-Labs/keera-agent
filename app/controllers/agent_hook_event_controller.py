@@ -41,12 +41,12 @@ async def _apply(agent: Agent, event: AgentHookEventRequest) -> str | None:
         )
         return "needs_input"
 
-    # PostToolUse fires for every tool call, so only a blocked agent is touched; a
-    # submitted prompt always means the agent is working again.
-    resumes = event.resumes_work() and (
-        agent.status == "needs_input" or event.hook_event_name == "UserPromptSubmit"
-    )
-    if not resumes:
+    # A tool call or a submitted prompt proves the agent is working, so any other status
+    # (including a stale `waiting`) self-heals. PostToolUse fires on every tool call,
+    # so an agent that is already running is not rewritten each time.
+    if not event.resumes_work():
+        return None
+    if agent.status == "running" and event.hook_event_name == "PostToolUse":
         return None
     await Agent.where("id", agent.id).update(
         {"status": "running", **CLEARED_ATTENTION, "updated_at": utc_now()}

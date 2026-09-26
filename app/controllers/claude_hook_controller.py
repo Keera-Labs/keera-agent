@@ -76,7 +76,8 @@ async def claude_stopped(
     Payload includes: session_id, cwd, hook_event_name, stop_hook_active, etc.
     We use `cwd` to find the active WebSocket and notify the frontend.
     After marking idle, picks up the next pending task (if any) and sends it to Claude.
-    The agent-id header (set in agent PTYs) narrows the waiting transition to that agent.
+    Only the agent the Stop is attributed to (agent-id header, else its worktree cwd)
+    moves to waiting.
     """
     try:
         body = await request.json()
@@ -101,27 +102,29 @@ async def claude_stopped(
     # All deferred I/O (sleeps + PTY writes) runs in the background task.
     if project:
         asyncio.create_task(
-            _handle_claude_stopped(project, project_cwd, hook_agent_id(x_keera_agent_id))
+            _handle_claude_stopped(project, project_cwd, hook_agent_id(x_keera_agent_id, cwd))
         )
 
     return JSONResponse({}, status_code=200)
 
 
-async def _mark_stopped_agents_waiting(project, agent_id: int | None) -> None:
-    if agent_id is not None:
-        # The stopping agent is known: only it returns to its prompt.
-        query = Agent.where("id", agent_id).where_in("status", ["running", "needs_input"])
-    else:
-        # Unattributed stop (e.g. a plain project terminal): any agent of the project
-        # that was actively running is now idle at its prompt.
-        query = Agent.where("project_id", project.id).where("status", "running")
-    await query.update(
-        {
-            "status": "waiting",
-            "current_activity": None,
-            **CLEARED_ATTENTION,
-            "updated_at": utc_now(),
-        }
+async def _mark_stopped_agent_waiting(agent_id: int | None) -> None:
+    # An unattributed Stop comes from some other Claude session in the project (the PM,
+    # the user's own terminal, a stale hook config) and does not say which agent
+    # stopped; treating it as "every running agent stopped" froze still-working agents.
+    if agent_id is None:
+        return
+    await (
+        Agent.where("id", agent_id)
+        .where_in("status", ["running", "needs_input"])
+        .update(
+            {
+                "status": "waiting",
+                "current_activity": None,
+                **CLEARED_ATTENTION,
+                "updated_at": utc_now(),
+            }
+        )
     )
 
 
@@ -135,7 +138,7 @@ async def _handle_claude_stopped(project, project_cwd: str, agent_id: int | None
         except Exception:
             pass
 
-    await _mark_stopped_agents_waiting(project, agent_id)
+    await _mark_stopped_agent_waiting(agent_id)
 
     # Check for pending tasks and dispatch the next one
     next_task = await Task.where("project_id", project.id).where("status", "pending").first()
