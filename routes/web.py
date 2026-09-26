@@ -29,6 +29,7 @@ from app.controllers import (
     plugin_controller,
     project_file_content_controller,
     project_file_controller,
+    project_usage_controller,
     settings_controller,
     task_controller,
     tasks_page_controller,
@@ -46,6 +47,8 @@ router.get("/api/projects/{project_id}/tasks", task_controller.index)
 router.post("/api/projects/{project_id}/tasks", task_controller.store)
 router.patch("/api/tasks/{task_id}", task_controller.update)
 router.delete("/api/tasks/{task_id}", task_controller.destroy)
+
+router.get("/api/projects/{project_id}/usage", project_usage_controller.show)
 
 router.get("/api/projects/{project_id}/files", project_file_controller.index)
 router.get("/api/projects/{project_id}/files/content", project_file_content_controller.show)

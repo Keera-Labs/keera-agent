@@ -193,4 +193,20 @@ describe('StatusBar', () => {
         expect(w.get('[data-testid="terminal-count"]').text()).toBe('2')
         expect(w.find('[data-testid="usage-placeholder"]').exists()).toBe(true)
     })
+
+    it('shows today\'s token usage of the active project', async () => {
+        stubFetch({
+            '/api/projects/1/usage': {
+                data: { attributes: {
+                    today: { input: 1, output: 2, cache_creation: 3, cache_read: 45_000, total: 45_006 },
+                    agents: {},
+                } },
+            },
+        })
+        const w = await mountHeader()
+        await flushPromises()
+
+        expect(w.get('[data-testid="usage-today"]').text()).toBe('Today 45K tok')
+        expect(w.find('[data-testid="usage-placeholder"]').exists()).toBe(false)
+    })
 })

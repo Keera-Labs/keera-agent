@@ -14,6 +14,7 @@ export interface AgentCardStats {
     model: string
     branch: string
     usage: string
+    usageDetail?: string
 }
 
 const props = defineProps<{
@@ -46,7 +47,7 @@ const statCells = computed(() => [
     { label: 'Provider', value: props.stats.provider },
     { label: 'Model', value: props.stats.model },
     { label: 'Branch', value: props.stats.branch },
-    { label: 'Usage', value: props.stats.usage },
+    { label: 'Usage', value: props.stats.usage, title: props.stats.usageDetail },
 ])
 
 const iconButtonClass = 'bg-transparent border border-stroke text-zinc-500 cursor-pointer w-[30px] h-[30px] rounded-md flex items-center justify-center shrink-0 transition-[color,background,border-color] duration-100 hover:text-(--hover) hover:border-(--hover) hover:bg-canvas'
@@ -103,7 +104,10 @@ const iconButtonClass = 'bg-transparent border border-stroke text-zinc-500 curso
         <div class="grid grid-cols-2 gap-4">
             <div v-for="stat in statCells" :key="stat.label" class="flex flex-col gap-[3px] min-w-0">
                 <span class="text-[10px] font-semibold uppercase tracking-[0.07em] text-zinc-400">{{ stat.label }}</span>
-                <span :class="['text-[13px] font-mono truncate', stat.value === PLACEHOLDER ? 'text-zinc-400' : 'text-zinc-900']">
+                <span
+                    :class="['text-[13px] font-mono truncate', stat.value === PLACEHOLDER ? 'text-zinc-400' : 'text-zinc-900']"
+                    :title="'title' in stat ? stat.title : undefined"
+                >
                     {{ stat.value }}
                 </span>
             </div>

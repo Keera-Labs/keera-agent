@@ -15,10 +15,14 @@ vi.mock('@inertiajs/vue3', () => ({
 
 let wrapper: VueWrapper | undefined
 
-async function mountOverview(agents: unknown[] = [agentResource(11, 'Builder'), agentResource(12, 'Checker')]) {
+async function mountOverview(
+    agents: unknown[] = [agentResource(11, 'Builder'), agentResource(12, 'Checker')],
+    routes: Record<string, unknown> = {},
+) {
     stubFetch({
         '/api/projects/1/agents': { data: agents },
         '/api/workspaces': [{ id: 7, name: 'Labs' }],
+        ...routes,
     })
     const plugins = installPinia()
     useProjectStore().setActiveProject(project)
@@ -46,6 +50,24 @@ describe('ProjectOverview', () => {
             expect.stringContaining('Builder'),
             expect.stringContaining('Checker'),
         ])
+    })
+
+    it('shows each agent\'s token usage, and a dash when it has none', async () => {
+        const tokens = { input: 10, output: 20, cache_creation: 300, cache_read: 1_250_000, total: 1_250_330 }
+        const { wrapper } = await mountOverview(undefined, {
+            '/api/projects/1/usage': {
+                data: { type: 'project_usages', id: '1', attributes: {
+                    today: tokens,
+                    agents: { 11: { ...tokens, last_model: 'claude-opus-5', last_used_at: null } },
+                } },
+            },
+        })
+
+        const [builder, checker] = wrapper.findAll('article')
+        const builderUsage = builder.findAll('span').find(s => s.text() === '1.3M tok')
+        expect(builderUsage?.attributes('title')).toContain('Cache read: 1,250,000')
+        expect(builderUsage?.attributes('title')).toContain('Last model: claude-opus-5')
+        expect(checker.text()).not.toContain('tok')
     })
 
     it('shows the empty state when the project has no agents', async () => {
