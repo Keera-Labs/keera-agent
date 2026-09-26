@@ -4,7 +4,10 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createApp, reactive } from 'vue'
 import { PiniaColada } from '@pinia/colada'
 import { disposeProjectSessions, type Session } from '@/composables/useTerminalSessions'
+import { flushPromises } from '@vue/test-utils'
+import type { Project } from '@/types/type'
 import { useAppLayoutStore } from './appLayoutStore'
+import { useProjectStore } from './projectStore'
 
 vi.mock('@inertiajs/vue3', () => ({
     usePage: () => reactive({ component: 'Home', props: {} }),
@@ -83,6 +86,27 @@ describe('useAppLayoutStore', () => {
         expect(store.sessions.get(2)).toBe(session)
 
         store.sessions.delete(2)
+    })
+
+    it('exposes the active project tasks parsed from the JSON:API envelope', async () => {
+        vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(url === '/api/projects/7/tasks'
+                ? {
+                    data: [{ type: 'tasks', id: '4', attributes: { id: 4, project_id: 7, title: 'Ship it', status: 'pending' } }],
+                    meta: { total: 1, count: 1, per_page: 15, current_page: 1, last_page: 1, next_page: null, previous_page: null },
+                }
+                : []),
+        })))
+        const pinia = createPinia()
+        createApp({}).use(pinia).use(PiniaColada)
+        setActivePinia(pinia)
+        useProjectStore().setActiveProject({ id: 7 } as Project)
+        store = useAppLayoutStore()
+
+        await flushPromises()
+
+        expect(store.tasks).toEqual([expect.objectContaining({ id: 4, title: 'Ship it' })])
     })
 
     it('toggles project search on Cmd+P', () => {
