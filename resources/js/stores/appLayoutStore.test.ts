@@ -1,0 +1,162 @@
+// @vitest-environment happy-dom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
+import { createApp, reactive } from 'vue'
+import { PiniaColada } from '@pinia/colada'
+import { disposeProjectSessions, type Session } from '@/composables/useTerminalSessions'
+import { flushPromises } from '@vue/test-utils'
+import type { Project } from '@/types/type'
+import { useAppLayoutStore } from './appLayoutStore'
+import { useProjectStore } from './projectStore'
+
+vi.mock('@inertiajs/vue3', () => ({
+    usePage: () => reactive({ component: 'Home', props: {} }),
+    router: { visit: vi.fn() },
+}))
+
+function fakeSession(): Session {
+    const element = document.createElement('div')
+    return {
+        term: { element, focus: vi.fn(), open: vi.fn(), dispose: vi.fn() },
+        ws: { close: vi.fn(), readyState: 1 },
+        fitAddon: { fit: vi.fn() },
+        observer: { observe: vi.fn(), disconnect: vi.fn() },
+    } as unknown as Session
+}
+
+let store: ReturnType<typeof useAppLayoutStore> | undefined
+
+function setup() {
+    const pinia = createPinia()
+    createApp({}).use(pinia).use(PiniaColada)
+    setActivePinia(pinia)
+    store = useAppLayoutStore()
+    const holder = document.createElement('div')
+    store.setTerminalHolder(holder)
+    return { store, holder }
+}
+
+beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve([]) })))
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { cb(0); return 0 })
+})
+
+afterEach(() => {
+    store?.$dispose()
+    store = undefined
+    vi.unstubAllGlobals()
+})
+
+describe('useAppLayoutStore', () => {
+    it('moves a live PM terminal into a visible slot and parks it back without closing the socket', () => {
+        const { store, holder } = setup()
+        const session = fakeSession()
+        store.sessions.set(1, session)
+        const slot = document.createElement('div')
+
+        store.showPmTerminal(1, slot)
+        expect(session.term.element!.parentElement).toBe(slot)
+        expect(session.observer.observe).toHaveBeenCalledWith(slot)
+        expect(store.containerRefs.get(1)).toBe(slot)
+
+        store.parkPmTerminal(1)
+        expect(session.term.element!.parentElement).toBe(holder)
+        expect(store.containerRefs.get(1)).toBe(holder)
+        expect(session.ws.close).not.toHaveBeenCalled()
+
+        store.sessions.delete(1)
+    })
+
+    it('does not re-register a container for a deleted project', () => {
+        const { store } = setup()
+        store.sessions.set(3, fakeSession())
+        store.showPmTerminal(3, document.createElement('div'))
+        disposeProjectSessions(3, [])
+
+        store.parkPmTerminal(3)
+
+        expect(store.containerRefs.has(3)).toBe(false)
+    })
+
+    it('keeps the raw session objects out of the store proxy', () => {
+        const { store } = setup()
+        const session = fakeSession()
+        store.sessions.set(2, session)
+
+        expect(store.sessions.get(2)).toBe(session)
+
+        store.sessions.delete(2)
+    })
+
+    it('exposes the active project tasks parsed from the JSON:API envelope', async () => {
+        vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(url === '/api/projects/7/tasks'
+                ? {
+                    data: [{ type: 'tasks', id: '4', attributes: { id: 4, project_id: 7, title: 'Ship it', status: 'pending' } }],
+                    meta: { total: 1, count: 1, per_page: 15, current_page: 1, last_page: 1, next_page: null, previous_page: null },
+                }
+                : []),
+        })))
+        const pinia = createPinia()
+        createApp({}).use(pinia).use(PiniaColada)
+        setActivePinia(pinia)
+        useProjectStore().setActiveProject({ id: 7 } as Project)
+        store = useAppLayoutStore()
+
+        await flushPromises()
+
+        expect(store.tasks).toEqual([expect.objectContaining({ id: 4, title: 'Ship it' })])
+    })
+
+    it('toggles project search on Cmd+P', () => {
+        const { store } = setup()
+
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', metaKey: true }))
+        expect(store.showProjectSearch).toBe(true)
+
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', metaKey: true }))
+        expect(store.showProjectSearch).toBe(false)
+    })
+})
+
+describe('terminal navigation keys', () => {
+    const NAV_KEYS = ['Enter', 'Tab', 'ArrowUp', 'ArrowDown']
+
+    function press(target: Element, key: string) {
+        const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+        target.dispatchEvent(event)
+        return event.defaultPrevented
+    }
+
+    it('leaves Enter, Tab and arrows alone in form fields and editors', () => {
+        setup()
+        const form = document.createElement('form')
+        const input = document.createElement('input')
+        const textarea = document.createElement('textarea')
+        const editable = document.createElement('div')
+        editable.contentEditable = 'true'
+        form.append(input, textarea, editable)
+        document.body.append(form)
+
+        for (const target of [input, textarea, editable]) {
+            for (const key of NAV_KEYS) {
+                expect(press(target, key), `${key} on <${target.tagName.toLowerCase()}>`).toBe(false)
+            }
+        }
+        form.remove()
+    })
+
+    it('still blocks them inside a terminal', () => {
+        setup()
+        const terminal = document.createElement('div')
+        terminal.className = 'xterm'
+        const helper = document.createElement('textarea')
+        terminal.append(helper)
+        document.body.append(terminal)
+
+        for (const key of NAV_KEYS) expect(press(helper, key)).toBe(true)
+        expect(press(helper, 'a')).toBe(false)
+        terminal.remove()
+    })
+})

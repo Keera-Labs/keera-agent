@@ -12,14 +12,14 @@
         "noImplicitAny": true,
         "skipLibCheck": true,
         "baseUrl": ".",
+        "types": ["vite/client"],
         "paths": {
             "@/*": ["./resources/js/*"]
-        },
-        "jsx": "react-jsx"
+        }
     },
     "include": [
         "resources/js/**/*.ts",
         "resources/js/**/*.d.ts",
-        "resources/js/**/*.tsx"
+        "resources/js/**/*.vue"
     ]
 }

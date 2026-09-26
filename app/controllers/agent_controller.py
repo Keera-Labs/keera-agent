@@ -98,7 +98,7 @@ async def destroy(request: Request, agent_id: int):
                     pass
 
             conn_manager.remove(session_id)
-            terminal_manager.close(session_id)
+            await terminal_manager.close(session_id)
         except Exception:
             pass
 
