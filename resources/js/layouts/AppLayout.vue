@@ -3,6 +3,7 @@ import '@xterm/xterm/css/xterm.css'
 import { storeToRefs } from 'pinia'
 import AppHeader from '@/layouts/app/AppHeader.vue'
 import ModalLayer from '@/layouts/ModalLayer.vue'
+import Sidebar from '@/layouts/sidebar/Sidebar.vue'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
 
 const layout = useAppLayoutStore()
@@ -26,11 +27,7 @@ function setHolder(el: unknown) {
         <AppHeader />
 
         <div class="flex flex-1 overflow-hidden">
-            <!-- Sidebar is ported separately; this keeps its footprint. -->
-            <aside
-                id="app-sidebar"
-                class="w-[220px] shrink-0 bg-canvas border-r border-stroke flex flex-col overflow-hidden"
-            />
+            <Sidebar id="app-sidebar" />
 
             <main class="flex-1 flex overflow-hidden bg-white">
                 <slot />
