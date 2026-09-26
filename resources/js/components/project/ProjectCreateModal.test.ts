@@ -68,13 +68,18 @@ afterEach(() => {
 })
 
 describe('ProjectCreateModal', () => {
-    it('defaults to the given workspace, falling back to the first one', async () => {
+    it('defaults to the given workspace', async () => {
         await open(2)
         expect(field<HTMLSelectElement>('select[name="workspace"]').value).toBe('2')
-        wrapper!.unmount()
+    })
 
+    it('preselects no workspace from the All projects view', async () => {
         await open(null)
-        expect(field<HTMLSelectElement>('select[name="workspace"]').value).toBe('1')
+        expect(field<HTMLSelectElement>('select[name="workspace"]').selectedIndex).toBe(0)
+
+        fill('demo', '~/code/demo')
+        await submit()
+        expect(sentBody(0).workspace_id).toBeNull()
     })
 
     it('creates the project and closes', async () => {

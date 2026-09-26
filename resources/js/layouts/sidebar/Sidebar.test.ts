@@ -85,7 +85,7 @@ describe('Sidebar', () => {
         const w = await mountSidebar()
 
         expect(projectNames(w)).toEqual(['alpha-api', 'alpha-web', 'loose'])
-        expect(w.get('[data-testid="workspace-picker"]').text()).toContain('Personal Workspace')
+        expect(w.get('[data-testid="workspace-picker"]').text()).toContain('All Projects')
 
         await w.findAll('[data-testid="project-item"]')[1].trigger('click')
         expect(router.visit).toHaveBeenCalledWith('/p-11')
@@ -201,7 +201,7 @@ describe('Sidebar', () => {
         const w = await mountSidebar()
         const subtitle = () => w.get('[data-testid="workspace-subtitle"]').text()
 
-        expect(subtitle()).toBe('All projects')
+        expect(subtitle()).toBe('All workspaces')
 
         await w.get('[data-testid="workspace-picker"]').trigger('click')
         await w.findAll('[data-testid="workspace-option"]')[0].trigger('click')
@@ -286,6 +286,32 @@ describe('Sidebar', () => {
         expect(settings.attributes('aria-current')).toBe('page')
         await settings.trigger('click')
         expect(router.visit).toHaveBeenCalledWith('/settings')
+    })
+
+    it('marks Agents as current only on a project agents page', async () => {
+        const w = await mountSidebar()
+        useProjectStore().setActiveProject(projects[0])
+        const agentsTab = () => w.get('[data-tab="agents"]').attributes('aria-current')
+
+        for (const component of ['Dashboard', 'settings/Index', 'Broadcasting']) {
+            page.component = component
+            await flushPromises()
+            expect(agentsTab(), component).toBeUndefined()
+        }
+
+        page.component = 'agents/Detail'
+        await flushPromises()
+        expect(agentsTab()).toBe('page')
+    })
+
+    it('opens the active project from the Agents nav on a non-project page', async () => {
+        page.component = 'Dashboard'
+        const w = await mountSidebar()
+        useProjectStore().setActiveProject(projects[0])
+        await flushPromises()
+
+        await w.get('[data-tab="agents"]').trigger('click')
+        expect(router.visit).toHaveBeenCalledWith('/p-10')
     })
 
     it('opens the project search palette from the store', async () => {

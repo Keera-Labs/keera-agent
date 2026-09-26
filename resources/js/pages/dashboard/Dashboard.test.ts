@@ -81,7 +81,7 @@ describe('Dashboard page', () => {
         const w = mount(Dashboard)
         const t = text(w)
         expect(t).toContain('All Projects')
-        expect(t).toContain('6 agents working across 2 projects.')
+        expect(t).toContain('2 agents working across 2 projects.')
         expect(t).toContain('Working now2')
         expect(t).toContain('Alpha Bot')
         expect(t).toContain('Beta Bot')
@@ -96,7 +96,7 @@ describe('Dashboard page', () => {
 
         const t = text(w)
         expect(t).toContain('Backend')
-        expect(t).toContain('4 agents working across 1 projects.')
+        expect(t).toContain('1 agent working across 1 project.')
         expect(t).toContain('Working now1')
         expect(t).not.toContain('Alpha Bot')
         expect(w.findAll('button[title^="Open "]').map(b => b.attributes('title'))).toEqual(['Open Beta'])
@@ -107,6 +107,15 @@ describe('Dashboard page', () => {
         useWorkspaceStore().setCurrentWorkspaceId(99)
         await nextTick()
         expect(w.text()).toBe('No projects yet. Create one to get started.')
+    })
+
+    it('derives the headline and running indicator from the Active count', () => {
+        expect(mount(Dashboard).get('[data-testid="dashboard-status"]').text()).toBe('running')
+
+        inertia.props = { dashboard: { ...dashboard(), agentCount: 4, stats: { projects: 2, active: 0, waiting: 1, queued: 3 } } }
+        const w = mount(Dashboard)
+        expect(text(w)).toContain('0 agents working across 2 projects.')
+        expect(w.get('[data-testid="dashboard-status"]').text()).toBe('idle')
     })
 
     it('hides "Working now" when no agent is working', () => {

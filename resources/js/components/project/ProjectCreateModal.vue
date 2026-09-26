@@ -36,7 +36,7 @@ function resetForm() {
     name.value = ''
     path.value = ''
     language.value = 'Python'
-    workspaceId.value = props.defaultWorkspaceId ?? workspaces.value[0]?.id ?? null
+    workspaceId.value = props.defaultWorkspaceId
     processing.value = false
     error.value = ''
     confirmCreate.value = null
