@@ -175,6 +175,8 @@ export interface UseTerminalSessionsParams {
     onAgentCreated: (agent: ProjectAgent) => void
     onClaudeStopped: (projectId: number) => void
     onAgentMessage: (messageId: number) => void
+    /** An agent changed status (e.g. started waiting on a question) — refresh agent queries. */
+    onAgentStatus: () => void
 }
 
 /**
@@ -249,7 +251,11 @@ export function useTerminalSessions(params: UseTerminalSessionsParams) {
                     if (event.type === 'claude_stopped') {
                         claudeStatus[project.id] = 'done'
                         params.onClaudeStopped(project.id)
+                        params.onAgentStatus()
                         playSound('done')
+                    } else if (event.type === 'agent_status') {
+                        params.onAgentStatus()
+                        if (event.status === 'needs_input') playSound('input')
                     } else if (event.type === 'agent_message') {
                         params.onAgentMessage(event.message_id as number)
                         playSound('input')

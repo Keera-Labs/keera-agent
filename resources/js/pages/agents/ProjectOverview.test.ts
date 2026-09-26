@@ -77,6 +77,31 @@ describe('ProjectOverview', () => {
         layout.agentSessions.clear()
     })
 
+    it('shows a working agent with a spinner and a blocked one with its question and Reply', async () => {
+        const working = agentResource(11, 'Builder')
+        const blocked = agentResource(12, 'Checker')
+        Object.assign(working.attributes, { status: 'running' })
+        Object.assign(blocked.attributes, { status: 'needs_input', attention_kind: 'question', attention_prompt: 'Squash the commits?' })
+        const { wrapper, layout } = await mountOverview([working, blocked])
+        layout.agentSessions.set(11, fakeSession())
+        layout.agentSessions.set(12, fakeSession())
+        layout.agentSessions.set(13, fakeSession())
+        layout.disposeAgentSession(13)
+        await flushPromises()
+
+        const [workingCard, blockedCard] = wrapper.findAll('article')
+        expect(workingCard.get('[data-testid="agent-status"]').text()).toBe('Working')
+        expect(workingCard.get('[data-testid="agent-status-indicator"]').attributes('data-status')).toBe('running')
+        expect(workingCard.find('[data-testid="agent-card-prompt"]').exists()).toBe(false)
+
+        expect(blockedCard.get('[data-testid="agent-status"]').text()).toContain('Needs input')
+        expect(blockedCard.get('[data-testid="agent-card-prompt"]').text()).toContain('Squash the commits?')
+        await blockedCard.get('[data-testid="agent-card-reply"]').trigger('click')
+
+        expect(router.visit).toHaveBeenCalledWith('/keera/agents/12')
+        layout.agentSessions.clear()
+    })
+
     it('drills into the agent on Open', async () => {
         const { wrapper, layout } = await mountOverview()
 

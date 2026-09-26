@@ -435,6 +435,42 @@ describe('Sidebar', () => {
             expect(rows()[0].attributes('aria-current')).toBeUndefined()
         })
 
+        it('spins the indicator of a working agent', async () => {
+            summaries = [summary(1, 10, 'running', { last_message: 'Refactoring' })]
+            const w = await mountSidebar()
+
+            const indicator = w.get('[data-testid="sidebar-agent"] [data-testid="agent-status-indicator"]')
+            expect(indicator.attributes('data-status')).toBe('running')
+            expect(indicator.attributes('aria-label')).toBe('Working')
+            expect(w.find('[data-testid="agent-reply"]').exists()).toBe(false)
+        })
+
+        it('puts a needs-input agent\'s question in the tooltip with a Reply action that opens the agent', async () => {
+            summaries = [summary(1, 10, 'needs_input', {
+                last_message: 'Old instruction', attention_kind: 'question', attention_prompt: 'Which port should I use?',
+            })]
+            const w = await mountSidebar()
+
+            const row = w.get('[data-testid="sidebar-agent"]')
+            expect(row.attributes('data-status')).toBe('needs_input')
+            expect(row.get('[data-testid="agent-status-indicator"]').attributes('aria-label')).toBe('Needs input')
+            expect(row.attributes('title')).toBe('agent-1 — Which port should I use?')
+            expect(row.get('[data-testid="agent-preview"]').text()).toBe('')
+
+            const reply = w.get('[data-testid="agent-reply"]')
+            expect(reply.attributes('aria-label')).toBe('Reply to agent-1')
+            await reply.trigger('click')
+
+            expect(router.visit).toHaveBeenCalledWith('/p-10/agents/1')
+        })
+
+        it('describes a permission prompt without text generically', async () => {
+            summaries = [summary(1, 10, 'needs_input', { attention_kind: 'permission', attention_prompt: null })]
+            const w = await mountSidebar()
+
+            expect(w.get('[data-testid="sidebar-agent"]').attributes('title')).toBe('agent-1 — Waiting for permission')
+        })
+
         it('collapses a project\'s agents and remembers it', async () => {
             summaries = [summary(1, 10, 'idle'), summary(2, 10, 'idle')]
             const w = await mountSidebar()

@@ -17,7 +17,7 @@ vi.mock('@inertiajs/vue3', () => ({
 const agent: ProjectAgent = {
     id: 5, project_id: 1, name: 'Dev', slug: 'dev', description: 'Builds things', provider: 'claude',
     model: 'claude-opus-5', system_prompt: 'Be careful.', agent_type: 'software_engineer', status: 'idle',
-    flags: { verbose: true }, dangerously_skip_permissions: false, plan_mode: false, created_at: null,
+    attention_kind: null, attention_prompt: null, flags: { verbose: true }, dangerously_skip_permissions: false, plan_mode: false, created_at: null,
 }
 
 type Call = { url: string; method: string; body?: Record<string, unknown> }
