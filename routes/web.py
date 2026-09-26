@@ -8,6 +8,7 @@ from app.controllers import (
     agent_message_controller,
     agent_permission_controller,
     agent_relay_controller,
+    agent_summary_controller,
     agent_template_controller,
     agent_trigger_controller,
     broadcasting_controller,
@@ -59,6 +60,7 @@ router.post("/api/claude-stopped", claude_hook_controller.claude_stopped)
 router.get("/api/projects/{project_id}/messages", agent_message_controller.index)
 router.patch("/api/messages/{message_id}/read", agent_message_controller.mark_read)
 
+router.get("/api/agent-summaries", agent_summary_controller.index)
 router.get("/api/projects/{project_id}/agents", agent_controller.index)
 router.post("/api/projects/{project_id}/agents", agent_controller.store)
 router.post("/api/projects/{project_id}/agents/spawn", agent_dispatch_controller.spawn)

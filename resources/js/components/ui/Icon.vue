@@ -9,7 +9,10 @@ type IconNode =
 const ICONS = {
     'arrow-left': [['path', { d: 'm12 19-7-7 7-7' }], ['path', { d: 'M19 12H5' }]],
     'arrow-right': [['path', { d: 'M5 12h14' }], ['path', { d: 'm12 5 7 7-7 7' }]],
+    asterisk: [['path', { d: 'M12 6v12' }], ['path', { d: 'M17.196 9 6.804 15' }], ['path', { d: 'm6.804 9 10.392 6' }]],
     check: [['path', { d: 'M20 6 9 17l-5-5' }]],
+    'chevron-down': [['path', { d: 'm6 9 6 6 6-6' }]],
+    code: [['path', { d: 'm16 18 6-6-6-6' }], ['path', { d: 'm8 6-6 6 6 6' }]],
     'chevrons-up-down': [['path', { d: 'm7 15 5 5 5-5' }], ['path', { d: 'm7 9 5-5 5 5' }]],
     'chevron-right': [['path', { d: 'm9 18 6-6-6-6' }]],
     command: [['path', { d: 'M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3' }]],

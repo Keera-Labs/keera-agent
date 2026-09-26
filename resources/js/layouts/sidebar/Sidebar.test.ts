@@ -35,11 +35,30 @@ const projects = [project(10, 'alpha-api', 1), project(11, 'alpha-web', 1), proj
 type Call = { url: string; method: string }
 let calls: Call[]
 
+function summary(id: number, projectId: number, status: string, extra: Record<string, unknown> = {}) {
+    return {
+        type: 'agent_summaries',
+        id: String(id),
+        attributes: {
+            project_id: projectId, name: `agent-${id}`, provider: 'claude', agent_type: 'software_engineer',
+            status, last_message: null, last_activity_at: null, ...extra,
+        },
+    }
+}
+let summaries: ReturnType<typeof summary>[]
+
 function fakeFetch(url: string, init?: RequestInit) {
     calls.push({ url, method: init?.method ?? 'GET' })
     const { pathname, searchParams } = new URL(url, 'http://test')
     let body: unknown = []
     if (pathname === '/api/workspaces') body = workspaces
+    if (pathname === '/api/agent-summaries') {
+        const ids = searchParams.getAll('project_ids').map(Number)
+        body = { data: summaries.filter(s => ids.includes(s.attributes.project_id)) }
+    }
+    if (pathname === '/api/projects/10/agents') {
+        body = { data: summaries.filter(s => s.attributes.project_id === 10) }
+    }
     if (pathname === '/api/projects' && init?.method === 'POST') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(project(99, 'fresh', 1)) })
     }
@@ -63,9 +82,12 @@ async function mountSidebar() {
 }
 
 const projectNames = (w: VueWrapper) => w.findAll('[data-testid="project-item"]').map(el => el.text())
+const agentNames = (el: { findAll: VueWrapper['findAll'] }) =>
+    el.findAll('[data-testid="agent-name"]').map(a => a.text())
 
 beforeEach(() => {
     calls = []
+    summaries = []
     page.component = 'Home'
     page.props = {}
     vi.stubGlobal('fetch', vi.fn(fakeFetch))
@@ -327,5 +349,82 @@ describe('Sidebar', () => {
 
         expect(router.visit).toHaveBeenCalledWith('/p-10')
         expect(document.querySelector('[aria-label="Search projects"]')).toBeNull()
+    })
+
+    describe('nested agents', () => {
+        it('lists each project\'s agents under it with preview and relative time, in one request', async () => {
+            summaries = [
+                summary(1, 10, 'waiting', { last_message: 'Fix the login bug', last_activity_at: new Date().toISOString() }),
+                summary(2, 12, 'idle', { provider: 'codex' }),
+                summary(3, 10, 'idle'),
+            ]
+            const w = await mountSidebar()
+
+            const cards = w.findAll('[data-testid="project-card"]')
+            expect(agentNames(cards[0])).toEqual(['agent-1', 'agent-3'])
+            expect(agentNames(cards[1])).toEqual([])
+            expect(agentNames(cards[2])).toEqual(['agent-2'])
+
+            const row = cards[0].get('[data-testid="sidebar-agent"]')
+            expect(row.attributes('data-status')).toBe('waiting')
+            expect(row.text()).toContain('– Fix the login bug')
+            expect(row.text()).toContain('now')
+
+            const summaryCalls = calls.filter(c => c.url.startsWith('/api/agent-summaries'))
+            expect(summaryCalls).toHaveLength(1)
+            expect(summaryCalls[0].url).toBe('/api/agent-summaries?project_ids=10&project_ids=11&project_ids=12')
+        })
+
+        it('groups projects with a running agent under "In progress"', async () => {
+            summaries = [summary(1, 11, 'running'), summary(2, 10, 'idle')]
+            const w = await mountSidebar()
+
+            const inProgress = w.get('[data-testid="group-in-progress"]')
+            expect(inProgress.text()).toBe('In progress')
+            expect(projectNames(w).map(n => n.replace(/\d+$/, ''))).toEqual(['alpha-web', 'alpha-api', 'loose'])
+            const groups = w.findAll('[data-testid^="group-"]').map(g => g.text().trim())
+            expect(groups).toEqual(['In progress', 'Projects'])
+        })
+
+        it('hides the "In progress" group when nothing is running', async () => {
+            summaries = [summary(1, 10, 'waiting')]
+            const w = await mountSidebar()
+
+            expect(w.find('[data-testid="group-in-progress"]').exists()).toBe(false)
+        })
+
+        it('opens an agent on click and marks it active', async () => {
+            vi.stubGlobal('WebSocket', class { close() {} })
+            summaries = [summary(1, 10, 'idle'), summary(2, 10, 'idle')]
+            const w = await mountSidebar()
+            useProjectStore().setActiveProject(projects[0])
+            await flushPromises()
+
+            const rows = () => w.findAll('[data-testid="sidebar-agent"]')
+            await rows()[1].trigger('click')
+            await flushPromises()
+
+            expect(router.visit).toHaveBeenCalledWith('/p-10/agents/2')
+            expect(useAppLayoutStore().activeAgentId).toBe(2)
+            expect(rows()[1].attributes('aria-current')).toBe('page')
+            expect(rows()[0].attributes('aria-current')).toBeUndefined()
+        })
+
+        it('collapses a project\'s agents and remembers it', async () => {
+            summaries = [summary(1, 10, 'idle'), summary(2, 10, 'idle')]
+            const w = await mountSidebar()
+
+            const toggle = w.get('[data-testid="project-collapse"]')
+            expect(toggle.text()).toContain('2')
+            await toggle.trigger('click')
+
+            expect(w.find('[data-testid="project-agents"]').exists()).toBe(false)
+            expect(router.visit).not.toHaveBeenCalled()
+            expect(JSON.parse(localStorage.getItem('keera.sidebar.collapsedProjects')!)).toEqual([10])
+
+            wrapper!.unmount()
+            const again = await mountSidebar()
+            expect(again.find('[data-testid="project-agents"]').exists()).toBe(false)
+        })
     })
 })

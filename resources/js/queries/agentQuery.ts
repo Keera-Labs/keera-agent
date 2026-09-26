@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryCache } from '@pinia/colada'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import { useRefetchInterval } from '@/composables/useRefetchInterval'
+import { AGENT_SUMMARIES_QUERY_KEY } from '@/queries/agentSummariesQuery'
 
 export interface AgentFlags {
     dangerously_skip_permissions?: boolean
@@ -93,8 +94,11 @@ export function useAgents(projectIdSource: MaybeRefOrGetter<number | null>) {
     })
     useRefetchInterval(query.refetch, 1000 * 10, enabled)
 
-    const setAgents = (updater: (prev: ProjectAgent[]) => ProjectAgent[]) =>
+    // The sidebar lists every project's agents from its own query, so each local change refreshes it too.
+    const setAgents = (updater: (prev: ProjectAgent[]) => ProjectAgent[]) => {
         queryCache.setQueryData<ProjectAgent[]>(key(), prev => updater(prev ?? []))
+        queryCache.invalidateQueries({ key: AGENT_SUMMARIES_QUERY_KEY })
+    }
 
     const invalidate = () => queryCache.invalidateQueries({ key: key(), exact: true })
 
