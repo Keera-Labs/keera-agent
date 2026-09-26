@@ -24,7 +24,6 @@
         "resources/js/**/*.vue"
     ],
     "exclude": [
-        "resources/js/pages/agents/AgentAddModal.test.ts",
-        "resources/js/pages/dashboard/index.ts"
+        "resources/js/pages/agents/AgentAddModal.test.ts"
     ]
 }

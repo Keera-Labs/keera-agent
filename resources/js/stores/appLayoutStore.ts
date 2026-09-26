@@ -44,6 +44,9 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
     const showGlobalSettings = ref(false)
     const showDefaultPermissions = ref(false)
     const showProjectSearch = ref(false)
+    // Name of a modal whose Vue port hasn't landed yet; ModalLayer shows a
+    // "being migrated" notice for it instead of failing silently.
+    const migratingModal = ref<string | null>(null)
 
     const projectView = ref<ProjectView>('agents')
     const rightPanelOpen = ref(false)
@@ -182,6 +185,7 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
         showGlobalSettings,
         showDefaultPermissions,
         showProjectSearch,
+        migratingModal,
         projectView,
         rightPanelOpen,
         activeAgentId,
