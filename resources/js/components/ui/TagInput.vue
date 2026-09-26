@@ -3,10 +3,12 @@ import { ref, useTemplateRef } from 'vue'
 
 const tags = defineModel<string[]>({ required: true })
 
-defineProps<{
+const props = defineProps<{
     placeholder?: string
     disabled?: boolean
     tagColor: string
+    // Off by default: permission rules such as `Bash(echo a, b)` contain commas.
+    splitOnComma?: boolean
 }>()
 
 const input = ref('')
@@ -21,7 +23,7 @@ function addTag(raw: string) {
 }
 
 function onKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter' || e.key === ',') {
+    if (e.key === 'Enter' || (props.splitOnComma && e.key === ',')) {
         e.preventDefault()
         addTag(input.value)
     } else if ((e.key === 'Backspace' || e.key === 'Delete') && input.value === '' && tags.value.length > 0) {
