@@ -16,7 +16,7 @@ const page = reactive<{ component: string; props: Record<string, unknown> }>({ c
 
 vi.mock('@inertiajs/vue3', () => ({
     usePage: () => page,
-    router: { visit: vi.fn() },
+    router: { visit: vi.fn(), on: vi.fn(() => () => {}) },
 }))
 
 function project(id: number, name: string, workspaceId: number | null): Project {
