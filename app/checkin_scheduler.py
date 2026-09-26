@@ -52,7 +52,12 @@ async def _send_checkin(project_id: int) -> None:
     from app.actions.agent_message_send_action import AgentMessageSendAction
     from app.models.Agent import Agent
 
-    pm = await Agent.where("project_id", project_id).where("agent_type", "pm").first()
+    pm = (
+        await Agent.where("project_id", project_id)
+        .where("agent_type", "pm")
+        .where_null("deleted_at")
+        .first()
+    )
     if not pm:
         return
     await AgentMessageSendAction.prepare(pm, pm, CHECKIN_MESSAGE).execute()

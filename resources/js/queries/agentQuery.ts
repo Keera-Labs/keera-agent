@@ -31,6 +31,8 @@ export interface ProjectAgent {
     dangerously_skip_permissions: boolean
     plan_mode: boolean
     task_id?: number | null
+    /** The agent that spawned this one (typically a PM). */
+    orchestrator_id?: number | null
     created_at: string | null
 }
 
@@ -77,6 +79,7 @@ export function normalizeAgent(resource: AgentResource): ProjectAgent {
         dangerously_skip_permissions: Boolean(attr.dangerously_skip_permissions),
         plan_mode: Boolean(attr.plan_mode),
         task_id: (attr.task_id as number | null) ?? null,
+        orchestrator_id: attr.orchestrator_id == null ? null : Number(attr.orchestrator_id),
         created_at: (attr.created_at as string | null) ?? null,
     }
 }
@@ -223,4 +226,10 @@ export function useAgents(projectIdSource: MaybeRefOrGetter<number | null>) {
         setDefault,
         spawnViaMCP,
     }
+}
+
+/** How many of `agents` a PM spawned; 0 for any other agent type. */
+export function orchestratedCount(agents: ProjectAgent[], agent: ProjectAgent): number {
+    if (agent.agent_type !== 'pm') return 0
+    return agents.filter(a => a.orchestrator_id === agent.id).length
 }

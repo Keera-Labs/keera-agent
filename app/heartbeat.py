@@ -30,7 +30,12 @@ async def send_heartbeat(project_id: int) -> None:
     from app.models.Agent import Agent
     from app.models.Task import Task
 
-    pm = await Agent.where("project_id", project_id).where("agent_type", "pm").first()
+    pm = (
+        await Agent.where("project_id", project_id)
+        .where("agent_type", "pm")
+        .where_null("deleted_at")
+        .first()
+    )
     if not pm:
         return
     tasks = await Task.where("project_id", project_id).order_by("id", "asc").get()

@@ -119,9 +119,7 @@ describe('SessionTabs', () => {
         store.setActiveAgentId(ENGINEER)
         await flushPromises()
 
-        expect(w.findAll('[data-testid="session-tab-close"]')).toHaveLength(1)
-        await w.get('[data-testid="session-tab-close"]').trigger('click')
-        await flushPromises()
+        await clickClose(w, 'Frontend Engineer with a very long name')
         await clickDialog('confirm-delete-agent-close-only')
 
         expect(dialog()).toBeNull()
@@ -175,6 +173,38 @@ describe('SessionTabs', () => {
         expect(tabNames(w)).toEqual(['PM', 'Reviewer'])
         expect(store.activeAgentId).toBe(REVIEWER)
         expect(router.visit).toHaveBeenCalledWith(`/${project.slug}/agents/${REVIEWER}`)
+    })
+
+    it('the PM tab can be deleted too, warning about the agents it orchestrates', async () => {
+        const orchestrated = (id: number, name: string) => {
+            const resource = agentResource(id, name)
+            return { ...resource, attributes: { ...resource.attributes, orchestrator_id: PM } }
+        }
+        stubFetch({
+            [`/api/projects/${project.id}/agents`]: {
+                data: [agentResource(PM, 'PM', 'pm'), orchestrated(ENGINEER, 'Engineer'), orchestrated(REVIEWER, 'Reviewer'), agentResource(13, 'Second PM', 'pm')],
+            },
+        })
+        const w = await mountHeader()
+        const pmSession = fakeSession()
+        store.sessions.set(project.id, pmSession)
+        store.setActiveAgentId(PM)
+        await flushPromises()
+
+        await clickClose(w, 'PM')
+        expect(dialog()?.textContent).toContain('Delete agent PM?')
+        expect(dialog()?.textContent).toContain('This PM orchestrates 2 agents')
+        // The PM tab is pinned, so there is no tab to merely close.
+        expect(document.querySelector('[data-testid="confirm-delete-agent-close-only"]')).toBeNull()
+
+        await clickDialog('confirm-delete-agent-confirm')
+
+        expect(fetch).toHaveBeenCalledWith(`/api/agents/${PM}`, { method: 'DELETE' })
+        expect(fetch).not.toHaveBeenCalledWith(`/api/agents/${ENGINEER}`, expect.anything())
+        expect(dialog()).toBeNull()
+        expect(pmSession.ws.close).toHaveBeenCalled()
+        expect(store.sessions.has(project.id)).toBe(false)
+        expect(tabNames(w)).toEqual(['Second PM'])
     })
 
     it('deleting an inactive agent tab leaves the current page alone', async () => {

@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import ConfirmDeleteAgentModal from '@/components/modals/ConfirmDeleteAgentModal.vue'
 import Icon from '@/components/ui/Icon.vue'
-import type { ProjectAgent } from '@/queries/agentQuery'
+import { orchestratedCount, type ProjectAgent } from '@/queries/agentQuery'
 import { contextDetail, formatTokens, tokenBreakdown, useProjectUsage } from '@/queries/usageQuery'
 import useWorkspaces from '@/queries/workspacesQuery'
 import { color } from '@/tokens'
@@ -137,6 +137,7 @@ const pillClass = 'inline-flex items-center gap-1.5 bg-surface border border-str
             :agent-name="removing.name"
             :pending="removePending"
             :error="removeError"
+            :orchestrated-count="orchestratedCount(agents, removing)"
             @cancel="removing = null"
             @confirm="confirmRemove"
         />

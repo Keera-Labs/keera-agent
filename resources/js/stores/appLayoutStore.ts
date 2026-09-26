@@ -250,6 +250,7 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
         setAgentContainer: terminals.setAgentContainer,
         launchAgentSession: terminals.launchAgentSession,
         disposeAgentSession: terminals.disposeAgentSession,
+        disposePmSession: terminals.disposePmSession,
         restartClaude: terminals.restartClaude,
         uploadImage: terminals.uploadImage,
         claudeStatus: terminals.claudeStatus,
