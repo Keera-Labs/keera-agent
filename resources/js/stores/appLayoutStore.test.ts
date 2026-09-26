@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { createApp, reactive } from 'vue'
 import { PiniaColada } from '@pinia/colada'
-import type { Session } from '@/composables/useTerminalSessions'
+import { disposeProjectSessions, type Session } from '@/composables/useTerminalSessions'
 import { useAppLayoutStore } from './appLayoutStore'
 
 vi.mock('@inertiajs/vue3', () => ({
@@ -14,7 +14,7 @@ vi.mock('@inertiajs/vue3', () => ({
 function fakeSession(): Session {
     const element = document.createElement('div')
     return {
-        term: { element, focus: vi.fn(), open: vi.fn() },
+        term: { element, focus: vi.fn(), open: vi.fn(), dispose: vi.fn() },
         ws: { close: vi.fn(), readyState: 1 },
         fitAddon: { fit: vi.fn() },
         observer: { observe: vi.fn(), disconnect: vi.fn() },
@@ -62,6 +62,17 @@ describe('useAppLayoutStore', () => {
         expect(session.ws.close).not.toHaveBeenCalled()
 
         store.sessions.delete(1)
+    })
+
+    it('does not re-register a container for a deleted project', () => {
+        const { store } = setup()
+        store.sessions.set(3, fakeSession())
+        store.showPmTerminal(3, document.createElement('div'))
+        disposeProjectSessions(3, [])
+
+        store.parkPmTerminal(3)
+
+        expect(store.containerRefs.has(3)).toBe(false)
     })
 
     it('keeps the raw session objects out of the store proxy', () => {

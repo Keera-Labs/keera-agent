@@ -3,6 +3,8 @@ import { createInertiaApp } from '@inertiajs/vue3'
 import { PiniaColada } from '@pinia/colada'
 import { createPinia } from 'pinia'
 import { createApp, h, type DefineComponent } from 'vue'
+import AppLayout from './layouts/AppLayout.vue'
+import ProjectLayout from './layouts/ProjectLayout.vue'
 import Placeholder from './pages/Placeholder.vue'
 
 const appName = import.meta.env.VITE_APP_NAME || 'Keera Agent'
@@ -14,6 +16,10 @@ createInertiaApp({
     // Pages are ported to Vue incrementally; any page without a Vue version yet
     // renders the placeholder so the app still boots on every route.
     resolve: name => pages[`./pages/${name}.vue`] ?? Placeholder,
+    // Pages without their own layout still render inside AppLayout, so it never
+    // unmounts and the terminal sessions and their DOM survive every navigation.
+    // Project-scoped pages also get ProjectLayout, as every React project page did.
+    layout: (_name, page) => (page.props.project ? [AppLayout, ProjectLayout] : AppLayout),
     setup({ el, App, props, plugin }) {
         createApp({ render: () => h(App, props) })
             .use(plugin)

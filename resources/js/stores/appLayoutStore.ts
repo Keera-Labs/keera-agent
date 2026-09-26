@@ -95,10 +95,14 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
     }, { immediate: true })
 
     // Selecting an agent starts every agent of the project so they can talk to each other.
+    // The PM is skipped: its PTY belongs to the PM session, and a second socket on the
+    // same PTY would split the output between two terminals.
     watch([activeAgentId, () => projectAgents.value.length], ([agentId]) => {
         if (agentId === null || !activeProject.value) return
         requestAnimationFrame(() => {
-            for (const agent of projectAgents.value) terminals.launchAgentSession(agent.id, agent.id === agentId)
+            for (const agent of projectAgents.value) {
+                if (agent.agent_type !== 'pm') terminals.launchAgentSession(agent.id, agent.id === agentId)
+            }
         })
     })
 
@@ -133,7 +137,9 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
     /** Move a project's PM terminal back to the holder before its slot goes away; the socket stays open. */
     function parkPmTerminal(projectId: number) {
         const holder = terminalHolder.value
-        if (!holder) return
+        // No entry means the project was never shown or was deleted
+        // (disposeProjectSessions); re-adding one would leak a stale ref.
+        if (!holder || !terminals.containerRefs.has(projectId)) return
         // containerRefs is written directly: setContainer would re-launch/focus the
         // active project's terminal while it sits off-screen.
         terminals.containerRefs.set(projectId, holder)

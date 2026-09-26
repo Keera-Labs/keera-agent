@@ -7,6 +7,4 @@ import ProjectLayout from '@/layouts/ProjectLayout.vue'
 defineOptions({ layout: [AppLayout, ProjectLayout] })
 </script>
 
-<template>
-    <div>Home</div>
-</template>
+<template></template>

@@ -25,12 +25,13 @@ watchEffect(() => setActiveProject(page.props.project))
 
 const isTasksPage = computed(() => page.component === 'Tasks')
 const isConfigPage = computed(() => page.component === 'Configurations')
-const isAgentDetail = computed(() => page.component === 'agents/Detail')
 const activeView = computed<ProjectView>(() =>
     isTasksPage.value ? 'tasks' : isConfigPage.value ? 'commands' : projectView.value,
 )
 const activeStatus = computed(() => (activeProject.value ? claudeStatus.value[activeProject.value.id] : undefined))
-const showAgentsView = computed(() => !!activeProject.value && activeView.value === 'agents' && !isAgentDetail.value)
+// The Dashboard view is the PM terminal. The agent pages that will own it are
+// not ported yet, so page content only shows in the other views.
+const showAgentsView = computed(() => !!activeProject.value && activeView.value === 'agents')
 
 function selectTab(view: ProjectView) {
     const project = activeProject.value
@@ -107,7 +108,7 @@ onBeforeUnmount(() => {
                 <span class="text-zinc-400 text-[13px]">No project selected</span>
             </div>
 
-            <slot />
+            <slot v-if="!showAgentsView" />
         </div>
     </div>
 </template>
