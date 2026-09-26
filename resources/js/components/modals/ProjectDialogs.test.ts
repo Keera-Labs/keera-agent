@@ -137,8 +137,8 @@ describe('ModalLayer', () => {
 
     it('still flags the modals that are not ported yet', async () => {
         const wrapper = mount(ModalLayer, { global: { plugins: plugins() } })
-        useAppLayoutStore().showProjectSearch = true
+        useAppLayoutStore().migratingModal = 'Something'
         await flushPromises()
-        expect(wrapper.text()).toContain('Project search is being migrated to Vue.')
+        expect(wrapper.text()).toContain('Something is being migrated to Vue.')
     })
 })
