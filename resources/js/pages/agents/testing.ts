@@ -38,7 +38,7 @@ export function installPinia() {
 export function fakeSession(): Session {
     return {
         term: { element: document.createElement('div'), focus: vi.fn(), open: vi.fn(), dispose: vi.fn() },
-        ws: { close: vi.fn(), readyState: 1 },
+        ws: { close: vi.fn(), send: vi.fn(), readyState: 1 },
         fitAddon: { fit: vi.fn() },
         observer: { observe: vi.fn(), disconnect: vi.fn() },
     } as unknown as Session

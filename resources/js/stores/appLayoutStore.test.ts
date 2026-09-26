@@ -38,7 +38,7 @@ function fakeSession(): Session {
     const element = document.createElement('div')
     return {
         term: { element, focus: vi.fn(), open: vi.fn(), dispose: vi.fn() },
-        ws: { close: vi.fn(), readyState: 1 },
+        ws: { close: vi.fn(), send: vi.fn(), readyState: 1 },
         fitAddon: { fit: vi.fn() },
         observer: { observe: vi.fn(), disconnect: vi.fn() },
     } as unknown as Session
@@ -83,6 +83,9 @@ describe('useAppLayoutStore', () => {
         expect(session.term.element!.parentElement).toBe(holder)
         expect(store.containerRefs.get(1)).toBe(holder)
         expect(session.ws.close).not.toHaveBeenCalled()
+        // A parked terminal must stop counting toward the shared PTY's size.
+        const lastReport = vi.mocked(session.ws.send).mock.calls.at(-1)![0] as string
+        expect(JSON.parse(lastReport)).toMatchObject({ type: 'resize', visible: false })
 
         store.sessions.delete(1)
     })

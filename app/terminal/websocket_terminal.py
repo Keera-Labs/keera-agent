@@ -18,7 +18,6 @@ class WebsocketTerminal:
         self._terminal = terminal
         self._on_output = on_output
         self._stopped = asyncio.Event()
-        self._size: tuple[int, int] | None = None
 
     @property
     def terminal(self) -> Terminal:
@@ -52,6 +51,7 @@ class WebsocketTerminal:
                 t.cancel()
             # Let the cancelled reader unregister the master fd before it is closed.
             await asyncio.gather(*tasks, return_exceptions=True)
+            self._terminal.remove_client(self)
             if stop_on_disconnect and self._ws is not None:
                 await self._terminal.aclose()
 
@@ -80,31 +80,26 @@ class WebsocketTerminal:
                     # Binary = a composed message to type in and submit.
                     text = msg["bytes"].decode(errors="replace")
                     if text.strip("\r\n"):
-                        self._claim_size()
                         await self._terminal.send(text)
                 elif msg.get("text"):
                     text: str = msg["text"]
                     try:
                         parsed = json.loads(text)
                         if isinstance(parsed, dict) and parsed.get("type") == "resize":
-                            self._size = (int(parsed["cols"]), int(parsed["rows"]))
-                            self._terminal.resize(*self._size)
+                            self._terminal.set_client_size(
+                                self,
+                                int(parsed["cols"]),
+                                int(parsed["rows"]),
+                                visible=bool(parsed.get("visible", True)),
+                            )
                         else:
                             # Text = raw keyboard from term.onData → no modification
-                            self._claim_size()
                             await self._terminal.write(text.encode())
                     except (json.JSONDecodeError, ValueError):
-                        self._claim_size()
                         await self._terminal.write(text.encode())
             except (WebSocketDisconnect, Exception):
                 break
         self._stopped.set()
-
-    def _claim_size(self) -> None:
-        # Clients sharing a PTY each resize it to their own view; the one being
-        # typed in takes it back so its TUI is redrawn at the width it shows.
-        if self._size is not None and self._terminal.size != self._size:
-            self._terminal.resize(*self._size)
 
     async def _watch_process(self, loop: asyncio.AbstractEventLoop) -> None:
         while self._terminal.is_alive() and not self._stopped.is_set():
