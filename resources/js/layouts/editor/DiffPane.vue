@@ -4,12 +4,14 @@ import { useQueryCache } from '@pinia/colada'
 import type * as Monaco from 'monaco-editor'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { EDITOR_FONT_FAMILY, EDITOR_FONT_SIZE, EDITOR_THEME, loadMonaco, type MonacoApi, type TextModel } from '@/editor/monaco'
+import { EDITOR_THEME, loadMonaco, type MonacoApi, type TextModel } from '@/editor/monaco'
 import { gitKeys, GitRequestError, useGitDiff, type GitDiff } from '@/queries/gitQuery'
 import { useDiffStore } from '@/stores/diffStore'
+import { useEditorSettingsStore } from '@/stores/editorSettingsStore'
 
 const diffs = useDiffStore()
 const { activeTab, sideBySide } = storeToRefs(diffs)
+const { font } = storeToRefs(useEditorSettingsStore())
 const queryCache = useQueryCache()
 
 const diffRequest = computed(() => {
@@ -86,8 +88,7 @@ onMounted(async () => {
         renderSideBySide: sideBySide.value,
         useInlineViewWhenSpaceIsLimited: false,
         automaticLayout: true,
-        fontFamily: EDITOR_FONT_FAMILY,
-        fontSize: EDITOR_FONT_SIZE,
+        ...font.value,
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
     })
@@ -95,6 +96,7 @@ onMounted(async () => {
 })
 
 watch(diff, render)
+watch(font, next => editor?.updateOptions(next))
 watch(sideBySide, value => editor?.updateOptions({ renderSideBySide: value }))
 
 // A 404 means the file left that list (staged, committed or reverted elsewhere): refresh the panel and drop the tab.

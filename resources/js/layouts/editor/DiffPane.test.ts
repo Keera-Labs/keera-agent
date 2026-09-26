@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installPinia } from '@/pages/agents/testing'
 import { gitKeys, type GitDiff } from '@/queries/gitQuery'
 import { useDiffStore } from '@/stores/diffStore'
+import { useEditorSettingsStore } from '@/stores/editorSettingsStore'
 import { useProjectStore } from '@/stores/projectStore'
 import type { Project } from '@/types/type'
 import DiffPane from './DiffPane.vue'
@@ -20,8 +21,6 @@ const monaco = vi.hoisted(() => {
 
 vi.mock('@/editor/monaco', () => ({
     EDITOR_THEME: 'vs',
-    EDITOR_FONT_FAMILY: 'Dank Mono',
-    EDITOR_FONT_SIZE: 13,
     loadMonaco: () => Promise.resolve({
         Uri: { from: ({ scheme, path }: { scheme: string; path: string }) => `${scheme}:${path}` },
         editor: {
@@ -77,6 +76,17 @@ async function mountPane(path = 'src/promo.ts', staged = false, worktreeLabel: s
 }
 
 describe('DiffPane', () => {
+    it('applies a newly saved editor font to the open diff', async () => {
+        await mountPane()
+        const settings = useEditorSettingsStore()
+
+        settings.saved = { font_family: 'fira-code', font_size: 15 }
+        await flushPromises()
+
+        expect(monaco.editor.updateOptions).toHaveBeenCalledWith(settings.font)
+        expect(settings.font.fontSize).toBe(15)
+    })
+
     it('renders both sides side by side with the file\'s language', async () => {
         const w = await mountPane()
 
@@ -84,7 +94,7 @@ describe('DiffPane', () => {
         expect(w.get('[data-testid="diff-path"]').text()).toBe('src/promo.ts')
         expect(w.get('[data-testid="diff-compared"]').text()).toBe('Index ↔ Working tree')
         expect(monaco.createDiffEditor.mock.calls[0][1]).toMatchObject({
-            readOnly: true, originalEditable: false, renderSideBySide: true, fontFamily: 'Dank Mono', fontSize: 13,
+            readOnly: true, originalEditable: false, renderSideBySide: true, ...useEditorSettingsStore().font,
         })
         expect(monaco.models.map(m => [m.value, m.language])).toEqual([
             ['const rate = 0.1\n', 'typescript'],
