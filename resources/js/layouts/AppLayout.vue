@@ -4,11 +4,14 @@ import { storeToRefs } from 'pinia'
 import AppHeader from '@/layouts/app/AppHeader.vue'
 import StatusBar from '@/layouts/app/StatusBar.vue'
 import ModalLayer from '@/layouts/ModalLayer.vue'
+import FileExplorer from '@/layouts/right-panel/FileExplorer.vue'
 import Sidebar from '@/layouts/sidebar/Sidebar.vue'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
+import { useProjectStore } from '@/stores/projectStore'
 
 const layout = useAppLayoutStore()
 const { sidebarOpen, rightPanelOpen, statusBarOpen } = storeToRefs(layout)
+const { activeProject } = storeToRefs(useProjectStore())
 
 // Receives template refs as Element | ComponentPublicInstance; the holder is always a plain div.
 function setHolder(el: unknown) {
@@ -20,8 +23,7 @@ function setHolder(el: unknown) {
     Persistent Inertia layout: it never unmounts across navigations, so the
     terminal sessions owned by the app layout store survive page changes.
     Regions: header, left sidebar, center main (page content), a collapsible
-    right panel and a bottom status bar. The right panel is an empty mount
-    point (teleport target) until content is ported into it.
+    right panel (the active project's file explorer) and a bottom status bar.
 -->
 <template>
     <div class="flex flex-col w-full h-screen overflow-hidden bg-canvas">
@@ -38,7 +40,12 @@ function setHolder(el: unknown) {
                 v-show="rightPanelOpen"
                 id="app-right-panel"
                 class="w-[272px] shrink-0 bg-canvas border-l border-stroke flex flex-col overflow-hidden"
-            />
+            >
+                <!-- Mounted on first open, then kept alive per project so each tree keeps its expanded folders. -->
+                <KeepAlive :max="8">
+                    <FileExplorer v-if="rightPanelOpen && activeProject" :key="activeProject.id" :project="activeProject" />
+                </KeepAlive>
+            </aside>
         </div>
 
         <footer v-show="statusBarOpen" id="app-status-bar" class="shrink-0">
