@@ -1,0 +1,211 @@
+import { usePage } from '@inertiajs/vue3'
+import { useQueryCache } from '@pinia/colada'
+import { defineStore, storeToRefs } from 'pinia'
+import { computed, markRaw, onScopeDispose, ref, shallowRef, watch } from 'vue'
+import { attachTerminal, useTerminalSessions } from '@/composables/useTerminalSessions'
+import { useAgents } from '@/queries/agentQuery'
+import useProjects, { PROJECTS_QUERY_KEY } from '@/queries/projectsQuery'
+import { useTasks } from '@/queries/taskQuery'
+import { WORKSPACES_QUERY_KEY } from '@/queries/workspacesQuery'
+import { useProjectStore } from '@/stores/projectStore'
+import type { AgentTemplate } from '@/types/agent'
+
+export type ProjectView = 'agents' | 'tasks' | 'commands'
+
+type PageProps = {
+    agent_id?: number
+    global_settings?: { max_agents_per_project?: number }
+}
+
+const TERMINAL_NAV_KEYS = ['Enter', 'ArrowUp', 'ArrowDown', 'Tab']
+
+// State shared by the persistent AppLayout and everything rendered inside it.
+// A store (not provide/inject) so the terminal sessions it owns live for the
+// app's lifetime, independent of any component.
+export const useAppLayoutStore = defineStore('appLayout', () => {
+    const page = usePage<PageProps>()
+    const queryCache = useQueryCache()
+    const { projects } = useProjects()
+    const { activeProject } = storeToRefs(useProjectStore())
+    const activeProjectId = computed(() => activeProject.value?.id ?? null)
+
+    const { tasks } = useTasks(activeProjectId)
+    const agentHook = useAgents(activeProjectId)
+    const projectAgents = agentHook.agents
+
+    const terminals = useTerminalSessions({
+        activeProject,
+        projectAgents,
+        onAgentCreated: agentHook.addAgent,
+        onClaudeStopped: () => {},
+        onAgentMessage: () => {},
+    })
+
+    const showGlobalSettings = ref(false)
+    const showDefaultPermissions = ref(false)
+    const showProjectSearch = ref(false)
+
+    const projectView = ref<ProjectView>('agents')
+    const rightPanelOpen = ref(false)
+    const isDraggingOver = ref(false)
+
+    // Raw selection — may still name an agent of the previous project right after a switch.
+    const selectedAgentId = ref<number | null>(null)
+    const activeAgentId = computed(() =>
+        selectedAgentId.value !== null && projectAgents.value.some(a => a.id === selectedAgentId.value)
+            ? selectedAgentId.value
+            : null,
+    )
+    function setActiveAgentId(id: number | null) {
+        selectedAgentId.value = id
+    }
+
+    watch(
+        () => projectAgents.value.find(a => a.id === page.props.agent_id)?.id,
+        id => { if (id !== undefined) selectedAgentId.value = id },
+        { immediate: true },
+    )
+
+    const maxAgentsPerProject = ref(page.props.global_settings?.max_agents_per_project ?? 10)
+    watch(() => page.props.global_settings?.max_agents_per_project, v => {
+        if (v !== undefined) maxAgentsPerProject.value = v
+    })
+
+    const agentTemplates = ref<AgentTemplate[]>([])
+    // The EFFECTIVE list for the active project (project overrides resolved over
+    // globals), which the global-only agent-templates query does not cover.
+    function refetchAgentTemplates() {
+        const url = activeProject.value
+            ? `/api/projects/${activeProject.value.id}/agent-templates`
+            : '/api/agent-templates'
+        fetch(url)
+            .then(r => r.json())
+            .then((templates: AgentTemplate[]) => { agentTemplates.value = templates })
+            .catch(() => {})
+    }
+    watch(activeProjectId, refetchAgentTemplates, { immediate: true })
+
+    // Server-side status only seeds projects the live sockets haven't reported on yet.
+    watch(() => projects.value.length, () => {
+        for (const p of projects.value) {
+            if (terminals.claudeStatus[p.id]) continue
+            if (p.claude_status === 'running') terminals.setClaudeStatus(p.id, 'running')
+            else if (p.claude_status === 'idle') terminals.setClaudeStatus(p.id, 'done')
+        }
+    }, { immediate: true })
+
+    // Selecting an agent starts every agent of the project so they can talk to each other.
+    watch([activeAgentId, () => projectAgents.value.length], ([agentId]) => {
+        if (agentId === null || !activeProject.value) return
+        requestAnimationFrame(() => {
+            for (const agent of projectAgents.value) terminals.launchAgentSession(agent.id, agent.id === agentId)
+        })
+    })
+
+    // Off-screen parking spot, mounted by AppLayout, that keeps xterm DOM alive
+    // while no visible slot shows a terminal.
+    const terminalHolder = shallowRef<HTMLElement | null>(null)
+    function setTerminalHolder(el: HTMLElement | null) {
+        terminalHolder.value = el
+    }
+
+    watch([terminalHolder, projectAgents], ([holder, agents]) => {
+        if (!holder) return
+        for (const agent of agents) {
+            if (!terminals.agentContainerRefs.get(agent.id)) terminals.setAgentContainer(agent.id, holder)
+        }
+    })
+
+    /** Show a project's PM terminal in a visible slot, launching the session into it if needed. */
+    function showPmTerminal(projectId: number, slot: HTMLElement) {
+        const session = terminals.sessions.get(projectId)
+        if (!session) {
+            terminals.setContainer(projectId, slot)
+            return
+        }
+        terminals.containerRefs.set(projectId, slot)
+        attachTerminal(session.term, slot)
+        session.observer.disconnect()
+        session.observer.observe(slot)
+        requestAnimationFrame(() => { session.fitAddon.fit(); session.term.focus() })
+    }
+
+    /** Move a project's PM terminal back to the holder before its slot goes away; the socket stays open. */
+    function parkPmTerminal(projectId: number) {
+        const holder = terminalHolder.value
+        if (!holder) return
+        // containerRefs is written directly: setContainer would re-launch/focus the
+        // active project's terminal while it sits off-screen.
+        terminals.containerRefs.set(projectId, holder)
+        const session = terminals.sessions.get(projectId)
+        if (!session) return
+        session.observer.disconnect()
+        attachTerminal(session.term, holder)
+    }
+
+    function refreshData() {
+        // Workspace changes can reassign projects, so both lists are refreshed.
+        queryCache.invalidateQueries({ key: WORKSPACES_QUERY_KEY })
+        queryCache.invalidateQueries({ key: PROJECTS_QUERY_KEY })
+    }
+
+    function onKeyDown(e: KeyboardEvent) {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
+            e.preventDefault()
+            showProjectSearch.value = !showProjectSearch.value
+        }
+    }
+    function blockTerminalNavKeys(e: KeyboardEvent) {
+        if (TERMINAL_NAV_KEYS.includes(e.key)) e.preventDefault()
+    }
+    function warnOnUnload(e: BeforeUnloadEvent) {
+        if (terminals.sessions.size > 0) e.preventDefault()
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    document.addEventListener('keydown', blockTerminalNavKeys)
+    window.addEventListener('beforeunload', warnOnUnload)
+    onScopeDispose(() => {
+        window.removeEventListener('keydown', onKeyDown)
+        document.removeEventListener('keydown', blockTerminalNavKeys)
+        window.removeEventListener('beforeunload', warnOnUnload)
+    })
+
+    return {
+        tasks,
+        showGlobalSettings,
+        showDefaultPermissions,
+        showProjectSearch,
+        projectView,
+        rightPanelOpen,
+        activeAgentId,
+        setActiveAgentId,
+        isDraggingOver,
+        // The store proxies everything it returns; xterm objects must stay raw.
+        sessions: markRaw(terminals.sessions),
+        agentSessions: markRaw(terminals.agentSessions),
+        containerRefs: markRaw(terminals.containerRefs),
+        agentContainerRefs: markRaw(terminals.agentContainerRefs),
+        liveSessionCount: terminals.liveSessionCount,
+        setContainer: terminals.setContainer,
+        setAgentContainer: terminals.setAgentContainer,
+        launchAgentSession: terminals.launchAgentSession,
+        restartClaude: terminals.restartClaude,
+        uploadImage: terminals.uploadImage,
+        claudeStatus: terminals.claudeStatus,
+        setClaudeStatus: terminals.setClaudeStatus,
+        lastActivity: terminals.lastActivity,
+        outputChars: terminals.outputChars,
+        sessionStart: terminals.sessionStart,
+        terminalHolder,
+        setTerminalHolder,
+        showPmTerminal,
+        parkPmTerminal,
+        refreshData,
+        handleWorkspaceDeleted: refreshData,
+        agentHook: markRaw(agentHook),
+        agentTemplates,
+        refetchAgentTemplates,
+        maxAgentsPerProject,
+    }
+})
