@@ -28,7 +28,11 @@ class TestAgentProviders(TestCase, DatabaseTransaction):
         self.assertEqual(attributes["model"], "gpt-5.6-terra")
 
         agent = await Agent.find(int(response.json()["data"]["id"]))
-        self.assertTrue(agent.to_command().startswith("codex --model gpt-5.6-terra"))
+        self.assertTrue(
+            agent.to_command().startswith(
+                "codex --config check_for_update_on_startup=false --model gpt-5.6-terra"
+            )
+        )
 
     async def test_create_defaults_to_codex(self):
         response = await self.post(

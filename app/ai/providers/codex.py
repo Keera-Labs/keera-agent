@@ -9,7 +9,8 @@ class CodexProvider(Provider):
     default_models = ("gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol")
 
     def build_command(self, command: ProviderCommand) -> str:
-        parts = ["codex"]
+        # The update prompt blocks startup, and Enter on it runs a global npm install.
+        parts = ["codex", "--config", "check_for_update_on_startup=false"]
         if command.continue_session:
             parts.extend(("resume", "--last"))
         if command.model:
