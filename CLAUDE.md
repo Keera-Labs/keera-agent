@@ -48,6 +48,11 @@ uv run pytest tests/test_projects.py::TestProjects::test_create_project
 npm run types:check
 ```
 
+**Run frontend tests (vitest):**
+```bash
+npm run test:frontend
+```
+
 **Build and deploy to dist/ (patches env, runs migrations, starts server on :4545):**
 ```bash
 bash bin/build.sh          # full build
@@ -58,18 +63,23 @@ bash bin/build.sh --no-build  # skip Vite, just sync files
 
 ### Stack
 - **Backend:** Python 3.13+, FastAPI via `fastapi-startkit` framework, Masonite ORM (async), SQLite
-- **Frontend:** React 19 + TypeScript, Inertia.js (server-driven SPA), Vite, Tailwind CSS v4
+- **Frontend:** Vue 3 (`<script setup lang="ts">` SFCs) + TypeScript, Inertia.js via `@inertiajs/vue3` (server-driven SPA), Pinia + Pinia Colada, Vite, Tailwind CSS v4, vitest
 - **Terminal:** xterm.js on the frontend, PTY via Python's `pty` module on the backend over WebSocket
 
 ### Request flow
 1. FastAPI routes are defined in `routes/web.py` and loaded via `providers/app_provider.py` at boot
 2. Page routes render Inertia responses (`Inertia.render("ComponentName", props)`) — the frontend receives props directly without a separate API call
 3. API routes return `JSONResponse` directly from controllers
-4. The frontend uses `@inertiajs/react` router (`router.visit(url)`) for navigation; the layout never unmounts (persistent)
+4. The frontend uses the `@inertiajs/vue3` router (`router.visit(url)`) for navigation; the layout never unmounts (persistent)
 
 ### Key architectural decisions
 
-**Persistent layout pattern:** `AppLayout.tsx` is the single persistent component — it never unmounts across navigations. Terminal sessions and WebSocket connections live in `useRef` maps keyed by project ID so they survive page transitions. New pages are loaded by Inertia and rendered inside the layout as `children`, but the main UI lives in `AppLayout` itself. `pages/Home.tsx` is only an entry point that sets the layout via `Home.layout`.
+**Persistent layout pattern:** `resources/js/app.ts` resolves every page from `resources/js/pages/<Name>.vue` and wraps it in `layouts/AppLayout.vue` as the default layout (plus `layouts/ProjectLayout.vue` when the page has a `project` prop), so `AppLayout` never unmounts across navigations. An unknown page name throws a clear error naming the missing `.vue` file. Terminal sessions and their WebSockets are owned by the Pinia store `stores/appLayoutStore.ts` (via `composables/useTerminalSessions.ts`), not by a component, so they live for the app's lifetime and survive page transitions; xterm objects are kept raw with `markRaw`.
+
+**Frontend state and data:**
+- Server data is fetched with Pinia Colada queries in `resources/js/queries/` (e.g. `useProjects`, `useTasks`); after a mutation, invalidate the matching key (`useQueryCache().invalidateQueries({ key: PROJECTS_QUERY_KEY })`).
+- Shared client state lives in Pinia stores in `resources/js/stores/`.
+- Reusable logic lives in composables in `resources/js/composables/` (`useX` functions).
 
 **Terminal sessions:** Each project gets one PTY process on the backend spawned via WebSocket connection at `/{project}/ws?path=...`. On connect, the backend auto-runs `claude --continue`; if the output contains "No conversation found to continue" it falls back to `claude`. Terminal output is stripped of ANSI codes and persisted to `terminal_outputs`. The in-process `connections` dict in `terminal_controller.py` maps `project_path → WebSocket` and is used by `claude_hook_controller.py` to push `claude_stopped` events to the frontend.
 
@@ -88,7 +98,9 @@ bash bin/build.sh --no-build  # skip Vite, just sync files
 - `app/models/` — minimal Masonite ORM models (just `__table__` declaration; schema is in migrations)
 - `databases/migrations/` — timestamped migration files; filename prefix determines run order
 - `routes/web.py` — all routes in one file
-- `resources/js/layouts/AppLayout.tsx` — the entire UI lives here
+- `resources/js/app.ts` — Inertia entry point: page resolution and the persistent default layout
+- `resources/js/layouts/AppLayout.vue` — the persistent shell (sidebar, terminals, modals via `ModalLayer.vue`)
+- `resources/js/{queries,stores,composables}/` — Pinia Colada queries, Pinia stores and composables
 - `config/` — dataclass-based config objects passed to providers at boot; reads env via `env()` from `fastapi_startkit.environment`
 - `bootstrap/application.py` — provider registration order matters (Database before FastAPI, Vite before Inertia)
 - `storage/keera.db` — SQLite database file (gitignored)
@@ -97,8 +109,8 @@ bash bin/build.sh --no-build  # skip Vite, just sync files
 ### Frontend structure
 - `resources/js/components/` holds **only** reusable, cross-page components (used by two or more pages).
 - Page-specific components live co-located with their page under `resources/js/pages/<page>/`, not in `components/`.
-- Canonical example: the Dashboard's sub-components (`StatCard`, `ProjectCard`, `DashboardBody`, etc.) live in `resources/js/pages/dashboard/` alongside the `pages/Dashboard.tsx` entry (see PR #204).
-- Case-sensitivity note: a page entry (`pages/Dashboard.tsx`) and its folder (`pages/dashboard/`) differ only in case, so import the folder's barrel via an explicit `@/pages/dashboard/index` path — a bare `@/pages/dashboard` resolves to the entry file on case-insensitive filesystems.
+- Canonical example: the Dashboard's sub-components (`StatCard`, `ProjectCard`, `DashboardBody`, etc.) live in `resources/js/pages/dashboard/` alongside the `pages/Dashboard.vue` entry (see PR #204).
+- Case-sensitivity note: a page entry (`pages/Dashboard.vue`) and its folder (`pages/dashboard/`) differ only in case, so import the folder's barrel via an explicit `@/pages/dashboard/index` path — a bare `@/pages/dashboard` resolves to the entry file on case-insensitive filesystems.
 
 ### Adding a new resource
 1. Create `databases/migrations/YYYY_MM_DD_HHMMSS_create_<table>.py` with `up`/`down` async methods
