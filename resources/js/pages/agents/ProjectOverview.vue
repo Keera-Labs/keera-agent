@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import type { ProjectAgent } from '@/queries/agentQuery'
+import { formatTokens, tokenBreakdown, useProjectUsage } from '@/queries/usageQuery'
 import useWorkspaces from '@/queries/workspacesQuery'
 import { color } from '@/tokens'
 import type { Project } from '@/types/type'
@@ -13,6 +14,7 @@ import { useAgentActions } from './useAgentActions'
 const props = defineProps<{ project: Project }>()
 
 const { workspaces } = useWorkspaces()
+const { usage } = useProjectUsage(() => props.project.id)
 const { agents, isPending, adoptPending, isRunning, open, restart, adopt, remove } = useAgentActions(() => props.project)
 
 function confirmRemove(agent: ProjectAgent) {
@@ -21,6 +23,11 @@ function confirmRemove(agent: ProjectAgent) {
 
 const workspaceName = computed(() => workspaces.value.find(w => w.id === props.project.workspace_id)?.name ?? null)
 const activeCount = computed(() => agents.value.filter(a => isRunning(a.id)).length)
+
+function agentUsage(agent: ProjectAgent) {
+    const tokens = usage.value?.agents[String(agent.id)]
+    return tokens ? { usage: formatTokens(tokens.total), usageDetail: tokenBreakdown(tokens) } : { usage: PLACEHOLDER }
+}
 
 const pillClass = 'inline-flex items-center gap-1.5 bg-surface border border-stroke rounded-full py-[5px] px-3 text-[12.5px] text-zinc-700 whitespace-nowrap'
 </script>
@@ -93,7 +100,7 @@ const pillClass = 'inline-flex items-center gap-1.5 bg-surface border border-str
                         provider: agent.provider,
                         model: agent.model,
                         branch: PLACEHOLDER,
-                        usage: PLACEHOLDER,
+                        ...agentUsage(agent),
                     }"
                     @open="open(agent)"
                     @restart="restart(agent)"

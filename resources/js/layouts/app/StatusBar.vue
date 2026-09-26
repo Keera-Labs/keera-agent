@@ -2,16 +2,22 @@
 import { storeToRefs } from 'pinia'
 import { computed } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
+import { formatTokens, tokenBreakdown, useProjectUsage } from '@/queries/usageQuery'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
+import { useProjectStore } from '@/stores/projectStore'
 
 const layout = useAppLayoutStore()
 const { claudeStatus, liveSessionCount } = storeToRefs(layout)
 
 const runningCount = computed(() => Object.values(claudeStatus.value).filter(s => s === 'running').length)
+
+const { activeProject } = storeToRefs(useProjectStore())
+const { usage } = useProjectUsage(() => activeProject.value?.id)
+const today = computed(() => (usage.value?.today.total ? usage.value.today : null))
 </script>
 
 <!--
-    Usage limits and memory are not tracked by Keera yet; their slots are
+    Plan usage limits and memory are not tracked by Keera yet; their slots are
     rendered as muted placeholders so the bar keeps its final shape.
 -->
 <template>
@@ -20,9 +26,18 @@ const runningCount = computed(() => Object.values(claudeStatus.value).filter(s =
         class="h-6 flex items-center gap-4 px-3 bg-canvas border-t border-stroke text-[11px] text-zinc-500 whitespace-nowrap overflow-hidden"
     >
         <span
+            v-if="today"
+            data-testid="usage-today"
+            class="flex items-center gap-1.5"
+            :title="`Claude tokens today in this project\n${tokenBreakdown(today)}`"
+        >
+            Today {{ formatTokens(today.total) }}
+        </span>
+        <span
+            v-else
             data-testid="usage-placeholder"
             class="flex items-center gap-1.5 text-zinc-400"
-            title="Usage limits are not tracked yet"
+            title="No Claude usage recorded today"
         >
             <span class="w-6 h-[5px] rounded-full bg-zinc-200" />
             <span>Usage —</span>
