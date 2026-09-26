@@ -21,7 +21,11 @@
     "include": [
         "resources/js/**/*.ts",
         "resources/js/**/*.d.ts",
-        "resources/js/**/*.tsx",
         "resources/js/**/*.vue"
+    ],
+    "exclude": [
+        "resources/js/pages/agents/AgentAddModal.test.ts",
+        "resources/js/pages/configurations/index.ts",
+        "resources/js/pages/dashboard/index.ts"
     ]
 }

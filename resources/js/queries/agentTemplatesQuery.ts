@@ -1,6 +1,8 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryCache } from '@pinia/colada'
+import { computed } from 'vue'
 import type { AgentTemplate } from '@/types/agent'
+
+const AGENT_TEMPLATES_QUERY_KEY = ['agent-templates']
 
 async function fetchAgentTemplates(): Promise<AgentTemplate[]> {
     const res = await fetch('/api/agent-templates')
@@ -9,23 +11,21 @@ async function fetchAgentTemplates(): Promise<AgentTemplate[]> {
 }
 
 export function useAgentTemplates() {
-    const query = useQuery<AgentTemplate[]>({
-        queryKey: ['agent-templates'],
-        queryFn: fetchAgentTemplates,
-        staleTime: 1000 * 60 * 5, // 5 minutes
+    const queryCache = useQueryCache()
+    const query = useQuery({
+        key: AGENT_TEMPLATES_QUERY_KEY,
+        query: fetchAgentTemplates,
+        staleTime: 1000 * 60 * 5,
     })
 
-    // Local setter for optimistic updates (e.g. after create/update/delete)
-    const [localTemplates, setLocalTemplates] = useState<AgentTemplate[] | null>(null)
-
-    const agentTemplates = localTemplates ?? query.data ?? []
-
+    // Written into the shared cache (not local state) so every consumer sees
+    // the result of a create/update/delete without a refetch.
     function setAgentTemplates(templates: AgentTemplate[]) {
-        setLocalTemplates(templates)
+        queryCache.setQueryData(AGENT_TEMPLATES_QUERY_KEY, templates)
     }
 
     return {
-        agentTemplates,
+        agentTemplates: computed(() => query.data.value ?? []),
         setAgentTemplates,
         isLoading: query.isLoading,
     }
