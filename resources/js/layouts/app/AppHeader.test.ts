@@ -151,21 +151,22 @@ describe('Header toolbar', () => {
         expect(store.showProjectSearch).toBe(true)
     })
 
-    it('toggles each layout region and persists the choice', async () => {
+    it('offers a way back only for hidden panels and persists reopening them', async () => {
         const w = await mountHeader()
+        expect(w.find('[data-testid="show-panel-left"]').exists()).toBe(false)
 
-        await w.get('[data-testid="toggle-panel-left"]').trigger('click')
-        await w.get('[data-testid="toggle-panel-bottom"]').trigger('click')
-        await w.get('[data-testid="toggle-panel-right"]').trigger('click')
+        store.sidebarOpen = false
+        await flushPromises()
+        await w.get('[data-testid="show-panel-left"]').trigger('click')
+        await w.get('[data-testid="show-panel-right"]').trigger('click')
         await flushPromises()
 
-        expect(store.sidebarOpen).toBe(false)
-        expect(store.statusBarOpen).toBe(false)
+        expect(store.sidebarOpen).toBe(true)
         expect(store.rightPanelOpen).toBe(true)
-        expect(localStorage.getItem('keera.layout.sidebarOpen')).toBe('false')
-        expect(localStorage.getItem('keera.layout.statusBarOpen')).toBe('false')
+        expect(localStorage.getItem('keera.layout.sidebarOpen')).toBe('true')
         expect(localStorage.getItem('keera.layout.rightPanelOpen')).toBe('true')
-        expect(w.get('[data-testid="toggle-panel-right"]').attributes('aria-pressed')).toBe('true')
+        expect(w.find('[data-testid="show-panel-left"]').exists()).toBe(false)
+        expect(w.find('[data-testid="show-panel-right"]').exists()).toBe(false)
     })
 
     it('restores persisted toggles on load', async () => {

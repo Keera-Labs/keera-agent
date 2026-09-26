@@ -23,13 +23,13 @@ const PROJECT_NAV: { id: ProjectView; label: string; icon: IconName }[] = [
 
 const page = usePage()
 const layout = useAppLayoutStore()
-const { activeAgentId, claudeStatus, projectView, showProjectSearch, tasks } = storeToRefs(layout)
+const { activeAgentId, claudeStatus, projectView, showProjectSearch, sidebarOpen, statusBarOpen, tasks } = storeToRefs(layout)
 const { activeProject } = storeToRefs(useProjectStore())
 const { projects } = useProjects()
 const { currentWorkspaceId } = storeToRefs(useWorkspaceStore())
 const { agentsByProject } = useAgentSummaries(() => projects.value.map(p => p.id))
 
-// "Projects" always renders: it holds the add button and the empty state.
+// The idle group always renders: it holds the "No projects" empty state.
 const visibleGroups = computed(() =>
     groupProjects(projects.value, agentsByProject.value, claudeStatus.value)
         .filter(group => group.id === 'projects' || group.projects.length > 0),
@@ -73,8 +73,10 @@ function changeView(view: ProjectView) {
     if (!project) { projectView.value = view; return }
     if (view === 'tasks') { router.visit(`/${project.slug}/tasks`); return }
     if (view === 'commands') { router.visit(`/${project.slug}/configurations`); return }
+    // Always lands on the agents overview: this link replaced the project "Dashboard" tab.
     projectView.value = 'agents'
-    if (!isAgentsPage.value) router.visit(`/${project.slug}`)
+    layout.setActiveAgentId(null)
+    if (page.component !== 'Home') router.visit(`/${project.slug}`)
 }
 
 const navClass = (active: boolean) => [
@@ -86,19 +88,32 @@ const iconButtonClass = 'flex items-center justify-center w-6 h-6 rounded-md tex
 
 <template>
     <aside class="w-[216px] shrink-0 bg-canvas border-r border-stroke flex flex-col overflow-hidden">
-        <!-- Doubles as the Dashboard (home) link; same height as the header so their borders line up. -->
-        <button
-            type="button"
-            aria-label="Go to Dashboard"
-            title="Dashboard"
-            class="shrink-0 flex items-center gap-2 h-10 px-3.5 border-b border-stroke text-left cursor-pointer transition-colors hover:bg-black/[0.03]"
-            @click="router.visit('/')"
-        >
-            <div class="w-6 h-6 rounded-md flex items-center justify-center shrink-0 bg-accent">
-                <Icon name="info" :size="13" color="white" />
-            </div>
-            <span class="font-semibold text-[13px] text-zinc-900 tracking-[-0.01em] whitespace-nowrap">Keera Agent</span>
-        </button>
+        <!-- Same height as the header so their borders line up. -->
+        <div class="shrink-0 flex items-center h-10 pr-2 border-b border-stroke">
+            <!-- The logo doubles as the Dashboard (home) link. -->
+            <button
+                type="button"
+                aria-label="Go to Dashboard"
+                title="Dashboard"
+                class="flex-1 min-w-0 flex items-center gap-2 h-full px-3.5 text-left cursor-pointer"
+                @click="router.visit('/')"
+            >
+                <div class="w-6 h-6 rounded-md flex items-center justify-center shrink-0 bg-accent">
+                    <Icon name="info" :size="13" color="white" />
+                </div>
+                <span class="font-semibold text-[13px] text-zinc-900 tracking-[-0.01em] whitespace-nowrap">Keera Agent</span>
+            </button>
+            <button
+                type="button"
+                data-testid="toggle-panel-left"
+                aria-label="Hide sidebar"
+                title="Hide sidebar"
+                :class="iconButtonClass"
+                @click="sidebarOpen = false"
+            >
+                <Icon name="panel-left" :size="14" />
+            </button>
+        </div>
 
         <div class="px-2 pt-2.5 pb-2">
             <button
@@ -135,22 +150,26 @@ const iconButtonClass = 'flex items-center justify-center w-6 h-6 rounded-md tex
         </div>
 
         <div class="flex-1 overflow-y-auto min-h-0 px-2 pb-2">
+            <div data-testid="section-projects" class="flex items-center h-7 pl-1.5 pr-0.5 mt-1">
+                <span class="flex-1 text-zinc-800 text-[12px] font-semibold">Projects</span>
+                <ProjectCreateModal :default-workspace-id="currentWorkspaceId">
+                    <template #trigger>
+                        <button type="button" title="Add project" :class="iconButtonClass">
+                            <Icon name="plus" :size="13" />
+                        </button>
+                    </template>
+                </ProjectCreateModal>
+            </div>
+
             <template v-for="group in visibleGroups" :key="group.id">
-                <div :data-testid="`group-${group.id}`" class="flex items-center gap-1.5 h-7 pl-1.5 pr-0.5 mt-1">
-                    <span
-                        :class="[
-                            'w-[11px] h-[11px] rounded-full border-2 shrink-0',
-                            group.id === 'in-progress' ? 'border-amber-500' : 'border-zinc-300',
-                        ]"
-                    />
-                    <span class="flex-1 text-zinc-800 text-[12px] font-semibold">{{ group.label }}</span>
-                    <ProjectCreateModal v-if="group.id === 'projects'" :default-workspace-id="currentWorkspaceId">
-                        <template #trigger>
-                            <button type="button" title="Add project" :class="iconButtonClass">
-                                <Icon name="plus" :size="13" />
-                            </button>
-                        </template>
-                    </ProjectCreateModal>
+                <!-- Running projects get a sub-heading; the rest follow unlabelled under "Projects". -->
+                <div
+                    v-if="group.id === 'in-progress'"
+                    data-testid="group-in-progress"
+                    class="flex items-center gap-1.5 h-6 pl-1.5 text-zinc-800 text-[12px] font-medium"
+                >
+                    <span class="w-[11px] h-[11px] rounded-full border-2 border-amber-500 shrink-0" />
+                    {{ group.label }}
                 </div>
 
                 <ul class="list-none m-0 p-0 mb-1 flex flex-col gap-1">
@@ -197,6 +216,17 @@ const iconButtonClass = 'flex items-center justify-center w-6 h-6 rounded-md tex
                 @click="router.visit('/settings')"
             >
                 <Icon name="settings" :size="14" />
+            </button>
+            <button
+                type="button"
+                data-testid="toggle-panel-bottom"
+                aria-label="Toggle status bar"
+                title="Toggle status bar"
+                :aria-pressed="statusBarOpen"
+                :class="[iconButtonClass, !statusBarOpen && 'text-zinc-400']"
+                @click="statusBarOpen = !statusBarOpen"
+            >
+                <Icon name="panel-bottom" :size="14" />
             </button>
 
             <!-- Always shown; inert until a project is active (AgentAddModal then renders no modal). -->
