@@ -96,7 +96,12 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
         <div
             v-if="menuOpen"
             ref="menu"
-            class="absolute right-0 top-full z-[200] bg-surface border border-stroke rounded shadow-[0_8px_24px_rgba(0,0,0,0.12)] min-w-[170px] py-1 px-0"
+            data-testid="project-menu"
+            :class="[
+                'absolute right-0 top-full z-[200] bg-surface border border-stroke rounded shadow-[0_8px_24px_rgba(0,0,0,0.12)] min-w-[170px] py-1 px-0',
+                // Stays mounted so the modal instance survives, but must not paint above the modal backdrop.
+                modalOpen && 'invisible pointer-events-none',
+            ]"
         >
             <ProjectEditModal :project="props.project" @open-change="onModalOpenChange">
                 <template #trigger>

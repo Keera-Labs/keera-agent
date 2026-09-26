@@ -203,10 +203,12 @@ describe('Sidebar', () => {
         item.dispatchEvent(new MouseEvent('mouseenter'))
         await flushPromises()
         await w.get('[aria-label="Project actions"]').trigger('click')
+        expect(w.get('[data-testid="project-menu"]').classes()).not.toContain('invisible')
         await w.get('[aria-label="Delete project"]').trigger('click')
 
         const dialog = document.querySelector('[role="dialog"]')!
         expect(dialog.textContent).toContain('alpha-api')
+        expect(w.get('[data-testid="project-menu"]').classes()).toEqual(expect.arrayContaining(['invisible', 'pointer-events-none']))
         dialog.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
         await flushPromises()
         expect(document.querySelector('[role="dialog"]')).not.toBeNull()
