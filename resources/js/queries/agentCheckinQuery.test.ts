@@ -5,6 +5,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, ref } from 'vue'
+import { HttpRequestError } from '@/composables/useHttp'
 import { useAgentCheckin, type AgentCheckin } from './agentCheckinQuery'
 
 const stopped: AgentCheckin = { enabled: false, interval_minutes: 5, running: false }
@@ -98,7 +99,7 @@ describe('useAgentCheckin', () => {
 
         requestMock.mockResolvedValueOnce(response({ detail: [{ loc: ['body', 'interval_minutes'] }] }, 422))
         await expect(api.update.mutateAsync({ enabled: true, interval_minutes: 0 }))
-            .rejects.toThrow('Failed to update check-in state')
+            .rejects.toMatchObject({ constructor: HttpRequestError, status: 422 })
 
         expect(api.checkin.value).toEqual(stopped)
     })
