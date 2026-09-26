@@ -3,14 +3,17 @@ import type * as Monaco from 'monaco-editor'
 import { storeToRefs } from 'pinia'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
-import { EDITOR_FONT_FAMILY, EDITOR_FONT_SIZE, EDITOR_THEME, loadMonaco, type TextModel } from '@/editor/monaco'
+import { EDITOR_THEME, loadMonaco, type MonacoApi, type TextModel } from '@/editor/monaco'
 import { SAVE_STATUS_LABEL, saveStatus, useEditorStore } from '@/stores/editorStore'
+import { useEditorSettingsStore } from '@/stores/editorSettingsStore'
 
 const editorStore = useEditorStore()
 const { activeTab } = storeToRefs(editorStore)
+const { font } = storeToRefs(useEditorSettingsStore())
 
 const host = ref<HTMLElement | null>(null)
 let editor: Monaco.editor.IStandaloneCodeEditor | null = null
+let monacoApi: MonacoApi | null = null
 let unmounted = false
 // One editor is shared by all tabs, so each model's cursor and scroll are kept here.
 const viewStates = new WeakMap<TextModel, Monaco.editor.ICodeEditorViewState | null>()
@@ -31,20 +34,16 @@ function showActiveModel() {
 onMounted(async () => {
     const monaco = await loadMonaco()
     if (unmounted || !host.value) return
+    monacoApi = monaco
     editor = monaco.editor.create(host.value, {
         model: null,
         theme: EDITOR_THEME,
         automaticLayout: true,
-        fontFamily: EDITOR_FONT_FAMILY,
-        fontSize: EDITOR_FONT_SIZE,
+        ...font.value,
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
     })
-    // Monaco caches glyph widths on create; if the face arrives later, stale
-    // measurements misplace the cursor and selections until they are re-taken.
-    document.fonts
-        .load(`${EDITOR_FONT_SIZE}px ${EDITOR_FONT_FAMILY}`)
-        .then(() => monaco.editor.remeasureFonts(), () => {})
+    remeasureWhenLoaded(font.value)
     editor.onDidBlurEditorText(() => {
         const tab = activeTab.value
         if (tab) editorStore.flush(tab.projectId, tab.path)
@@ -53,6 +52,19 @@ onMounted(async () => {
 })
 
 watch(activeTab, showActiveModel)
+
+// Monaco caches glyph widths; if the face arrives after they were taken, stale
+// measurements misplace the cursor and selections until they are re-taken.
+function remeasureWhenLoaded({ fontFamily, fontSize }: { fontFamily: string; fontSize: number }) {
+    document.fonts
+        .load(`${fontSize}px ${fontFamily}`)
+        .then(() => monacoApi?.editor.remeasureFonts(), () => {})
+}
+
+watch(font, next => {
+    editor?.updateOptions(next)
+    remeasureWhenLoaded(next)
+})
 
 // Capture phase: runs before Monaco's own key handling and outside it too, so
 // the save shortcut works wherever focus is while a file is shown.

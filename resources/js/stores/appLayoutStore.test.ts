@@ -4,7 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createApp, reactive } from 'vue'
 import { PiniaColada, useQueryCache } from '@pinia/colada'
 import { playSound } from '@/composables/useAudio'
-import { disposeProjectSessions, type Session } from '@/composables/useTerminalSessions'
+import { applyTerminalFont, disposeProjectSessions, type Session } from '@/composables/useTerminalSessions'
 import { flushPromises } from '@vue/test-utils'
 import type { Project } from '@/types/type'
 import { useAppLayoutStore } from './appLayoutStore'
@@ -106,6 +106,23 @@ describe('useAppLayoutStore', () => {
         expect(store.sessions.get(2)).toBe(session)
 
         store.sessions.delete(2)
+    })
+
+    it('re-fonts and re-fits live terminals once a saved editor font loads', async () => {
+        const { store } = setup()
+        const session = fakeSession()
+        Object.assign(session.term, { options: {} })
+        store.sessions.set(4, session)
+        const load = vi.fn(() => Promise.resolve([]))
+        Object.defineProperty(document, 'fonts', { value: { load }, configurable: true })
+
+        await applyTerminalFont({ fontFamily: '"JetBrains Mono", monospace', fontSize: 15 })
+
+        expect(load).toHaveBeenCalledWith('15px "JetBrains Mono", monospace')
+        expect(session.term.options).toMatchObject({ fontFamily: '"JetBrains Mono", monospace', fontSize: 15 })
+        expect(session.fitAddon.fit).toHaveBeenCalled()
+
+        store.sessions.delete(4)
     })
 
     it('exposes the active project tasks parsed from the JSON:API envelope', async () => {

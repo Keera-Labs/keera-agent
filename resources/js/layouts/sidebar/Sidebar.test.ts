@@ -308,14 +308,22 @@ describe('Sidebar', () => {
         expect(document.querySelector('[aria-label="Search projects"]')).not.toBeNull()
     })
 
-    it('marks Settings as current on the settings page', async () => {
-        page.component = 'settings/Index'
+    it('opens the Settings modal in place from the gear', async () => {
         const w = await mountSidebar()
+        const gear = w.get('[title="Settings"]')
+        const dialog = () => w.find('[role="dialog"][aria-label="Settings"]')
 
-        const settings = w.get('[title="Settings"]')
-        expect(settings.attributes('aria-current')).toBe('page')
-        await settings.trigger('click')
-        expect(router.visit).toHaveBeenCalledWith('/settings')
+        expect(gear.attributes('aria-expanded')).toBe('false')
+        await gear.trigger('click')
+        await flushPromises()
+
+        expect(dialog().exists()).toBe(true)
+        expect(gear.attributes('aria-expanded')).toBe('true')
+        expect(router.visit).not.toHaveBeenCalledWith('/settings')
+
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+        await flushPromises()
+        expect(dialog().exists()).toBe(false)
     })
 
     it('marks Agents as current only on a project agents page', async () => {
