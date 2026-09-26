@@ -3,7 +3,9 @@ import { router } from '@inertiajs/vue3'
 import { onBeforeUnmount, ref, watch } from 'vue'
 import DotsIndicator from '@/components/ui/DotsIndicator.vue'
 import Icon from '@/components/ui/Icon.vue'
-import { useAppLayoutStore } from '@/stores/appLayoutStore'
+import ProjectDeleteModal from '@/pages/project/ProjectDeleteModal.vue'
+import ProjectEditModal from '@/pages/project/ProjectEditModal.vue'
+import ProjectMoveModal from '@/pages/project/ProjectMoveModal.vue'
 import { color } from '@/tokens'
 import type { Project } from '@/types/type'
 
@@ -13,10 +15,10 @@ const props = defineProps<{
     status?: 'running' | 'done'
 }>()
 
-const layout = useAppLayoutStore()
 const hovered = ref(false)
 const menuOpen = ref(false)
 const menu = ref<HTMLElement | null>(null)
+const modalOpen = ref(false)
 
 const menuItemClass = (danger = false) =>
     `flex items-center gap-2 py-1.5 px-3 cursor-pointer text-[12px] ${danger ? 'text-danger' : 'text-zinc-700'} bg-transparent border-0 w-full text-left whitespace-nowrap hover:bg-canvas`
@@ -25,10 +27,10 @@ function visit() {
     router.visit(`/${props.project.slug}`)
 }
 
-// The project edit/move/delete modals are ported separately.
-function openPendingModal(name: string) {
-    menuOpen.value = false
-    layout.migratingModal = name
+// The modals live inside the menu, so it stays open until the modal closes.
+function onModalOpenChange(open: boolean) {
+    modalOpen.value = open
+    if (!open) menuOpen.value = false
 }
 
 function openDirectory() {
@@ -37,6 +39,8 @@ function openDirectory() {
 }
 
 function onClickOutside(e: MouseEvent) {
+    // A modal is teleported to <body>, so clicks inside it land "outside" the menu.
+    if (modalOpen.value) return
     if (menu.value && !menu.value.contains(e.target as Node)) menuOpen.value = false
 }
 
@@ -94,23 +98,35 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
             ref="menu"
             class="absolute right-0 top-full z-[200] bg-surface border border-stroke rounded shadow-[0_8px_24px_rgba(0,0,0,0.12)] min-w-[170px] py-1 px-0"
         >
-            <button type="button" :class="menuItemClass()" @click.stop="openPendingModal('Edit project')">
-                <Icon name="settings" :size="12" class="shrink-0" />
-                Edit project
-            </button>
-            <button type="button" :class="menuItemClass()" @click.stop="openPendingModal('Move project')">
-                <Icon name="arrow-right" :size="12" class="shrink-0" />
-                Move to workspace
-            </button>
+            <ProjectEditModal :project="props.project" @open-change="onModalOpenChange">
+                <template #trigger>
+                    <button type="button" :class="menuItemClass()">
+                        <Icon name="settings" :size="12" class="shrink-0" />
+                        Edit project
+                    </button>
+                </template>
+            </ProjectEditModal>
+            <ProjectMoveModal :project="props.project" @open-change="onModalOpenChange">
+                <template #trigger>
+                    <button type="button" :class="menuItemClass()">
+                        <Icon name="arrow-right" :size="12" class="shrink-0" />
+                        Move to workspace
+                    </button>
+                </template>
+            </ProjectMoveModal>
             <button type="button" :class="menuItemClass()" @click.stop="openDirectory">
                 <Icon name="folder" :size="12" class="shrink-0" />
                 Open in directory
             </button>
             <div class="h-px bg-stroke my-1 mx-0" />
-            <button type="button" :class="menuItemClass(true)" @click.stop="openPendingModal('Delete project')">
-                <Icon name="trash-2" :size="12" class="shrink-0" />
-                Delete project
-            </button>
+            <ProjectDeleteModal :project="props.project" @open-change="onModalOpenChange">
+                <template #trigger>
+                    <button type="button" :class="menuItemClass(true)">
+                        <Icon name="trash-2" :size="12" class="shrink-0" />
+                        Delete project
+                    </button>
+                </template>
+            </ProjectDeleteModal>
         </div>
     </div>
 </template>

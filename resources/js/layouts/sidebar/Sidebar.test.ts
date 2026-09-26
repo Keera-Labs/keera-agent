@@ -40,6 +40,9 @@ function fakeFetch(url: string, init?: RequestInit) {
     const { pathname, searchParams } = new URL(url, 'http://test')
     let body: unknown = []
     if (pathname === '/api/workspaces') body = workspaces
+    if (pathname === '/api/projects' && init?.method === 'POST') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(project(99, 'fresh', 1)) })
+    }
     if (pathname === '/api/projects') {
         const ws = searchParams.get('workspace_id')
         body = ws === null ? projects : projects.filter(p => p.workspace_id === Number(ws))
@@ -166,11 +169,78 @@ describe('Sidebar', () => {
         expect(document.querySelector('form')).toBeNull()
     })
 
-    it('shows the migration notice for modals that are not ported yet', async () => {
+    it('creates a project in the selected workspace from "Add project"', async () => {
         const w = await mountSidebar()
+        useWorkspaceStore().setCurrentWorkspaceId(1)
+        await flushPromises()
 
         await w.get('[title="Add project"]').trigger('click')
+        const dialog = document.querySelector('[role="dialog"]')!
+        expect(dialog.textContent).toContain('New Project')
+        expect(dialog.querySelector<HTMLSelectElement>('select[name="workspace"]')!.value).toBe('1')
 
-        expect(w.get('[role="status"]').text()).toContain('Create project is being migrated')
+        for (const [field, value] of [['name', 'fresh'], ['path', '~/code/fresh']]) {
+            const input = dialog.querySelector<HTMLInputElement>(`input[name="${field}"]`)!
+            input.value = value
+            input.dispatchEvent(new Event('input'))
+        }
+        dialog.querySelector('form')!.dispatchEvent(new Event('submit'))
+        await flushPromises()
+
+        const post = vi.mocked(fetch).mock.calls.find(([, init]) => init?.method === 'POST')!
+        expect(post[0]).toBe('/api/projects')
+        expect(JSON.parse(post[1]!.body as string)).toEqual({
+            name: 'fresh', path: '~/code/fresh', language: 'Python', workspace_id: 1, create_dir: false,
+        })
+        expect(router.visit).toHaveBeenCalledWith('/p-99')
+        expect(document.querySelector('[role="dialog"]')).toBeNull()
+    })
+
+    it('keeps a project menu modal open while interacting with it', async () => {
+        const w = await mountSidebar()
+        const item = w.findAll('[data-testid="project-item"]')[0].element.parentElement!
+
+        item.dispatchEvent(new MouseEvent('mouseenter'))
+        await flushPromises()
+        await w.get('[aria-label="Project actions"]').trigger('click')
+        await w.get('[aria-label="Delete project"]').trigger('click')
+
+        const dialog = document.querySelector('[role="dialog"]')!
+        expect(dialog.textContent).toContain('alpha-api')
+        dialog.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+        await flushPromises()
+        expect(document.querySelector('[role="dialog"]')).not.toBeNull()
+
+        ;[...dialog.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Delete')!.click()
+        await flushPromises()
+
+        expect(calls).toContainEqual({ url: '/api/projects/10', method: 'DELETE' })
+        expect(document.querySelector('[role="dialog"]')).toBeNull()
+        expect(w.find('[aria-label="Edit project"]').exists()).toBe(false)
+    })
+
+    it('opens the project search palette from the store', async () => {
+        await mountSidebar()
+
+        useAppLayoutStore().showProjectSearch = true
+        await flushPromises()
+
+        const dialog = document.querySelector('[aria-label="Search projects"]')!
+        expect(dialog.querySelectorAll('[data-testid="search-result"]')).toHaveLength(3)
+        dialog.querySelector<HTMLElement>('[data-testid="search-result"]')!.click()
+        await flushPromises()
+
+        expect(router.visit).toHaveBeenCalledWith('/p-10')
+        expect(document.querySelector('[aria-label="Search projects"]')).toBeNull()
+    })
+
+    it('shows the migration notice for modals that are not ported yet', async () => {
+        const w = await mountSidebar()
+        useProjectStore().setActiveProject(projects[0])
+        await flushPromises()
+
+        await w.get('button:not([disabled]).bg-blue-600').trigger('click')
+
+        expect(w.get('[role="status"]').text()).toContain('New agent is being migrated')
     })
 })

@@ -1,24 +1,26 @@
 <script setup lang="ts">
+import { router } from '@inertiajs/vue3'
 import { storeToRefs } from 'pinia'
 import { computed } from 'vue'
 import ConfirmDeleteWorkspaceModal from '@/components/modals/ConfirmDeleteWorkspaceModal.vue'
+import ProjectSearchModal from '@/components/modals/ProjectSearchModal.vue'
+import useAllProjects from '@/queries/allProjectsQuery'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 
 const layout = useAppLayoutStore()
 const { showGlobalSettings, showProjectSearch, migratingModal } = storeToRefs(layout)
 const workspaceStore = useWorkspaceStore()
+const searchProjects = useAllProjects(showProjectSearch)
 
 // Modals not ported yet keep their open state wired and say so instead of failing silently.
 const pendingModal = computed(() => {
     if (showGlobalSettings.value) return 'Global settings'
-    if (showProjectSearch.value) return 'Project search'
     return migratingModal.value
 })
 
 function close() {
     showGlobalSettings.value = false
-    showProjectSearch.value = false
     migratingModal.value = null
 }
 
@@ -35,6 +37,13 @@ function onWorkspaceDeleted(workspaceId: number) {
         :workspace="workspaceStore.deletingWorkspace"
         @close="workspaceStore.setDeletingWorkspace(null)"
         @deleted="onWorkspaceDeleted"
+    />
+
+    <ProjectSearchModal
+        v-if="showProjectSearch"
+        :projects="searchProjects"
+        @close="showProjectSearch = false"
+        @select="project => router.visit(`/${project.slug}`)"
     />
 
     <div
