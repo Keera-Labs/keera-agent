@@ -2,16 +2,16 @@ from typing import Annotated
 
 from fastapi import Query
 
-from app.requests.git_request import GitWorktreeQuery
+from app.requests.git_request import GitDiffQuery
+from app.services.git_diff import file_diff
 from app.services.git_repository import GitRepository
 from app.services.process import CommandError
 from app.utils.git_responses import git_error_response
 
 
-async def store(project_id: int, query: Annotated[GitWorktreeQuery, Query()]):
+async def show(project_id: int, query: Annotated[GitDiffQuery, Query()]):
     try:
         repo = await GitRepository.for_project(project_id, query.worktree)
-        pushed = await repo.push()
-        return {**pushed, "status": (await repo.status()).to_dict()}
+        return (await file_diff(repo, query.path, query.staged)).to_dict()
     except CommandError as e:
         return git_error_response(e)

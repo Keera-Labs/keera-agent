@@ -56,6 +56,12 @@ class GitTestRepo:
         self.git("commit", "-q", "-m", message)
         return self.git("rev-parse", "HEAD").strip()
 
+    def add_worktree(self, relative: str, branch: str) -> Path:
+        """`worktree add` inside the temp repo (e.g. .claude/worktrees/agent-7)."""
+        path = self.root / relative
+        self.git("worktree", "add", "-q", "-b", branch, str(path))
+        return path.resolve()
+
     def add_bare_remote(self, name: str = "origin") -> Path:
         remote = self.base / f"{name}.git"
         self.git("init", "-q", "--bare", str(remote), cwd=self.base)

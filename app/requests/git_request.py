@@ -19,8 +19,20 @@ class GitPathsRequest(BaseModel):
         return None if self.all else self.paths
 
 
-class GitCommitIndexQuery(BaseModel):
+class GitWorktreeQuery(BaseModel):
+    """`worktree` is a path from GET /git/worktrees; omitted means the project's checkout."""
+
+    worktree: Optional[str] = None
+
+
+class GitCommitIndexQuery(GitWorktreeQuery):
     limit: int = Field(default=20, ge=1, le=100)
+
+
+class GitDiffQuery(GitWorktreeQuery):
+    # Validated by the diff service so a missing path is a 422 JSON error like a bad one.
+    path: str = ""
+    staged: bool = False
 
 
 class GitCommitStoreRequest(BaseModel):
