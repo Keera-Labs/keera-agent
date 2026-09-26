@@ -50,8 +50,10 @@ class WebsocketTerminal:
         finally:
             for t in tasks:
                 t.cancel()
+            # Let the cancelled reader unregister the master fd before it is closed.
+            await asyncio.gather(*tasks, return_exceptions=True)
             if stop_on_disconnect and self._ws is not None:
-                self._terminal.stop()
+                await self._terminal.aclose()
 
     async def _read_pty(self, loop: asyncio.AbstractEventLoop) -> None:
         master_fd = self._terminal.master_fd

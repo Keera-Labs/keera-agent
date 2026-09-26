@@ -4,9 +4,12 @@ import fcntl
 import os
 import pty as _pty
 import re
+import signal
 import struct
 import subprocess
 import termios
+import threading
+import time
 
 
 def _with_color_env(env: dict) -> dict:
@@ -80,11 +83,102 @@ class _PlainText:
         return re.sub(r"\s+", " ", text)
 
 
+def _descendant_process_groups(root_pid: int) -> set[int]:
+    try:
+        ps = subprocess.run(
+            ["ps", "-A", "-o", "pid=,ppid=,pgid="],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return set()
+
+    children: dict[int, list[tuple[int, int]]] = {}
+    for line in ps.stdout.splitlines():
+        fields = line.split()
+        if len(fields) == 3 and all(f.isdigit() for f in fields):
+            pid, ppid, pgid = map(int, fields)
+            children.setdefault(ppid, []).append((pid, pgid))
+
+    groups: set[int] = set()
+    pending = [root_pid]
+    while pending:
+        for pid, pgid in children.get(pending.pop(), []):
+            groups.add(pgid)
+            pending.append(pid)
+    return groups
+
+
+def _signal_groups(groups: set[int], sig: signal.Signals) -> None:
+    for pgid in groups:
+        try:
+            os.killpg(pgid, sig)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+
+def _wait_for_groups(groups: set[int], timeout: float) -> set[int]:
+    """Wait up to `timeout` for the groups to empty; return the ones still alive."""
+    deadline = time.monotonic() + timeout
+    alive = set(groups)
+    while True:
+        for pgid in list(alive):
+            try:
+                os.killpg(pgid, 0)
+            except (ProcessLookupError, PermissionError):
+                alive.discard(pgid)
+        if not alive or time.monotonic() >= deadline:
+            return alive
+        time.sleep(0.02)
+
+
+def _process_groups(shell_pid: int, master_fd: int | None) -> set[int]:
+    """Every process group started from a terminal's shell.
+
+    The shell runs in its own session (setsid), but with job control each
+    command it launches (the claude/codex CLI, background jobs) gets its own
+    process group, so killing only the shell's group would orphan them.
+    """
+    groups = {shell_pid} | _descendant_process_groups(shell_pid)
+    if master_fd is not None:
+        try:
+            groups.add(os.tcgetpgrp(master_fd))
+        except OSError:
+            pass
+    return groups - {0, 1, os.getpgrp()}
+
+
+def _shutdown(proc: subprocess.Popen | None, master_fd: int | None, grace: float) -> None:
+    """Kill everything a terminal started and release its PTY. Blocks for up to seconds."""
+    groups = _process_groups(proc.pid, master_fd) if proc else set()
+    _signal_groups(groups, signal.SIGTERM)
+    # Close the master before reaping the shell: a session leader's exit waits for
+    # unread tty output to drain, and nothing reads the master once we're stopping.
+    if master_fd is not None:
+        try:
+            os.close(master_fd)
+        except OSError:
+            pass
+    if proc:
+        # Interactive shells ignore SIGTERM, and the shell holds no state worth a
+        # graceful exit; reaping it also stops its zombie keeping its group "alive".
+        try:
+            proc.kill()
+            proc.wait(timeout=5)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        _signal_groups(_wait_for_groups(groups, grace), signal.SIGKILL)
+
+
 class Terminal:
     # send() waits at most echo_timeout for the CLI to echo a paste, and treats
     # echo_settle seconds of silence as the echo having finished rendering.
     echo_timeout = 3.0
     echo_settle = 0.3
+    # How long stop() lets the CLI exit on SIGTERM before SIGKILLing it.
+    stop_grace = 1.0
     # How long wait_for_cli_ready() holds for an unanswered startup dialog.
     dialog_timeout = 120.0
 
@@ -103,6 +197,7 @@ class Terminal:
         self._env = _with_color_env(env or os.environ.copy())
         self._proc: subprocess.Popen | None = None
         self.master_fd: int | None = None
+        self._stop_lock = threading.Lock()
         self._write_lock = asyncio.Lock()
         self._send_lock = asyncio.Lock()
         self._output_seq = 0
@@ -135,20 +230,24 @@ class Terminal:
         self._proc = proc
         self.master_fd = master_fd
 
+    def _detach(self) -> tuple[subprocess.Popen | None, int | None]:
+        # Taking ownership under a lock makes stop()/aclose() idempotent and safe to
+        # race: only the first caller gets the process and fd to tear down.
+        with self._stop_lock:
+            proc, self._proc = self._proc, None
+            master_fd, self.master_fd = self.master_fd, None
+        return proc, master_fd
+
     def stop(self) -> None:
-        if self._proc:
-            try:
-                self._proc.kill()
-                self._proc.wait()
-            except OSError:
-                pass
-            self._proc = None
-        if self.master_fd is not None:
-            try:
-                os.close(self.master_fd)
-            except OSError:
-                pass
-            self.master_fd = None
+        """Blocking teardown (can take seconds); on the event loop use aclose()."""
+        _shutdown(*self._detach(), self.stop_grace)
+
+    async def aclose(self) -> None:
+        # Detach on the loop thread so writers and readers see a stopped terminal at
+        # once, then do the slow signalling and reaping off the loop.
+        proc, master_fd = self._detach()
+        if proc is not None or master_fd is not None:
+            await asyncio.to_thread(_shutdown, proc, master_fd, self.stop_grace)
 
     async def write(self, data: bytes) -> None:
         if self.master_fd is None or not data:
