@@ -44,20 +44,24 @@ def _etag(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _require_regular_file(target: Path) -> os.stat_result:
-    # Checked before open() so a FIFO or device node can never block or be read.
-    st = target.stat()
-    if not stat.S_ISREG(st.st_mode):
-        raise IsADirectoryError
-    return st
-
-
-def _read_text(target: Path) -> tuple[str, bytes]:
-    _require_regular_file(target)
-    with open(target, "rb") as f:
+def _read_regular_file(target: Path) -> tuple[bytes, os.stat_result]:
+    # O_NONBLOCK + fstat on the opened fd: a FIFO swapped in after path resolution
+    # can't block the open, and is rejected before anything is read from it.
+    fd = os.open(target, os.O_RDONLY | os.O_NONBLOCK)
+    with os.fdopen(fd, "rb") as f:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise IsADirectoryError
+        if st.st_size > MAX_BYTES:
+            raise FileTooLarge
         data = f.read(MAX_BYTES + 1)
     if len(data) > MAX_BYTES:
         raise FileTooLarge
+    return data, st
+
+
+def _read_text(target: Path) -> tuple[str, bytes]:
+    data, _ = _read_regular_file(target)
     if b"\x00" in data:
         raise NotText
     try:
@@ -66,12 +70,20 @@ def _read_text(target: Path) -> tuple[str, bytes]:
         raise NotText from e
 
 
+def _ensure_editable(target: Path) -> None:
+    # Cheap pre-check outside the write lock so a save against a missing, non-regular
+    # or oversized file is rejected without ever queueing behind other saves.
+    st = target.stat()
+    if not stat.S_ISREG(st.st_mode):
+        raise IsADirectoryError
+    if st.st_size > MAX_BYTES:
+        raise FileTooLarge
+
+
 def _replace_atomically(target: Path, data: bytes, expected_etag: str) -> None:
-    st = _require_regular_file(target)
-    with open(target, "rb") as f:
-        current = hashlib.file_digest(f, "sha256").hexdigest()
-    if current != expected_etag:
-        raise EtagMismatch(current)
+    current, st = _read_regular_file(target)
+    if _etag(current) != expected_etag:
+        raise EtagMismatch(_etag(current))
 
     fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.", suffix=".tmp")
     try:
@@ -128,6 +140,7 @@ async def update(
         rel, target = resolve_project_path(root, query.path)
         if len(data) > MAX_BYTES:
             raise FileTooLarge
+        await asyncio.to_thread(_ensure_editable, target)
         async with _write_lock:
             await asyncio.to_thread(_replace_atomically, target, data, body.etag)
     except (InvalidPath, OSError, FileTooLarge, EtagMismatch) as e:

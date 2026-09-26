@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ProjectFileIndexRequest(BaseModel):
@@ -18,3 +18,13 @@ class ProjectFileContentUpdateRequest(BaseModel):
 
     content: str
     etag: str = Field(min_length=1)
+
+    @field_validator("content")
+    @classmethod
+    def content_must_be_encodable(cls, value: str) -> str:
+        # JSON can carry lone surrogates ("\ud800") that have no UTF-8 encoding.
+        try:
+            value.encode("utf-8")
+        except UnicodeEncodeError as e:
+            raise ValueError("content is not valid UTF-8 text") from e
+        return value

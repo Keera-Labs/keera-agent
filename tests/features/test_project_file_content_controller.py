@@ -133,6 +133,13 @@ class TestShowFileContent(ProjectFileContentTestCase):
         response = await self.get(self.url("app/x.py"))
         response.assert_status(403)
 
+    async def test_fifo_returns_404_without_blocking(self):
+        # No pre-open stat on the read path: this exercises O_NONBLOCK + fstat.
+        os.mkfifo(self.root / "pipe")
+
+        response = await self.get(self.url("pipe"))
+        response.assert_status(404)
+
     async def test_missing_path_returns_422(self):
         response = await self.get(self.url(None), headers={"Accept": "application/json"})
         response.assert_status(422)
@@ -263,6 +270,37 @@ class TestUpdateFileContent(ProjectFileContentTestCase):
 
         assert self.file.read_text() == "print('héllo')\n"
         assert sorted(p.name for p in (self.root / "app").iterdir()) == ["x.py"]
+
+    async def test_lone_surrogate_content_returns_422(self):
+        original = self.file.read_bytes()
+
+        response = await self.put(
+            self.url("app/x.py"),
+            content=b'{"content": "\\ud800", "etag": "%s"}' % self.current_etag().encode(),
+            headers={"Content-Type": "application/json", "Accept": "application/json"},
+        )
+        response.assert_status(422)
+        assert self.file.read_bytes() == original
+
+    async def test_oversized_existing_file_returns_413_without_hashing_or_locking(self):
+        big = self.root / "big.txt"
+        with open(big, "wb") as f:
+            f.truncate(MAX_BYTES * 50)
+
+        with mock.patch(
+            "app.controllers.project_file_content_controller._replace_atomically"
+        ) as replace:
+            response = await self.put(self.url("big.txt"), json={"content": "x", "etag": "bogus"})
+        response.assert_status(413)
+
+        replace.assert_not_called()
+        assert big.stat().st_size == MAX_BYTES * 50
+
+    async def test_fifo_returns_404(self):
+        os.mkfifo(self.root / "pipe")
+
+        response = await self.put(self.url("pipe"), json={"content": "x", "etag": "abc"})
+        response.assert_status(404)
 
     async def test_missing_etag_returns_422(self):
         response = await self.put(self.url("app/x.py"), json={"content": "x"})
