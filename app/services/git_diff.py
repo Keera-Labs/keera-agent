@@ -75,6 +75,8 @@ class FileDiff:
     original_path: str | None
     status: str
     staged: bool
+    # Same meaning as on /git/status: "U" is either untracked (true) or unmerged (false).
+    untracked: bool = False
     original: str | None = None
     modified: str | None = None
     binary: bool = False
@@ -154,7 +156,8 @@ async def _sides(repo: GitRepository, change: FileChange, staged: bool) -> tuple
     working = await asyncio.to_thread(_read_working_file, repo, change.path)
     if change.untracked:
         return None, working
-    if change.status == "C":
+    if change.unmerged:
+        # The index holds conflict stages, not one blob, so show HEAD against the marked-up file.
         return await _read_blob(repo, f"HEAD:{change.path}"), working
     original = await _read_blob(repo, f":0:{source}")
     return original, None if change.status == "D" else working
@@ -167,6 +170,7 @@ async def file_diff(repo: GitRepository, path: str, staged: bool) -> FileDiff:
         original_path=change.original_path,
         status=change.status,
         staged=staged,
+        untracked=change.untracked,
         language=language_for(change.path),
     )
     original, modified = await _sides(repo, change, staged)

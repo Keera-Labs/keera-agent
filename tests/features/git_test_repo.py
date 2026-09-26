@@ -56,6 +56,29 @@ class GitTestRepo:
         self.git("commit", "-q", "-m", message)
         return self.git("rev-parse", "HEAD").strip()
 
+    def merge_with_conflicts(self, ours: dict, theirs: dict) -> None:
+        """Commit `theirs` on a side branch and `ours` on main, then merge so they conflict.
+
+        Each dict maps path -> content, or None to delete that path.
+        """
+        self.git("checkout", "-q", "-b", "theirs")
+        self._apply(theirs)
+        self.commit_all("theirs")
+        self.git("checkout", "-q", "main")
+        self._apply(ours)
+        self.commit_all("ours")
+        merge = subprocess.run(
+            ["git", "merge", "-q", "theirs"], cwd=self.root, capture_output=True, text=True
+        )
+        assert merge.returncode != 0, "expected a conflicting merge"
+
+    def _apply(self, files: dict) -> None:
+        for path, content in files.items():
+            if content is None:
+                (self.root / path).unlink()
+            else:
+                self.write(path, content)
+
     def add_worktree(self, relative: str, branch: str) -> Path:
         """`worktree add` inside the temp repo (e.g. .claude/worktrees/agent-7)."""
         path = self.root / relative

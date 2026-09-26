@@ -39,6 +39,7 @@ class TestGitDiffController(TestCase, DatabaseTransaction):
             "original_path": None,
             "status": "M",
             "staged": False,
+            "untracked": False,
             "original": "print('v2')\n",
             "modified": "print('v3')\n",
             "binary": False,
@@ -62,9 +63,12 @@ class TestGitDiffController(TestCase, DatabaseTransaction):
 
         body = (await self.diff("dir/new.md")).json()
 
-        assert body["status"] == "U"
+        assert body["status"] == "U" and body["untracked"] is True
         assert body["original"] is None and body["modified"] == "# new\n"
         assert body["language"] == "markdown"
+        status = (await self.get(f"/api/projects/{self.project.id}/git/status")).json()
+        entry = next(f for f in status["changes"] if f["path"] == "dir/new.md")
+        assert (entry["status"], entry["untracked"]) == (body["status"], body["untracked"])
 
     async def test_staged_added_file_has_empty_original(self):
         self.repo.write("added.txt", "added\n")
@@ -92,6 +96,29 @@ class TestGitDiffController(TestCase, DatabaseTransaction):
         body = (await self.diff("renamed.txt", staged=True)).json()
 
         assert body["status"] == "R"
+        assert body["original_path"] == "notes.txt"
+        assert body["original"] == "old notes\n" and body["modified"] == "old notes\n"
+
+    async def test_unmerged_file_compares_head_with_conflict_markers(self):
+        self.repo.merge_with_conflicts(
+            ours={"notes.txt": "ours\n"}, theirs={"notes.txt": "theirs\n"}
+        )
+
+        body = (await self.diff("notes.txt")).json()
+
+        assert body["status"] == "U" and body["untracked"] is False
+        assert body["original"] == "ours\n"
+        assert "<<<<<<<" in body["modified"] and "theirs" in body["modified"]
+
+    async def test_staged_copy_reads_original_from_source(self):
+        self.repo.git("config", "status.renames", "copies")
+        self.repo.write("notes-copy.txt", "old notes\n")
+        self.repo.write("notes.txt", "old notes\nedited\n")
+        self.repo.git("add", "-A")
+
+        body = (await self.diff("notes-copy.txt", staged=True)).json()
+
+        assert body["status"] == "C"
         assert body["original_path"] == "notes.txt"
         assert body["original"] == "old notes\n" and body["modified"] == "old notes\n"
 
