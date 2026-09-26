@@ -28,11 +28,18 @@ const XTERM_THEME = {
     white: '#6e7781', brightWhite: '#8c959f',
 }
 
+export interface TerminalFont {
+    fontFamily: string
+    fontSize: number
+}
+
+let terminalFont: TerminalFont = { fontFamily: '"Dank Mono", "Fira Code", "Cascadia Code", monospace', fontSize: 16 }
+
 export function makeTerminal() {
     return new Terminal({
         theme: XTERM_THEME,
-        fontFamily: '"Dank Mono", "Fira Code", "Cascadia Code", monospace',
-        fontSize: 16, lineHeight: 1.4, cursorBlink: true, scrollback: 5000,
+        ...terminalFont,
+        lineHeight: 1.4, cursorBlink: true, scrollback: 5000,
     })
 }
 
@@ -85,6 +92,23 @@ function disposeSession({ term, ws, observer }: Session) {
     observer.disconnect()
     term.dispose()
     ws.close()
+}
+
+/**
+ * Switch every open terminal (and the ones opened later) to a new font. xterm
+ * measures its cell size when the option changes, so the face is loaded first;
+ * the resize to the new cell count then goes through the usual fit path.
+ */
+export async function applyTerminalFont(font: TerminalFont) {
+    terminalFont = font
+    await document.fonts.load(`${font.fontSize}px ${font.fontFamily}`).catch(() => {})
+    // A newer font was applied while this one was loading.
+    if (terminalFont !== font) return
+    for (const { term, fitAddon } of [...sessions.values(), ...agentSessions.values()]) {
+        term.options.fontFamily = font.fontFamily
+        term.options.fontSize = font.fontSize
+        fitAddon.fit()
+    }
 }
 
 function disposeAgentSessions() {

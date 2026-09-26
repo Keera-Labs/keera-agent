@@ -3,6 +3,8 @@
 @import "@fontsource-variable/roboto/wght-italic.css";
 @import "@fontsource/fira-code/400.css";
 @import "@fontsource/fira-code/700.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/700.css";
 @config "../../tailwind.config.js";
 
 @theme {
@@ -10,6 +12,7 @@
     /*
      * Dank Mono (commercial) and Monaco (macOS system font) are never shipped and
      * apply only when installed; the bundled Fira Code keeps the stack free-font backed.
+     * The editor and terminal font is user-configurable (editor/fonts.ts); this is UI chrome only.
      */
     --font-mono: "Dank Mono", "Fira Code", Monaco, ui-monospace, SFMono-Regular, Menlo, monospace;
 

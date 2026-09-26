@@ -1,4 +1,4 @@
-import { usePage } from '@inertiajs/vue3'
+import { router, usePage } from '@inertiajs/vue3'
 import { useQueryCache } from '@pinia/colada'
 import { defineStore, storeToRefs } from 'pinia'
 import { computed, markRaw, onScopeDispose, ref, shallowRef, watch } from 'vue'
@@ -8,6 +8,8 @@ import { AGENT_SUMMARIES_QUERY_KEY } from '@/queries/agentSummariesQuery'
 import useProjects, { PROJECTS_QUERY_KEY } from '@/queries/projectsQuery'
 import { useTasks } from '@/queries/taskQuery'
 import { WORKSPACES_QUERY_KEY } from '@/queries/workspacesQuery'
+import type { SettingsSectionId } from '@/layouts/settings/sections'
+import { useEditorSettingsStore } from '@/stores/editorSettingsStore'
 import { useProjectStore } from '@/stores/projectStore'
 import type { AgentTemplate } from '@/types/agent'
 import type { Project } from '@/types/type'
@@ -61,9 +63,14 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
         },
     })
 
+    // Loaded up front: the saved font applies to terminals opened before any editor.
+    useEditorSettingsStore().load()
+
     const showGlobalSettings = ref(false)
     const showDefaultPermissions = ref(false)
     const showProjectSearch = ref(false)
+    // The open Settings section, or null while the Settings modal is closed.
+    const settingsSection = ref<SettingsSectionId | null>(null)
     // The project whose system prompt / permissions dialog is open, or null when closed.
     const systemPromptProject = ref<Project | null>(null)
     const permissionsProject = ref<Project | null>(null)
@@ -174,6 +181,21 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
         attachTerminal(session.term, holder)
     }
 
+    function openSettings(section: SettingsSectionId = 'ai') {
+        settingsSection.value = section
+    }
+
+    function closeSettings() {
+        settingsSection.value = null
+        // /settings is only a deep link into the modal; closing it leaves for the dashboard.
+        if (page.component === 'settings/Index') router.visit('/', { replace: true })
+    }
+
+    // Back/forward or any link away from /settings takes the modal with it.
+    watch(() => page.url, url => {
+        if (!url.startsWith('/settings')) settingsSection.value = null
+    })
+
     function refreshData() {
         // Workspace changes can reassign projects, so both lists are refreshed.
         queryCache.invalidateQueries({ key: WORKSPACES_QUERY_KEY })
@@ -209,6 +231,9 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
         showGlobalSettings,
         showDefaultPermissions,
         showProjectSearch,
+        settingsSection,
+        openSettings,
+        closeSettings,
         systemPromptProject,
         permissionsProject,
         projectView,

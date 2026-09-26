@@ -27,6 +27,44 @@ class InvalidRepoPath(CommandError):
         super().__init__(f"Invalid path: {path}")
 
 
+class InvalidWorktree(CommandError):
+    def __init__(self, path: str):
+        super().__init__(f"Unknown worktree: {path}")
+
+
+class ChangeNotFound(CommandError):
+    pass
+
+
+@dataclass
+class Worktree:
+    path: str
+    head: str | None = None
+    branch: str | None = None
+    detached: bool = False
+    bare: bool = False
+    locked: bool = False
+    prunable: bool = False
+
+
+def _parse_worktrees(raw: bytes) -> list[Worktree]:
+    """Parse `worktree list --porcelain -z`: NUL-separated attributes, records end in NUL NUL."""
+    worktrees: list[Worktree] = []
+    for token in raw.decode("utf-8", "replace").split("\0"):
+        key, _, value = token.partition(" ")
+        if key == "worktree":
+            worktrees.append(Worktree(str(Path(value).resolve())))
+        elif not worktrees:
+            continue
+        elif key == "HEAD":
+            worktrees[-1].head = None if set(value) == {"0"} else value
+        elif key == "branch":
+            worktrees[-1].branch = value.removeprefix("refs/heads/")
+        elif key in ("detached", "bare", "locked", "prunable"):
+            setattr(worktrees[-1], key, True)
+    return worktrees
+
+
 @dataclass
 class FileChange:
     path: str
@@ -177,11 +215,26 @@ class GitRepository:
         return cls(Path(result.text.strip()).resolve())
 
     @classmethod
-    async def for_project(cls, project_id: int) -> "GitRepository":
+    async def for_project(cls, project_id: int, worktree: str | None = None) -> "GitRepository":
         repo = await cls.discover(await project_root(project_id))
         if repo is None:
             raise NotARepository()
-        return repo
+        return await repo.select_worktree(worktree) if worktree else repo
+
+    async def worktrees(self) -> list[Worktree]:
+        result = await self.git_ok("worktree", "list", "--porcelain", "-z")
+        return _parse_worktrees(result.stdout)
+
+    async def select_worktree(self, path: str) -> "GitRepository":
+        """Switch to one of this repo's worktrees; only paths git itself lists are accepted."""
+        try:
+            wanted = Path(path).resolve()
+        except (OSError, ValueError, RuntimeError) as e:
+            raise InvalidWorktree(path) from e
+        for worktree in await self.worktrees():
+            if Path(worktree.path) == wanted and not (worktree.bare or worktree.prunable):
+                return GitRepository(wanted)
+        raise InvalidWorktree(path)
 
     async def git(self, *args: str, timeout: float = READ_TIMEOUT, stdin: bytes | None = None):
         return await run_command(
@@ -194,13 +247,19 @@ class GitRepository:
             raise CommandError(result.output or f"git {args[0]} failed", result.stderr)
         return result
 
+    async def changed_files(self) -> RepositoryStatus:
+        """Staged and unstaged changes without line counts: cheap enough for a single lookup."""
+        porcelain = await self.git_ok(
+            "status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all"
+        )
+        return _parse_status(porcelain.stdout)
+
     async def status(self) -> RepositoryStatus:
-        porcelain, unstaged, staged = await asyncio.gather(
-            self.git_ok("status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all"),
+        status, unstaged, staged = await asyncio.gather(
+            self.changed_files(),
             self.git_ok("diff", "--numstat", "-z", "-M"),
             self.git_ok("diff", "--cached", "--numstat", "-z", "-M"),
         )
-        status = _parse_status(porcelain.stdout)
         _apply_numstat(status.staged, _parse_numstat(staged.stdout))
         _apply_numstat(status.changes, _parse_numstat(unstaged.stdout))
         await asyncio.to_thread(_count_untracked_lines, self.root, status.changes)

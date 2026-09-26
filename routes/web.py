@@ -18,11 +18,14 @@ from app.controllers import (
     configurations_page_controller,
     dashboard_controller,
     default_permission_controller,
+    editor_settings_controller,
     git_commit_controller,
+    git_diff_controller,
     git_pull_request_controller,
     git_push_controller,
     git_stage_controller,
     git_status_controller,
+    git_worktree_controller,
     global_settings_controller,
     heartbeat_controller,
     home_controller,
@@ -51,7 +54,10 @@ router.get("/api/projects/{project_id}/files", project_file_controller.index)
 router.get("/api/projects/{project_id}/files/content", project_file_content_controller.show)
 router.put("/api/projects/{project_id}/files/content", project_file_content_controller.update)
 
-# Source Control panel — git operations on the project's repository
+# Source Control panel — git operations on the project's repository; every endpoint
+# takes an optional ?worktree=<path from /git/worktrees>.
+router.get("/api/projects/{project_id}/git/worktrees", git_worktree_controller.index)
+router.get("/api/projects/{project_id}/git/diff", git_diff_controller.show)
 router.get("/api/projects/{project_id}/git/status", git_status_controller.show)
 router.post("/api/projects/{project_id}/git/stage", git_stage_controller.store)
 router.post("/api/projects/{project_id}/git/unstage", git_stage_controller.destroy)
@@ -129,6 +135,8 @@ router.patch("/api/default-permissions", default_permission_controller.update)
 # Global app settings
 router.get("/api/global-settings", global_settings_controller.get_global_settings)
 router.patch("/api/global-settings", global_settings_controller.update_global_settings)
+router.get("/api/settings/editor", editor_settings_controller.show)
+router.patch("/api/settings/editor", editor_settings_controller.update)
 
 # Plugin system — list discovered plugins and toggle activation (before wildcard)
 router.get("/api/plugins", plugin_controller.index)

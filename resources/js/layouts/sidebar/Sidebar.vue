@@ -23,7 +23,7 @@ const PROJECT_NAV: { id: ProjectView; label: string; icon: IconName }[] = [
 
 const page = usePage()
 const layout = useAppLayoutStore()
-const { activeAgentId, claudeStatus, projectView, showProjectSearch, sidebarOpen, statusBarOpen, tasks } = storeToRefs(layout)
+const { activeAgentId, claudeStatus, projectView, settingsSection, showProjectSearch, sidebarOpen, statusBarOpen, tasks } = storeToRefs(layout)
 const { activeProject } = storeToRefs(useProjectStore())
 const { projects } = useProjects()
 const { currentWorkspaceId } = storeToRefs(useWorkspaceStore())
@@ -49,7 +49,7 @@ function selectAgent(project: Project, agent: AgentSummary) {
     router.visit(`/${project.slug}/agents/${agent.id}`)
 }
 
-const isSettingsPage = computed(() => page.component.startsWith('settings/'))
+const isSettingsOpen = computed(() => settingsSection.value !== null)
 const isTasksPage = computed(() => page.component === 'Tasks')
 const isConfigPage = computed(() => page.component === 'Configurations')
 // A project's agents view renders as "Home" (no agents yet) or "agents/*".
@@ -194,9 +194,10 @@ const iconButtonClass = 'flex items-center justify-center w-6 h-6 rounded-md tex
             <button
                 type="button"
                 title="Settings"
-                :aria-current="isSettingsPage ? 'page' : undefined"
-                :class="[iconButtonClass, isSettingsPage && 'bg-black/[0.06] text-zinc-900']"
-                @click="router.visit('/settings')"
+                aria-label="Settings"
+                :aria-expanded="isSettingsOpen"
+                :class="[iconButtonClass, isSettingsOpen && 'bg-black/[0.06] text-zinc-900']"
+                @click="layout.openSettings()"
             >
                 <Icon name="settings" :size="14" />
             </button>
