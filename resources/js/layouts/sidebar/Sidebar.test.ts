@@ -290,6 +290,14 @@ describe('Sidebar', () => {
         expect(w.get('[data-testid="workspace-menu"]').isVisible()).toBe(false)
     })
 
+    it('goes to the Dashboard from the logo at the top of the sidebar', async () => {
+        const w = await mountSidebar()
+
+        await w.get('[aria-label="Go to Dashboard"]').trigger('click')
+
+        expect(router.visit).toHaveBeenCalledWith('/')
+    })
+
     it('opens the project search palette from the Search button', async () => {
         const w = await mountSidebar()
 

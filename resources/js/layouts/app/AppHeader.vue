@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { router } from '@inertiajs/vue3'
 import { storeToRefs } from 'pinia'
 import Icon, { type IconName } from '@/components/ui/Icon.vue'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
@@ -20,23 +19,6 @@ const PANEL_TOGGLES: { label: string; icon: IconName; open: typeof sidebarOpen }
 
 <template>
     <header class="shrink-0 bg-canvas flex items-stretch h-10 border-b border-stroke z-20">
-        <!-- Logo zone: same width as the sidebar; doubles as the Dashboard (home) link -->
-        <button
-            type="button"
-            aria-label="Go to Dashboard"
-            title="Dashboard"
-            :class="[
-                'shrink-0 flex items-center gap-2 px-3.5 text-left cursor-pointer transition-colors hover:bg-black/[0.03]',
-                sidebarOpen ? 'w-[220px] border-r border-stroke' : '',
-            ]"
-            @click="router.visit('/')"
-        >
-            <div class="w-6 h-6 rounded-md flex items-center justify-center shrink-0 bg-accent">
-                <Icon name="info" :size="13" color="white" />
-            </div>
-            <span class="font-semibold text-[13px] text-zinc-900 tracking-[-0.01em] whitespace-nowrap">Keera Agent</span>
-        </button>
-
         <SessionTabs />
 
         <div class="shrink-0 flex items-center gap-1 pl-2 pr-2.5">

@@ -86,6 +86,20 @@ const iconButtonClass = 'flex items-center justify-center w-6 h-6 rounded-md tex
 
 <template>
     <aside class="w-[216px] shrink-0 bg-canvas border-r border-stroke flex flex-col overflow-hidden">
+        <!-- Doubles as the Dashboard (home) link; same height as the header so their borders line up. -->
+        <button
+            type="button"
+            aria-label="Go to Dashboard"
+            title="Dashboard"
+            class="shrink-0 flex items-center gap-2 h-10 px-3.5 border-b border-stroke text-left cursor-pointer transition-colors hover:bg-black/[0.03]"
+            @click="router.visit('/')"
+        >
+            <div class="w-6 h-6 rounded-md flex items-center justify-center shrink-0 bg-accent">
+                <Icon name="info" :size="13" color="white" />
+            </div>
+            <span class="font-semibold text-[13px] text-zinc-900 tracking-[-0.01em] whitespace-nowrap">Keera Agent</span>
+        </button>
+
         <div class="px-2 pt-2.5 pb-2">
             <button
                 type="button"

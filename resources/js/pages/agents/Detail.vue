@@ -9,7 +9,6 @@ import { useProjectStore } from '@/stores/projectStore'
 import { color } from '@/tokens'
 import { AGENT_TYPE_COLORS, AGENT_TYPE_LABELS } from '@/types/agent'
 import { agentColor } from '@/utils/agentColor'
-import AgentsListPanel from './AgentsListPanel.vue'
 import PmCheckinControl from './PmCheckinControl.vue'
 import ProjectOverview from './ProjectOverview.vue'
 import { agentRoleLabel } from './presentation'
@@ -107,8 +106,6 @@ function onDrop(e: DragEvent) {
         <ProjectOverview v-if="activeAgentId === null" :project="activeProject" />
 
         <div v-else class="flex-1 overflow-hidden flex">
-            <AgentsListPanel :project="activeProject" />
-
             <div
                 data-testid="agent-execution"
                 class="flex-1 flex flex-col overflow-hidden relative bg-white"
