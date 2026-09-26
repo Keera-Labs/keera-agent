@@ -119,3 +119,44 @@ describe('useAppLayoutStore', () => {
         expect(store.showProjectSearch).toBe(false)
     })
 })
+
+describe('terminal navigation keys', () => {
+    const NAV_KEYS = ['Enter', 'Tab', 'ArrowUp', 'ArrowDown']
+
+    function press(target: Element, key: string) {
+        const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+        target.dispatchEvent(event)
+        return event.defaultPrevented
+    }
+
+    it('leaves Enter, Tab and arrows alone in form fields and editors', () => {
+        setup()
+        const form = document.createElement('form')
+        const input = document.createElement('input')
+        const textarea = document.createElement('textarea')
+        const editable = document.createElement('div')
+        editable.contentEditable = 'true'
+        form.append(input, textarea, editable)
+        document.body.append(form)
+
+        for (const target of [input, textarea, editable]) {
+            for (const key of NAV_KEYS) {
+                expect(press(target, key), `${key} on <${target.tagName.toLowerCase()}>`).toBe(false)
+            }
+        }
+        form.remove()
+    })
+
+    it('still blocks them inside a terminal', () => {
+        setup()
+        const terminal = document.createElement('div')
+        terminal.className = 'xterm'
+        const helper = document.createElement('textarea')
+        terminal.append(helper)
+        document.body.append(terminal)
+
+        for (const key of NAV_KEYS) expect(press(helper, key)).toBe(true)
+        expect(press(helper, 'a')).toBe(false)
+        terminal.remove()
+    })
+})
