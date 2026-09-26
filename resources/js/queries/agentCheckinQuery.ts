@@ -1,6 +1,6 @@
+import { useHttp } from '@inertiajs/vue3'
 import { useMutation, useQuery, useQueryCache } from '@pinia/colada'
 import { toValue, type MaybeRefOrGetter } from 'vue'
-import { useHttp } from '@/composables/useHttp'
 import { useRefetchInterval } from '@/composables/useRefetchInterval'
 
 export interface AgentCheckin {
@@ -25,19 +25,27 @@ export function useAgentCheckin(agentId: MaybeRefOrGetter<number | null>) {
     const enabled = () => toValue(agentId) !== null
     const url = () => `/api/agents/${toValue(agentId)}/checkin`
 
-    // Separate clients so a poll and a toggle don't share one abort controller.
-    const fetchRequest = useHttp().throwOnError()
-    const updateRequest = useHttp().throwOnError()
+    // One instance per independent request, so the poll and the toggle never share processing state or an abort controller.
+    const fetchRequest = useHttp<Record<string, never>, AgentCheckin>()
+    const updateRequest = useHttp<AgentCheckinPayload, AgentCheckin>({ enabled: false, interval_minutes: 5 })
 
     const query = useQuery({
         key,
-        query: () => fetchRequest.get<AgentCheckin>(url()),
+        query: () => fetchRequest.get(url()),
         enabled,
     })
     useRefetchInterval(query.refetch, 1000 * 15, enabled)
 
     const update = useMutation({
-        mutation: (payload: AgentCheckinPayload) => updateRequest.patch<AgentCheckin>(url(), payload),
+        mutation: (payload: AgentCheckinPayload) => {
+            Object.assign(updateRequest, payload)
+            return updateRequest.patch(url(), {
+                // Inertia resolves a 422 with undefined; throwing here rejects the mutation so it is never cached.
+                onError: errors => {
+                    throw new Error('Check-in update failed validation', { cause: errors })
+                },
+            })
+        },
         onSuccess: data => queryCache.setQueryData(key(), data),
     })
 
