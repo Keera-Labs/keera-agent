@@ -1,5 +1,6 @@
 import json
 import os
+import stat
 import tempfile
 from pathlib import Path
 from unittest import mock
@@ -85,6 +86,25 @@ class TestRemoteControlSettingController(TestCase):
 
         self.assertEqual(os.listdir(self._tmp.name), [".claude.json"])
 
+    async def test_update_keeps_the_file_mode(self):
+        for mode in (0o644, 0o600):
+            self.write_config({"numStartups": 1})
+            self.config.chmod(mode)
+
+            (await self.patch(URL, json={"enabled": True})).assert_ok()
+
+            self.assertEqual(stat.S_IMODE(self.config.stat().st_mode), mode)
+
+    async def test_a_new_config_is_private(self):
+        (await self.patch(URL, json={"enabled": True})).assert_ok()
+
+        self.assertEqual(stat.S_IMODE(self.config.stat().st_mode), 0o600)
+
+    async def test_show_reports_the_config_path(self):
+        response = await self.get(URL)
+
+        self.assertEqual(response.json()["data"]["attributes"]["path"], str(self.config))
+
     async def test_update_writes_through_a_symlinked_config(self):
         target = Path(self._tmp.name) / "dotfiles.json"
         target.write_text(json.dumps({"numStartups": 1}))
@@ -94,6 +114,16 @@ class TestRemoteControlSettingController(TestCase):
 
         self.assertTrue(self.config.is_symlink())
         self.assertEqual(json.loads(target.read_text())["remoteControlAtStartup"], True)
+
+    async def test_symlinked_config_keeps_the_target_mode(self):
+        target = Path(self._tmp.name) / "dotfiles.json"
+        target.write_text("{}")
+        target.chmod(0o644)
+        self.config.symlink_to(target)
+
+        (await self.patch(URL, json={"enabled": True})).assert_ok()
+
+        self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o644)
 
     async def test_invalid_json_is_reported_and_never_overwritten(self):
         self.config.write_text("{not json")

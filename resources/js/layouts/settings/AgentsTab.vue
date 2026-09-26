@@ -71,8 +71,9 @@ function toggleRemoteControl() {
                 <span v-if="remoteControl.loadError" data-testid="remote-control-error" class="text-danger text-[11px]">
                     {{ remoteControl.loadError }}
                 </span>
-                <span v-else class="text-zinc-400 text-[11px] leading-normal">
-                    Saved as <code class="font-mono">remoteControlAtStartup</code> in ~/.claude.json, the same as Claude Code's /config.
+                <span v-else data-testid="remote-control-hint" class="text-zinc-400 text-[11px] leading-normal">
+                    Saved as <code class="font-mono">remoteControlAtStartup</code> in
+                    <code class="font-mono">{{ remoteControl.configPath }}</code>, the same as Claude Code's /config.
                 </span>
             </section>
         </div>

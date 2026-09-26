@@ -1,5 +1,6 @@
 import json
 import os
+import stat
 from pathlib import Path
 
 from app.utils.json_utils import atomic_write_json
@@ -46,4 +47,13 @@ class ClaudeConfig:
         data = self._load()
         data[key] = value
         # Resolved so a symlinked config (e.g. from a dotfiles repo) is updated, not replaced.
-        atomic_write_json(str(self.path.resolve()), data)
+        target = self.path.resolve()
+        atomic_write_json(str(target), data, mode=self._mode(target))
+
+    @staticmethod
+    def _mode(target: Path) -> int | None:
+        """The existing file's permissions; None (0600) for a new one, as it holds account details."""
+        try:
+            return stat.S_IMODE(target.stat().st_mode)
+        except FileNotFoundError:
+            return None

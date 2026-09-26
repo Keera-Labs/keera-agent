@@ -13,7 +13,8 @@ export const useRemoteControlSettingsStore = defineStore('remoteControlSettings'
     const saveState = ref<SaveState>('idle')
     const error = ref('')
 
-    const saved = computed(() => query.data.value ?? false)
+    const saved = computed(() => query.data.value?.enabled ?? false)
+    const configPath = computed(() => query.data.value?.path ?? '~/.claude.json')
     const enabled = computed(() => draft.value ?? saved.value)
     const dirty = computed(() => draft.value !== null && draft.value !== saved.value)
     const loadError = computed(() => query.error.value?.message ?? '')
@@ -48,5 +49,5 @@ export const useRemoteControlSettingsStore = defineStore('remoteControlSettings'
     // Claude's own /config can flip the value, so the tab re-reads it each time it opens.
     const refresh = () => query.refetch()
 
-    return { enabled, ready, loadError, dirty, saveState, error, setEnabled, save, discard, refresh }
+    return { enabled, configPath, ready, loadError, dirty, saveState, error, setEnabled, save, discard, refresh }
 })

@@ -7,8 +7,8 @@ from app.resources.remote_control_setting_resource import RemoteControlSettingRe
 from app.services.claude_config import REMOTE_CONTROL_KEY, ClaudeConfig, InvalidClaudeConfig
 
 
-def _resource(enabled: bool) -> RemoteControlSettingResource:
-    return RemoteControlSettingResource({"enabled": enabled})
+def _resource(config: ClaudeConfig, enabled: bool) -> RemoteControlSettingResource:
+    return RemoteControlSettingResource({"enabled": enabled, "path": str(config.path)})
 
 
 def _invalid(error: InvalidClaudeConfig) -> JSONResponse:
@@ -16,15 +16,17 @@ def _invalid(error: InvalidClaudeConfig) -> JSONResponse:
 
 
 async def show():
+    config = ClaudeConfig()
     try:
-        return _resource(ClaudeConfig().get(REMOTE_CONTROL_KEY) is True)
+        return _resource(config, config.get(REMOTE_CONTROL_KEY) is True)
     except InvalidClaudeConfig as error:
         return _invalid(error)
 
 
 async def update(body: RemoteControlSettingRequest):
+    config = ClaudeConfig()
     try:
-        ClaudeConfig().set(REMOTE_CONTROL_KEY, body.enabled)
+        config.set(REMOTE_CONTROL_KEY, body.enabled)
     except InvalidClaudeConfig as error:
         return _invalid(error)
-    return _resource(body.enabled)
+    return _resource(config, body.enabled)

@@ -38,7 +38,7 @@ function remoteControlFetch(init?: RequestInit) {
         if (remoteControl.status < 400) remoteControl.enabled = body.enabled
     }
     const { status, enabled, error } = remoteControl
-    const json = status < 400 ? { data: { attributes: { enabled } } } : { error }
+    const json = status < 400 ? { data: { attributes: { enabled, path: '/custom/claude/.claude.json' } } } : { error }
     return Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(json) })
 }
 
@@ -294,6 +294,7 @@ describe('SettingsModal', () => {
 
         expect(toggle().attributes('aria-pressed')).toBe('true')
         expect(w.text()).toContain('Applies to new Claude sessions; running agents are unaffected')
+        expect(w.get('[data-testid="remote-control-hint"]').text()).toContain('/custom/claude/.claude.json')
     })
 
     it('saves the Remote Control toggle on and off through the footer', async () => {
