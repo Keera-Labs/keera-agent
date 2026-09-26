@@ -116,7 +116,6 @@ describe('ModalLayer', () => {
         store.showGlobalSettings = true
         await flushPromises()
         expect(wrapper.find('[role="dialog"][aria-label="Settings"]').exists()).toBe(true)
-        expect(wrapper.text()).not.toContain('being migrated')
         await wrapper.get('[aria-label="Close"]').trigger('click')
         expect(store.showGlobalSettings).toBe(false)
 
@@ -133,12 +132,5 @@ describe('ModalLayer', () => {
         expect(store.systemPromptProject).toBeNull()
 
         wrapper.unmount()
-    })
-
-    it('still flags the modals that are not ported yet', async () => {
-        const wrapper = mount(ModalLayer, { global: { plugins: plugins() } })
-        useAppLayoutStore().showProjectSearch = true
-        await flushPromises()
-        expect(wrapper.text()).toContain('Project search is being migrated to Vue.')
     })
 })

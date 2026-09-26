@@ -20,6 +20,8 @@ from app.controllers import (
     heartbeat_controller,
     home_controller,
     plugin_controller,
+    project_file_content_controller,
+    project_file_controller,
     settings_controller,
     task_controller,
     tasks_page_controller,
@@ -37,6 +39,10 @@ router.get("/api/projects/{project_id}/tasks", task_controller.index)
 router.post("/api/projects/{project_id}/tasks", task_controller.store)
 router.patch("/api/tasks/{task_id}", task_controller.update)
 router.delete("/api/tasks/{task_id}", task_controller.destroy)
+
+router.get("/api/projects/{project_id}/files", project_file_controller.index)
+router.get("/api/projects/{project_id}/files/content", project_file_content_controller.show)
+router.put("/api/projects/{project_id}/files/content", project_file_content_controller.update)
 
 router.get("/api/projects/{project_id}/commands", command_controller.index)
 router.post("/api/projects/{project_id}/commands", command_controller.store)

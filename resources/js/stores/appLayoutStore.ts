@@ -45,9 +45,6 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
     const showGlobalSettings = ref(false)
     const showDefaultPermissions = ref(false)
     const showProjectSearch = ref(false)
-    // Name of a modal whose Vue port hasn't landed yet; ModalLayer shows a
-    // "being migrated" notice for it instead of failing silently.
-    const migratingModal = ref<string | null>(null)
     // The project whose system prompt / permissions dialog is open, or null when closed.
     const systemPromptProject = ref<Project | null>(null)
     const permissionsProject = ref<Project | null>(null)
@@ -192,7 +189,6 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
         showGlobalSettings,
         showDefaultPermissions,
         showProjectSearch,
-        migratingModal,
         systemPromptProject,
         permissionsProject,
         projectView,

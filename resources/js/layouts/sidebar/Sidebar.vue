@@ -2,11 +2,13 @@
 import { router, usePage } from '@inertiajs/vue3'
 import { storeToRefs } from 'pinia'
 import { computed } from 'vue'
+import ProjectCreateModal from '@/components/project/ProjectCreateModal.vue'
 import Icon, { type IconName } from '@/components/ui/Icon.vue'
 import AgentAddModal from '@/pages/agents/AgentAddModal.vue'
 import useProjects from '@/queries/projectsQuery'
 import { useAppLayoutStore, type ProjectView } from '@/stores/appLayoutStore'
 import { useProjectStore } from '@/stores/projectStore'
+import { useWorkspaceStore } from '@/stores/workspaceStore'
 import ProjectItem from './ProjectItem.vue'
 import WorkspacePicker from './WorkspacePicker.vue'
 
@@ -21,6 +23,7 @@ const layout = useAppLayoutStore()
 const { claudeStatus, projectView, tasks } = storeToRefs(layout)
 const { activeProject } = storeToRefs(useProjectStore())
 const { projects } = useProjects()
+const { currentWorkspaceId } = storeToRefs(useWorkspaceStore())
 
 const isSettingsPage = computed(() => page.component === 'Settings')
 const isTasksPage = computed(() => page.component === 'Tasks')
@@ -38,11 +41,6 @@ function changeView(view: ProjectView) {
     if (isTasksPage.value || isConfigPage.value) router.visit(`/${project.slug}`)
 }
 
-// The project-create modal is ported separately.
-function openPendingModal(name: string) {
-    layout.migratingModal = name
-}
-
 const navClass = (active: boolean) => [
     'flex items-center gap-2 py-[7px] px-2.5 w-full border rounded text-[12px] cursor-pointer text-left transition-all duration-100',
     active
@@ -58,27 +56,33 @@ const navClass = (active: boolean) => [
         <div class="flex-1 overflow-y-auto flex flex-col min-h-0">
             <div class="pt-2.5 pr-2.5 pb-1 pl-3.5 flex items-center justify-between">
                 <span class="text-zinc-400 text-[10px] font-bold uppercase tracking-[0.12em]">Projects</span>
-                <button
-                    type="button"
-                    title="Add project"
-                    class="bg-transparent border-0 cursor-pointer text-zinc-400 py-0 px-0.5 flex items-center hover:text-zinc-500"
-                    @click="openPendingModal('Create project')"
-                >
-                    <Icon name="plus" :size="11" />
-                </button>
+                <ProjectCreateModal :default-workspace-id="currentWorkspaceId">
+                    <template #trigger>
+                        <button
+                            type="button"
+                            title="Add project"
+                            class="bg-transparent border-0 cursor-pointer text-zinc-400 py-0 px-0.5 flex items-center hover:text-zinc-500"
+                        >
+                            <Icon name="plus" :size="11" />
+                        </button>
+                    </template>
+                </ProjectCreateModal>
             </div>
 
             <ul class="list-none m-0 py-0 px-0.5">
                 <template v-if="projects.length === 0">
                     <li class="py-1 px-4 text-zinc-400 text-[11px] italic">No projects</li>
                     <li>
-                        <button
-                            type="button"
-                            class="mt-0.5 mx-2.5 mb-1.5 w-[calc(100%-20px)] bg-transparent border border-dashed border-stroke rounded text-zinc-400 text-[11px] p-1.5 cursor-pointer text-center block hover:text-zinc-500 hover:border-zinc-500"
-                            @click="openPendingModal('Create project')"
-                        >
-                            + Add project
-                        </button>
+                        <ProjectCreateModal :default-workspace-id="currentWorkspaceId">
+                            <template #trigger>
+                                <button
+                                    type="button"
+                                    class="mt-0.5 mx-2.5 mb-1.5 w-[calc(100%-20px)] bg-transparent border border-dashed border-stroke rounded text-zinc-400 text-[11px] p-1.5 cursor-pointer text-center block hover:text-zinc-500 hover:border-zinc-500"
+                                >
+                                    + Add project
+                                </button>
+                            </template>
+                        </ProjectCreateModal>
                     </li>
                 </template>
                 <li v-for="project in projects" :key="project.id">
