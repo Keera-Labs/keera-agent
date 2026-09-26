@@ -16,6 +16,7 @@ class ProviderCommand:
     permission_mode: str | None = None
     verbose: bool = False
     max_turns: int | None = None
+    settings_file: str | None = None
 
 
 class Provider(ABC):

@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import ConfirmDeleteAgentModal from '@/components/modals/ConfirmDeleteAgentModal.vue'
 import Icon from '@/components/ui/Icon.vue'
 import type { ProjectAgent } from '@/queries/agentQuery'
-import { formatTokens, tokenBreakdown, useProjectUsage } from '@/queries/usageQuery'
+import { contextDetail, formatTokens, tokenBreakdown, useProjectUsage } from '@/queries/usageQuery'
 import useWorkspaces from '@/queries/workspacesQuery'
 import { color } from '@/tokens'
 import type { Project } from '@/types/type'
@@ -44,8 +44,11 @@ const workspaceName = computed(() => workspaces.value.find(w => w.id === props.p
 const activeCount = computed(() => agents.value.filter(a => isRunning(a.id)).length)
 
 function agentUsage(agent: ProjectAgent) {
-    const tokens = usage.value?.agents[String(agent.id)]
-    return tokens ? { usage: formatTokens(tokens.total), usageDetail: tokenBreakdown(tokens) } : { usage: PLACEHOLDER }
+    const id = String(agent.id)
+    const tokens = usage.value?.agents[id]
+    const context = contextDetail(usage.value?.reports?.[id])
+    const detail = [tokens && tokenBreakdown(tokens), context].filter(Boolean).join('\n')
+    return { usage: tokens ? formatTokens(tokens.total) : PLACEHOLDER, usageDetail: detail || undefined }
 }
 
 const pillClass = 'inline-flex items-center gap-1.5 bg-surface border border-stroke rounded-full py-[5px] px-3 text-[12.5px] text-zinc-700 whitespace-nowrap'

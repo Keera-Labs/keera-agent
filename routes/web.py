@@ -12,6 +12,7 @@ from app.controllers import (
     agent_summary_controller,
     agent_template_controller,
     agent_trigger_controller,
+    agent_usage_report_controller,
     broadcasting_controller,
     claude_hook_controller,
     command_controller,
@@ -52,6 +53,7 @@ router.patch("/api/tasks/{task_id}", task_controller.update)
 router.delete("/api/tasks/{task_id}", task_controller.destroy)
 
 router.get("/api/projects/{project_id}/usage", project_usage_controller.show)
+router.post("/api/agent-usage-reports", agent_usage_report_controller.store)
 
 router.get("/api/projects/{project_id}/files", project_file_controller.index)
 router.get("/api/projects/{project_id}/files/content", project_file_content_controller.show)

@@ -284,4 +284,25 @@ describe('StatusBar', () => {
         expect(w.get('[data-testid="usage-today"]').text()).toBe('Today 45K tok')
         expect(w.find('[data-testid="usage-placeholder"]').exists()).toBe(false)
     })
+
+    it('shows the plan limit bars from the latest statusline report', async () => {
+        const resetsAt = Math.floor(Date.now() / 1000) + 2 * 3600 + 5 * 60
+        stubFetch({
+            '/api/projects/1/usage': {
+                data: { attributes: {
+                    today: { input: 0, output: 0, cache_creation: 0, cache_read: 0, total: 0 },
+                    agents: {},
+                    reports: {},
+                    limits: { five_hour: { used_percentage: 23.5, resets_at: resetsAt }, seven_day: null },
+                } },
+            },
+        })
+        const w = await mountHeader()
+        await flushPromises()
+
+        const bar = w.get('[data-testid="limit-five_hour"]')
+        expect(bar.text().replace(/\s+/g, ' ')).toBe('5h 24%')
+        expect(bar.attributes('title')).toMatch(/^5-hour limit: 24% used, resets in 2h [45]m$/)
+        expect(w.find('[data-testid="limit-seven_day"]').exists()).toBe(false)
+    })
 })

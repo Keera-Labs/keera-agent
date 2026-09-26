@@ -74,6 +74,15 @@ class ProjectUsage:
     today: Tokens = field(default_factory=Tokens)
     agents: dict[int, AgentUsage] = field(default_factory=dict)
 
+    def merge(self, other: "ProjectUsage") -> "ProjectUsage":
+        self.today.add(other.today)
+        for agent_id, theirs in other.agents.items():
+            mine = self.agents.setdefault(agent_id, AgentUsage())
+            mine.tokens.add(theirs.tokens)
+            if (mine.last_used_at or "") <= (theirs.last_used_at or ""):
+                mine.last_model, mine.last_used_at = theirs.last_model, theirs.last_used_at
+        return self
+
 
 @dataclass(frozen=True)
 class _Message:

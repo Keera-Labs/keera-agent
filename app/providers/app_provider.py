@@ -30,6 +30,13 @@ class AppProvider(Provider):
 
             await SeedBuiltinTemplatesAction().execute()
 
+            from app.actions.statusline_settings_write_action import StatuslineSettingsWriteAction
+
+            try:
+                StatuslineSettingsWriteAction().execute()
+            except OSError:
+                pass  # Agents just start without Keera's statusline.
+
             # Resume PM check-in schedulers that were left enabled so their state
             # survives a server restart, not just a browser reload.
             try:
