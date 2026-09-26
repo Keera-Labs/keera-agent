@@ -3,8 +3,6 @@ import { router } from '@inertiajs/vue3'
 import { useQueryCache } from '@pinia/colada'
 import { storeToRefs } from 'pinia'
 import ConfirmDeleteWorkspaceModal from '@/components/modals/ConfirmDeleteWorkspaceModal.vue'
-import DefaultPermissionsModal from '@/components/modals/DefaultPermissionsModal.vue'
-import GlobalSettingsModal from '@/components/modals/GlobalSettingsModal.vue'
 import ProjectPermissionsModal from '@/components/modals/ProjectPermissionsModal.vue'
 import ProjectSearchModal from '@/components/modals/ProjectSearchModal.vue'
 import SystemPromptModal from '@/components/modals/SystemPromptModal.vue'
@@ -16,8 +14,6 @@ import { useWorkspaceStore } from '@/stores/workspaceStore'
 
 const layout = useAppLayoutStore()
 const {
-    showGlobalSettings,
-    showDefaultPermissions,
     showProjectSearch,
     settingsSection,
     systemPromptProject,
@@ -46,8 +42,6 @@ function refreshProjects() {
         @deleted="onWorkspaceDeleted"
     />
     <SettingsModal v-if="settingsSection" />
-    <GlobalSettingsModal v-if="showGlobalSettings" @close="showGlobalSettings = false" />
-    <DefaultPermissionsModal v-if="showDefaultPermissions" @close="showDefaultPermissions = false" />
     <SystemPromptModal
         v-if="systemPromptProject"
         :key="systemPromptProject.id"

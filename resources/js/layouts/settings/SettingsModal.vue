@@ -3,12 +3,12 @@ import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import DefaultPermissionsTab from '@/pages/settings/DefaultPermissionsTab.vue'
-import PluginsTab from '@/pages/settings/PluginsTab.vue'
 import ProvidersTab from '@/pages/settings/ProvidersTab.vue'
 import TemplatesTab from '@/pages/settings/TemplatesTab.vue'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import { useEditorSettingsStore } from '@/stores/editorSettingsStore'
 import EditorSection from './EditorSection.vue'
+import GeneralSection from './GeneralSection.vue'
 import { filterSections, SETTINGS_SECTIONS, type SettingsSectionId } from './sections'
 
 type AiTab = 'providers' | 'templates' | 'permissions'
@@ -157,7 +157,7 @@ const navItem = (active: boolean) => [
                         <TemplatesTab v-else-if="aiTab === 'templates'" />
                         <DefaultPermissionsTab v-else />
                     </template>
-                    <PluginsTab v-else />
+                    <GeneralSection v-else />
                 </div>
 
                 <div v-else class="flex-1 min-w-0 overflow-y-auto px-6 py-5" :data-pane="current.id">
