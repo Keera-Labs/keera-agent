@@ -19,11 +19,27 @@ const listing: Record<string, unknown[]> = {
     app: [{ name: 'tasks.py', path: 'app/tasks.py', type: 'file' }],
 }
 
+// Stands in for the backend, which drops dotfiles once the saved filters say so.
+let hideHidden = false
+let settingsBody: Record<string, unknown> | undefined
+
+function fakeFetch(url: string, init?: RequestInit) {
+    if (url === '/api/settings/editor') {
+        settingsBody = JSON.parse(String(init?.body ?? '{}'))
+        hideHidden = settingsBody!.hide_hidden === true
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: { attributes: { ...settingsBody, customized: true } } }) })
+    }
+    const path = new URL(url, 'http://x').searchParams.get('path') ?? ''
+    const entries = (listing[path] as { name: string }[]).filter(e => !(hideHidden && e.name.startsWith('.')))
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ path, entries, truncated: false }) })
+}
+
 beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn((url: string) => {
-        const path = new URL(url, 'http://x').searchParams.get('path') ?? ''
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ path, entries: listing[path], truncated: false }) })
-    }))
+    hideHidden = false
+    settingsBody = undefined
+    vi.stubGlobal('fetch', vi.fn(fakeFetch))
+    // happy-dom has no FontFaceSet; any settings save re-applies the terminal font through it.
+    Object.defineProperty(document, 'fonts', { value: { load: () => Promise.resolve([]) }, configurable: true })
 })
 
 afterEach(() => vi.unstubAllGlobals())
@@ -72,10 +88,15 @@ describe('FileExplorer', () => {
         expect(w.text()).toContain('No matching files')
     })
 
-    it('hides dot and ignored entries via the filter button', async () => {
+    it('saves the hide filters from the funnel and reloads the tree', async () => {
         const w = await mountExplorer()
-        await w.get('button[aria-pressed="false"]').trigger('click')
+        const funnel = w.get('button[title="Hide hidden and ignored files"]')
+        await funnel.trigger('click')
+        await flushPromises()
+
+        expect(settingsBody).toMatchObject({ hide_hidden: true, hide_ignored: true })
         expect(rowTexts(w)).toEqual(['app', 'README.md'])
+        expect(w.get('button[title="Show hidden and ignored files"]').attributes('aria-pressed')).toBe('true')
     })
 
     it('keeps content search as a disabled placeholder', async () => {

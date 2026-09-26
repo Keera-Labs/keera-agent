@@ -41,7 +41,7 @@ describe('useFileTree', () => {
     it('loads the project root from the files endpoint', async () => {
         const tree = await loadedTree()
         expect(fetchMock).toHaveBeenCalledWith('/api/projects/7/files?path=')
-        expect(names(tree.visibleRows('', false))).toEqual(['.venv', 'app', 'config', 'README.md'])
+        expect(names(tree.visibleRows(''))).toEqual(['.venv', 'app', 'config', 'README.md'])
     })
 
     it('fetches a folder only on its first expand and collapses it on the next toggle', async () => {
@@ -49,7 +49,7 @@ describe('useFileTree', () => {
         tree.toggle(dir('app'))
         await flushPromises()
         expect(fetchMock).toHaveBeenLastCalledWith('/api/projects/7/files?path=app')
-        expect(names(tree.visibleRows('', false))).toEqual([
+        expect(names(tree.visibleRows(''))).toEqual([
             '.venv', 'app', '  __pycache__', '  controllers', '  tasks.py', 'config', 'README.md',
         ])
 
@@ -71,7 +71,7 @@ describe('useFileTree', () => {
         const tree = await loadedTree()
         tree.toggle(dir('config'))
         await flushPromises()
-        expect(names(tree.visibleRows('', false))).toEqual(['.venv', 'app', 'config', '  [Permission denied]', 'README.md'])
+        expect(names(tree.visibleRows(''))).toEqual(['.venv', 'app', 'config', '  [Permission denied]', 'README.md'])
     })
 
     it('adds a notice row after a truncated listing', async () => {
@@ -80,7 +80,7 @@ describe('useFileTree', () => {
         const tree = await loadedTree()
         tree.toggle(dir('big'))
         await flushPromises()
-        expect(names(tree.visibleRows('', false))).toEqual(['big', '  a.txt', '  b.txt', '  [Showing first 2 entries]'])
+        expect(names(tree.visibleRows(''))).toEqual(['big', '  a.txt', '  b.txt', '  [Showing first 2 entries]'])
     })
 
     it('filters by name and opens loaded folders that contain a match', async () => {
@@ -91,15 +91,8 @@ describe('useFileTree', () => {
         await flushPromises()
         tree.toggle(dir('app'))
 
-        expect(names(tree.visibleRows('ADMIN', false))).toEqual(['app', '  controllers', '    admin_controller.py'])
-        expect(tree.visibleRows('nothing-matches', false)).toEqual([])
-    })
-
-    it('hides dot and ignored entries when asked', async () => {
-        const tree = await loadedTree()
-        tree.toggle(dir('app'))
-        await flushPromises()
-        expect(names(tree.visibleRows('', true))).toEqual(['app', '  controllers', '  tasks.py', 'config', 'README.md'])
+        expect(names(tree.visibleRows('ADMIN'))).toEqual(['app', '  controllers', '    admin_controller.py'])
+        expect(tree.visibleRows('nothing-matches')).toEqual([])
     })
 
     it('reports a root failure', async () => {
@@ -119,7 +112,7 @@ describe('useFileTree', () => {
         delete listing['app/controllers']
         await tree.refresh()
 
-        expect(names(tree.visibleRows('', false))).toEqual(['.venv', 'app', '  tasks.py', 'config', 'README.md'])
+        expect(names(tree.visibleRows(''))).toEqual(['.venv', 'app', '  tasks.py', 'config', 'README.md'])
         expect(fetchMock).toHaveBeenLastCalledWith('/api/projects/7/files?path=app%2Fcontrollers')
     })
 })

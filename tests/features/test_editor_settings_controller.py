@@ -4,6 +4,7 @@ from app.models.GlobalSettings import GlobalSettings
 from tests.test_case import TestCase
 
 URL = "/api/settings/editor"
+NO_FILTERS = {"hide_hidden": False, "hide_ignored": False, "hidden_patterns": []}
 
 
 def _attrs(response) -> dict:
@@ -27,7 +28,8 @@ class TestEditorSettingsController(TestCase):
         response.assert_ok()
         self.assertEqual(response.json()["data"]["type"], "editor_settings")
         self.assertEqual(
-            _attrs(response), {"font_family": "dank-mono", "font_size": 13, "customized": False}
+            _attrs(response),
+            {"font_family": "dank-mono", "font_size": 13, **NO_FILTERS, "customized": False},
         )
 
     async def test_update_persists_and_show_returns_saved_values(self):
@@ -35,11 +37,12 @@ class TestEditorSettingsController(TestCase):
 
         response.assert_ok()
         self.assertEqual(
-            _attrs(response), {"font_family": "jetbrains-mono", "font_size": 16, "customized": True}
+            _attrs(response),
+            {"font_family": "jetbrains-mono", "font_size": 16, **NO_FILTERS, "customized": True},
         )
         self.assertEqual(
             _attrs(await self.get(URL)),
-            {"font_family": "jetbrains-mono", "font_size": 16, "customized": True},
+            {"font_family": "jetbrains-mono", "font_size": 16, **NO_FILTERS, "customized": True},
         )
 
     async def test_update_overwrites_the_previous_value(self):
@@ -65,5 +68,40 @@ class TestEditorSettingsController(TestCase):
 
         self.assertEqual(
             _attrs(await self.get(URL)),
-            {"font_family": "dank-mono", "font_size": 13, "customized": False},
+            {"font_family": "dank-mono", "font_size": 13, **NO_FILTERS, "customized": False},
+        )
+
+    async def test_update_persists_file_tree_filters(self):
+        filters = {
+            "hide_hidden": True,
+            "hide_ignored": True,
+            "hidden_patterns": ["*.log", "build/"],
+        }
+        response = await self.patch(URL, json={"font_family": "monaco", "font_size": 13, **filters})
+
+        response.assert_ok()
+        self.assertEqual(
+            _attrs(await self.get(URL)),
+            {"font_family": "monaco", "font_size": 13, **filters, "customized": True},
+        )
+
+    async def test_update_trims_patterns_and_rejects_blank_ones(self):
+        response = await self.patch(
+            URL, json={"font_family": "monaco", "font_size": 13, "hidden_patterns": ["  dist/ "]}
+        )
+        self.assertEqual(_attrs(response)["hidden_patterns"], ["dist/"])
+
+        response = await self.patch(
+            URL, json={"font_family": "monaco", "font_size": 13, "hidden_patterns": ["  "]}
+        )
+        response.assert_status(422)
+
+    async def test_rows_saved_before_filters_existed_still_load(self):
+        await GlobalSettings.create(
+            {"key": "editor", "value": json.dumps({"font_family": "monaco", "font_size": 12})}
+        )
+
+        self.assertEqual(
+            _attrs(await self.get(URL)),
+            {"font_family": "monaco", "font_size": 12, **NO_FILTERS, "customized": True},
         )
