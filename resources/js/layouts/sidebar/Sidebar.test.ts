@@ -124,10 +124,11 @@ describe('Sidebar', () => {
         await flushPromises()
 
         const items = w.findAll('[data-testid="project-item"]')
-        expect(items[0].classes()).toContain('bg-[#EEF2FF]')
-        expect(items[1].classes()).not.toContain('bg-[#EEF2FF]')
-        expect(items[1].find('.bg-success').exists()).toBe(true)
-        expect(w.text()).toContain('AI Coding Manager')
+        expect(items[0].attributes('aria-current')).toBe('page')
+        expect(items[0].text()).toContain('/tmp/p-10')
+        expect(items[1].attributes('aria-current')).toBeUndefined()
+        expect(items[1].get('[data-testid="project-status"]').attributes('data-status')).toBe('done')
+        expect(items[2].get('[data-testid="project-status"]').attributes('data-status')).toBe('idle')
     })
 
     it('confirms before deleting a workspace and falls back to "All Projects"', async () => {
@@ -154,7 +155,7 @@ describe('Sidebar', () => {
         const w = await mountSidebar()
 
         await w.get('[data-testid="workspace-picker"]').trigger('click')
-        await w.get('[aria-label="New workspace"]').trigger('click')
+        await w.get('[data-testid="workspace-menu"] [aria-label="New workspace"]').trigger('click')
         expect(w.get('[data-testid="workspace-menu"]').isVisible()).toBe(false)
 
         const input = document.querySelector<HTMLInputElement>('input[name="name"]')!
@@ -196,6 +197,43 @@ describe('Sidebar', () => {
         expect(document.querySelector('[role="dialog"]')).toBeNull()
     })
 
+    it('labels the picker without a project count, since the project list is paginated', async () => {
+        const w = await mountSidebar()
+        const subtitle = () => w.get('[data-testid="workspace-subtitle"]').text()
+
+        expect(subtitle()).toBe('All projects')
+
+        await w.get('[data-testid="workspace-picker"]').trigger('click')
+        await w.findAll('[data-testid="workspace-option"]')[0].trigger('click')
+        await flushPromises()
+
+        expect(subtitle()).toBe('Workspace')
+        expect(subtitle()).not.toMatch(/\d/)
+    })
+
+    it('opens a project menu upward when it would overflow the list', async () => {
+        const w = await mountSidebar()
+        const rows = w.findAll('[data-testid="project-item"]').map(el => el.element.parentElement!)
+        const scroller = rows[0].closest('.overflow-y-auto')!
+        vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue({ bottom: 400 } as DOMRect)
+        vi.spyOn(rows[0], 'getBoundingClientRect').mockReturnValue({ bottom: 40 } as DOMRect)
+        vi.spyOn(rows[2], 'getBoundingClientRect').mockReturnValue({ bottom: 390 } as DOMRect)
+
+        async function openMenu(row: HTMLElement) {
+            row.dispatchEvent(new MouseEvent('mouseenter'))
+            await flushPromises()
+            await w.get('[aria-label="Project actions"]').trigger('click')
+            const classes = w.get('[data-testid="project-menu"]').classes()
+            await w.get('[aria-label="Project actions"]').trigger('click')
+            row.dispatchEvent(new MouseEvent('mouseleave'))
+            await flushPromises()
+            return classes
+        }
+
+        expect(await openMenu(rows[0])).toContain('top-full')
+        expect(await openMenu(rows[2])).toContain('bottom-full')
+    })
+
     it('keeps a project menu modal open while interacting with it', async () => {
         const w = await mountSidebar()
         const item = w.findAll('[data-testid="project-item"]')[0].element.parentElement!
@@ -219,6 +257,35 @@ describe('Sidebar', () => {
         expect(calls).toContainEqual({ url: '/api/projects/10', method: 'DELETE' })
         expect(document.querySelector('[role="dialog"]')).toBeNull()
         expect(w.find('[aria-label="Edit project"]').exists()).toBe(false)
+    })
+
+    it('creates a workspace from the Workspaces header', async () => {
+        const w = await mountSidebar()
+
+        await w.get('[title="New workspace"]').trigger('click')
+
+        expect(document.querySelector('form')!.textContent).toContain('New Workspace')
+        expect(w.get('[data-testid="workspace-menu"]').isVisible()).toBe(false)
+    })
+
+    it('opens the project search palette from the Search button', async () => {
+        const w = await mountSidebar()
+
+        await w.get('[data-testid="sidebar-search"]').trigger('click')
+        await flushPromises()
+
+        expect(useAppLayoutStore().showProjectSearch).toBe(true)
+        expect(document.querySelector('[aria-label="Search projects"]')).not.toBeNull()
+    })
+
+    it('marks Settings as current on the settings page', async () => {
+        page.component = 'settings/Index'
+        const w = await mountSidebar()
+
+        const settings = w.get('[title="Settings"]')
+        expect(settings.attributes('aria-current')).toBe('page')
+        await settings.trigger('click')
+        expect(router.visit).toHaveBeenCalledWith('/settings')
     })
 
     it('opens the project search palette from the store', async () => {
