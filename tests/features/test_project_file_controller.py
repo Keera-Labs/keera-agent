@@ -5,6 +5,7 @@ Feature tests for GET /api/projects/{project_id}/files (project_file_controller.
 import os
 import tempfile
 from pathlib import Path
+from unittest import mock
 
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
@@ -59,6 +60,7 @@ class TestProjectFileController(TestCase, DatabaseTransaction):
                 {"name": "controllers", "path": "app/controllers", "type": "dir"},
                 {"name": "x.py", "path": "app/x.py", "type": "file"},
             ],
+            "truncated": False,
         }
 
     async def test_trailing_slash_is_normalized(self):
@@ -128,6 +130,7 @@ class TestProjectFileController(TestCase, DatabaseTransaction):
                 {"name": "controllers", "path": "app-link/controllers", "type": "dir"},
                 {"name": "x.py", "path": "app-link/x.py", "type": "file"},
             ],
+            "truncated": False,
         }
 
     async def test_missing_directory_returns_404(self):
@@ -141,3 +144,47 @@ class TestProjectFileController(TestCase, DatabaseTransaction):
     async def test_unknown_project_returns_404(self):
         response = await self.get(self.url(project_id=999999))
         response.assert_status(404)
+
+    async def test_symlink_loop_entry_is_listed_as_file(self):
+        os.symlink(self.root / "loop", self.root / "loop")
+
+        response = await self.get(self.url())
+        response.assert_ok()
+
+        loop = next(e for e in response.json()["entries"] if e["name"] == "loop")
+        assert loop["type"] == "file"
+
+    async def test_symlink_loop_path_returns_400(self):
+        os.symlink(self.root / "loop", self.root / "loop")
+
+        response = await self.get(self.url("loop"))
+        response.assert_status(400)
+
+    async def test_name_too_long_returns_400(self):
+        response = await self.get(self.url("a" * 300))
+        response.assert_status(400)
+
+    async def test_dir_removed_before_scan_returns_404(self):
+        with mock.patch(
+            "app.controllers.project_file_controller.os.scandir",
+            side_effect=FileNotFoundError,
+        ):
+            response = await self.get(self.url("app"))
+        response.assert_status(404)
+
+    async def test_dir_replaced_by_file_before_scan_returns_404(self):
+        with mock.patch(
+            "app.controllers.project_file_controller.os.scandir",
+            side_effect=NotADirectoryError,
+        ):
+            response = await self.get(self.url("app"))
+        response.assert_status(404)
+
+    async def test_large_directory_is_truncated(self):
+        with mock.patch("app.controllers.project_file_controller.MAX_ENTRIES", 3):
+            response = await self.get(self.url())
+        response.assert_ok()
+        body = response.json()
+
+        assert body["truncated"] is True
+        assert [e["name"] for e in body["entries"]] == [".git", "app", ".env"]
