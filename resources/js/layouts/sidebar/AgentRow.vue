@@ -36,10 +36,11 @@ const provider = PROVIDER_ICON[props.agent.provider] ?? PROVIDER_ICON.claude
     >
         <span :class="['w-1.5 h-1.5 rounded-full shrink-0', STATUS_DOT[props.agent.status] ?? STATUS_DOT.idle]" />
         <Icon :name="provider.name" :size="12" :color="provider.color" class="shrink-0" />
-        <span data-testid="agent-name" :class="['truncate shrink-0 max-w-[60%]', props.active ? 'text-zinc-900 font-medium' : 'text-zinc-700']">
+        <span data-testid="agent-name" :class="['truncate min-w-0', props.active ? 'text-zinc-900 font-medium' : 'text-zinc-700']">
             {{ props.agent.name }}
         </span>
-        <span class="flex-1 min-w-0 truncate text-zinc-400">
+        <!-- The name gives up width first, so a preview is never squeezed to a lone dash. -->
+        <span :class="['flex-1 truncate text-zinc-400', props.agent.last_message ? 'min-w-[48px]' : 'min-w-0']">
             <template v-if="props.agent.last_message">– {{ props.agent.last_message }}</template>
         </span>
         <span class="shrink-0 text-[11px] tabular-nums text-zinc-400">
