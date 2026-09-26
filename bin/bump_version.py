@@ -54,8 +54,10 @@ def bump(root: Path, part: str, dry_run: bool = False) -> tuple[str, str]:
         if not match:
             raise SystemExit(f"ERROR: could not find the app version in {name}")
         if match.group(2) != old:
-            raise SystemExit(f"ERROR: {name} has version {match.group(2)}, expected {old} (files out of sync)")
-        pending[name] = text[: match.start(2)] + new + text[match.end(2):]
+            raise SystemExit(
+                f"ERROR: {name} has version {match.group(2)}, expected {old} (files out of sync)"
+            )
+        pending[name] = text[: match.start(2)] + new + text[match.end(2) :]
 
     if not dry_run:
         for name, text in pending.items():
