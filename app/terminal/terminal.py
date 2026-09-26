@@ -4,9 +4,11 @@ import fcntl
 import os
 import pty as _pty
 import re
+import signal
 import struct
 import subprocess
 import termios
+import time
 
 
 def _with_color_env(env: dict) -> dict:
@@ -80,11 +82,64 @@ class _PlainText:
         return re.sub(r"\s+", " ", text)
 
 
+def _descendant_process_groups(root_pid: int) -> set[int]:
+    try:
+        ps = subprocess.run(
+            ["ps", "-A", "-o", "pid=,ppid=,pgid="],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return set()
+
+    children: dict[int, list[tuple[int, int]]] = {}
+    for line in ps.stdout.splitlines():
+        fields = line.split()
+        if len(fields) == 3 and all(f.isdigit() for f in fields):
+            pid, ppid, pgid = map(int, fields)
+            children.setdefault(ppid, []).append((pid, pgid))
+
+    groups: set[int] = set()
+    pending = [root_pid]
+    while pending:
+        for pid, pgid in children.get(pending.pop(), []):
+            groups.add(pgid)
+            pending.append(pid)
+    return groups
+
+
+def _signal_groups(groups: set[int], sig: signal.Signals) -> None:
+    for pgid in groups:
+        try:
+            os.killpg(pgid, sig)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+
+def _wait_for_groups(groups: set[int], timeout: float) -> set[int]:
+    """Wait up to `timeout` for the groups to empty; return the ones still alive."""
+    deadline = time.monotonic() + timeout
+    alive = set(groups)
+    while True:
+        for pgid in list(alive):
+            try:
+                os.killpg(pgid, 0)
+            except (ProcessLookupError, PermissionError):
+                alive.discard(pgid)
+        if not alive or time.monotonic() >= deadline:
+            return alive
+        time.sleep(0.02)
+
+
 class Terminal:
     # send() waits at most echo_timeout for the CLI to echo a paste, and treats
     # echo_settle seconds of silence as the echo having finished rendering.
     echo_timeout = 3.0
     echo_settle = 0.3
+    # How long stop() lets the CLI exit on SIGTERM before SIGKILLing it.
+    stop_grace = 1.0
     # How long wait_for_cli_ready() holds for an unanswered startup dialog.
     dialog_timeout = 120.0
 
@@ -136,19 +191,26 @@ class Terminal:
         self.master_fd = master_fd
 
     def stop(self) -> None:
-        if self._proc:
-            try:
-                self._proc.kill()
-                self._proc.wait()
-            except OSError:
-                pass
-            self._proc = None
+        groups = self._process_groups() if self._proc else set()
+        _signal_groups(groups, signal.SIGTERM)
+        # Close the master before reaping the shell: a session leader's exit waits for
+        # unread tty output to drain, and nothing reads the master once we're stopping.
         if self.master_fd is not None:
             try:
                 os.close(self.master_fd)
             except OSError:
                 pass
             self.master_fd = None
+        if self._proc:
+            # Interactive shells ignore SIGTERM, and the shell holds no state worth a
+            # graceful exit; reaping it also stops its zombie keeping its group "alive".
+            try:
+                self._proc.kill()
+                self._proc.wait(timeout=5)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+            _signal_groups(_wait_for_groups(groups, self.stop_grace), signal.SIGKILL)
+            self._proc = None
 
     async def write(self, data: bytes) -> None:
         if self.master_fd is None or not data:
@@ -298,6 +360,21 @@ class Terminal:
     def wait(self) -> None:
         if self._proc is not None:
             self._proc.wait()
+
+    def _process_groups(self) -> set[int]:
+        """Every process group started from this terminal.
+
+        The shell runs in its own session (setsid), but with job control each
+        command it launches (the claude/codex CLI, background jobs) gets its own
+        process group, so killing only the shell's group would orphan them.
+        """
+        groups = {self._proc.pid} | _descendant_process_groups(self._proc.pid)
+        if self.master_fd is not None:
+            try:
+                groups.add(os.tcgetpgrp(self.master_fd))
+            except OSError:
+                pass
+        return groups - {0, 1, os.getpgrp()}
 
     def is_alive(self) -> bool:
         return self._proc is not None and self._proc.poll() is None
