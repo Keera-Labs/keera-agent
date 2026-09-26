@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi.templating import Jinja2Templates
 from fastapi_startkit.support import Provider
 
@@ -29,6 +31,16 @@ class AppProvider(Provider):
         self.app.fastapi.include_router(api_router.router)
 
         register_exception_handlers(self.app)
+
+        from fastapi_startkit import Config
+
+        from app.services.log_maintenance import open_log_files, utc_today
+
+        # The daily channel picked its file when the log provider booted and
+        # writes to it for the life of the process, so it must outlive retention.
+        log_dir = Config.get("logging.channels.daily.path", "storage/logs")
+        boot_log_files = open_log_files() | {Path(log_dir, f"{utc_today()}.log").resolve()}
+
         self.commands(
             [
                 QueueWorkCommand,
@@ -54,15 +66,14 @@ class AppProvider(Provider):
 
             import asyncio
 
-            from fastapi_startkit import Config
-
-            from app.services.log_maintenance import prune_daily_logs_forever
+            from app.services.log_maintenance import prune_daily_logs_forever, retention_days_from
 
             # Keep a reference so the task is not garbage-collected mid-sleep.
             self.log_pruner = asyncio.create_task(
                 prune_daily_logs_forever(
-                    Config.get("logging.channels.daily.path", "storage/logs"),
-                    int(Config.get("logging.retention_days", 14)),
+                    log_dir,
+                    retention_days_from(Config.get("logging.retention_days")),
+                    keep=boot_log_files,
                 )
             )
 

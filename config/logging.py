@@ -22,5 +22,6 @@ class LoggingConfig:
     # Floor for third-party loggers (ORM, sqlite driver, asyncio, http clients).
     library_level: str = field(default_factory=lambda: env("LOG_LIBRARY_LEVEL", "warning"))
 
-    # Daily log files older than this are deleted; 0 disables pruning.
-    retention_days: int = field(default_factory=lambda: int(env("LOG_RETENTION_DAYS", 14)))
+    # Daily log files older than this are deleted; 0 disables pruning. Parsed
+    # at startup so a bad value falls back to the default instead of failing boot.
+    retention_days: str | int = field(default_factory=lambda: env("LOG_RETENTION_DAYS", 14))

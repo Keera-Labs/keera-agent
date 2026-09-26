@@ -203,11 +203,11 @@ class TestRelayMessageToNewAgent(TestCase, DatabaseTransaction):
         await self.cli.stop()
         await super().asyncTearDown()
 
-    async def _queue(self, content: str) -> int:
+    async def _queue(self, content: str, to_agent=None) -> int:
         msg = await AgentRelayMessage.create(
             {
                 "from_agent_id": self.pm.id,
-                "to_agent_id": self.agent.id,
+                "to_agent_id": (to_agent or self.agent).id,
                 "content": content,
                 "status": "pending",
             }
@@ -268,6 +268,28 @@ class TestRelayMessageToNewAgent(TestCase, DatabaseTransaction):
         received = b"".join(await _wait_for_submit(self.cli.log))
         self.assertEqual((await AgentRelayMessage.find(msg_id)).status, "delivered")
         self.assertEqual(received.count(b"next step"), 1)
+
+    async def test_stop_hook_only_delivers_to_live_agents(self):
+        self.cli.mark_ready()
+        offline = await AgentFactory.new().create(project_id=self.project.id, session_id=None)
+        # A deleted agent whose stale session id now points at a live terminal.
+        deleted = await AgentFactory.new().create(
+            project_id=self.project.id,
+            session_id=self.cli.session_id,
+            deleted_at="2026-01-01 00:00:00",
+        )
+        offline_msg = await self._queue("for the offline agent", to_agent=offline)
+        deleted_msg = await self._queue("for the deleted agent", to_agent=deleted)
+        live_msg = await self._queue("for the live agent")
+
+        await _deliver_agent_relay_messages(self.project, self.cli.dir)
+
+        received = b"".join(await _wait_for_submit(self.cli.log))
+        self.assertEqual((await AgentRelayMessage.find(live_msg)).status, "delivered")
+        self.assertEqual((await AgentRelayMessage.find(offline_msg)).status, "pending")
+        self.assertEqual((await AgentRelayMessage.find(deleted_msg)).status, "pending")
+        self.assertNotIn(b"offline agent", received)
+        self.assertNotIn(b"deleted agent", received)
 
     async def test_live_session_without_ready_event_is_treated_as_booting(self):
         claude_ready.pop(self.cli.session_id, None)
