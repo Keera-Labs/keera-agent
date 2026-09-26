@@ -52,7 +52,13 @@ class TestProjectUsageController(TestCase, DatabaseTransaction):
         root = Path(os.path.realpath(self.tmp.name))
         self.transcripts = root / "claude-projects"
         self.transcripts.mkdir()
-        env = mock.patch.dict(os.environ, {"KEERA_CLAUDE_PROJECTS_DIR": str(self.transcripts)})
+        env = mock.patch.dict(
+            os.environ,
+            {
+                "KEERA_CLAUDE_PROJECTS_DIR": str(self.transcripts),
+                "KEERA_CODEX_SESSIONS_DIR": str(root / "codex-sessions"),
+            },
+        )
         env.start()
         self.addCleanup(env.stop)
 
