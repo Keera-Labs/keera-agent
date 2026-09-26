@@ -3,7 +3,14 @@ import { useQueryCache } from '@pinia/colada'
 import { defineStore, storeToRefs } from 'pinia'
 import { computed, onScopeDispose, reactive, ref } from 'vue'
 import { loadMonaco, modelUri, type TextModel } from '@/editor/monaco'
-import { FileContentError, fileContentQuery, saveFileContent, type FileContent, type SavedFile } from '@/queries/fileContentQuery'
+import {
+    FileContentError,
+    fileContentQuery,
+    saveFileContent,
+    saveRequestBody,
+    type FileContent,
+    type SavedFile,
+} from '@/queries/fileContentQuery'
 import { useProjectStore } from '@/stores/projectStore'
 
 export type EditorTab = {
@@ -39,8 +46,9 @@ export const SAVE_STATUS_LABEL: Record<SaveStatus, string> = {
 
 export const AUTO_SAVE_DELAY_MS = 1000
 
-// Browsers cap the combined body size of in-flight keepalive requests at 64 KiB.
-const KEEPALIVE_BUDGET_BYTES = 60 * 1024
+// Browsers reject a keepalive fetch once the bodies of all in-flight keepalive
+// requests exceed 64 KiB together; the rest is headroom for headers.
+export const KEEPALIVE_BUDGET_BYTES = 60 * 1024
 
 type Buffer = {
     model: TextModel
@@ -329,7 +337,9 @@ export const useEditorStore = defineStore('editor', () => {
                 unsaved = true
                 continue
             }
-            const size = new TextEncoder().encode(buffer.model.getValue()).length
+            // JSON escaping and multibyte characters make the body larger than the text itself.
+            const body = saveRequestBody(buffer.model.getValue(), tab.etag)
+            const size = new TextEncoder().encode(body).length
             if (size > budget) {
                 unsaved = true
                 continue

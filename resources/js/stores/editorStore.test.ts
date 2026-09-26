@@ -4,7 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createApp } from 'vue'
 import { PiniaColada } from '@pinia/colada'
 import type { Project } from '@/types/type'
-import { AUTO_SAVE_DELAY_MS, saveStatus, useEditorStore } from './editorStore'
+import { AUTO_SAVE_DELAY_MS, KEEPALIVE_BUDGET_BYTES, saveStatus, useEditorStore } from './editorStore'
 import { useProjectStore } from './projectStore'
 
 type Handler = (...args: unknown[]) => unknown
@@ -344,6 +344,31 @@ describe('useEditorStore', () => {
                 model.edit('x'.repeat(70 * 1024))
                 expect(unload()).toBe(true)
                 expect(fetchMock).toHaveBeenCalledTimes(1)
+            })
+
+            it.each([
+                ['JSON escaping', '\n\t"'.repeat(15 * 1024)],
+                ['multibyte characters', '€'.repeat(25 * 1024)],
+            ])('measures the request body, which %s grows past the budget', async (_, content) => {
+                expect(content.length).toBeLessThan(KEEPALIVE_BUDGET_BYTES)
+                const model = await openFile()
+                model.edit(content)
+
+                expect(unload()).toBe(true)
+                expect(fetchMock).toHaveBeenCalledTimes(1)
+            })
+
+            it('warns when several tabs together exceed the shared keepalive budget', async () => {
+                const first = await openFile('a.ts')
+                const second = await openFile('b.ts')
+                fetchMock.mockImplementation(savedAs('e2'))
+                first.edit('x'.repeat(35 * 1024))
+                second.edit('y'.repeat(35 * 1024))
+
+                expect(unload()).toBe(true)
+                const keepalivePuts = fetchMock.mock.calls.filter(([, init]) => init?.keepalive)
+                expect(keepalivePuts).toHaveLength(1)
+                expect(keepalivePuts[0][0]).toContain('path=a.ts')
             })
         })
     })
