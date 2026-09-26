@@ -114,13 +114,17 @@ async def _mark_stopped_agent_waiting(agent_id: int | None) -> None:
     # stopped; treating it as "every running agent stopped" froze still-working agents.
     if agent_id is None:
         return
-    await Agent.where("id", agent_id).where_in("status", ["running", "needs_input"]).update(
-        {
-            "status": "waiting",
-            "current_activity": None,
-            **CLEARED_ATTENTION,
-            "updated_at": utc_now(),
-        }
+    await (
+        Agent.where("id", agent_id)
+        .where_in("status", ["running", "needs_input"])
+        .update(
+            {
+                "status": "waiting",
+                "current_activity": None,
+                **CLEARED_ATTENTION,
+                "updated_at": utc_now(),
+            }
+        )
     )
 
 
