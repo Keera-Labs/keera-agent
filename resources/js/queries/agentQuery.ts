@@ -200,6 +200,8 @@ export function useAgents(projectIdSource: MaybeRefOrGetter<number | null>) {
     return {
         agents: computed(() => query.data.value ?? []),
         isLoading: query.isLoading,
+        // True only until the first load resolves; isLoading also covers background refetches.
+        isPending: computed(() => query.status.value === 'pending'),
         invalidate,
         addAgent,
         create,

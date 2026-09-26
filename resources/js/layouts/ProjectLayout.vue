@@ -6,6 +6,7 @@ import DotsIndicator from '@/components/ui/DotsIndicator.vue'
 import useProjects from '@/queries/projectsQuery'
 import { useAppLayoutStore, type ProjectView } from '@/stores/appLayoutStore'
 import { useProjectStore } from '@/stores/projectStore'
+import AgentsIndex from '@/pages/agents/Index.vue'
 
 const TABS: { id: ProjectView; label: string }[] = [
     { id: 'agents', label: 'Dashboard' },
@@ -15,7 +16,7 @@ const TABS: { id: ProjectView; label: string }[] = [
 
 const page = usePage<{ project?: string }>()
 const layout = useAppLayoutStore()
-const { claudeStatus, projectView, liveSessionCount } = storeToRefs(layout)
+const { claudeStatus, projectView, liveSessionCount, activeAgentId } = storeToRefs(layout)
 const { activeProject } = storeToRefs(useProjectStore())
 
 // The only layout with a project route, so it is the one place that resolves
@@ -29,9 +30,11 @@ const activeView = computed<ProjectView>(() =>
     isTasksPage.value ? 'tasks' : isConfigPage.value ? 'commands' : projectView.value,
 )
 const activeStatus = computed(() => (activeProject.value ? claudeStatus.value[activeProject.value.id] : undefined))
-// The Dashboard view is the PM terminal. The agent pages that will own it are
-// not ported yet, so page content only shows in the other views.
 const showAgentsView = computed(() => !!activeProject.value && activeView.value === 'agents')
+// The Dashboard view shows the project overview until an agent is drilled into.
+// agents/Detail is not ported yet, so a drilled-in agent shows the PM terminal meanwhile.
+const showOverview = computed(() => showAgentsView.value && activeAgentId.value === null)
+const showPmTerminal = computed(() => showAgentsView.value && activeAgentId.value !== null)
 
 function selectTab(view: ProjectView) {
     const project = activeProject.value
@@ -39,6 +42,7 @@ function selectTab(view: ProjectView) {
     if (view === 'tasks') { router.visit(`/${project.slug}/tasks`); return }
     if (view === 'commands') { router.visit(`/${project.slug}/configurations`); return }
     projectView.value = 'agents'
+    layout.setActiveAgentId(null)
     if (isTasksPage.value || isConfigPage.value) router.visit(`/${project.slug}`)
 }
 
@@ -100,9 +104,11 @@ onBeforeUnmount(() => {
 
         <div class="flex-1 flex overflow-hidden">
             <!-- Always mounted (display-toggled) so the terminal slot never unmounts under a live xterm. -->
-            <div :class="['flex-1 overflow-hidden', showAgentsView ? 'flex' : 'hidden']">
+            <div :class="['flex-1 overflow-hidden', showPmTerminal ? 'flex' : 'hidden']">
                 <div ref="terminalSlot" data-testid="pm-terminal" class="flex-1 overflow-hidden p-2 box-border bg-[#f6f8fa]" />
             </div>
+
+            <AgentsIndex v-if="showOverview" />
 
             <div v-if="!activeProject" class="flex-1 flex items-center justify-center">
                 <span class="text-zinc-400 text-[13px]">No project selected</span>
