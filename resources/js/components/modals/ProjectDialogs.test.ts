@@ -7,7 +7,6 @@ import { reactive } from 'vue'
 import ModalLayer from '@/layouts/ModalLayer.vue'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import type { Project } from '@/types/type'
-import DefaultPermissionsModal from './DefaultPermissionsModal.vue'
 import ProjectPermissionsModal from './ProjectPermissionsModal.vue'
 import SystemPromptModal from './SystemPromptModal.vue'
 
@@ -92,19 +91,6 @@ describe('permission dialogs', () => {
         expect(bodyOf('PATCH', '/api/projects/5/permissions')).toEqual({ allow: ['Read'], deny: ['Bash(rm *)'] })
         expect(wrapper.emitted('close')).toHaveLength(1)
     })
-
-    it('shows a load error for default permissions and keeps the dialog open on a failed save', async () => {
-        fetchMock.mockImplementationOnce(() => Promise.reject(new Error('offline')))
-        routes['PATCH /api/default-permissions'] = { status: 500, body: {} }
-        const wrapper = mount(DefaultPermissionsModal)
-        await flushPromises()
-        expect(wrapper.text()).toContain('Failed to load defaults')
-
-        await wrapper.get('form').trigger('submit')
-        await flushPromises()
-        expect(wrapper.text()).toContain('Something went wrong')
-        expect(wrapper.emitted('close')).toBeUndefined()
-    })
 })
 
 describe('ModalLayer', () => {
@@ -113,11 +99,11 @@ describe('ModalLayer', () => {
         const wrapper = mount(ModalLayer, { global: { plugins: plugins() }, attachTo: document.body })
         const store = useAppLayoutStore()
 
-        store.showGlobalSettings = true
+        store.openSettings('general')
         await flushPromises()
         expect(wrapper.find('[role="dialog"][aria-label="Settings"]').exists()).toBe(true)
-        await wrapper.get('[aria-label="Close"]').trigger('click')
-        expect(store.showGlobalSettings).toBe(false)
+        await wrapper.get('[aria-label="Close settings"]').trigger('click')
+        expect(store.settingsSection).toBeNull()
 
         store.permissionsProject = project
         await flushPromises()

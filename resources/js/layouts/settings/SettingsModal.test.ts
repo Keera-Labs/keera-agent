@@ -13,7 +13,7 @@ const page = reactive({ component: 'Home', url: '/', props: {} })
 
 vi.mock('@inertiajs/vue3', () => ({
     usePage: () => page,
-    router: { visit: vi.fn() },
+    router: { visit: vi.fn(), reload: vi.fn() },
 }))
 
 const stubs = {
@@ -27,7 +27,14 @@ type Call = { method: string; body?: unknown }
 let calls: Call[]
 let saved: Record<string, unknown>
 
+let globalPatch: { status: number; body: Record<string, unknown> }
+
 function fakeFetch(url: string, init?: RequestInit) {
+    if (url === '/api/global-settings') {
+        calls.push({ method: init?.method ?? 'GET', body: JSON.parse(String(init?.body)) })
+        const { status, body } = globalPatch
+        return Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) })
+    }
     if (url !== '/api/settings/editor') return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
     const method = init?.method ?? 'GET'
     const body = init?.body ? JSON.parse(String(init.body)) : undefined
@@ -52,6 +59,7 @@ const navLabels = (w: VueWrapper) => w.findAll('[data-section]').map(b => b.attr
 beforeEach(() => {
     calls = []
     saved = { font_family: 'dank-mono', font_size: 13, hide_hidden: false, hide_ignored: false, hidden_patterns: [], customized: false }
+    globalPatch = { status: 200, body: { max_agents_per_project: 25 } }
     page.component = 'Home'
     vi.stubGlobal('fetch', vi.fn(fakeFetch))
     // happy-dom has no FontFaceSet; saving applies the font to terminals through it.
@@ -63,6 +71,7 @@ afterEach(() => {
     wrapper = undefined
     vi.unstubAllGlobals()
     vi.mocked(router.visit).mockClear()
+    vi.mocked(router.reload).mockClear()
 })
 
 describe('SettingsModal', () => {
@@ -190,5 +199,70 @@ describe('SettingsModal', () => {
 
         await w.get('[aria-label="Close settings"]').trigger('click')
         expect(router.visit).toHaveBeenCalledWith('/', { replace: true })
+    })
+
+    it('saves the max agents limit from the Agents tab through the footer', async () => {
+        const { w, layout } = await open('ai')
+        await w.get('[data-ai-tab="agents"]').trigger('click')
+        const input = w.get('[data-testid="max-agents"]')
+        const save = w.get('[data-testid="settings-save"]')
+
+        expect((input.element as HTMLInputElement).value).toBe('10')
+        expect(save.attributes('disabled')).toBeDefined()
+
+        await input.setValue('250')
+        await input.trigger('change')
+        expect((input.element as HTMLInputElement).value).toBe('100')
+
+        await input.setValue('25')
+        await input.trigger('change')
+        expect(w.get('[data-testid="settings-status"]').text()).toBe('Unsaved changes')
+        await save.trigger('click')
+        await flushPromises()
+
+        expect(calls.filter(c => c.method === 'PATCH')).toEqual([{ method: 'PATCH', body: { max_agents_per_project: 25 } }])
+        expect(layout.maxAgentsPerProject).toBe(25)
+        expect(router.reload).toHaveBeenCalledWith({ only: ['global_settings'] })
+        expect(w.get('[data-testid="settings-status"]').text()).toBe('Saved to Keera settings')
+    })
+
+    it('saves editor and agent edits together, and Discard drops both', async () => {
+        const { w, layout } = await open('ai')
+        await w.get('[data-ai-tab="agents"]').trigger('click')
+        await w.get('[data-testid="max-agents"]').setValue('7')
+        await w.get('[data-testid="max-agents"]').trigger('change')
+        await w.get('[data-section="editor"]').trigger('click')
+        await w.get('[data-preset="16"]').trigger('click')
+
+        await w.get('[data-testid="settings-discard"]').trigger('click')
+        expect(w.get('[data-testid="settings-save"]').attributes('disabled')).toBeDefined()
+
+        await w.get('[data-preset="16"]').trigger('click')
+        await w.get('[data-section="ai"]').trigger('click')
+        await w.get('[data-ai-tab="agents"]').trigger('click')
+        expect((w.get('[data-testid="max-agents"]').element as HTMLInputElement).value).toBe('10')
+        await w.get('[data-testid="max-agents"]').setValue('7')
+        await w.get('[data-testid="max-agents"]').trigger('change')
+        await w.get('[data-testid="settings-save"]').trigger('click')
+        await flushPromises()
+
+        expect(calls.filter(c => c.method === 'PATCH')).toHaveLength(2)
+        expect(calls).toContainEqual({ method: 'PATCH', body: { max_agents_per_project: 7 } })
+        expect(layout.maxAgentsPerProject).toBe(25)
+    })
+
+    it('shows the server error when the max agents limit is rejected', async () => {
+        globalPatch = { status: 422, body: { error: 'max_agents_per_project must be an integer between 1 and 100' } }
+        const { w, layout } = await open('ai')
+        await w.get('[data-ai-tab="agents"]').trigger('click')
+
+        await w.get('[data-testid="max-agents"]').setValue('5')
+        await w.get('[data-testid="max-agents"]').trigger('change')
+        await w.get('[data-testid="settings-save"]').trigger('click')
+        await flushPromises()
+
+        expect(w.get('[data-testid="settings-status"]').text()).toContain('between 1 and 100')
+        expect(layout.maxAgentsPerProject).toBe(10)
+        expect(router.reload).not.toHaveBeenCalled()
     })
 })

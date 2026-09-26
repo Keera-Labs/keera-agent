@@ -66,8 +66,6 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
     // Loaded up front: the saved font applies to terminals opened before any editor.
     useEditorSettingsStore().load()
 
-    const showGlobalSettings = ref(false)
-    const showDefaultPermissions = ref(false)
     const showProjectSearch = ref(false)
     // The open Settings section, or null while the Settings modal is closed.
     const settingsSection = ref<SettingsSectionId | null>(null)
@@ -229,8 +227,6 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
 
     return {
         tasks,
-        showGlobalSettings,
-        showDefaultPermissions,
         showProjectSearch,
         settingsSection,
         openSettings,
