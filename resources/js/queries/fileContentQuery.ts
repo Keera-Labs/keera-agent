@@ -33,11 +33,20 @@ export async function fetchFileContent(projectId: number, path: string): Promise
     return res.json()
 }
 
-export async function saveFileContent(projectId: number, path: string, content: string, etag: string): Promise<SavedFile> {
+export const saveRequestBody = (content: string, etag: string) => JSON.stringify({ content, etag })
+
+export async function saveFileContent(
+    projectId: number,
+    path: string,
+    content: string,
+    etag: string,
+    { keepalive = false } = {},
+): Promise<SavedFile> {
     const res = await fetch(contentUrl(projectId, path), {
         method: 'PUT',
         headers: JSON_HEADERS,
-        body: JSON.stringify({ content, etag }),
+        body: saveRequestBody(content, etag),
+        keepalive,
     })
     if (!res.ok) throw await readError(res)
     return res.json()

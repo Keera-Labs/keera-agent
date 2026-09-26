@@ -4,7 +4,7 @@ import { storeToRefs } from 'pinia'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import { EDITOR_THEME, loadMonaco, type TextModel } from '@/editor/monaco'
-import { useEditorStore } from '@/stores/editorStore'
+import { SAVE_STATUS_LABEL, saveStatus, useEditorStore } from '@/stores/editorStore'
 
 const editorStore = useEditorStore()
 const { activeTab } = storeToRefs(editorStore)
@@ -39,6 +39,10 @@ onMounted(async () => {
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
     })
+    editor.onDidBlurEditorText(() => {
+        const tab = activeTab.value
+        if (tab) editorStore.flush(tab.projectId, tab.path)
+    })
     showActiveModel()
 })
 
@@ -69,8 +73,16 @@ const bannerButton = 'h-6 px-2 rounded border text-[12px] cursor-pointer'
     <section class="absolute inset-0 z-10 flex flex-col bg-white" aria-label="Editor">
         <div v-if="activeTab" class="flex items-center gap-2 h-7 px-3 shrink-0 border-b border-stroke text-[12px] text-zinc-500">
             <span class="truncate font-mono" data-testid="editor-path">{{ activeTab.path }}</span>
-            <span v-if="activeTab.saving" class="shrink-0">Saving…</span>
-            <span v-else-if="activeTab.dirty" class="shrink-0">Unsaved changes</span>
+            <span
+                data-testid="editor-save-status"
+                :data-status="saveStatus(activeTab)"
+                :class="['shrink-0 ml-auto', {
+                    'text-danger': saveStatus(activeTab) === 'error',
+                    'text-amber-700': saveStatus(activeTab) === 'conflict',
+                }]"
+            >
+                {{ SAVE_STATUS_LABEL[saveStatus(activeTab)] }}
+            </span>
         </div>
 
         <div
