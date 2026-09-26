@@ -13,6 +13,7 @@ from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.models.Agent import Agent
 from app.models.Project import Project
 from app.terminal.claude_monitor import make_claude_session_monitor
+from app.terminal.cli_supervisor import supervise_cli, with_exit_marker
 from app.terminal.connection_manager import ConnectionManager
 from app.terminal.manager import TerminalManager
 from app.terminal.readiness import claude_ready, mark_booting
@@ -154,9 +155,10 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
 
     bridge = WebsocketTerminal(websocket, terminal, on_output=monitor)
     conn_manager.set(session_id, bridge, cwd=cwd)
+    supervise_cli(agent_record.id, terminal, session_id, build_cmd)
 
     try:
-        await bridge.run(auto_send=claude_cmd.encode() + b"\n")
+        await bridge.run(auto_send=with_exit_marker(claude_cmd).encode() + b"\n")
     finally:
         conn_manager.remove(session_id)
         claude_ready.pop(session_id, None)
