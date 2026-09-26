@@ -392,6 +392,15 @@ export function useTerminalSessions(params: UseTerminalSessionsParams) {
         syncLiveSessionCount()
     }
 
+    /** Close a project's PM terminal; its container stays registered so a remaining PM can relaunch in it. */
+    function disposePmSession(projectId: number) {
+        const session = sessions.get(projectId)
+        if (!session) return
+        disposeSession(session)
+        sessions.delete(projectId)
+        syncLiveSessionCount()
+    }
+
     function setClaudeStatus(projectId: number, status: ClaudeStatus) {
         claudeStatus[projectId] = status
     }
@@ -422,6 +431,7 @@ export function useTerminalSessions(params: UseTerminalSessionsParams) {
         setAgentContainer,
         launchAgentSession,
         disposeAgentSession,
+        disposePmSession,
         restartClaude,
         uploadImage,
         claudeStatus,

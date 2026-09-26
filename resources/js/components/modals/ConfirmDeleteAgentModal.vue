@@ -8,6 +8,8 @@ const props = defineProps<{
     error?: string
     /** Offer closing only the terminal tab, keeping the agent. */
     closeOnly?: boolean
+    /** For a PM: how many agents it orchestrates. They are not deleted with it. */
+    orchestratedCount?: number
 }>()
 const emit = defineEmits<{ cancel: []; confirm: []; closeOnly: [] }>()
 
@@ -44,6 +46,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                 </h2>
                 <p class="m-0 text-zinc-500 text-[13px] leading-normal">
                     This stops its terminal and process and removes the agent.
+                </p>
+                <p v-if="orchestratedCount" data-testid="confirm-delete-agent-orchestrated" class="m-0 text-zinc-500 text-[13px] leading-normal">
+                    This PM orchestrates {{ orchestratedCount }} {{ orchestratedCount === 1 ? 'agent' : 'agents' }}. They are not deleted and keep running.
                 </p>
                 <span v-if="error" role="alert" class="text-danger text-[12px]">{{ error }}</span>
                 <div class="flex gap-2 items-center">

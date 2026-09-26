@@ -42,7 +42,8 @@ export function useAgentActions(project: MaybeRefOrGetter<Project>) {
     }
 
     async function remove(agent: ProjectAgent) {
-        layout.disposeAgentSession(agent.id)
+        if (agent.agent_type === 'pm') layout.disposePmSession(toValue(project).id)
+        else layout.disposeAgentSession(agent.id)
         layout.agentContainerRefs.delete(agent.id)
         await agentsQuery.remove.mutateAsync(agent.id)
     }

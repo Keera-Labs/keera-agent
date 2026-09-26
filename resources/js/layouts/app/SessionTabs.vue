@@ -6,7 +6,7 @@ import { computed, ref } from 'vue'
 import ConfirmDeleteAgentModal from '@/components/modals/ConfirmDeleteAgentModal.vue'
 import Icon from '@/components/ui/Icon.vue'
 import AgentAddModal from '@/pages/agents/AgentAddModal.vue'
-import type { ProjectAgent } from '@/queries/agentQuery'
+import { orchestratedCount, type ProjectAgent } from '@/queries/agentQuery'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import { useDiffStore, type DiffTab } from '@/stores/diffStore'
 import { SAVE_STATUS_LABEL, saveStatus, useEditorStore, type EditorTab, type SaveStatus } from '@/stores/editorStore'
@@ -94,7 +94,9 @@ function select(agent: ProjectAgent) {
 }
 
 function close(agent: ProjectAgent) {
-    layout.disposeAgentSession(agent.id)
+    const project = activeProject.value
+    if (isPm(agent) && project) layout.disposePmSession(project.id)
+    else layout.disposeAgentSession(agent.id)
     if (activeAgentId.value === agent.id) layout.setActiveAgentId(null)
 }
 
@@ -164,7 +166,6 @@ async function confirmDelete() {
                     {{ agent.name }}
                 </button>
                 <button
-                    v-if="!isPm(agent)"
                     type="button"
                     data-testid="session-tab-close"
                     :aria-label="`Close ${agent.name} tab`"
@@ -174,7 +175,6 @@ async function confirmDelete() {
                 >
                     <Icon name="x" :size="11" />
                 </button>
-                <span v-else class="w-1" />
             </div>
 
             <div
@@ -261,7 +261,8 @@ async function confirmDelete() {
             :agent-name="closing.name"
             :pending="removeAgent.isLoading.value"
             :error="deleteError"
-            close-only
+            :close-only="!isPm(closing)"
+            :orchestrated-count="orchestratedCount(layout.agentHook.agents.value, closing)"
             @cancel="closing = null"
             @close-only="closeTabOnly"
             @confirm="confirmDelete"
