@@ -18,6 +18,7 @@ from app.controllers import (
     configurations_page_controller,
     dashboard_controller,
     default_permission_controller,
+    editor_settings_controller,
     git_commit_controller,
     git_pull_request_controller,
     git_push_controller,
@@ -129,6 +130,8 @@ router.patch("/api/default-permissions", default_permission_controller.update)
 # Global app settings
 router.get("/api/global-settings", global_settings_controller.get_global_settings)
 router.patch("/api/global-settings", global_settings_controller.update_global_settings)
+router.get("/api/settings/editor", editor_settings_controller.show)
+router.patch("/api/settings/editor", editor_settings_controller.update)
 
 # Plugin system — list discovered plugins and toggle activation (before wildcard)
 router.get("/api/plugins", plugin_controller.index)
