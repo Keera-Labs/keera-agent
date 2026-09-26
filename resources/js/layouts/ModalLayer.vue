@@ -8,6 +8,7 @@ import GlobalSettingsModal from '@/components/modals/GlobalSettingsModal.vue'
 import ProjectPermissionsModal from '@/components/modals/ProjectPermissionsModal.vue'
 import ProjectSearchModal from '@/components/modals/ProjectSearchModal.vue'
 import SystemPromptModal from '@/components/modals/SystemPromptModal.vue'
+import SettingsModal from '@/layouts/settings/SettingsModal.vue'
 import useAllProjects from '@/queries/allProjectsQuery'
 import { PROJECTS_QUERY_KEY } from '@/queries/projectsQuery'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
@@ -18,6 +19,7 @@ const {
     showGlobalSettings,
     showDefaultPermissions,
     showProjectSearch,
+    settingsSection,
     systemPromptProject,
     permissionsProject,
 } = storeToRefs(layout)
@@ -43,6 +45,7 @@ function refreshProjects() {
         @close="workspaceStore.setDeletingWorkspace(null)"
         @deleted="onWorkspaceDeleted"
     />
+    <SettingsModal v-if="settingsSection" />
     <GlobalSettingsModal v-if="showGlobalSettings" @close="showGlobalSettings = false" />
     <DefaultPermissionsModal v-if="showDefaultPermissions" @close="showDefaultPermissions = false" />
     <SystemPromptModal
