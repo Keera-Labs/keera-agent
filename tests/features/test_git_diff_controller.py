@@ -95,6 +95,29 @@ class TestGitDiffController(TestCase, DatabaseTransaction):
         assert body["original_path"] == "notes.txt"
         assert body["original"] == "old notes\n" and body["modified"] == "old notes\n"
 
+    async def test_unmerged_file_compares_head_with_conflict_markers(self):
+        self.repo.merge_with_conflicts(
+            ours={"notes.txt": "ours\n"}, theirs={"notes.txt": "theirs\n"}
+        )
+
+        body = (await self.diff("notes.txt")).json()
+
+        assert body["status"] == "U"
+        assert body["original"] == "ours\n"
+        assert "<<<<<<<" in body["modified"] and "theirs" in body["modified"]
+
+    async def test_staged_copy_reads_original_from_source(self):
+        self.repo.git("config", "status.renames", "copies")
+        self.repo.write("notes-copy.txt", "old notes\n")
+        self.repo.write("notes.txt", "old notes\nedited\n")
+        self.repo.git("add", "-A")
+
+        body = (await self.diff("notes-copy.txt", staged=True)).json()
+
+        assert body["status"] == "C"
+        assert body["original_path"] == "notes.txt"
+        assert body["original"] == "old notes\n" and body["modified"] == "old notes\n"
+
     async def test_binary_file_returns_placeholder_flags(self):
         self.repo.write("logo.png", b"\x89PNG\x00\x01\x02")
 

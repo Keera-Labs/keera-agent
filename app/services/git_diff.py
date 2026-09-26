@@ -154,7 +154,8 @@ async def _sides(repo: GitRepository, change: FileChange, staged: bool) -> tuple
     working = await asyncio.to_thread(_read_working_file, repo, change.path)
     if change.untracked:
         return None, working
-    if change.status == "C":
+    if change.unmerged:
+        # The index holds conflict stages, not one blob, so show HEAD against the marked-up file.
         return await _read_blob(repo, f"HEAD:{change.path}"), working
     original = await _read_blob(repo, f":0:{source}")
     return original, None if change.status == "D" else working
