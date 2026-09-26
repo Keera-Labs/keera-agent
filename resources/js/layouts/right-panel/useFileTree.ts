@@ -10,8 +10,8 @@ export type TreeRow =
 
 const ROOT = ''
 
-// Names conventionally excluded from version control. Real .gitignore awareness
-// needs the backend, so this list approximates it for styling only.
+// Names conventionally excluded from version control, used only to mute them.
+// Hiding happens in the backend listing, which asks git (Settings > Editor > Files).
 const IGNORED_NAMES = new Set([
     '__pycache__', 'node_modules', '.venv', 'venv', '.idea', '.vscode', '.worktrees',
     '.pytest_cache', '.ruff_cache', '.mypy_cache', '.DS_Store', 'dist', 'build',
@@ -82,18 +82,17 @@ export function useFileTree(projectId: MaybeRefOrGetter<number>) {
      * matches (or that contain a loaded match) are kept, and folders holding a
      * match are shown open. Unloaded folders cannot be searched.
      */
-    function visibleRows(query: string, hideIgnored: boolean): TreeRow[] {
+    function visibleRows(query: string): TreeRow[] {
         const q = query.trim().toLowerCase()
         const containsMatch = new Map<string, boolean>()
 
-        const hidden = (e: FileEntry) => hideIgnored && isMuted(e.name)
         const nameMatches = (e: FileEntry) => e.name.toLowerCase().includes(q)
         const hasDescendantMatch = (e: FileEntry): boolean => {
             if (e.type !== 'dir') return false
             let found = containsMatch.get(e.path)
             if (found === undefined) {
                 found = (listings.get(e.path)?.entries ?? [])
-                    .some(c => !hidden(c) && (nameMatches(c) || hasDescendantMatch(c)))
+                    .some(c => nameMatches(c) || hasDescendantMatch(c))
                 containsMatch.set(e.path, found)
             }
             return found
@@ -107,7 +106,6 @@ export function useFileTree(projectId: MaybeRefOrGetter<number>) {
                 rows.push({ kind: 'notice', key: `${path}#error`, depth, text: error, tone: 'error' })
             }
             for (const entry of listing?.entries ?? []) {
-                if (hidden(entry)) continue
                 const descendantMatch = q !== '' && hasDescendantMatch(entry)
                 if (q !== '' && !nameMatches(entry) && !descendantMatch) continue
                 const isOpen = descendantMatch || expanded.has(entry.path)

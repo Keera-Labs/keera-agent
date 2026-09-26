@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
+import { useEditorSettingsStore } from '@/stores/editorSettingsStore'
 import { useEditorStore } from '@/stores/editorStore'
 import type { Project } from '@/types/type'
 import { isIgnored, isMuted, useFileTree, type FileEntry } from './useFileTree'
@@ -13,11 +14,21 @@ const { openError } = storeToRefs(editor)
 const tree = useFileTree(() => props.project.id)
 const { rootError } = tree
 const query = ref('')
-const hideIgnored = ref(false)
 const selectedPath = ref<string | null>(null)
 
-const rows = computed(() => tree.visibleRows(query.value, hideIgnored.value))
+const rows = computed(() => tree.visibleRows(query.value))
 const projectOpenError = computed(() => openError.value?.projectId === props.project.id ? openError.value : null)
+
+// The backend applies the filters, so a saved change needs fresh listings.
+const settings = useEditorSettingsStore()
+const { fileFilters } = storeToRefs(settings)
+const hidingFiles = computed(() => fileFilters.value.hide_hidden && fileFilters.value.hide_ignored)
+watch(() => JSON.stringify(fileFilters.value), () => void tree.refresh())
+
+function toggleHiding() {
+    const hide = !hidingFiles.value
+    void settings.setFileFilters({ hide_hidden: hide, hide_ignored: hide })
+}
 
 onMounted(tree.refresh)
 
@@ -38,10 +49,10 @@ const iconButton = 'p-1 rounded text-zinc-400 hover:text-zinc-700 hover:bg-zinc-
             <span class="flex-1 truncate text-[13px] font-medium text-zinc-900" :title="project.path">{{ project.name }}</span>
             <button
                 type="button"
-                :class="[iconButton, hideIgnored && 'text-accent! bg-zinc-200/70']"
-                :title="hideIgnored ? 'Show hidden and ignored files' : 'Hide hidden and ignored files'"
-                :aria-pressed="hideIgnored"
-                @click="hideIgnored = !hideIgnored"
+                :class="[iconButton, hidingFiles && 'text-accent! bg-zinc-200/70']"
+                :title="hidingFiles ? 'Show hidden and ignored files' : 'Hide hidden and ignored files'"
+                :aria-pressed="hidingFiles"
+                @click="toggleHiding"
             >
                 <Icon name="funnel" :size="13" />
             </button>

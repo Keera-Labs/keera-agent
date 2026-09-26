@@ -5,7 +5,10 @@ from typing import Annotated
 
 from fastapi import Query
 
+from app.controllers import editor_settings_controller
+from app.requests.editor_settings_request import EditorSettingsRequest
 from app.requests.project_file_request import ProjectFileIndexRequest
+from app.utils.file_filters import filter_entries
 from app.utils.project_paths import (
     InvalidPath,
     path_error_response,
@@ -27,7 +30,9 @@ def _entry_type(entry: os.DirEntry, root: Path) -> str:
         return "file"
 
 
-def _list_entries(root: Path, target: Path, rel: str) -> list[dict]:
+def _list_entries(
+    root: Path, target: Path, rel: str, settings: EditorSettingsRequest
+) -> list[dict]:
     with os.scandir(target) as it:
         entries = [
             {
@@ -37,16 +42,18 @@ def _list_entries(root: Path, target: Path, rel: str) -> list[dict]:
             }
             for entry in it
         ]
+    entries = filter_entries(entries, target, settings)
     entries.sort(key=lambda e: (e["type"] != "dir", e["name"].lower(), e["name"]))
     return entries
 
 
 async def index(project_id: int, query: Annotated[ProjectFileIndexRequest, Query()]):
     root = await project_root(project_id)
+    settings = await editor_settings_controller.current()
 
     try:
         rel, target = resolve_project_path(root, query.path)
-        entries = await asyncio.to_thread(_list_entries, root, target, rel)
+        entries = await asyncio.to_thread(_list_entries, root, target, rel, settings)
     except (InvalidPath, OSError) as e:
         return path_error_response(e)
 
