@@ -13,10 +13,13 @@ class WebsocketTerminal:
         websocket: WebSocket | None,
         terminal: Terminal,
         on_output: Callable[[bytes], Awaitable[None]] | None = None,
+        on_restart: Callable[[], Awaitable[object]] | None = None,
     ):
         self._ws = websocket
         self._terminal = terminal
         self._on_output = on_output
+        self._on_restart = on_restart
+        self._restart_task: asyncio.Task | None = None
         self._stopped = asyncio.Event()
 
     @property
@@ -92,6 +95,8 @@ class WebsocketTerminal:
                                 int(parsed["rows"]),
                                 visible=bool(parsed.get("visible", True)),
                             )
+                        elif isinstance(parsed, dict) and parsed.get("type") == "restart_cli":
+                            self._request_restart()
                         else:
                             # Text = raw keyboard from term.onData → no modification
                             await self._terminal.write(text.encode())
@@ -100,6 +105,11 @@ class WebsocketTerminal:
             except (WebSocketDisconnect, Exception):
                 break
         self._stopped.set()
+
+    def _request_restart(self) -> None:
+        # Runs off the receive loop: a restart waits for the CLI to stop and boot.
+        if self._on_restart and not (self._restart_task and not self._restart_task.done()):
+            self._restart_task = asyncio.create_task(self._on_restart())
 
     async def _watch_process(self, loop: asyncio.AbstractEventLoop) -> None:
         while self._terminal.is_alive() and not self._stopped.is_set():

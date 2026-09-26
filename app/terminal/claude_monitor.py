@@ -4,7 +4,7 @@ import re
 from app.actions.agent_startup import wait_for_agent_cli
 from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.models.Agent import Agent
-from app.terminal.cli_supervisor import with_exit_marker
+from app.terminal.cli_supervisor import launch_cli
 from app.terminal.readiness import mark_booting
 
 _NO_CONV = re.compile(rb"No conversation found to continue", re.IGNORECASE)
@@ -66,7 +66,7 @@ async def _restart(
         return
     agent = await Agent.find(agent_id)
     if agent:
-        await terminal.write(with_exit_marker(build_cmd(agent)).encode() + b"\r")
+        await launch_cli(terminal, session_id, build_cmd(agent))
         await wait_for_agent_cli(terminal, agent_id)
         await Agent.where("id", agent_id).update({"has_session": True})
         if after_restart:

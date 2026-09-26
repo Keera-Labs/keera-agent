@@ -131,3 +131,43 @@ describe('tab visibility', () => {
         scope.stop()
     })
 })
+
+describe('restartClaude', () => {
+    function setup() {
+        const scope = effectScope()
+        const terminals = scope.run(() => useTerminalSessions({
+            activeProject: { id: 1 } as never,
+            projectAgents: [],
+            onAgentCreated: () => {},
+            onClaudeStopped: () => {},
+            onAgentMessage: () => {},
+            onAgentStatus: () => {},
+        }))!
+        const pm = fakeSession(slot)
+        terminals.sessions.set(1, pm.session)
+        const cleanup = () => {
+            terminals.sessions.delete(1)
+            scope.stop()
+        }
+        return { terminals, pm, cleanup }
+    }
+
+    it('asks the server to relaunch the CLI instead of typing a command', () => {
+        const { terminals, pm, cleanup } = setup()
+
+        terminals.restartClaude()
+
+        expect(sent(pm.send)).toEqual([{ type: 'restart_cli' }])
+        cleanup()
+    })
+
+    it('does nothing on a socket that is not open', () => {
+        const { terminals, pm, cleanup } = setup()
+        ;(pm.session.ws as { readyState: number }).readyState = WebSocket.CLOSED
+
+        terminals.restartClaude()
+
+        expect(pm.send).not.toHaveBeenCalled()
+        cleanup()
+    })
+})
