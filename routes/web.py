@@ -18,6 +18,11 @@ from app.controllers import (
     configurations_page_controller,
     dashboard_controller,
     default_permission_controller,
+    git_commit_controller,
+    git_pull_request_controller,
+    git_push_controller,
+    git_stage_controller,
+    git_status_controller,
     global_settings_controller,
     heartbeat_controller,
     home_controller,
@@ -45,6 +50,16 @@ router.delete("/api/tasks/{task_id}", task_controller.destroy)
 router.get("/api/projects/{project_id}/files", project_file_controller.index)
 router.get("/api/projects/{project_id}/files/content", project_file_content_controller.show)
 router.put("/api/projects/{project_id}/files/content", project_file_content_controller.update)
+
+# Source Control panel — git operations on the project's repository
+router.get("/api/projects/{project_id}/git/status", git_status_controller.show)
+router.post("/api/projects/{project_id}/git/stage", git_stage_controller.store)
+router.post("/api/projects/{project_id}/git/unstage", git_stage_controller.destroy)
+router.get("/api/projects/{project_id}/git/commits", git_commit_controller.index)
+router.post("/api/projects/{project_id}/git/commits", git_commit_controller.store)
+router.post("/api/projects/{project_id}/git/push", git_push_controller.store)
+router.get("/api/projects/{project_id}/git/pull-request", git_pull_request_controller.show)
+router.post("/api/projects/{project_id}/git/pull-request", git_pull_request_controller.store)
 
 router.get("/api/projects/{project_id}/commands", command_controller.index)
 router.post("/api/projects/{project_id}/commands", command_controller.store)
