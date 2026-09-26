@@ -67,6 +67,7 @@ function setHolder(el: unknown) {
         <!-- Off-screen parking spot for live xterm instances not shown in any slot. -->
         <div
             :ref="setHolder"
+            data-terminal-holder
             aria-hidden="true"
             class="absolute left-[-99999px] top-0 w-[900px] h-[600px] overflow-hidden pointer-events-none"
         />

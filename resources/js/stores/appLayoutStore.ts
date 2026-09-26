@@ -2,7 +2,7 @@ import { usePage } from '@inertiajs/vue3'
 import { useQueryCache } from '@pinia/colada'
 import { defineStore, storeToRefs } from 'pinia'
 import { computed, markRaw, onScopeDispose, ref, shallowRef, watch } from 'vue'
-import { attachTerminal, useTerminalSessions } from '@/composables/useTerminalSessions'
+import { attachTerminal, reportSize, useTerminalSessions } from '@/composables/useTerminalSessions'
 import { useAgents } from '@/queries/agentQuery'
 import { AGENT_SUMMARIES_QUERY_KEY } from '@/queries/agentSummariesQuery'
 import useProjects, { PROJECTS_QUERY_KEY } from '@/queries/projectsQuery'
@@ -156,7 +156,7 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
         attachTerminal(session.term, slot)
         session.observer.disconnect()
         session.observer.observe(slot)
-        requestAnimationFrame(() => { session.fitAddon.fit(); session.term.focus() })
+        requestAnimationFrame(() => { session.fitAddon.fit(); reportSize(session); session.term.focus() })
     }
 
     /** Move a project's PM terminal back to the holder before its slot goes away; the socket stays open. */
@@ -172,6 +172,7 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
         if (!session) return
         session.observer.disconnect()
         attachTerminal(session.term, holder)
+        reportSize(session)
     }
 
     function refreshData() {
