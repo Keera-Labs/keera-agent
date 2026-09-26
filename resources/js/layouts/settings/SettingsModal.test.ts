@@ -51,7 +51,7 @@ const navLabels = (w: VueWrapper) => w.findAll('[data-section]').map(b => b.attr
 
 beforeEach(() => {
     calls = []
-    saved = { font_family: 'dank-mono', font_size: 13, customized: false }
+    saved = { font_family: 'dank-mono', font_size: 13, hide_hidden: false, hide_ignored: false, hidden_patterns: [], customized: false }
     page.component = 'Home'
     vi.stubGlobal('fetch', vi.fn(fakeFetch))
     // happy-dom has no FontFaceSet; saving applies the font to terminals through it.
@@ -123,9 +123,28 @@ describe('SettingsModal', () => {
         await save.trigger('click')
         await flushPromises()
 
-        expect(calls.at(-1)).toEqual({ method: 'PATCH', body: { font_family: 'jetbrains-mono', font_size: 16 } })
+        expect(calls.at(-1)).toEqual({ method: 'PATCH', body: expect.objectContaining({ font_family: 'jetbrains-mono', font_size: 16 }) })
         expect(settings.font).toEqual({ fontFamily: expect.stringContaining('JetBrains Mono'), fontSize: 16 })
         expect(w.get('[data-testid="settings-status"]').text()).toBe('Saved to Keera settings')
+    })
+
+    it('saves the Files filters and hide patterns', async () => {
+        const { w, settings } = await open('editor')
+        const files = w.get('[data-testid="file-filters"]')
+
+        await files.get('[data-filter="hide_ignored"]').trigger('click')
+        const pattern = files.get('input')
+        await pattern.setValue(' *.log ')
+        await pattern.trigger('keydown', { key: 'Enter' })
+        await pattern.setValue('build/')
+        await pattern.trigger('keydown', { key: ',' })
+        expect(files.get('[data-filter="hide_ignored"]').attributes('aria-pressed')).toBe('true')
+
+        await w.get('[data-testid="settings-save"]').trigger('click')
+        await flushPromises()
+
+        expect(calls.at(-1)?.body).toMatchObject({ hide_hidden: false, hide_ignored: true, hidden_patterns: ['*.log', 'build/'] })
+        expect(settings.fileFilters).toEqual({ hide_hidden: false, hide_ignored: true, hidden_patterns: ['*.log', 'build/'] })
     })
 
     it('clamps the size stepper to 11-20', async () => {

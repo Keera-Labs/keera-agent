@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { usePage } from '@inertiajs/vue3'
 import { Files, GitBranch, LayoutGrid, List, PanelRight, RefreshCw } from '@lucide/vue'
 import { useQueryCache } from '@pinia/colada'
 import { storeToRefs } from 'pinia'
 import { computed, ref, type Component } from 'vue'
+import { useAgentWorktreeDefault, useGitWorktree } from '@/composables/useGitWorktree'
 import { useRefetchInterval } from '@/composables/useRefetchInterval'
 import { useGitStatus } from '@/queries/gitQuery'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
@@ -25,12 +27,15 @@ const EMPTY_TEXT: Partial<Record<ViewId, string>> = {
     'source-control': 'Select a project to see its changes',
 }
 
-const { rightPanelOpen } = storeToRefs(useAppLayoutStore())
+const { rightPanelOpen, activeAgentId } = storeToRefs(useAppLayoutStore())
 const { activeProject } = storeToRefs(useProjectStore())
 const activeView = ref<ViewId>('files')
+const page = usePage()
 
 const projectId = () => activeProject.value?.id ?? null
-const { changedCount, refetch } = useGitStatus(projectId)
+useAgentWorktreeDefault(projectId, () => (page.component === 'agents/Detail' ? activeAgentId.value : null))
+const { target } = useGitWorktree(projectId)
+const { changedCount, refetch } = useGitStatus(target)
 // Agents edit files behind the panel's back, so the badge re-reads status while visible; focus and mutations cover the rest.
 useRefetchInterval(refetch, 30_000, () => rightPanelOpen.value && projectId() !== null)
 

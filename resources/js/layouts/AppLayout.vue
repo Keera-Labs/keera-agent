@@ -8,17 +8,22 @@ import ModalLayer from '@/layouts/ModalLayer.vue'
 import RightPanel from '@/layouts/right-panel/RightPanel.vue'
 import Sidebar from '@/layouts/sidebar/Sidebar.vue'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
+import { useDiffStore } from '@/stores/diffStore'
 import { useEditorStore } from '@/stores/editorStore'
 
 const layout = useAppLayoutStore()
 const { sidebarOpen, rightPanelOpen, statusBarOpen } = storeToRefs(layout)
 const { activeTab: activeEditorTab } = storeToRefs(useEditorStore())
+const { activeTab: activeDiffTab } = storeToRefs(useDiffStore())
 
-// Loaded with the first opened file (Monaco is its own large chunk), then kept
-// mounted so switching back to a file does not rebuild the editor.
+// Loaded with the first opened file or diff (Monaco is its own large chunk), then
+// kept mounted so switching back to a tab does not rebuild the editor.
 const EditorPane = defineAsyncComponent(() => import('@/layouts/editor/EditorPane.vue'))
 const editorMounted = ref(false)
 watch(activeEditorTab, tab => { if (tab) editorMounted.value = true })
+const DiffPane = defineAsyncComponent(() => import('@/layouts/editor/DiffPane.vue'))
+const diffMounted = ref(false)
+watch(activeDiffTab, tab => { if (tab) diffMounted.value = true })
 
 // Receives template refs as Element | ComponentPublicInstance; the holder is always a plain div.
 function setHolder(el: unknown) {
@@ -46,6 +51,7 @@ function setHolder(el: unknown) {
                     <slot />
                     <!-- Overlays the page instead of hiding it, so terminals below keep their size. -->
                     <EditorPane v-if="editorMounted" v-show="activeEditorTab" />
+                    <DiffPane v-if="diffMounted" v-show="activeDiffTab" />
                 </main>
             </div>
 
@@ -67,6 +73,7 @@ function setHolder(el: unknown) {
         <!-- Off-screen parking spot for live xterm instances not shown in any slot. -->
         <div
             :ref="setHolder"
+            data-terminal-holder
             aria-hidden="true"
             class="absolute left-[-99999px] top-0 w-[900px] h-[600px] overflow-hidden pointer-events-none"
         />

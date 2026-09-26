@@ -15,10 +15,14 @@ vi.mock('@inertiajs/vue3', () => ({
 
 let wrapper: VueWrapper | undefined
 
-async function mountOverview(agents: unknown[] = [agentResource(11, 'Builder'), agentResource(12, 'Checker')]) {
+async function mountOverview(
+    agents: unknown[] = [agentResource(11, 'Builder'), agentResource(12, 'Checker')],
+    routes: Record<string, unknown> = {},
+) {
     stubFetch({
         '/api/projects/1/agents': { data: agents },
         '/api/workspaces': [{ id: 7, name: 'Labs' }],
+        ...routes,
     })
     const plugins = installPinia()
     useProjectStore().setActiveProject(project)
@@ -46,6 +50,24 @@ describe('ProjectOverview', () => {
             expect.stringContaining('Builder'),
             expect.stringContaining('Checker'),
         ])
+    })
+
+    it('shows each agent\'s token usage, and a dash when it has none', async () => {
+        const tokens = { input: 10, output: 20, cache_creation: 300, cache_read: 1_250_000, total: 1_250_330 }
+        const { wrapper } = await mountOverview(undefined, {
+            '/api/projects/1/usage': {
+                data: { type: 'project_usages', id: '1', attributes: {
+                    today: tokens,
+                    agents: { 11: { ...tokens, last_model: 'claude-opus-5', last_used_at: null } },
+                } },
+            },
+        })
+
+        const [builder, checker] = wrapper.findAll('article')
+        const builderUsage = builder.findAll('span').find(s => s.text() === '1.3M tok')
+        expect(builderUsage?.attributes('title')).toContain('Cache read: 1,250,000')
+        expect(builderUsage?.attributes('title')).toContain('Last model: claude-opus-5')
+        expect(checker.text()).not.toContain('tok')
     })
 
     it('shows the empty state when the project has no agents', async () => {
@@ -114,19 +136,25 @@ describe('ProjectOverview', () => {
 
     it('deletes an agent from its card only after confirmation', async () => {
         const { wrapper } = await mountOverview()
-        const confirm = vi.fn(() => false)
-        vi.stubGlobal('confirm', confirm)
+        const dialog = () => document.querySelector<HTMLElement>('[data-testid="confirm-delete-agent"]')
+        const click = async (testid: string) => {
+            document.querySelector<HTMLElement>(`[data-testid="${testid}"]`)!.click()
+            await flushPromises()
+        }
         const deleteButtons = wrapper.findAll('[data-testid="agent-card-delete"]')
 
         await deleteButtons[1].trigger('click')
         await flushPromises()
-        expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Checker'))
+        expect(dialog()?.textContent).toContain('Delete agent Checker?')
+        await click('confirm-delete-agent-cancel')
+        expect(dialog()).toBeNull()
         expect(fetch).not.toHaveBeenCalledWith('/api/agents/12', expect.anything())
 
-        confirm.mockReturnValue(true)
         await deleteButtons[1].trigger('click')
         await flushPromises()
+        await click('confirm-delete-agent-confirm')
         expect(fetch).toHaveBeenCalledWith('/api/agents/12', { method: 'DELETE' })
+        expect(dialog()).toBeNull()
     })
 
     it('opens the add-agent modal from New Agent', async () => {

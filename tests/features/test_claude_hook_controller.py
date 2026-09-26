@@ -96,8 +96,8 @@ class TestClaudeHookController(TestCase, DatabaseTransaction):
 
     # ── per-agent Stop attribution ────────────────────────────────────────────
 
-    async def _stop(self, headers: dict | None = None):
-        cwd = os.path.expanduser(self.project.path)
+    async def _stop(self, headers: dict | None = None, cwd: str | None = None):
+        cwd = cwd or os.path.expanduser(self.project.path)
         response = await self.post("/api/claude-stopped", json={"cwd": cwd}, headers=headers or {})
         response.assert_ok()
         await asyncio.sleep(0.1)
@@ -118,11 +118,25 @@ class TestClaudeHookController(TestCase, DatabaseTransaction):
         self.assertIsNone(stopped.attention_prompt)
         self.assertEqual((await Agent.find(sibling.id)).status, "running")
 
-    async def test_claude_stopped_without_header_marks_all_running_agents_waiting(self):
+    async def test_claude_stopped_attributes_by_agent_worktree_cwd_without_header(self):
+        stopping = await AgentFactory.new().create(project_id=self.project.id, status="running")
+        sibling = await AgentFactory.new().create(project_id=self.project.id, status="running")
+        worktree = os.path.join(
+            os.path.expanduser(self.project.path), ".claude", "worktrees", f"agent-{stopping.id}"
+        )
+
+        await self._stop(cwd=worktree)
+
+        self.assertEqual((await Agent.find(stopping.id)).status, "waiting")
+        self.assertEqual((await Agent.find(sibling.id)).status, "running")
+
+    async def test_unattributed_claude_stopped_leaves_working_agents_running(self):
+        """A Stop from another session in the project (PM, the user's own claude) says
+        nothing about which agent stopped, so it must not flip working agents."""
         first = await AgentFactory.new().create(project_id=self.project.id, status="running")
         second = await AgentFactory.new().create(project_id=self.project.id, status="running")
 
-        await self._stop()
+        await self._stop({"X-Keera-Agent-Id": "$KEERA_AGENT_ID"})
 
-        self.assertEqual((await Agent.find(first.id)).status, "waiting")
-        self.assertEqual((await Agent.find(second.id)).status, "waiting")
+        self.assertEqual((await Agent.find(first.id)).status, "running")
+        self.assertEqual((await Agent.find(second.id)).status, "running")

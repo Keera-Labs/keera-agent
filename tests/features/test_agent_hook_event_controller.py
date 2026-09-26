@@ -82,10 +82,21 @@ class TestAgentHookEventController(TestCase, DatabaseTransaction):
         self.assertIsNone(agent.attention_kind)
         self.assertIsNone(agent.attention_prompt)
 
-    async def test_post_tool_use_leaves_waiting_agent_alone(self):
+    async def test_post_tool_use_restores_a_waiting_agent_to_running(self):
+        """A tool call proves the agent is working, so a stale `waiting` self-heals."""
         await Agent.where("id", self.agent.id).update({"status": "waiting"})
 
         agent = await self._post({"hook_event_name": "PostToolUse", "tool_name": "Bash"})
+
+        self.assertEqual(agent.status, "running")
+
+    async def test_unattributed_post_tool_use_does_not_touch_agents(self):
+        await Agent.where("id", self.agent.id).update({"status": "waiting"})
+
+        agent = await self._post(
+            {"hook_event_name": "PostToolUse", "tool_name": "Bash"},
+            headers={"X-Keera-Agent-Id": "$KEERA_AGENT_ID"},
+        )
 
         self.assertEqual(agent.status, "waiting")
 

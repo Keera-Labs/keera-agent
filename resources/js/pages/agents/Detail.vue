@@ -3,7 +3,7 @@ import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import AgentStatusIndicator from '@/components/ui/AgentStatusIndicator.vue'
 import Icon from '@/components/ui/Icon.vue'
-import { attachTerminal } from '@/composables/useTerminalSessions'
+import { attachTerminal, reportSize } from '@/composables/useTerminalSessions'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import { useProjectStore } from '@/stores/projectStore'
 import { color } from '@/tokens'
@@ -59,7 +59,7 @@ function showAgentTerminal(agentId: number, el: HTMLElement) {
     attachTerminal(session.term, el)
     session.observer.disconnect()
     session.observer.observe(el)
-    requestAnimationFrame(() => { session.fitAddon.fit(); session.term.focus() })
+    requestAnimationFrame(() => { session.fitAddon.fit(); reportSize(session); session.term.focus() })
 }
 
 function parkAgentTerminal(agentId: number) {
@@ -71,6 +71,7 @@ function parkAgentTerminal(agentId: number) {
     // The holder is not observed; the terminal refits when it is next shown in a slot.
     session.observer.disconnect()
     attachTerminal(session.term, holder)
+    reportSize(session)
 }
 
 watch(

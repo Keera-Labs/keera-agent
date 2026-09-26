@@ -1,11 +1,19 @@
 <script setup lang="ts">
-import { ChevronRight, CircleCheck, Minus, Plus } from '@lucide/vue'
+import { ChevronRight, CircleCheck, FileText, Minus, Plus } from '@lucide/vue'
 import { ref, useId } from 'vue'
 import type { GitFileChange } from '@/queries/gitQuery'
 import { statusBadge } from './sourceControl'
 
-const props = defineProps<{ title: string; files: GitFileChange[]; staged: boolean; disabled: boolean }>()
-const emit = defineEmits<{ toggle: [paths: string[] | 'all']; open: [file: GitFileChange] }>()
+const props = withDefaults(defineProps<{
+    title: string
+    files: GitFileChange[]
+    staged: boolean
+    disabled: boolean
+    canOpenFile: boolean
+    /** Rows that are other worktrees nested in this checkout, by path, with the worktree's label. */
+    worktreeLabels?: Record<string, string>
+}>(), { worktreeLabels: () => ({}) })
+const emit = defineEmits<{ toggle: [paths: string[] | 'all']; open: [file: GitFileChange]; openFile: [file: GitFileChange] }>()
 
 const expanded = ref(true)
 const sectionId = useId()
@@ -59,17 +67,27 @@ const iconButton = 'p-0.5 rounded text-zinc-500 hover:text-zinc-800 hover:bg-zin
 
                 <button
                     type="button"
-                    class="flex-1 min-w-0 flex items-baseline gap-1.5 text-left cursor-pointer disabled:cursor-default"
-                    :disabled="file.status === 'D'"
+                    class="flex-1 min-w-0 flex items-baseline gap-1.5 text-left cursor-pointer"
+                    :title="worktreeLabels[file.path] ? `Switch to worktree ${worktreeLabels[file.path]}` : `Show changes in ${file.path}`"
                     @click="emit('open', file)"
                 >
                     <span
                         class="shrink-0 max-w-full truncate text-zinc-900"
                         :class="[staged && 'font-semibold', file.status === 'D' && 'line-through text-zinc-500']"
-                    >{{ file.name }}</span>
+                    >{{ worktreeLabels[file.path] ?? file.name }}</span>
                     <span class="min-w-0 truncate text-zinc-400 text-[11px]">{{ file.dir }}</span>
                 </button>
 
+                <button
+                    v-if="canOpenFile && file.status !== 'D' && !worktreeLabels[file.path]"
+                    type="button"
+                    :class="[iconButton, 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100']"
+                    title="Open file"
+                    :aria-label="`Open ${file.path}`"
+                    @click="emit('openFile', file)"
+                >
+                    <FileText :size="12" />
+                </button>
                 <button
                     type="button"
                     :class="[iconButton, 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100']"
@@ -82,7 +100,8 @@ const iconButton = 'p-0.5 rounded text-zinc-500 hover:text-zinc-800 hover:bg-zin
                 </button>
 
                 <span class="shrink-0 text-[11px] tabular-nums" data-testid="line-stats">
-                    <span v-if="file.untracked" class="text-emerald-600">untracked</span>
+                    <span v-if="worktreeLabels[file.path]" class="text-zinc-500">worktree</span>
+                    <span v-else-if="file.untracked" class="text-emerald-600">untracked</span>
                     <span v-else-if="file.binary" class="text-zinc-400">binary</span>
                     <template v-else>
                         <span class="text-emerald-600">+{{ file.additions ?? 0 }}</span>

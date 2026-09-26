@@ -22,6 +22,10 @@ async def _saved() -> EditorSettingsRequest | None:
         return None
 
 
+async def current() -> EditorSettingsRequest:
+    return await _saved() or DEFAULTS
+
+
 async def show() -> EditorSettingsResource:
     saved = await _saved()
     # `customized` lets the terminal keep its own size until the user picks one.

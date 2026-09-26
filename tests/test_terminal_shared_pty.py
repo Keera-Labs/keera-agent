@@ -3,12 +3,16 @@
 A PTY gets a second bridge whenever a browser reattaches to a live agent: a
 second tab or window, a reconnect that lands before the old socket is torn
 down, or a browser opening an agent a trigger started headless. Every bridge
-must keep receiving output, and the size of the PTY must follow the client the
-user is typing in, or that client's TUI is drawn at another client's width.
+must keep receiving output, and the PTY must be no larger than any client's
+view: a TUI drawn wider or taller than a client's xterm wraps early and its
+cursor-addressed redraws land in the wrong cells, garbling that client.
 """
 
 import asyncio
+import fcntl
 import json
+import struct
+import termios
 import unittest
 
 from app.terminal.terminal import Terminal
@@ -32,8 +36,8 @@ class FakeWebSocket:
     def type(self, text: str) -> None:
         self.inbox.put_nowait({"type": "websocket.receive", "text": text})
 
-    def resize(self, cols: int, rows: int) -> None:
-        self.type(json.dumps({"type": "resize", "cols": cols, "rows": rows}))
+    def resize(self, cols: int, rows: int, visible: bool = True) -> None:
+        self.type(json.dumps({"type": "resize", "cols": cols, "rows": rows, "visible": visible}))
 
     def disconnect(self) -> None:
         self.inbox.put_nowait({"type": "websocket.disconnect"})
@@ -85,16 +89,85 @@ class TestSharedPty(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(await _until(lambda: b"still-42" in first.received))
 
-    async def test_the_typing_client_owns_the_pty_size(self):
+    def pty_size(self) -> tuple[int, int]:
+        rows, cols, _, _ = struct.unpack(
+            "HHHH", fcntl.ioctl(self.terminal.master_fd, termios.TIOCGWINSZ, b"\0" * 8)
+        )
+        return cols, rows
+
+    async def test_the_pty_fits_the_smallest_client(self):
+        first, second = self.attach(), self.attach()
+        await asyncio.sleep(0.1)
+
+        first.resize(100, 40)
+        second.resize(140, 30)
+
+        self.assertTrue(await _until(lambda: self.pty_size() == (100, 30)))
+
+    async def test_a_larger_client_resizing_last_does_not_grow_the_pty(self):
         narrow, wide = self.attach(), self.attach()
         await asyncio.sleep(0.1)
         narrow.resize(100, 30)
-        wide.resize(140, 30)
-        await _until(lambda: self.terminal.size == (140, 30))
+        await _until(lambda: self.pty_size() == (100, 30))
 
-        narrow.type("x")
+        wide.resize(140, 40)
+        wide.type("x")
+        await asyncio.sleep(0.2)
 
-        self.assertTrue(await _until(lambda: self.terminal.size == (100, 30)))
+        self.assertEqual(self.pty_size(), (100, 30))
+
+    async def test_the_pty_grows_back_when_the_smallest_client_detaches(self):
+        wide, narrow = self.attach(), self.attach()
+        await asyncio.sleep(0.1)
+        wide.resize(140, 40)
+        narrow.resize(100, 30)
+        await _until(lambda: self.pty_size() == (100, 30))
+
+        narrow.disconnect()
+
+        self.assertTrue(await _until(lambda: self.pty_size() == (140, 40)))
+
+    async def test_a_client_without_a_size_does_not_constrain_the_pty(self):
+        self.attach()
+        sized = self.attach()
+        await asyncio.sleep(0.1)
+
+        sized.resize(120, 35)
+
+        self.assertTrue(await _until(lambda: self.pty_size() == (120, 35)))
+
+    async def test_a_hidden_client_does_not_shrink_the_pty(self):
+        shown, background = self.attach(), self.attach()
+        await asyncio.sleep(0.1)
+
+        shown.resize(140, 40)
+        background.resize(80, 20, visible=False)
+
+        self.assertTrue(await _until(lambda: self.pty_size() == (140, 40)))
+        await asyncio.sleep(0.2)
+        self.assertEqual(self.pty_size(), (140, 40))
+
+    async def test_a_client_counts_again_once_it_becomes_visible(self):
+        shown, background = self.attach(), self.attach()
+        await asyncio.sleep(0.1)
+        shown.resize(140, 40)
+        background.resize(80, 20, visible=False)
+        await _until(lambda: self.pty_size() == (140, 40))
+
+        background.resize(80, 20, visible=True)
+
+        self.assertTrue(await _until(lambda: self.pty_size() == (80, 20)))
+
+    async def test_the_last_size_is_kept_when_no_client_is_visible(self):
+        client = self.attach()
+        await asyncio.sleep(0.1)
+        client.resize(120, 35)
+        await _until(lambda: self.pty_size() == (120, 35))
+
+        client.resize(90, 20, visible=False)
+        await asyncio.sleep(0.2)
+
+        self.assertEqual(self.pty_size(), (120, 35))
 
 
 if __name__ == "__main__":

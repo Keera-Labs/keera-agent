@@ -1,4 +1,20 @@
-import type { GitFileChange, GitStatus } from '@/queries/gitQuery'
+import type { GitFileChange, GitStatus, GitWorktree } from '@/queries/gitQuery'
+
+export function gitWorktree(path: string, overrides: Partial<GitWorktree> = {}): GitWorktree {
+    return {
+        path,
+        branch: 'dev',
+        head: 'a1b2c3d4e5',
+        detached: false,
+        is_main: false,
+        is_current: false,
+        locked: false,
+        prunable: false,
+        agent_id: null,
+        agent_name: null,
+        ...overrides,
+    }
+}
 
 export function gitFile(path: string, overrides: Partial<GitFileChange> = {}): GitFileChange {
     const slash = path.lastIndexOf('/')

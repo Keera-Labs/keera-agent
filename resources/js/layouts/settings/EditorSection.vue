@@ -12,7 +12,10 @@ import {
     MIN_FONT_SIZE,
     type FontFamilyId,
 } from '@/editor/fonts'
+import TagInput from '@/components/ui/TagInput.vue'
+import { flagRowClass, toggleClass } from '@/components/ui/styles'
 import { useEditorSettingsStore } from '@/stores/editorSettingsStore'
+import { color } from '@/tokens'
 
 const { draft } = storeToRefs(useEditorSettingsStore())
 
@@ -32,7 +35,12 @@ function setSize(size: number) {
     draft.value.font_size = clampFontSize(size)
 }
 
-const card = 'border border-stroke rounded-lg bg-white p-4 flex flex-col gap-3'
+const fileToggles = [
+    { key: 'hide_hidden', label: 'Hide hidden files', hint: 'Dotfiles and dot-folders such as .env and .github.' },
+    { key: 'hide_ignored', label: 'Hide git-ignored files', hint: 'Anything .gitignore excludes. Tracked files always stay visible.' },
+] as const
+
+const card ='border border-stroke rounded-lg bg-white p-4 flex flex-col gap-3'
 const badge = 'rounded px-1.5 py-px text-[10px] font-medium bg-accent/10 text-accent'
 const stepButton = 'w-7 h-7 flex items-center justify-center text-zinc-600 hover:bg-black/[0.04] cursor-pointer disabled:opacity-40 disabled:cursor-default'
 </script>
@@ -161,6 +169,50 @@ const stepButton = 'w-7 h-7 flex items-center justify-center text-zinc-600 hover
                 >
                     {{ preset.size }}px ({{ preset.label }})
                 </button>
+            </div>
+        </section>
+
+        <section :class="card" aria-labelledby="files-heading" data-testid="file-filters">
+            <div>
+                <h3 id="files-heading" class="m-0 text-zinc-900 text-[13px] font-semibold">Files</h3>
+                <p class="mt-1 mb-0 text-zinc-500 text-[12px]">
+                    Entries left out of the file explorer. Open tabs are never closed.
+                </p>
+            </div>
+
+            <div v-for="toggle in fileToggles" :key="toggle.key" :class="flagRowClass" @click="draft[toggle.key] = !draft[toggle.key]">
+                <div>
+                    <div class="text-[12px] font-medium text-zinc-700">{{ toggle.label }}</div>
+                    <div class="text-[10px] text-zinc-400">{{ toggle.hint }}</div>
+                </div>
+                <button
+                    type="button"
+                    :data-filter="toggle.key"
+                    :aria-label="toggle.label"
+                    :aria-pressed="draft[toggle.key]"
+                    :class="toggleClass(draft[toggle.key])"
+                >
+                    <span
+                        :class="[
+                            'absolute top-[3px] w-3 h-3 rounded-full bg-white transition-[left] duration-150',
+                            draft[toggle.key] ? 'left-[17px]' : 'left-[3px]',
+                        ]"
+                    />
+                </button>
+            </div>
+
+            <div class="flex flex-col gap-1">
+                <span id="hidden-patterns-label" class="text-[12px] font-medium text-zinc-700">Hide patterns</span>
+                <TagInput
+                    v-model="draft.hidden_patterns"
+                    aria-labelledby="hidden-patterns-label"
+                    placeholder="e.g. *.log, build/, docs/generated"
+                    split-on-comma
+                    :tag-color="color.accent"
+                />
+                <p class="m-0 text-[10px] text-zinc-400">
+                    A glob matches a name. Include a "/" to match a path from the project root, or end with "/" to match folders only.
+                </p>
             </div>
         </section>
     </div>

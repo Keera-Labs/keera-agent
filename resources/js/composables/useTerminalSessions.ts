@@ -10,6 +10,8 @@ export interface Session {
     ws: WebSocket
     fitAddon: FitAddon
     observer: ResizeObserver
+    /** The last resize message sent, so repeated reports don't reach the server. */
+    reportedSize?: string
 }
 
 export type ClaudeStatus = 'running' | 'done'
@@ -136,6 +138,28 @@ function sendIfOpen(ws: WebSocket, data: string | Uint8Array) {
     if (ws.readyState === WebSocket.OPEN) ws.send(data)
 }
 
+/** Whether the user can see this terminal: its tab is in front and it sits in a displayed slot. */
+export function isTerminalShown(term: Terminal): boolean {
+    const el = term.element
+    return document.visibilityState === 'visible'
+        && !!el?.isConnected
+        && !el.closest('[data-terminal-holder]')
+        && el.getClientRects().length > 0
+}
+
+/**
+ * Tell the server this client's size and whether it is on screen. A PTY shared
+ * by several clients (e.g. two browser tabs) is sized to the smallest visible
+ * one, so a parked terminal or a background tab must not hold it small.
+ */
+export function reportSize(session: Session) {
+    const { term, ws } = session
+    const message = JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows, visible: isTerminalShown(term) })
+    if (message === session.reportedSize || ws.readyState !== WebSocket.OPEN) return
+    session.reportedSize = message
+    ws.send(message)
+}
+
 type SocketEvent = { type?: string; [key: string]: unknown }
 
 interface ConnectHandlers {
@@ -163,7 +187,7 @@ function connectTerminal(container: HTMLElement, project: Project, agentId: numb
     const ws = new WebSocket(`${protocol}//${location.host}/${project.slug}/ws?agent_id=${agentId}`)
     ws.binaryType = 'arraybuffer'
     ws.onopen = () => {
-        ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
+        reportSize(session)
         handlers.onOpen?.()
     }
     ws.onmessage = e => {
@@ -184,13 +208,17 @@ function connectTerminal(container: HTMLElement, project: Project, agentId: numb
     ws.onclose = () => term.write('\r\n\x1b[31m[disconnected]\x1b[0m\r\n')
 
     term.onData(data => sendIfOpen(ws, data))
-    term.onResize(({ cols, rows }) => sendIfOpen(ws, JSON.stringify({ type: 'resize', cols, rows })))
+    term.onResize(() => reportSize(session))
     container.addEventListener('click', () => term.focus())
 
-    const observer = new ResizeObserver(() => fitAddon.fit())
+    const observer = new ResizeObserver(() => {
+        fitAddon.fit()
+        reportSize(session)
+    })
     observer.observe(container)
 
-    return { term, ws, fitAddon, observer }
+    const session: Session = { term, ws, fitAddon, observer }
+    return session
 }
 
 export interface UseTerminalSessionsParams {
@@ -223,7 +251,7 @@ export function useTerminalSessions(params: UseTerminalSessionsParams) {
 
         const existing = agentSessions.get(agentId)
         if (existing) {
-            if (focus) requestAnimationFrame(() => { existing.fitAddon.fit(); existing.term.focus() })
+            if (focus) requestAnimationFrame(() => { existing.fitAddon.fit(); reportSize(existing); existing.term.focus() })
             return
         }
 
@@ -252,7 +280,7 @@ export function useTerminalSessions(params: UseTerminalSessionsParams) {
 
         const existing = sessions.get(project.id)
         if (existing) {
-            requestAnimationFrame(() => { existing.fitAddon.fit(); existing.term.focus() })
+            requestAnimationFrame(() => { existing.fitAddon.fit(); reportSize(existing); existing.term.focus() })
             return
         }
 
@@ -368,10 +396,17 @@ export function useTerminalSessions(params: UseTerminalSessionsParams) {
         claudeStatus[projectId] = status
     }
 
+    function reportAllSizes() {
+        sessions.forEach(reportSize)
+        agentSessions.forEach(reportSize)
+    }
+    document.addEventListener('visibilitychange', reportAllSizes)
+
     watch(() => activeProject.value?.id, disposeAgentSessions)
     watch([() => activeProject.value?.id, pmAgentId], launchPmSession, { immediate: true, flush: 'post' })
 
     onScopeDispose(() => {
+        document.removeEventListener('visibilitychange', reportAllSizes)
         sessions.forEach(disposeSession)
         sessions.clear()
         disposeAgentSessions()

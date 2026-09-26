@@ -13,8 +13,9 @@ READ_TIMEOUT = 30
 WRITE_TIMEOUT = 120
 UNTRACKED_COUNT_LIMIT = 2 * 1024 * 1024
 
-# Porcelain v2 status letters mapped onto the panel's vocabulary.
-_STATUS_LETTERS = {"M": "M", "T": "M", "A": "A", "D": "D", "R": "R", "C": "A"}
+# Porcelain v2 status letters mapped onto the panel's vocabulary. "U" is shared by
+# untracked (untracked=True) and unmerged entries (DD/AU/UD/UA/DU/AA/UU); "C" is a copy.
+_STATUS_LETTERS = {"M": "M", "T": "M", "A": "A", "D": "D", "R": "R", "C": "C"}
 
 
 class NotARepository(CommandError):
@@ -75,6 +76,10 @@ class FileChange:
     binary: bool = False
     untracked: bool = False
 
+    @property
+    def unmerged(self) -> bool:
+        return self.status == "U" and not self.untracked
+
     def to_dict(self) -> dict:
         directory, name = posixpath.split(self.path)
         return {"name": name, "dir": directory, **asdict(self)}
@@ -128,7 +133,7 @@ def _parse_status(raw: bytes) -> RepositoryStatus:
                     FileChange(path, _STATUS_LETTERS.get(xy[1], "M"), _renamed(xy[1], original))
                 )
         elif entry.startswith("u "):
-            status.changes.append(FileChange(entry.split(" ", 10)[-1], "C"))
+            status.changes.append(FileChange(entry.split(" ", 10)[-1], "U"))
         elif entry.startswith("? "):
             status.changes.append(FileChange(entry[2:], "U", untracked=True))
     return status

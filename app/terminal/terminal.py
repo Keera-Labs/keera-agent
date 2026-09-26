@@ -216,6 +216,8 @@ class Terminal:
         # the output from every other bridge, and unregistering it would starve them.
         self._subscribers: list[asyncio.Queue[bytes]] = []
         self._reader: tuple[asyncio.AbstractEventLoop, int] | None = None
+        # (cols, rows) of each client currently showing this terminal on screen.
+        self._client_sizes: dict[object, tuple[int, int]] = {}
 
     @property
     def size(self) -> tuple[int, int]:
@@ -442,6 +444,30 @@ class Terminal:
         self._rows = rows
         if self.master_fd is not None:
             self._set_size(self.master_fd, rows, cols)
+
+    def set_client_size(self, client: object, cols: int, rows: int, visible: bool = True) -> None:
+        """Record what one attached client shows; hidden clients don't constrain the size."""
+        if visible:
+            self._client_sizes[client] = (cols, rows)
+        else:
+            self._client_sizes.pop(client, None)
+        self._fit_clients()
+
+    def remove_client(self, client: object) -> None:
+        if self._client_sizes.pop(client, None) is not None:
+            self._fit_clients()
+
+    def _fit_clients(self) -> None:
+        # Like tmux, size the PTY to the smallest visible client: a TUI drawn wider
+        # or taller than a client's view wraps early there and its cursor-addressed
+        # redraws land in the wrong cells, while a larger view just shows a margin.
+        # With nobody looking, the last size is kept so nothing redraws needlessly.
+        if not self._client_sizes:
+            return
+        cols = min(c for c, _ in self._client_sizes.values())
+        rows = min(r for _, r in self._client_sizes.values())
+        if (cols, rows) != self.size:
+            self.resize(cols, rows)
 
     def wait(self) -> None:
         if self._proc is not None:

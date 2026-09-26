@@ -117,6 +117,52 @@ class TestGitStatusController(TestCase, DatabaseTransaction):
         assert changes["blob.bin"]["binary"] is True
         assert changes["blob.bin"]["untracked"] is True
 
+    async def test_unmerged_paths_report_u_and_are_not_untracked(self):
+        self.repo.init()
+        self.repo.write("both.txt", "base\n")
+        self.repo.write("ours_del.txt", "base\n")
+        self.repo.write("theirs_del.txt", "base\n")
+        self.repo.commit_all()
+        self.repo.merge_with_conflicts(
+            ours={
+                "both.txt": "ours\n",
+                "added.txt": "ours\n",
+                "ours_del.txt": None,
+                "theirs_del.txt": "ours\n",
+            },
+            theirs={
+                "both.txt": "theirs\n",
+                "added.txt": "theirs\n",
+                "ours_del.txt": "theirs\n",
+                "theirs_del.txt": None,
+            },
+        )
+
+        body = (await self.get(self.url)).json()
+
+        changes = by_path(body["changes"])
+        # UU, AA, DU and UD respectively.
+        for path in ("both.txt", "added.txt", "ours_del.txt", "theirs_del.txt"):
+            assert changes[path]["status"] == "U", path
+            assert changes[path]["untracked"] is False, path
+        assert body["staged"] == []
+
+    async def test_copies_report_c_with_original_path(self):
+        self.repo.init()
+        self.repo.write("src.txt", "one\ntwo\nthree\nfour\n")
+        self.repo.commit_all()
+        self.repo.git("config", "status.renames", "copies")
+        self.repo.write("copy.txt", "one\ntwo\nthree\nfour\n")
+        self.repo.write("src.txt", "one\ntwo\nthree\nfour\nfive\n")
+        self.repo.git("add", "-A")
+
+        body = (await self.get(self.url)).json()
+
+        copied = by_path(body["staged"])["copy.txt"]
+        assert copied["status"] == "C"
+        assert copied["original_path"] == "src.txt"
+        assert copied["untracked"] is False
+
     async def test_detached_head(self):
         self.repo.init()
         self.repo.write("a.txt", "1\n")
