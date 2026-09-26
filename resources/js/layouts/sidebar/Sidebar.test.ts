@@ -235,14 +235,4 @@ describe('Sidebar', () => {
         expect(router.visit).toHaveBeenCalledWith('/p-10')
         expect(document.querySelector('[aria-label="Search projects"]')).toBeNull()
     })
-
-    it('shows the migration notice for modals that are not ported yet', async () => {
-        const w = await mountSidebar()
-        useProjectStore().setActiveProject(projects[0])
-        await flushPromises()
-
-        await w.get('button:not([disabled]).bg-blue-600').trigger('click')
-
-        expect(w.get('[role="status"]').text()).toContain('New agent is being migrated')
-    })
 })

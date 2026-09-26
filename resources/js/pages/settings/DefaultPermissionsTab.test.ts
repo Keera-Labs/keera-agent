@@ -32,6 +32,25 @@ describe('DefaultPermissionsTab', () => {
         expect(w.text()).toContain('✓ Saved')
     })
 
+    it('accepts a rule containing a comma as a single tag', async () => {
+        vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ allow: [], deny: [] }),
+        })))
+        const w = mount(DefaultPermissionsTab)
+        await flushPromises()
+
+        const allowInput = w.findAll('input')[0]
+        for (const key of 'Bash(echo a, b)') {
+            await allowInput.setValue((allowInput.element as HTMLInputElement).value + key)
+            await allowInput.trigger('keydown', { key })
+        }
+        await allowInput.trigger('keydown', { key: 'Enter' })
+
+        const tags = w.findAll('span.font-mono').map(s => s.text().replace('×', '').trim())
+        expect(tags).toEqual(['Bash(echo a, b)'])
+    })
+
     it('shows the server error when saving fails', async () => {
         vi.stubGlobal('fetch', vi.fn((_url: string, init?: RequestInit) => Promise.resolve({
             ok: init?.method !== 'PATCH',

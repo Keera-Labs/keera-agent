@@ -30,8 +30,21 @@ describe('TagInput', () => {
         expect((input.element as HTMLInputElement).value).toBe('')
     })
 
-    it('adds a tag on comma', async () => {
-        const w = mountTagInput(['alpha'])
+    it('keeps commas inside a tag by default', async () => {
+        const w = mountTagInput()
+        const input = w.get('input')
+
+        await input.setValue('Bash(echo a')
+        await input.trigger('keydown', { key: ',' })
+        expect(w.emitted('update:modelValue')).toBeUndefined()
+
+        await input.setValue('Bash(echo a, b)')
+        await input.trigger('keydown', { key: 'Enter' })
+        expect(tagsOf(w)).toEqual(['Bash(echo a, b)'])
+    })
+
+    it('adds a tag on comma when splitOnComma is set', async () => {
+        const w = mountTagInput(['alpha'], { splitOnComma: true })
         const input = w.get('input')
 
         await input.setValue('beta')

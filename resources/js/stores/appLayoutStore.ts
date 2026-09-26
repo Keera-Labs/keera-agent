@@ -9,6 +9,7 @@ import { useTasks } from '@/queries/taskQuery'
 import { WORKSPACES_QUERY_KEY } from '@/queries/workspacesQuery'
 import { useProjectStore } from '@/stores/projectStore'
 import type { AgentTemplate } from '@/types/agent'
+import type { Project } from '@/types/type'
 
 export type ProjectView = 'agents' | 'tasks' | 'commands'
 
@@ -47,6 +48,9 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
     // Name of a modal whose Vue port hasn't landed yet; ModalLayer shows a
     // "being migrated" notice for it instead of failing silently.
     const migratingModal = ref<string | null>(null)
+    // The project whose system prompt / permissions dialog is open, or null when closed.
+    const systemPromptProject = ref<Project | null>(null)
+    const permissionsProject = ref<Project | null>(null)
 
     const projectView = ref<ProjectView>('agents')
     const rightPanelOpen = ref(false)
@@ -186,6 +190,8 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
         showDefaultPermissions,
         showProjectSearch,
         migratingModal,
+        systemPromptProject,
+        permissionsProject,
         projectView,
         rightPanelOpen,
         activeAgentId,
@@ -200,6 +206,7 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
         setContainer: terminals.setContainer,
         setAgentContainer: terminals.setAgentContainer,
         launchAgentSession: terminals.launchAgentSession,
+        disposeAgentSession: terminals.disposeAgentSession,
         restartClaude: terminals.restartClaude,
         uploadImage: terminals.uploadImage,
         claudeStatus: terminals.claudeStatus,
