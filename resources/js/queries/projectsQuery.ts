@@ -1,12 +1,14 @@
-import { router, usePage } from "@inertiajs/react"
-import { useContext } from "react"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { router, usePage } from "@inertiajs/vue3"
+import { useMutation, useQuery, useQueryCache } from "@pinia/colada"
+import { storeToRefs } from "pinia"
+import { computed } from "vue"
 import type { Project } from "@/types/type"
-import { AppLayoutContext } from "@/layouts/context/AppLayoutContext"
+import type { ProjectAgent } from "@/queries/agentQuery"
+import { disposeProjectSessions } from "@/composables/useTerminalSessions"
 import { useProjectStore } from "@/stores/projectStore"
 import { useWorkspaceStore } from "@/stores/workspaceStore"
 
-export const PROJECTS_QUERY_KEY = ["projects"] as const
+export const PROJECTS_QUERY_KEY = ["projects"]
 
 // Matches PROJECTS_PER_PAGE_MAX in app/controllers/project_controller.py —
 // the API clamps per_page to this value regardless, so requesting more is pointless.
@@ -22,32 +24,28 @@ async function fetchProjects(workspaceId: number | null): Promise<Project[]> {
 }
 
 export default function useProjects() {
-    const queryClient = useQueryClient()
-    const props = usePage<{ project?: string; projects?: Project[] }>().props
-    const projectName = props.project
-    const workspaceId = useWorkspaceStore(s => s.currentWorkspaceId)
+    const queryCache = useQueryCache()
+    const page = usePage<{ project?: string; projects?: Project[] }>()
+    const projectStore = useProjectStore()
+    const { currentWorkspaceId } = storeToRefs(useWorkspaceStore())
 
-    const query = useQuery<Project[]>({
-        queryKey: [...PROJECTS_QUERY_KEY, workspaceId],
-        queryFn: () => fetchProjects(workspaceId),
-        initialData: workspaceId === null ? props.projects : undefined,
+    const query = useQuery({
+        key: () => [...PROJECTS_QUERY_KEY, currentWorkspaceId.value],
+        query: () => fetchProjects(currentWorkspaceId.value),
+        // Server-rendered props hold the unfiltered list, so they only seed "All Projects".
+        initialData: () => (currentWorkspaceId.value === null ? page.props.projects : undefined),
         staleTime: 1000 * 30,
     })
-    const projects = query.data ?? []
+    const projects = computed(() => query.data.value ?? [])
 
     function setActiveProject(slug?: string) {
-        const active = slug ? projects.find(p => p.slug === slug) ?? null : projects[0] ?? null
+        const list = projects.value
+        const active = slug ? list.find(p => p.slug === slug) ?? null : list[0] ?? null
         if (slug && !active) return
-        if (useProjectStore.getState().activeProject?.id !== active?.id) {
-            useProjectStore.getState().setActiveProject(active)
-        }
+        if (projectStore.activeProject?.id !== active?.id) projectStore.setActiveProject(active)
     }
 
-    const invalidate = () => queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY })
-
-    // Nullable: the layout provider calls this hook before the context exists.
-    // Delete reads only the layout's agent-terminal refs to tear them down.
-    const layout = useContext(AppLayoutContext)
+    const invalidate = () => queryCache.invalidateQueries({ key: PROJECTS_QUERY_KEY })
 
     function handleProjectCreated(project: Project) {
         invalidate()
@@ -55,7 +53,7 @@ export default function useProjects() {
     }
 
     const moveMutation = useMutation({
-        mutationFn: async ({ project, workspaceId }: { project: Project; workspaceId: number | null }) => {
+        mutation: async ({ project, workspaceId }: { project: Project; workspaceId: number | null }) => {
             const res = await fetch(`/api/projects/${project.id}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
@@ -76,27 +74,17 @@ export default function useProjects() {
     }
 
     const deleteMutation = useMutation({
-        mutationFn: async (projectId: number) => {
-            if (layout) {
-                for (const agent of layout.agentHook.agents) {
-                    const session = layout.agentSessions.current.get(agent.id)
-                    if (session) {
-                        session.observer.disconnect()
-                        session.term.dispose()
-                        session.ws.close()
-                        layout.agentSessions.current.delete(agent.id)
-                    }
-                    layout.agentContainerRefs.current.delete(agent.id)
-                }
-            }
+        mutation: async (projectId: number) => {
+            const agents = queryCache.getQueryData<ProjectAgent[]>(["agents", projectId]) ?? []
+            disposeProjectSessions(projectId, agents.map(a => a.id))
             const res = await fetch(`/api/projects/${projectId}`, { method: "DELETE" })
             if (!res.ok) throw new Error("Failed to delete project")
             return projectId
         },
-        onSuccess: (projectId) => {
+        onSuccess: projectId => {
             invalidate()
-            const project = projects.find(p => p.id === projectId)
-            if (project && projectName === project.slug) router.visit("/")
+            const project = projects.value.find(p => p.id === projectId)
+            if (project && page.props.project === project.slug) router.visit("/")
         },
     })
 
@@ -107,7 +95,7 @@ export default function useProjects() {
     return {
         projects,
         setActiveProject,
-        deleting: deleteMutation.isPending,
+        deleting: deleteMutation.isLoading,
         handleProjectCreated,
         handleMoveProject,
         handleProjectUpdated,

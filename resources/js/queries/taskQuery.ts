@@ -1,4 +1,5 @@
-import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryCache } from '@pinia/colada'
+import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import type { Task } from '@/types/type'
 
 async function fetchTasks(projectId: number): Promise<Task[]> {
@@ -7,22 +8,26 @@ async function fetchTasks(projectId: number): Promise<Task[]> {
     return res.json()
 }
 
-export function useTasks(projectId: number | null) {
-    const queryClient = useQueryClient()
-    const key = ['tasks', projectId]
+export function useTasks(projectIdSource: MaybeRefOrGetter<number | null>) {
+    const queryCache = useQueryCache()
+    const projectId = () => toValue(projectIdSource)
+    const key = () => ['tasks', projectId()]
 
-    const query = useQuery<Task[]>({
-        queryKey: key,
-        queryFn: () => fetchTasks(projectId!),
-        enabled: projectId !== null,
+    const query = useQuery({
+        key,
+        query: () => fetchTasks(projectId()!),
+        enabled: () => projectId() !== null,
         staleTime: 1000 * 30,
     })
 
-    const invalidate = () => queryClient.invalidateQueries({ queryKey: key })
+    const setTasks = (updater: (prev: Task[]) => Task[]) =>
+        queryCache.setQueryData<Task[]>(key(), prev => updater(prev ?? []))
+
+    const invalidate = () => queryCache.invalidateQueries({ key: key(), exact: true })
 
     const create = useMutation({
-        mutationFn: async (data: { title: string; body: string; assignees: string[] }) => {
-            const res = await fetch(`/api/projects/${projectId}/tasks`, {
+        mutation: async (data: { title: string; body: string; assignees: string[] }) => {
+            const res = await fetch(`/api/projects/${projectId()}/tasks`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data),
@@ -30,13 +35,11 @@ export function useTasks(projectId: number | null) {
             if (!res.ok) throw new Error('Failed to create task')
             return res.json() as Promise<Task>
         },
-        onSuccess: (task) => {
-            queryClient.setQueryData<Task[]>(key, prev => [...(prev ?? []), task])
-        },
+        onSuccess: task => setTasks(prev => [...prev, task]),
     })
 
     const updateStatus = useMutation({
-        mutationFn: async ({ taskId, status }: { taskId: number; status: Task['status'] }) => {
+        mutation: async ({ taskId, status }: { taskId: number; status: Task['status'] }) => {
             const res = await fetch(`/api/tasks/${taskId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
@@ -45,27 +48,19 @@ export function useTasks(projectId: number | null) {
             if (!res.ok) throw new Error('Failed to update task')
             return res.json() as Promise<Task>
         },
-        onSuccess: (updated) => {
-            queryClient.setQueryData<Task[]>(key, prev =>
-                (prev ?? []).map(t => t.id === updated.id ? updated : t)
-            )
-        },
+        onSuccess: updated => setTasks(prev => prev.map(t => (t.id === updated.id ? updated : t))),
     })
 
     const remove = useMutation({
-        mutationFn: async (taskId: number) => {
+        mutation: async (taskId: number) => {
             await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' })
             return taskId
         },
-        onSuccess: (taskId) => {
-            queryClient.setQueryData<Task[]>(key, prev =>
-                (prev ?? []).filter(t => t.id !== taskId)
-            )
-        },
+        onSuccess: taskId => setTasks(prev => prev.filter(t => t.id !== taskId)),
     })
 
     return {
-        tasks: query.data ?? [],
+        tasks: computed(() => query.data.value ?? []),
         isLoading: query.isLoading,
         invalidate,
         create,

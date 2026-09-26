@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query"
+import { useQuery } from "@pinia/colada"
+import { computed, type MaybeRefOrGetter } from "vue"
 import type { Project } from "@/types/type"
 
 // Matches PROJECTS_PER_PAGE_MAX in app/controllers/project_controller.py —
@@ -24,12 +25,12 @@ async function fetchAllProjects(): Promise<Project[]> {
 // Full, unpaginated project list — for surfaces like the Cmd+P search
 // palette that must be able to reach every project, unlike the sidebar's
 // capped recent-projects list.
-export default function useAllProjects(enabled: boolean) {
-    const query = useQuery<Project[]>({
-        queryKey: ["projects", "all"],
-        queryFn: fetchAllProjects,
+export default function useAllProjects(enabled: MaybeRefOrGetter<boolean>) {
+    const query = useQuery({
+        key: ["projects", "all"],
+        query: fetchAllProjects,
         enabled,
         staleTime: 1000 * 30,
     })
-    return query.data ?? []
+    return computed(() => query.data.value ?? [])
 }
