@@ -3,6 +3,7 @@ import { router, usePage } from '@inertiajs/vue3'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, ref, watch, watchEffect } from 'vue'
 import DotsIndicator from '@/components/ui/DotsIndicator.vue'
+import Icon from '@/components/ui/Icon.vue'
 import useProjects from '@/queries/projectsQuery'
 import { useAppLayoutStore, type ProjectView } from '@/stores/appLayoutStore'
 import { useProjectStore } from '@/stores/projectStore'
@@ -16,7 +17,7 @@ const TABS: { id: ProjectView; label: string }[] = [
 
 const page = usePage<{ project?: string }>()
 const layout = useAppLayoutStore()
-const { claudeStatus, projectView, liveSessionCount, activeAgentId } = storeToRefs(layout)
+const { claudeStatus, projectView, activeAgentId } = storeToRefs(layout)
 const { activeProject } = storeToRefs(useProjectStore())
 
 // The only layout with a project route, so it is the one place that resolves
@@ -66,6 +67,12 @@ watch(
     { flush: 'post', immediate: true },
 )
 
+const PANE_BUTTON_CLASS = 'w-6 h-6 flex items-center justify-center rounded-md text-zinc-400 bg-transparent cursor-pointer transition-colors hover:text-zinc-800 hover:bg-black/[0.05]'
+
+function clearPmTerminal() {
+    if (activeProject.value) layout.sessions.get(activeProject.value.id)?.term.clear()
+}
+
 onBeforeUnmount(() => {
     if (activeProject.value) layout.parkPmTerminal(activeProject.value.id)
 })
@@ -100,18 +107,33 @@ onBeforeUnmount(() => {
                     </span>
                 </div>
             </template>
-
-            <!-- Global running indicator -->
-            <div v-if="liveSessionCount > 0" class="flex items-center gap-2 pr-3 ml-auto">
-                <DotsIndicator />
-                <span class="text-amber-600 text-[12.5px] font-semibold font-mono">{{ liveSessionCount }} running</span>
-            </div>
         </div>
 
         <div class="flex-1 flex overflow-hidden">
             <!-- Always mounted (display-toggled) so the terminal slot never unmounts under a live xterm. -->
-            <div :class="['flex-1 overflow-hidden', showPmTerminal ? 'flex' : 'hidden']">
+            <div :class="['flex-1 overflow-hidden relative', showPmTerminal ? 'flex' : 'hidden']">
                 <div ref="terminalSlot" data-testid="pm-terminal" class="flex-1 overflow-hidden p-2 box-border bg-[#f6f8fa]" />
+                <div class="absolute top-2 right-3 z-10 flex items-center gap-0.5">
+                    <button
+                        type="button"
+                        title="Restart Claude"
+                        aria-label="Restart Claude"
+                        :class="PANE_BUTTON_CLASS"
+                        @click="layout.restartClaude()"
+                    >
+                        <Icon name="rotate-cw" :size="13" />
+                    </button>
+                    <button
+                        type="button"
+                        data-testid="pm-terminal-clear"
+                        title="Clear terminal"
+                        aria-label="Clear terminal"
+                        :class="PANE_BUTTON_CLASS"
+                        @click="clearPmTerminal"
+                    >
+                        <Icon name="trash-2" :size="13" />
+                    </button>
+                </div>
             </div>
 
             <AgentsIndex v-if="showOverview" />
