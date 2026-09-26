@@ -54,6 +54,9 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
 
     const projectView = ref<ProjectView>('agents')
     const rightPanelOpen = ref(false)
+    function toggleRightPanel() {
+        rightPanelOpen.value = !rightPanelOpen.value
+    }
     const isDraggingOver = ref(false)
 
     // Raw selection — may still name an agent of the previous project right after a switch.
@@ -194,6 +197,7 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
         permissionsProject,
         projectView,
         rightPanelOpen,
+        toggleRightPanel,
         activeAgentId,
         setActiveAgentId,
         isDraggingOver,

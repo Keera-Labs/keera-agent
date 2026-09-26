@@ -118,4 +118,13 @@ describe('useAppLayoutStore', () => {
         window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', metaKey: true }))
         expect(store.showProjectSearch).toBe(false)
     })
+
+    it('starts with the right panel closed and toggles it', () => {
+        const { store } = setup()
+        expect(store.rightPanelOpen).toBe(false)
+        store.toggleRightPanel()
+        expect(store.rightPanelOpen).toBe(true)
+        store.toggleRightPanel()
+        expect(store.rightPanelOpen).toBe(false)
+    })
 })
