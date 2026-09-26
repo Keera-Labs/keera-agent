@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, reactive, toValue, watch, type MaybeRefOrGetter } from 'vue'
+import { computed, onScopeDispose, reactive, ref, toValue, watch, type MaybeRefOrGetter } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import type { Project } from '@/types/type'
@@ -64,6 +64,12 @@ const claudeStatus = reactive<Record<number, ClaudeStatus>>({})
 const lastActivity = reactive<Record<number, string>>({})
 const outputChars = reactive<Record<number, number>>({})
 const sessionStart = reactive<Record<number, Date>>({})
+// Reactive mirror of the Maps' sizes, which Vue cannot track itself.
+const liveSessionCount = ref(0)
+
+function syncLiveSessionCount() {
+    liveSessionCount.value = sessions.size + agentSessions.size
+}
 
 const INPUT_PROMPT_PATTERNS = [
     /\?\s*$/m,
@@ -84,6 +90,7 @@ function disposeSession({ term, ws, observer }: Session) {
 function disposeAgentSessions() {
     agentSessions.forEach(disposeSession)
     agentSessions.clear()
+    syncLiveSessionCount()
 }
 
 /** Tear down a project's PM terminal and the given agents' terminals, e.g. when the project is deleted. */
@@ -98,6 +105,7 @@ export function disposeProjectSessions(projectId: number, agentIds: number[]) {
         agentSessions.delete(agentId)
         agentContainerRefs.delete(agentId)
     }
+    syncLiveSessionCount()
 }
 
 function sendIfOpen(ws: WebSocket, data: string | Uint8Array) {
@@ -170,9 +178,9 @@ export interface UseTerminalSessionsParams {
 }
 
 /**
- * Owns the PM and agent PTY sessions. Call it once, from the persistent app
- * layout: its watchers open the active project's PM session and its unmount
- * hook tears every session down.
+ * Owns the PM and agent PTY sessions. Call it once, from the app layout store:
+ * its watchers open the active project's PM session and disposing its scope
+ * tears every session down.
  */
 export function useTerminalSessions(params: UseTerminalSessionsParams) {
     const activeProject = computed(() => toValue(params.activeProject))
@@ -204,6 +212,7 @@ export function useTerminalSessions(params: UseTerminalSessionsParams) {
             })
             if (focus) session.term.focus()
             agentSessions.set(agentId, session)
+            syncLiveSessionCount()
         })
     }
 
@@ -272,6 +281,7 @@ export function useTerminalSessions(params: UseTerminalSessionsParams) {
             })
             session.term.focus()
             sessions.set(project.id, session)
+            syncLiveSessionCount()
         })
     }
 
@@ -317,7 +327,7 @@ export function useTerminalSessions(params: UseTerminalSessionsParams) {
     watch(() => activeProject.value?.id, disposeAgentSessions)
     watch([() => activeProject.value?.id, pmAgentId], launchPmSession, { immediate: true, flush: 'post' })
 
-    onBeforeUnmount(() => {
+    onScopeDispose(() => {
         sessions.forEach(disposeSession)
         sessions.clear()
         disposeAgentSessions()
@@ -328,6 +338,7 @@ export function useTerminalSessions(params: UseTerminalSessionsParams) {
         agentSessions,
         containerRefs,
         agentContainerRefs,
+        liveSessionCount,
         setContainer,
         setAgentContainer,
         launchAgentSession,
