@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import ConfirmDeleteAgentModal from '@/components/modals/ConfirmDeleteAgentModal.vue'
 import Icon from '@/components/ui/Icon.vue'
 import type { ProjectAgent } from '@/queries/agentQuery'
 import useWorkspaces from '@/queries/workspacesQuery'
@@ -15,8 +16,26 @@ const props = defineProps<{ project: Project }>()
 const { workspaces } = useWorkspaces()
 const { agents, isPending, adoptPending, isRunning, open, restart, adopt, remove } = useAgentActions(() => props.project)
 
-function confirmRemove(agent: ProjectAgent) {
-    if (window.confirm(`Delete ${agent.name}? Its terminal session is closed.`)) remove(agent)
+const removing = ref<ProjectAgent | null>(null)
+const removePending = ref(false)
+const removeError = ref('')
+
+function requestRemove(agent: ProjectAgent) {
+    removeError.value = ''
+    removing.value = agent
+}
+
+async function confirmRemove() {
+    if (!removing.value) return
+    removePending.value = true
+    try {
+        await remove(removing.value)
+        removing.value = null
+    } catch (err) {
+        removeError.value = err instanceof Error ? err.message : 'Failed to delete agent'
+    } finally {
+        removePending.value = false
+    }
 }
 
 const workspaceName = computed(() => workspaces.value.find(w => w.id === props.project.workspace_id)?.name ?? null)
@@ -98,9 +117,18 @@ const pillClass = 'inline-flex items-center gap-1.5 bg-surface border border-str
                     @open="open(agent)"
                     @restart="restart(agent)"
                     @adopt="adopt(agent)"
-                    @remove="confirmRemove(agent)"
+                    @remove="requestRemove(agent)"
                 />
             </div>
         </div>
+
+        <ConfirmDeleteAgentModal
+            v-if="removing"
+            :agent-name="removing.name"
+            :pending="removePending"
+            :error="removeError"
+            @cancel="removing = null"
+            @confirm="confirmRemove"
+        />
     </div>
 </template>

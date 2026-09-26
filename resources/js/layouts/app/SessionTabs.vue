@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { router, usePage } from '@inertiajs/vue3'
 import { storeToRefs } from 'pinia'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import ConfirmDeleteAgentModal from '@/components/modals/ConfirmDeleteAgentModal.vue'
 import Icon from '@/components/ui/Icon.vue'
 import AgentAddModal from '@/pages/agents/AgentAddModal.vue'
 import type { ProjectAgent } from '@/queries/agentQuery'
@@ -88,6 +89,46 @@ function close(agent: ProjectAgent) {
     layout.disposeAgentSession(agent.id)
     if (activeAgentId.value === agent.id) layout.setActiveAgentId(null)
 }
+
+// Closing an agent's tab deletes the agent, so it goes through a confirmation first.
+const closing = ref<ProjectAgent | null>(null)
+const deleteError = ref('')
+const removeAgent = layout.agentHook.remove
+
+function requestClose(agent: ProjectAgent) {
+    deleteError.value = ''
+    closing.value = agent
+}
+
+function closeTabOnly() {
+    if (closing.value) close(closing.value)
+    closing.value = null
+}
+
+async function confirmDelete() {
+    const agent = closing.value
+    const project = activeProject.value
+    if (!agent || !project) return
+    const list = tabs.value
+    const index = list.findIndex(a => a.id === agent.id)
+    const neighbour = list[index + 1] ?? list[index - 1]
+    const wasActive = isActive(agent)
+
+    deleteError.value = ''
+    try {
+        await removeAgent.mutateAsync(agent.id)
+    } catch (err) {
+        deleteError.value = err instanceof Error ? err.message : 'Failed to delete agent'
+        return
+    }
+    close(agent)
+    layout.agentContainerRefs.delete(agent.id)
+    closing.value = null
+
+    if (!wasActive) return
+    if (neighbour) select(neighbour)
+    else router.visit(`/${project.slug}`)
+}
 </script>
 
 <template>
@@ -118,10 +159,10 @@ function close(agent: ProjectAgent) {
                     v-if="!isPm(agent)"
                     type="button"
                     data-testid="session-tab-close"
-                    :aria-label="`Close ${agent.name} terminal`"
-                    title="Close terminal"
+                    :aria-label="`Close ${agent.name} tab`"
+                    title="Close tab"
                     :class="[closeButtonClass, isActive(agent) ? 'visible' : 'invisible group-hover:visible']"
-                    @click.stop="close(agent)"
+                    @click.stop="requestClose(agent)"
                 >
                     <Icon name="x" :size="11" />
                 </button>
@@ -177,5 +218,16 @@ function close(agent: ProjectAgent) {
                 </template>
             </AgentAddModal>
         </div>
+
+        <ConfirmDeleteAgentModal
+            v-if="closing"
+            :agent-name="closing.name"
+            :pending="removeAgent.isLoading.value"
+            :error="deleteError"
+            close-only
+            @cancel="closing = null"
+            @close-only="closeTabOnly"
+            @confirm="confirmDelete"
+        />
     </nav>
 </template>
