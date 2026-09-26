@@ -12,7 +12,7 @@ import { useProjectStore } from '@/stores/projectStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { Project } from '@/types/type'
 import ProjectCard from './ProjectCard.vue'
-import { groupProjects, loadCollapsedProjects, saveCollapsedProjects } from './sidebarAgents'
+import { loadCollapsedProjects, saveCollapsedProjects } from './sidebarAgents'
 import WorkspacePicker from './WorkspacePicker.vue'
 
 const PROJECT_NAV: { id: ProjectView; label: string; icon: IconName }[] = [
@@ -29,11 +29,6 @@ const { projects } = useProjects()
 const { currentWorkspaceId } = storeToRefs(useWorkspaceStore())
 const { agentsByProject } = useAgentSummaries(() => projects.value.map(p => p.id))
 
-// The idle group always renders: it holds the "No projects" empty state.
-const visibleGroups = computed(() =>
-    groupProjects(projects.value, agentsByProject.value, claudeStatus.value)
-        .filter(group => group.id === 'projects' || group.projects.length > 0),
-)
 const agentsOf = (project: Project) => agentsByProject.value.get(project.id) ?? []
 
 const collapsed = ref(loadCollapsedProjects())
@@ -161,48 +156,36 @@ const iconButtonClass = 'flex items-center justify-center w-6 h-6 rounded-md tex
                 </ProjectCreateModal>
             </div>
 
-            <template v-for="group in visibleGroups" :key="group.id">
-                <!-- Running projects get a sub-heading; the rest follow unlabelled under "Projects". -->
-                <div
-                    v-if="group.id === 'in-progress'"
-                    data-testid="group-in-progress"
-                    class="flex items-center gap-1.5 h-6 pl-1.5 text-zinc-800 text-[12px] font-medium"
-                >
-                    <span class="w-[11px] h-[11px] rounded-full border-2 border-amber-500 shrink-0" />
-                    {{ group.label }}
-                </div>
-
-                <ul class="list-none m-0 p-0 mb-1 flex flex-col gap-1">
-                    <template v-if="group.id === 'projects' && projects.length === 0">
-                        <li class="py-1 px-2 text-zinc-400 text-[12px]">No projects</li>
-                        <li>
-                            <ProjectCreateModal :default-workspace-id="currentWorkspaceId">
-                                <template #trigger>
-                                    <button
-                                        type="button"
-                                        class="mt-0.5 w-full bg-transparent border border-dashed border-stroke rounded-md text-zinc-500 text-[12px] p-1.5 cursor-pointer text-center block hover:text-zinc-700 hover:border-zinc-400"
-                                    >
-                                        + Add project
-                                    </button>
-                                </template>
-                            </ProjectCreateModal>
-                        </li>
-                    </template>
-                    <li v-for="project in group.projects" :key="project.id">
-                        <ProjectCard
-                            :project="project"
-                            :agents="agentsOf(project)"
-                            :active="project.id === activeProject?.id"
-                            :active-agent-id="activeAgentId"
-                            :status="claudeStatus[project.id]"
-                            :collapsed="collapsed.has(project.id)"
-                            :now="now"
-                            @toggle="toggleCollapsed(project.id)"
-                            @select-agent="agent => selectAgent(project, agent)"
-                        />
+            <ul class="list-none m-0 p-0 mb-1 flex flex-col gap-1">
+                <template v-if="projects.length === 0">
+                    <li class="py-1 px-2 text-zinc-400 text-[12px]">No projects</li>
+                    <li>
+                        <ProjectCreateModal :default-workspace-id="currentWorkspaceId">
+                            <template #trigger>
+                                <button
+                                    type="button"
+                                    class="mt-0.5 w-full bg-transparent border border-dashed border-stroke rounded-md text-zinc-500 text-[12px] p-1.5 cursor-pointer text-center block hover:text-zinc-700 hover:border-zinc-400"
+                                >
+                                    + Add project
+                                </button>
+                            </template>
+                        </ProjectCreateModal>
                     </li>
-                </ul>
-            </template>
+                </template>
+                <li v-for="project in projects" :key="project.id">
+                    <ProjectCard
+                        :project="project"
+                        :agents="agentsOf(project)"
+                        :active="project.id === activeProject?.id"
+                        :active-agent-id="activeAgentId"
+                        :status="claudeStatus[project.id]"
+                        :collapsed="collapsed.has(project.id)"
+                        :now="now"
+                        @toggle="toggleCollapsed(project.id)"
+                        @select-agent="agent => selectAgent(project, agent)"
+                    />
+                </li>
+            </ul>
         </div>
 
         <WorkspacePicker />

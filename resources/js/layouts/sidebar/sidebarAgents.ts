@@ -1,31 +1,3 @@
-import type { AgentSummary } from '@/queries/agentSummariesQuery'
-import type { Project } from '@/types/type'
-
-export interface ProjectGroup {
-    id: 'in-progress' | 'projects'
-    label: string
-    projects: Project[]
-}
-
-/**
- * Split projects into "In progress" (a running agent or a running project
- * session) and the rest, keeping the incoming order within each group.
- */
-export function groupProjects(
-    projects: Project[],
-    agentsByProject: Map<number, AgentSummary[]>,
-    projectStatus: Record<number, string | undefined>,
-): ProjectGroup[] {
-    const isInProgress = (project: Project) =>
-        projectStatus[project.id] === 'running'
-        || (agentsByProject.get(project.id) ?? []).some(agent => agent.status === 'running')
-
-    return [
-        { id: 'in-progress', label: 'In progress', projects: projects.filter(isInProgress) },
-        { id: 'projects', label: 'Projects', projects: projects.filter(p => !isInProgress(p)) },
-    ]
-}
-
 /** Compact age like the reference sidebar: "now", "5m", "3h", "2d". */
 export function relativeTime(iso: string | null, now: number): string {
     if (!iso) return ''

@@ -409,22 +409,13 @@ describe('Sidebar', () => {
             expect(summaryCalls[0].url).toBe('/api/agent-summaries?project_ids=10&project_ids=11&project_ids=12')
         })
 
-        it('groups projects with a running agent under "In progress"', async () => {
+        it('lists every project in order under one "Projects" heading, running or not', async () => {
             summaries = [summary(1, 11, 'running'), summary(2, 10, 'idle')]
             const w = await mountSidebar()
 
-            const inProgress = w.get('[data-testid="group-in-progress"]')
-            expect(inProgress.text()).toBe('In progress')
-            expect(projectNames(w).map(n => n.replace(/\d+$/, ''))).toEqual(['alpha-web', 'alpha-api', 'loose'])
-            const headings = w.findAll('[data-testid="section-projects"], [data-testid="group-in-progress"]')
-            expect(headings.map(h => h.text().trim())).toEqual(['Projects', 'In progress'])
-        })
-
-        it('hides the "In progress" group when nothing is running', async () => {
-            summaries = [summary(1, 10, 'waiting')]
-            const w = await mountSidebar()
-
-            expect(w.find('[data-testid="group-in-progress"]').exists()).toBe(false)
+            expect(w.get('[data-testid="section-projects"]').text().trim()).toBe('Projects')
+            expect(w.text()).not.toContain('In progress')
+            expect(projectNames(w).map(n => n.replace(/\d+$/, ''))).toEqual(['alpha-api', 'alpha-web', 'loose'])
         })
 
         it('opens an agent on click and marks it active', async () => {
