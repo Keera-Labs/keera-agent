@@ -7,10 +7,6 @@ export default {
 
     theme: {
         extend: {
-            fontFamily: {
-                mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
-            },
-
             borderRadius: {
                 'sm': '4px',
                 DEFAULT: '6px',

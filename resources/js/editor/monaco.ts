@@ -5,6 +5,8 @@ export type TextModel = Monaco.editor.ITextModel
 
 // The app only has a light theme so far; a dark theme plugs in here.
 export const EDITOR_THEME = 'vs'
+export const EDITOR_FONT_FAMILY = "'Dank Mono', 'Fira Code', Monaco, ui-monospace, SFMono-Regular, Menlo, monospace"
+export const EDITOR_FONT_SIZE = 13
 
 let loading: Promise<MonacoApi> | null = null
 

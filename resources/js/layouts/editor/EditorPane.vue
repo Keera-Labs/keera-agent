@@ -3,7 +3,7 @@ import type * as Monaco from 'monaco-editor'
 import { storeToRefs } from 'pinia'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
-import { EDITOR_THEME, loadMonaco, type TextModel } from '@/editor/monaco'
+import { EDITOR_FONT_FAMILY, EDITOR_FONT_SIZE, EDITOR_THEME, loadMonaco, type TextModel } from '@/editor/monaco'
 import { SAVE_STATUS_LABEL, saveStatus, useEditorStore } from '@/stores/editorStore'
 
 const editorStore = useEditorStore()
@@ -35,10 +35,16 @@ onMounted(async () => {
         model: null,
         theme: EDITOR_THEME,
         automaticLayout: true,
-        fontSize: 13,
+        fontFamily: EDITOR_FONT_FAMILY,
+        fontSize: EDITOR_FONT_SIZE,
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
     })
+    // Monaco caches glyph widths on create; if the face arrives later, stale
+    // measurements misplace the cursor and selections until they are re-taken.
+    document.fonts
+        .load(`${EDITOR_FONT_SIZE}px ${EDITOR_FONT_FAMILY}`)
+        .then(() => monaco.editor.remeasureFonts(), () => {})
     editor.onDidBlurEditorText(() => {
         const tab = activeTab.value
         if (tab) editorStore.flush(tab.projectId, tab.path)
