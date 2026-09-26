@@ -4,7 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createApp } from 'vue'
 import { PiniaColada } from '@pinia/colada'
 import type { Project } from '@/types/type'
-import { useEditorStore } from './editorStore'
+import { AUTO_SAVE_DELAY_MS, saveStatus, useEditorStore } from './editorStore'
 import { useProjectStore } from './projectStore'
 
 type Handler = (...args: unknown[]) => unknown
@@ -61,6 +61,8 @@ const PROJECT = { id: 1, name: 'Keera', slug: 'keera' } as Project
 function jsonResponse(status: number, body: unknown) {
     return Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) })
 }
+
+const savedAs = (etag: string) => () => jsonResponse(200, { path: 'src/app.ts', etag, size: 3 })
 
 let fetchMock: ReturnType<typeof vi.fn>
 let store: ReturnType<typeof useEditorStore>
@@ -202,31 +204,45 @@ describe('useEditorStore', () => {
             expect(event.defaultPrevented).toBe(false)
         })
 
-        it('leaves a closed tab\'s disposed model alone when its save finishes afterwards', async () => {
+
+        it('leaves a disposed model alone when its save finishes afterwards', async () => {
             const model = await openFile()
             model.edit('two')
             let respond!: (value: unknown) => void
             fetchMock.mockImplementationOnce(() => new Promise(resolve => { respond = resolve }))
             const saving = store.save(1, 'src/app.ts')
             const tab = store.activeTab!
-            vi.stubGlobal('confirm', vi.fn(() => true))
 
-            store.close(1, 'src/app.ts')
+            store.closeProject(1)
             const getVersion = vi.spyOn(model, 'getAlternativeVersionId')
             respond({ ok: true, status: 200, json: () => Promise.resolve({ path: 'src/app.ts', etag: 'e2', size: 3 }) })
-            await saving
 
+            expect(await saving).toBe(false)
             expect(getVersion).not.toHaveBeenCalled()
             expect(tab.etag).toBe('e1')
         })
 
-        it('asks before discarding unsaved changes and keeps the tab when declined', async () => {
+        it('saves pending edits and closes without asking', async () => {
             const model = await openFile()
             model.edit('two')
+            fetchMock.mockImplementationOnce(savedAs('e2'))
+            const confirm = vi.fn()
+            vi.stubGlobal('confirm', confirm)
+
+            expect(await store.close(1, 'src/app.ts')).toBe(true)
+            expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ content: 'two', etag: 'e1' })
+            expect(confirm).not.toHaveBeenCalled()
+            expect(model.disposed).toBe(true)
+        })
+
+        it('asks when the pending edits fail to save and keeps the tab when declined', async () => {
+            const model = await openFile()
+            model.edit('two')
+            fetchMock.mockImplementationOnce(() => jsonResponse(500, {}))
             const confirm = vi.fn(() => false)
             vi.stubGlobal('confirm', confirm)
 
-            expect(store.close(1, 'src/app.ts')).toBe(false)
+            expect(await store.close(1, 'src/app.ts')).toBe(false)
             expect(confirm).toHaveBeenCalledOnce()
             expect(store.projectTabs).toHaveLength(1)
             expect(model.disposed).toBe(false)
@@ -239,13 +255,13 @@ describe('useEditorStore', () => {
             const confirm = vi.fn(() => true)
             vi.stubGlobal('confirm', confirm)
 
-            expect(store.close(1, 'a.ts')).toBe(true)
+            expect(await store.close(1, 'a.ts')).toBe(true)
             expect(confirm).not.toHaveBeenCalled()
             expect(first.disposed).toBe(true)
             expect(first.listeners).toEqual([])
             expect(store.activeTab?.path).toBe('b.ts')
 
-            store.close(1, 'b.ts')
+            await store.close(1, 'b.ts')
             expect(store.activeTab).toBeNull()
         })
     })
@@ -254,18 +270,38 @@ describe('useEditorStore', () => {
         const visit = (path: string, only: string[] = []) =>
             routerHandlers.get('before')!({ detail: { visit: { url: new URL(path, 'http://localhost'), only } } })
 
-        it('asks before switching project and cancels the visit when declined', async () => {
+        async function failedSave() {
             const model = await openFile()
             model.edit('two')
+            fetchMock.mockImplementationOnce(() => jsonResponse(500, {}))
+            await store.save(1, 'src/app.ts')
+            return model
+        }
+
+        it('asks before leaving a project whose save failed and cancels the visit when declined', async () => {
+            await failedSave()
             vi.stubGlobal('confirm', vi.fn(() => false))
 
             expect(visit('/other')).toBe(false)
             expect(store.activeTab?.path).toBe('src/app.ts')
         })
 
-        it('lets visits within the project through and brings their page to the front', async () => {
+        it('leaves a project with only pending edits without asking, saving them', async () => {
             const model = await openFile()
             model.edit('two')
+            fetchMock.mockImplementationOnce(savedAs('e2'))
+            const confirm = vi.fn()
+            vi.stubGlobal('confirm', confirm)
+
+            expect(visit('/other')).toBeUndefined()
+            expect(confirm).not.toHaveBeenCalled()
+            expect(fetchMock).toHaveBeenCalledTimes(2)
+            expect(fetchMock.mock.calls[1][1].method).toBe('PUT')
+        })
+
+        it('lets visits within the project through and brings their page to the front', async () => {
+            await failedSave()
+            fetchMock.mockImplementationOnce(() => jsonResponse(500, {}))
             const confirm = vi.fn()
             vi.stubGlobal('confirm', confirm)
 
@@ -280,16 +316,161 @@ describe('useEditorStore', () => {
             expect(store.activeTab?.path).toBe('src/app.ts')
         })
 
-        it('warns on window unload only while a tab is dirty', async () => {
-            const model = await openFile()
+        describe('on window unload', () => {
             const unload = () => {
                 const event = new Event('beforeunload', { cancelable: true })
                 window.dispatchEvent(event)
                 return event.defaultPrevented
             }
-            expect(unload()).toBe(false)
+
+            it('sends pending edits with keepalive instead of warning', async () => {
+                const model = await openFile()
+                expect(unload()).toBe(false)
+
+                model.edit('two')
+                fetchMock.mockImplementationOnce(savedAs('e2'))
+                expect(unload()).toBe(false)
+                const [, init] = fetchMock.mock.calls[1]
+                expect(init).toMatchObject({ method: 'PUT', keepalive: true })
+            })
+
+            it('warns while a save has failed, conflicted or is still in flight', async () => {
+                await failedSave()
+                expect(unload()).toBe(true)
+            })
+
+            it('warns when pending edits are too large to send with keepalive', async () => {
+                const model = await openFile()
+                model.edit('x'.repeat(70 * 1024))
+                expect(unload()).toBe(true)
+                expect(fetchMock).toHaveBeenCalledTimes(1)
+            })
+        })
+    })
+
+    describe('auto-save', () => {
+        beforeEach(() => { vi.useFakeTimers() })
+        afterEach(() => { vi.useRealTimers() })
+
+        const puts = () => fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT')
+
+        it('saves once, a second after typing stops', async () => {
+            const model = await openFile()
+            fetchMock.mockImplementation(savedAs('e2'))
+
+            model.edit('t')
+            await vi.advanceTimersByTimeAsync(600)
+            model.edit('tw')
+            await vi.advanceTimersByTimeAsync(600)
             model.edit('two')
-            expect(unload()).toBe(true)
+            await vi.advanceTimersByTimeAsync(AUTO_SAVE_DELAY_MS - 1)
+            expect(puts()).toHaveLength(0)
+
+            await vi.advanceTimersByTimeAsync(1)
+            expect(puts()).toHaveLength(1)
+            expect(JSON.parse(puts()[0][1].body)).toEqual({ content: 'two', etag: 'e1' })
+            expect(store.activeTab).toMatchObject({ dirty: false, etag: 'e2' })
+            expect(saveStatus(store.activeTab!)).toBe('saved')
+
+            await vi.advanceTimersByTimeAsync(5000)
+            expect(puts()).toHaveLength(1)
+        })
+
+        it('flushes right away on blur, without waiting for the debounce', async () => {
+            const model = await openFile()
+            fetchMock.mockImplementation(savedAs('e2'))
+            model.edit('two')
+
+            expect(await store.flush(1, 'src/app.ts')).toBe(true)
+            expect(puts()).toHaveLength(1)
+            await vi.advanceTimersByTimeAsync(5000)
+            expect(puts()).toHaveLength(1)
+        })
+
+        it('flushes the tab being left when switching tabs', async () => {
+            const first = await openFile('a.ts')
+            await openFile('b.ts')
+            store.activate(1, 'a.ts')
+            fetchMock.mockImplementation(savedAs('e2'))
+            first.edit('two')
+
+            store.activate(1, 'b.ts')
+            await vi.advanceTimersByTimeAsync(0)
+
+            expect(puts()).toHaveLength(1)
+            expect(puts()[0][0]).toContain('path=a.ts')
+            expect(store.tabsByProject[1][0].dirty).toBe(false)
+        })
+
+        it('never overlaps saves and sends one follow-up with the new etag', async () => {
+            const model = await openFile()
+            const responders: ((value: unknown) => void)[] = []
+            fetchMock.mockImplementation(() => new Promise(resolve => { responders.push(resolve) }))
+
+            model.edit('two')
+            await vi.advanceTimersByTimeAsync(AUTO_SAVE_DELAY_MS)
+            expect(saveStatus(store.activeTab!)).toBe('saving')
+            model.edit('three')
+            await vi.advanceTimersByTimeAsync(AUTO_SAVE_DELAY_MS)
+            model.edit('four')
+            store.save(1, 'src/app.ts')
+            expect(puts()).toHaveLength(1)
+
+            responders[0]({ ok: true, status: 200, json: () => Promise.resolve({ path: 'src/app.ts', etag: 'e2', size: 3 }) })
+            await vi.advanceTimersByTimeAsync(0)
+            expect(puts()).toHaveLength(2)
+            expect(JSON.parse(puts()[1][1].body)).toEqual({ content: 'four', etag: 'e2' })
+            expect(store.activeTab?.dirty).toBe(true)
+
+            responders[1]({ ok: true, status: 200, json: () => Promise.resolve({ path: 'src/app.ts', etag: 'e3', size: 4 }) })
+            await vi.advanceTimersByTimeAsync(5000)
+            expect(puts()).toHaveLength(2)
+            expect(store.activeTab).toMatchObject({ dirty: false, etag: 'e3', saving: false })
+        })
+
+        it('stops auto-saving on a 409 and shows the conflict instead of overwriting', async () => {
+            const model = await openFile()
+            fetchMock.mockImplementationOnce(() => jsonResponse(409, { error: 'File changed on disk', etag: 'e9' }))
+            model.edit('two')
+            await vi.advanceTimersByTimeAsync(AUTO_SAVE_DELAY_MS)
+            expect(store.activeTab).toMatchObject({ conflict: true, dirty: true })
+            expect(saveStatus(store.activeTab!)).toBe('conflict')
+
+            model.edit('three')
+            await vi.advanceTimersByTimeAsync(5000)
+            expect(await store.flush(1, 'src/app.ts')).toBe(false)
+            expect(puts()).toHaveLength(1)
+            expect(store.hasUnsavedWork()).toBe(true)
+        })
+
+        it('keeps the tab dirty with a readable error and retries on the next edit', async () => {
+            const model = await openFile()
+            fetchMock.mockImplementationOnce(() => jsonResponse(413, { error: 'File exceeds 2 MB' }))
+            model.edit('two')
+            await vi.advanceTimersByTimeAsync(AUTO_SAVE_DELAY_MS)
+            expect(store.activeTab).toMatchObject({ dirty: true, error: 'File exceeds 2 MB' })
+            expect(saveStatus(store.activeTab!)).toBe('error')
+
+            fetchMock.mockImplementationOnce(savedAs('e2'))
+            model.edit('tw')
+            await vi.advanceTimersByTimeAsync(AUTO_SAVE_DELAY_MS)
+            expect(puts()).toHaveLength(2)
+            expect(store.activeTab).toMatchObject({ dirty: false, error: null })
+        })
+
+        it('clears the pending timer when a tab or its project is closed', async () => {
+            const first = await openFile('a.ts')
+            const second = await openFile('b.ts')
+            first.edit('two')
+            second.edit('two')
+            vi.stubGlobal('confirm', vi.fn(() => true))
+            fetchMock.mockImplementationOnce(() => jsonResponse(500, {}))
+
+            await store.close(1, 'a.ts')
+            store.closeProject(1)
+            expect(vi.getTimerCount()).toBe(0)
+            await vi.advanceTimersByTimeAsync(5000)
+            expect(puts()).toHaveLength(1)
         })
     })
 })

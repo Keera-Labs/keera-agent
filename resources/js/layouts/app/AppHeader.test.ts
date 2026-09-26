@@ -131,13 +131,14 @@ describe('SessionTabs', () => {
         const fileTabs = w.findAll('[data-testid="editor-tab"]')
         expect(fileTabs.map(t => t.text())).toEqual(['app.ts', 'README.md'])
         expect(fileTabs.map(t => t.attributes('data-dirty'))).toEqual(['true', 'false'])
+        expect(fileTabs.map(t => t.attributes('data-save-status'))).toEqual(['unsaved', 'saved'])
         const selected = w.findAll('[role="tab"][aria-selected="true"]')
         expect(selected.map(t => t.text())).toEqual(['app.ts'])
 
         await fileTabs[1].trigger('click')
         expect(editor.activeTab?.path).toBe('README.md')
 
-        const close = vi.spyOn(editor, 'close').mockReturnValue(true)
+        const close = vi.spyOn(editor, 'close').mockResolvedValue(true)
         await fileTabs[0].get('[data-testid="editor-tab-close"]').trigger('click')
         expect(close).toHaveBeenCalledWith(project.id, 'src/app.ts')
     })
