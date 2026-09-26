@@ -191,7 +191,14 @@ async def _deliver_agent_relay_messages(project, cwd: str) -> None:
     for all agents in the project and inject them into active PTYs.
     This creates the continuous back-and-forth flow between agents.
     """
-    agents = await Agent.where("project_id", project.id).get()
+    # Only agents with a live session can receive a message; scanning every
+    # agent ever created ran hundreds of queries on each Stop hook.
+    agents = (
+        await Agent.where("project_id", project.id)
+        .where_null("deleted_at")
+        .where_not_null("session_id")
+        .get()
+    )
     if not agents:
         return
 

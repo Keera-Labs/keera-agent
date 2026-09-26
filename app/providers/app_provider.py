@@ -9,6 +9,12 @@ class AppProvider(Provider):
         templates = Jinja2Templates(directory=str(self.app.base_path / "resources" / "templates"))
         self.app.bind("templates", templates)
 
+        from fastapi_startkit import Config
+
+        from app.services.log_maintenance import quiet_noisy_loggers
+
+        quiet_noisy_loggers(Config.get("logging.library_level", "warning"))
+
     def boot(self) -> None:
         from app.console.claude_hook_command import ClaudeHookCommand
         from app.console.mcp_sync_command import McpSyncCommand
@@ -45,6 +51,20 @@ class AppProvider(Provider):
                 StatuslineSettingsWriteAction().execute()
             except OSError:
                 pass  # Agents just start without Keera's statusline.
+
+            import asyncio
+
+            from fastapi_startkit import Config
+
+            from app.services.log_maintenance import prune_daily_logs_forever
+
+            # Keep a reference so the task is not garbage-collected mid-sleep.
+            self.log_pruner = asyncio.create_task(
+                prune_daily_logs_forever(
+                    Config.get("logging.channels.daily.path", "storage/logs"),
+                    int(Config.get("logging.retention_days", 14)),
+                )
+            )
 
             # Resume PM check-in schedulers that were left enabled so their state
             # survives a server restart, not just a browser reload.
