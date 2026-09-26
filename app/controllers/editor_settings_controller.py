@@ -25,7 +25,9 @@ async def _saved() -> EditorSettingsRequest | None:
 async def show() -> EditorSettingsResource:
     saved = await _saved()
     # `customized` lets the terminal keep its own size until the user picks one.
-    return EditorSettingsResource({**(saved or DEFAULTS).model_dump(), "customized": saved is not None})
+    return EditorSettingsResource(
+        {**(saved or DEFAULTS).model_dump(), "customized": saved is not None}
+    )
 
 
 async def update(body: EditorSettingsRequest) -> EditorSettingsResource:
