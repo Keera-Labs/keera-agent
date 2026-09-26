@@ -23,6 +23,21 @@
     --color-overlay: rgba(0,0,0,0.5);
 }
 
+/*
+ * Terminal hosts pad the .xterm element rather than themselves: FitAddon sizes
+ * xterm to the host's full computed box and only subtracts padding set on
+ * .xterm, so padding on the host makes xterm larger than the visible area.
+ * Unlayered on purpose, so these beat xterm.css (which is unlayered too).
+ */
+.terminal-host > .xterm {
+    padding: --spacing(2);
+}
+
+/* xterm.css paints the viewport black and stretches it over the padding. */
+.terminal-host > .xterm .xterm-viewport {
+    background-color: transparent;
+}
+
 /* Scrollbar styling for light theme */
 * {
     scrollbar-width: thin;
