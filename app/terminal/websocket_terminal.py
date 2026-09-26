@@ -1,6 +1,5 @@
 import asyncio
 import json
-import os
 from collections.abc import Awaitable, Callable
 
 from fastapi import WebSocket, WebSocketDisconnect
@@ -19,6 +18,7 @@ class WebsocketTerminal:
         self._terminal = terminal
         self._on_output = on_output
         self._stopped = asyncio.Event()
+        self._size: tuple[int, int] | None = None
 
     @property
     def terminal(self) -> Terminal:
@@ -56,23 +56,11 @@ class WebsocketTerminal:
                 await self._terminal.aclose()
 
     async def _read_pty(self, loop: asyncio.AbstractEventLoop) -> None:
-        master_fd = self._terminal.master_fd
-        queue: asyncio.Queue = asyncio.Queue()
-
-        def on_readable():
-            try:
-                data = os.read(master_fd, 4096)
-                if data:
-                    queue.put_nowait(data)
-            except OSError:
-                pass
-
-        loop.add_reader(master_fd, on_readable)
+        queue = self._terminal.subscribe()
         try:
             while not self._stopped.is_set():
                 try:
                     data = await asyncio.wait_for(queue.get(), timeout=0.1)
-                    self._terminal.mark_output(data)
                     if self._ws is not None:
                         await self._ws.send_bytes(data)
                     if self._on_output:
@@ -80,10 +68,7 @@ class WebsocketTerminal:
                 except asyncio.TimeoutError:
                     continue
         finally:
-            try:
-                loop.remove_reader(master_fd)
-            except Exception:
-                pass
+            self._terminal.unsubscribe(queue)
 
     async def _ws_to_pty(self) -> None:
         while not self._stopped.is_set():
@@ -95,21 +80,31 @@ class WebsocketTerminal:
                     # Binary = a composed message to type in and submit.
                     text = msg["bytes"].decode(errors="replace")
                     if text.strip("\r\n"):
+                        self._claim_size()
                         await self._terminal.send(text)
                 elif msg.get("text"):
                     text: str = msg["text"]
                     try:
                         parsed = json.loads(text)
                         if isinstance(parsed, dict) and parsed.get("type") == "resize":
-                            self._terminal.resize(int(parsed["cols"]), int(parsed["rows"]))
+                            self._size = (int(parsed["cols"]), int(parsed["rows"]))
+                            self._terminal.resize(*self._size)
                         else:
                             # Text = raw keyboard from term.onData → no modification
+                            self._claim_size()
                             await self._terminal.write(text.encode())
                     except (json.JSONDecodeError, ValueError):
+                        self._claim_size()
                         await self._terminal.write(text.encode())
             except (WebSocketDisconnect, Exception):
                 break
         self._stopped.set()
+
+    def _claim_size(self) -> None:
+        # Clients sharing a PTY each resize it to their own view; the one being
+        # typed in takes it back so its TUI is redrawn at the width it shows.
+        if self._size is not None and self._terminal.size != self._size:
+            self._terminal.resize(*self._size)
 
     async def _watch_process(self, loop: asyncio.AbstractEventLoop) -> None:
         while self._terminal.is_alive() and not self._stopped.is_set():
