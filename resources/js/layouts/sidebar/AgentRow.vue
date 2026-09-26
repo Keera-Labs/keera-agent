@@ -15,10 +15,14 @@ const PROVIDER_ICON: Record<string, { name: IconName; color: string }> = {
 const provider = PROVIDER_ICON[props.agent.provider] ?? PROVIDER_ICON.claude
 
 const needsInput = computed(() => props.agent.status === 'needs_input')
-const preview = computed(() => {
-    if (!needsInput.value) return props.agent.last_message
-    return props.agent.attention_prompt
-        ?? (props.agent.attention_kind === 'permission' ? 'Waiting for permission' : 'Asked a question')
+const attention = computed(() => props.agent.attention_prompt
+    ?? (props.agent.attention_kind === 'permission' ? 'Waiting for permission' : 'Asked a question'))
+// Beside the Reply button a row has no room for a readable snippet, so a blocked
+// agent's prompt lives in the tooltip (the card and detail header show it in full).
+const preview = computed(() => (needsInput.value ? null : props.agent.last_message))
+const title = computed(() => {
+    const detail = needsInput.value ? attention.value : preview.value
+    return detail ? `${props.agent.name} — ${detail}` : props.agent.name
 })
 </script>
 
@@ -29,7 +33,7 @@ const preview = computed(() => {
             data-testid="sidebar-agent"
             :data-status="props.agent.status"
             :aria-current="props.active ? 'page' : undefined"
-            :title="preview ? `${props.agent.name} — ${preview}` : props.agent.name"
+            :title="title"
             :class="[
                 'flex items-center gap-1.5 flex-1 min-w-0 h-7 px-1.5 rounded-md text-[12.5px] text-left cursor-pointer transition-colors duration-100',
                 props.active
@@ -46,7 +50,7 @@ const preview = computed(() => {
             <!-- The name gives up width first, so a preview is never squeezed to a lone dash. -->
             <span
                 data-testid="agent-preview"
-                :class="['flex-1 truncate', needsInput ? 'text-amber-700' : 'text-zinc-400', preview ? 'min-w-[48px]' : 'min-w-0']"
+                :class="['flex-1 truncate text-zinc-400', preview ? 'min-w-[48px]' : 'min-w-0']"
             >
                 <template v-if="preview">– {{ preview }}</template>
             </span>
