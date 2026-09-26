@@ -19,7 +19,7 @@ from app.models.Agent import Agent
 from app.models.Project import Project
 from app.services.worktree_cleanup import cleanup_agent_worktree
 from app.terminal.claude_monitor import make_claude_session_monitor
-from app.terminal.cli_supervisor import supervise_cli, with_exit_marker
+from app.terminal.cli_supervisor import supervise_cli
 from app.terminal.connection_manager import ConnectionManager
 from app.terminal.manager import TerminalManager
 from app.terminal.readiness import claude_ready, mark_booting
@@ -298,10 +298,10 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
         after_restart=_make_after_restart(terminal, message),
     )
     bridge = WebsocketTerminal(None, terminal, on_output=monitor)
-    supervise_cli(agent.id, terminal, session_id, _build_cmd_with_identity)
+    supervisor = supervise_cli(agent.id, terminal, session_id, _build_cmd_with_identity)
     asyncio.create_task(
         bridge.run(
-            auto_send=with_exit_marker(_build_cmd_with_identity(fresh_agent)).encode(),
+            auto_send=supervisor.launch_line(_build_cmd_with_identity(fresh_agent)).encode(),
             stop_on_disconnect=False,
         )
     )
