@@ -197,6 +197,43 @@ describe('Sidebar', () => {
         expect(document.querySelector('[role="dialog"]')).toBeNull()
     })
 
+    it('labels the picker without a project count, since the project list is paginated', async () => {
+        const w = await mountSidebar()
+        const subtitle = () => w.get('[data-testid="workspace-subtitle"]').text()
+
+        expect(subtitle()).toBe('All projects')
+
+        await w.get('[data-testid="workspace-picker"]').trigger('click')
+        await w.findAll('[data-testid="workspace-option"]')[0].trigger('click')
+        await flushPromises()
+
+        expect(subtitle()).toBe('Workspace')
+        expect(subtitle()).not.toMatch(/\d/)
+    })
+
+    it('opens a project menu upward when it would overflow the list', async () => {
+        const w = await mountSidebar()
+        const rows = w.findAll('[data-testid="project-item"]').map(el => el.element.parentElement!)
+        const scroller = rows[0].closest('.overflow-y-auto')!
+        vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue({ bottom: 400 } as DOMRect)
+        vi.spyOn(rows[0], 'getBoundingClientRect').mockReturnValue({ bottom: 40 } as DOMRect)
+        vi.spyOn(rows[2], 'getBoundingClientRect').mockReturnValue({ bottom: 390 } as DOMRect)
+
+        async function openMenu(row: HTMLElement) {
+            row.dispatchEvent(new MouseEvent('mouseenter'))
+            await flushPromises()
+            await w.get('[aria-label="Project actions"]').trigger('click')
+            const classes = w.get('[data-testid="project-menu"]').classes()
+            await w.get('[aria-label="Project actions"]').trigger('click')
+            row.dispatchEvent(new MouseEvent('mouseleave'))
+            await flushPromises()
+            return classes
+        }
+
+        expect(await openMenu(rows[0])).toContain('top-full')
+        expect(await openMenu(rows[2])).toContain('bottom-full')
+    })
+
     it('keeps a project menu modal open while interacting with it', async () => {
         const w = await mountSidebar()
         const item = w.findAll('[data-testid="project-item"]')[0].element.parentElement!

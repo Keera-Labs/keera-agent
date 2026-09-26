@@ -16,7 +16,21 @@ const props = defineProps<{
 const hovered = ref(false)
 const menuOpen = ref(false)
 const menu = ref<HTMLElement | null>(null)
+const root = ref<HTMLElement | null>(null)
 const modalOpen = ref(false)
+const openUp = ref(false)
+
+const MENU_HEIGHT = 160
+
+function toggleMenu() {
+    if (!menuOpen.value && root.value) {
+        // The list scrolls, so a menu dropping below its last rows would be clipped.
+        const scroller = root.value.closest('.overflow-y-auto') ?? document.documentElement
+        const spaceBelow = scroller.getBoundingClientRect().bottom - root.value.getBoundingClientRect().bottom
+        openUp.value = spaceBelow < MENU_HEIGHT
+    }
+    menuOpen.value = !menuOpen.value
+}
 
 const menuItemClass = (danger = false) =>
     `flex items-center gap-2 h-7 px-2 rounded-md cursor-pointer text-[12.5px] ${danger ? 'text-danger' : 'text-zinc-700'} bg-transparent border-0 w-full text-left whitespace-nowrap hover:bg-black/[0.04]`
@@ -56,7 +70,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
 </script>
 
 <template>
-    <div class="relative flex" @mouseenter="hovered = true" @mouseleave="hovered = false">
+    <div ref="root" class="relative flex" @mouseenter="hovered = true" @mouseleave="hovered = false">
         <div
             role="button"
             tabindex="0"
@@ -99,7 +113,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
                 menuOpen ? 'bg-black/[0.06]' : 'hover:bg-black/[0.05]',
             ]"
             @mousedown.stop
-            @click.stop="menuOpen = !menuOpen"
+            @click.stop="toggleMenu"
         >
             <Icon name="ellipsis-vertical" :size="13" />
         </button>
@@ -109,7 +123,9 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
             ref="menu"
             data-testid="project-menu"
             :class="[
-                'absolute right-0 top-full mt-1 z-[200] bg-surface border border-stroke rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.12)] min-w-[180px] p-1',
+                'absolute right-0 z-[200]',
+                openUp ? 'bottom-full mb-1' : 'top-full mt-1',
+                'bg-surface border border-stroke rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.12)] min-w-[180px] p-1',
                 // Stays mounted so the modal instance survives, but must not paint above the modal backdrop.
                 modalOpen && 'invisible pointer-events-none',
             ]"

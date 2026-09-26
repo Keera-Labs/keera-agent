@@ -2,13 +2,11 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import WorkspaceAddModal from '@/components/WorkspaceAddModal.vue'
 import Icon from '@/components/ui/Icon.vue'
-import useProjects from '@/queries/projectsQuery'
 import useWorkspaces from '@/queries/workspacesQuery'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 
 const workspaceStore = useWorkspaceStore()
 const { workspaces } = useWorkspaces()
-const { projects } = useProjects()
 const open = ref(false)
 const root = ref<HTMLElement | null>(null)
 
@@ -16,8 +14,6 @@ const selected = computed(() => workspaceStore.currentWorkspaceId)
 const current = computed(() =>
     selected.value !== null ? workspaces.value.find(w => w.id === selected.value) ?? null : null,
 )
-
-const projectCount = computed(() => `${projects.value.length} ${projects.value.length === 1 ? 'project' : 'projects'}`)
 
 function select(id: number | null) {
     workspaceStore.setCurrentWorkspaceId(id)
@@ -66,8 +62,9 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
                 <div class="text-zinc-900 text-[12.5px] font-semibold truncate leading-tight">
                     {{ current?.name ?? 'Personal Workspace' }}
                 </div>
-                <div class="text-zinc-500 text-[11px] truncate leading-tight">
-                    {{ current ? projectCount : `All projects · ${projectCount}` }}
+                <!-- No project count: the projects query is paginated, so its length is not a total. -->
+                <div data-testid="workspace-subtitle" class="text-zinc-500 text-[11px] truncate leading-tight">
+                    {{ current ? 'Workspace' : 'All projects' }}
                 </div>
             </div>
             <Icon name="chevrons-up-down" :size="12" class="shrink-0 text-zinc-400" />
