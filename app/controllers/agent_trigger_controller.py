@@ -11,6 +11,8 @@ from fastapi.responses import JSONResponse
 from fastapi_startkit.application import app
 
 from app.actions.agent_startup import wait_for_agent_cli
+from app.actions.agent_status_action import CLEARED_ATTENTION
+from app.actions.claude_hook_action import agent_env
 from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.actions.terminal_write_action import TerminalWriteAction
 from app.models.Agent import Agent
@@ -43,6 +45,7 @@ async def _mark_agent_working(agent_id: int, message: str) -> None:
             "status": "running",
             "started_at": now,
             "current_activity": _activity_summary(message),
+            **CLEARED_ATTENTION,
         }
     )
 
@@ -310,7 +313,7 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     await _mark_agent_working(agent.id, initial_message)
 
     terminal_manager: TerminalManager = app().make("terminal")
-    terminal_manager.create(cwd=agent_cwd, session_id=session_id)
+    terminal_manager.create(cwd=agent_cwd, session_id=session_id, env=agent_env(agent.id))
     terminal = terminal_manager.get(session_id)
 
     # Give the shell time to start, then launch claude

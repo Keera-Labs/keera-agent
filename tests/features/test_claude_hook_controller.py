@@ -6,9 +6,14 @@ and that the task-dispatch logic uses `body` (not the dropped `description`)
 to identify pending work.
 """
 
+import asyncio
+import os
+
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
+from app.models.Agent import Agent
 from app.models.Task import Task
+from databases.factories.agent_factory import AgentFactory
 from databases.factories.project_factory import ProjectFactory
 from databases.factories.task_factory import TaskFactory
 from tests.test_case import TestCase
@@ -88,3 +93,36 @@ class TestClaudeHookController(TestCase, DatabaseTransaction):
 
         refreshed = await Task.find(task.id)
         self.assertEqual(refreshed.status, "in_progress")
+
+    # ── per-agent Stop attribution ────────────────────────────────────────────
+
+    async def _stop(self, headers: dict | None = None):
+        cwd = os.path.expanduser(self.project.path)
+        response = await self.post("/api/claude-stopped", json={"cwd": cwd}, headers=headers or {})
+        response.assert_ok()
+        await asyncio.sleep(0.1)
+
+    async def test_claude_stopped_with_agent_header_only_marks_that_agent_waiting(self):
+        stopping = await AgentFactory.new().create(
+            project_id=self.project.id,
+            status="needs_input",
+            attention_kind="question",
+            attention_prompt="Proceed?",
+        )
+        sibling = await AgentFactory.new().create(project_id=self.project.id, status="running")
+
+        await self._stop({"X-Keera-Agent-Id": str(stopping.id)})
+
+        stopped = await Agent.find(stopping.id)
+        self.assertEqual(stopped.status, "waiting")
+        self.assertIsNone(stopped.attention_prompt)
+        self.assertEqual((await Agent.find(sibling.id)).status, "running")
+
+    async def test_claude_stopped_without_header_marks_all_running_agents_waiting(self):
+        first = await AgentFactory.new().create(project_id=self.project.id, status="running")
+        second = await AgentFactory.new().create(project_id=self.project.id, status="running")
+
+        await self._stop()
+
+        self.assertEqual((await Agent.find(first.id)).status, "waiting")
+        self.assertEqual((await Agent.find(second.id)).status, "waiting")

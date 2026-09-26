@@ -21,6 +21,8 @@ class AgentSummaryResource(JsonResource[Agent]):
             "provider": agent.provider or "claude",
             "agent_type": agent.agent_type,
             "status": agent.status,
+            "attention_kind": agent.attention_kind,
+            "attention_prompt": agent.attention_prompt,
             "last_message": self.last_message,
             "last_activity_at": self.last_activity_at,
         }
