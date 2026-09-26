@@ -2,23 +2,37 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installPinia } from '@/pages/agents/testing'
-import type { GitPullRequestInfo, GitStatus } from '@/queries/gitQuery'
+import type { GitPullRequestInfo, GitStatus, GitWorktree } from '@/queries/gitQuery'
+import { useDiffStore } from '@/stores/diffStore'
+import { useEditorStore } from '@/stores/editorStore'
+import { useProjectStore } from '@/stores/projectStore'
 import type { Project } from '@/types/type'
 import SourceControl from './SourceControl.vue'
-import { gitFile, gitStatus } from './testing'
+import { gitFile, gitStatus, gitWorktree } from './testing'
 
 vi.mock('@inertiajs/vue3', () => ({ router: { on: vi.fn(() => () => {}) }, usePage: () => ({ props: {}, component: 'Dashboard' }) }))
 
 type Reply = { body: unknown; status?: number }
 
+const AGENT_TREE = '/code/shop/.claude/worktrees/agent-7'
+
 let status: GitStatus
+let agentStatus: GitStatus
+let worktrees: GitWorktree[]
 let pullRequestInfo: GitPullRequestInfo
 let posts: Record<string, Reply>
 const fetchMock = vi.fn((url: string, init?: RequestInit) => {
-    const path = url.replace('/api/projects/9/git', '')
+    const { pathname, searchParams } = new URL(url, 'http://app')
+    const path = pathname.replace('/api/projects/9/git', '')
+    const inAgentTree = searchParams.get('worktree') === AGENT_TREE
     const reply: Reply = init?.method === 'POST'
         ? posts[path] ?? { body: { detail: 'unexpected' }, status: 500 }
-        : { body: path === '/status' ? status : path === '/pull-request' ? pullRequestInfo : { commits: [] } }
+        : {
+            body: path === '/status' ? (inAgentTree ? agentStatus : status)
+                : path === '/pull-request' ? pullRequestInfo
+                : path === '/worktrees' ? { worktrees }
+                : { commits: [] },
+        }
     const code = reply.status ?? 200
     return Promise.resolve({ ok: code < 400, status: code, json: () => Promise.resolve(reply.body) })
 })
@@ -37,7 +51,14 @@ const referenceStatus = () => gitStatus({
 })
 
 beforeEach(() => {
+    localStorage.clear()
     status = referenceStatus()
+    agentStatus = gitStatus({ branch: 'task/2034-diff', changes: [gitFile('resources/js/DiffPane.vue', { status: 'A', untracked: true })], count: 1 })
+    worktrees = [
+        gitWorktree('/code/shop', { branch: 'fix/eu-promo-checkout', is_main: true, is_current: true }),
+        gitWorktree(AGENT_TREE, { branch: 'task/2034-diff', agent_id: 7, agent_name: 'Diff Frontend' }),
+        gitWorktree('/tmp/gone', { branch: 'old', prunable: true }),
+    ]
     pullRequestInfo = { available: true, error: null, pull_request: null }
     posts = {}
     fetchMock.mockClear()
@@ -48,6 +69,7 @@ afterEach(() => vi.unstubAllGlobals())
 
 async function mountPanel() {
     const wrapper = mount(SourceControl, { props: { project }, global: { plugins: [...installPinia()] }, attachTo: document.body })
+    useProjectStore().setActiveProject(project)
     await flushPromises()
     return wrapper
 }
@@ -224,6 +246,106 @@ describe('SourceControl', () => {
         const section = w.get('[data-testid="changes"]')
         await section.get('button[aria-expanded]').trigger('click')
         expect(section.get('ul').isVisible()).toBe(false)
+    })
+
+    it('opens a file row as a diff of the side it is listed on', async () => {
+        const w = await mountPanel()
+        const diffs = useDiffStore()
+
+        await w.get('[data-testid="changes"]').findAll('li')[1].get('button[title^="Show changes"]').trigger('click')
+        expect(diffs.activeTab).toMatchObject({ path: 'app/tasks.py', staged: false, untracked: false, target: { projectId: 9, worktree: null } })
+
+        await w.get('[data-testid="changes"]').findAll('li')[2].get('button[title^="Show changes"]').trigger('click')
+        expect(diffs.activeTab).toMatchObject({ path: 'app/bootstrap.py', untracked: true })
+
+        await w.get('[data-testid="staged-changes"]').findAll('li')[0].get('button[title^="Show changes"]').trigger('click')
+        expect(diffs.activeTab).toMatchObject({ path: 'src/checkout/promo.ts', staged: true })
+        expect(diffs.tabsByProject[9]).toHaveLength(3)
+    })
+
+    it('opens deleted files as diffs, and the file itself only from the explicit Open file action', async () => {
+        status = gitStatus({ changes: [gitFile('app/old.py', { status: 'D', additions: 0, deletions: 9 }), gitFile('app/tasks.py')], count: 2 })
+        const w = await mountPanel()
+        const editor = useEditorStore()
+        const open = vi.spyOn(editor, 'open').mockResolvedValue()
+
+        const [deleted, modified] = w.get('[data-testid="changes"]').findAll('li')
+        expect(deleted.find('[aria-label="Open app/old.py"]').exists()).toBe(false)
+        await deleted.get('button[title^="Show changes"]').trigger('click')
+        expect(useDiffStore().activeTab?.path).toBe('app/old.py')
+        expect(open).not.toHaveBeenCalled()
+
+        await modified.get('[aria-label="Open app/tasks.py"]').trigger('click')
+        expect(open).toHaveBeenCalledWith(9, 'app/tasks.py')
+    })
+
+    it('lists the live worktrees with branch and agent, and switches every git call to the chosen one', async () => {
+        const w = await mountPanel()
+
+        await w.get('[data-testid="branch-pill"]').trigger('click')
+        const options = w.findAll('[data-testid="worktree-option"]')
+        expect(options.map(o => o.text())).toEqual([
+            'fix/eu-promo-checkoutMain checkout',
+            'task/2034-diffDiff Frontend',
+        ])
+        expect(options[0].attributes('aria-checked')).toBe('true')
+
+        await options[1].trigger('click')
+        await flushPromises()
+
+        const worktreeParam = `worktree=${encodeURIComponent(AGENT_TREE)}`
+        expect(fetchMock).toHaveBeenCalledWith(`/api/projects/9/git/status?${worktreeParam}`, expect.anything())
+        expect(w.get('[data-testid="branch-pill"]').text()).toContain('task/2034-diff')
+        expect(w.get('[data-testid="worktree-label"]').text()).toBe('Diff Frontend')
+        expect(w.get('[data-testid="changes"]').text()).toContain('DiffPane.vue')
+        expect(w.find('[data-testid="staged-changes"]').exists()).toBe(false)
+        // The file editor reads the project's own checkout, so another worktree's files open only as diffs.
+        expect(w.find('[aria-label="Open resources/js/DiffPane.vue"]').exists()).toBe(false)
+
+        await w.get('[data-testid="changes"] button[title^="Show changes"]').trigger('click')
+        expect(useDiffStore().activeTab).toMatchObject({ target: { worktree: AGENT_TREE }, worktreeLabel: 'Diff Frontend' })
+
+        posts['/stage'] = { body: agentStatus }
+        await w.get('[aria-label="Stage resources/js/DiffPane.vue"]').trigger('click')
+        await flushPromises()
+        expect(fetchMock).toHaveBeenCalledWith(`/api/projects/9/git/stage?${worktreeParam}`, expect.objectContaining({ method: 'POST' }))
+    })
+
+    it('shows an agent worktree nested in the main checkout as a worktree row that switches to it', async () => {
+        status = gitStatus({ changes: [gitFile('.claude/worktrees/agent-7/', { status: 'A', untracked: true })], count: 1 })
+        const w = await mountPanel()
+
+        const row = w.get('[data-testid="changes"] li')
+        expect(row.get('[data-testid="line-stats"]').text()).toBe('worktree')
+        expect(row.text()).toContain('Diff Frontend.claude/worktrees/agent-7')
+        expect(row.find('[aria-label^="Open "]').exists()).toBe(false)
+
+        await row.get('button[title="Switch to worktree Diff Frontend"]').trigger('click')
+        await flushPromises()
+
+        expect(useDiffStore().activeTab).toBeNull()
+        expect(w.get('[data-testid="worktree-label"]').text()).toBe('Diff Frontend')
+    })
+
+    it('remembers the chosen worktree per project', async () => {
+        const first = await mountPanel()
+        await first.get('[data-testid="branch-pill"]').trigger('click')
+        await first.findAll('[data-testid="worktree-option"]')[1].trigger('click')
+        first.unmount()
+
+        fetchMock.mockClear()
+        const second = await mountPanel()
+        expect(second.get('[data-testid="branch-pill"]').text()).toContain('task/2034-diff')
+        // It waits for the worktree list, so the main checkout is never read in between.
+        expect(fetchMock.mock.calls.filter(([url]) => url === '/api/projects/9/git/status')).toHaveLength(0)
+    })
+
+    it('falls back to the main checkout when the remembered worktree is gone or prunable', async () => {
+        localStorage.setItem('keera.git.worktree', JSON.stringify({ 9: '/tmp/gone' }))
+        const w = await mountPanel()
+
+        expect(w.get('[data-testid="branch-pill"]').text()).toBe('fix/eu-promo-checkout')
+        expect(fetchMock.mock.calls.some(([url]) => url.includes('worktree='))).toBe(false)
     })
 
     it('keeps the draft message when the panel remounts', async () => {
