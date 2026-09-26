@@ -20,7 +20,7 @@ import { agentRoleLabel } from './presentation'
 // when the agent changes or the page unmounts, so the PTY never closes.
 
 const layout = useAppLayoutStore()
-const { activeAgentId, isDraggingOver, claudeStatus } = storeToRefs(layout)
+const { activeAgentId, isDraggingOver } = storeToRefs(layout)
 const { activeProject } = storeToRefs(useProjectStore())
 
 const activeAgent = computed(() =>
@@ -40,8 +40,6 @@ const subtitle = computed(() => {
     if (!agent) return null
     return agent.model ? `${agentRoleLabel(agent)} · ${agent.model}` : agentRoleLabel(agent)
 })
-const status = computed(() => (activeProject.value ? claudeStatus.value[activeProject.value.id] : undefined))
-
 const terminalSlot = ref<HTMLElement | null>(null)
 
 /** Reply: put the cursor in the agent's terminal, where the question or permission prompt is showing. */
@@ -167,10 +165,6 @@ function onDrop(e: DragEvent) {
                             >
                                 Reply
                             </button>
-                        </span>
-                        <span v-else-if="status === 'running' || activeAgent?.status === 'running'" class="flex items-center gap-1.5 ml-2">
-                            <AgentStatusIndicator status="running" :size="12" />
-                            <span class="text-success text-[11px] font-mono">running</span>
                         </span>
                     </div>
                 </div>

@@ -69,12 +69,13 @@ describe('Detail', () => {
         expect(slot.classes().some(c => /^p[xytrbl]?-/.test(c))).toBe(false)
     })
 
-    it('shows a spinner in the header while the agent works', async () => {
+    it('shows no status badge in the header while the agent works', async () => {
         const { wrapper } = await mountDetail(11, { status: 'running' })
 
-        const indicator = wrapper.get('[data-testid="agent-execution"] [data-testid="agent-status-indicator"]')
-        expect(indicator.attributes('data-status')).toBe('running')
-        expect(wrapper.find('[data-testid="agent-needs-input"]').exists()).toBe(false)
+        const header = wrapper.get('[data-testid="agent-execution"]')
+        expect(header.text()).not.toContain('running')
+        expect(header.find('[data-testid="agent-status-indicator"]').exists()).toBe(false)
+        expect(header.find('[data-testid="agent-needs-input"]').exists()).toBe(false)
     })
 
     it('shows no status badge once the project session has stopped', async () => {
