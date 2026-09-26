@@ -136,19 +136,25 @@ describe('ProjectOverview', () => {
 
     it('deletes an agent from its card only after confirmation', async () => {
         const { wrapper } = await mountOverview()
-        const confirm = vi.fn(() => false)
-        vi.stubGlobal('confirm', confirm)
+        const dialog = () => document.querySelector<HTMLElement>('[data-testid="confirm-delete-agent"]')
+        const click = async (testid: string) => {
+            document.querySelector<HTMLElement>(`[data-testid="${testid}"]`)!.click()
+            await flushPromises()
+        }
         const deleteButtons = wrapper.findAll('[data-testid="agent-card-delete"]')
 
         await deleteButtons[1].trigger('click')
         await flushPromises()
-        expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Checker'))
+        expect(dialog()?.textContent).toContain('Delete agent Checker?')
+        await click('confirm-delete-agent-cancel')
+        expect(dialog()).toBeNull()
         expect(fetch).not.toHaveBeenCalledWith('/api/agents/12', expect.anything())
 
-        confirm.mockReturnValue(true)
         await deleteButtons[1].trigger('click')
         await flushPromises()
+        await click('confirm-delete-agent-confirm')
         expect(fetch).toHaveBeenCalledWith('/api/agents/12', { method: 'DELETE' })
+        expect(dialog()).toBeNull()
     })
 
     it('opens the add-agent modal from New Agent', async () => {

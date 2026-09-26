@@ -43,6 +43,19 @@ function openSession(agentId: number) {
 
 const tabNames = (w: VueWrapper) => w.findAll('[data-testid="session-tab"]').map(el => el.text())
 
+const dialog = () => document.querySelector<HTMLElement>('[data-testid="confirm-delete-agent"]')
+
+async function clickDialog(testid: string) {
+    document.querySelector<HTMLElement>(`[data-testid="${testid}"]`)!.click()
+    await flushPromises()
+}
+
+async function clickClose(w: VueWrapper, agentName: string) {
+    const tab = w.findAll('[data-testid="session-tab"]').find(t => t.text() === agentName)!
+    await tab.get('[data-testid="session-tab-close"]').trigger('click')
+    await flushPromises()
+}
+
 beforeEach(() => {
     page.component = 'agents/Detail'
     localStorage.clear()
@@ -99,7 +112,7 @@ describe('SessionTabs', () => {
         expect(w.get('[role="tab"]').attributes('aria-selected')).toBe('false')
     })
 
-    it('closes an agent terminal and drops back to the overview when it was active', async () => {
+    it('"Just close tab" closes the terminal but keeps the agent', async () => {
         const w = await mountHeader()
         openSession(ENGINEER)
         const session = store.agentSessions.get(ENGINEER)!
@@ -109,12 +122,74 @@ describe('SessionTabs', () => {
         expect(w.findAll('[data-testid="session-tab-close"]')).toHaveLength(1)
         await w.get('[data-testid="session-tab-close"]').trigger('click')
         await flushPromises()
+        await clickDialog('confirm-delete-agent-close-only')
 
+        expect(dialog()).toBeNull()
+        expect(fetch).not.toHaveBeenCalledWith(`/api/agents/${ENGINEER}`, expect.anything())
         expect(session.ws.close).toHaveBeenCalled()
         expect(store.agentSessions.has(ENGINEER)).toBe(false)
         expect(store.activeAgentId).toBeNull()
         expect(router.visit).not.toHaveBeenCalled()
         expect(tabNames(w)).toEqual(['PM'])
+    })
+
+    it('asks before deleting an agent on tab close; Cancel and Escape keep the agent and its tab', async () => {
+        const w = await mountHeader()
+        openSession(ENGINEER)
+        store.setActiveAgentId(ENGINEER)
+        await flushPromises()
+
+        await clickClose(w, 'Frontend Engineer with a very long name')
+        expect(dialog()?.textContent).toContain('Delete agent Frontend Engineer with a very long name?')
+        // Enter lands on Cancel, never on Delete.
+        expect(document.activeElement?.getAttribute('data-testid')).toBe('confirm-delete-agent-cancel')
+
+        await clickDialog('confirm-delete-agent-cancel')
+        expect(dialog()).toBeNull()
+
+        await clickClose(w, 'Frontend Engineer with a very long name')
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+        await flushPromises()
+        expect(dialog()).toBeNull()
+
+        expect(fetch).not.toHaveBeenCalledWith(`/api/agents/${ENGINEER}`, expect.anything())
+        expect(store.agentSessions.has(ENGINEER)).toBe(true)
+        expect(tabNames(w)).toEqual(['PM', 'Frontend Engineer with a very long name'])
+    })
+
+    it('Delete removes the agent, closes its tab and moves to the neighbouring tab', async () => {
+        const w = await mountHeader()
+        openSession(ENGINEER)
+        openSession(REVIEWER)
+        const session = store.agentSessions.get(ENGINEER)!
+        store.setActiveAgentId(ENGINEER)
+        await flushPromises()
+
+        await clickClose(w, 'Frontend Engineer with a very long name')
+        await clickDialog('confirm-delete-agent-confirm')
+
+        expect(fetch).toHaveBeenCalledWith(`/api/agents/${ENGINEER}`, { method: 'DELETE' })
+        expect(dialog()).toBeNull()
+        expect(session.ws.close).toHaveBeenCalled()
+        expect(store.agentSessions.has(ENGINEER)).toBe(false)
+        expect(tabNames(w)).toEqual(['PM', 'Reviewer'])
+        expect(store.activeAgentId).toBe(REVIEWER)
+        expect(router.visit).toHaveBeenCalledWith(`/${project.slug}/agents/${REVIEWER}`)
+    })
+
+    it('deleting an inactive agent tab leaves the current page alone', async () => {
+        const w = await mountHeader()
+        openSession(ENGINEER)
+        store.setActiveAgentId(PM)
+        await flushPromises()
+
+        await clickClose(w, 'Frontend Engineer with a very long name')
+        await clickDialog('confirm-delete-agent-confirm')
+
+        expect(fetch).toHaveBeenCalledWith(`/api/agents/${ENGINEER}`, { method: 'DELETE' })
+        expect(tabNames(w)).toEqual(['PM'])
+        expect(store.activeAgentId).toBe(PM)
+        expect(router.visit).not.toHaveBeenCalled()
     })
 
     it('shows open files as tabs beside the terminals, with a dirty marker', async () => {

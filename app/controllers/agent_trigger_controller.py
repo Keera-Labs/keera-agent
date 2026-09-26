@@ -291,12 +291,19 @@ def _make_after_restart(terminal, message: str):
     return _after_restart
 
 
+async def _is_deleted(agent_id: int) -> bool:
+    return not await Agent.where("id", agent_id).where_null("deleted_at").first()
+
+
 async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) -> None:
     """Spawn a Terminal for the agent without a WebSocket — triggered from the backend.
 
     Parts 1 & 3 are handled by make_claude_session_monitor via WebsocketTerminal(ws=None).
     Part 2 – Reset has_session=False if the process exits in < _MIN_SESSION_LIFETIME seconds.
     """
+    if await _is_deleted(agent.id):
+        return
+
     base_url = app().make("config").get("fastapi.app_url")
 
     if getattr(agent, "provider", None) == "codex":
@@ -335,6 +342,12 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
 
     # Re-fetch agent so to_command() uses the current has_session value from DB
     fresh_agent = await Agent.find(agent.id)
+    # Deleted while booting: the delete may have looked up session_id before this
+    # spawn stored it, so the terminal is ours to tear down.
+    if not fresh_agent or getattr(fresh_agent, "deleted_at", None):
+        claude_ready.pop(session_id, None)
+        await terminal_manager.close(session_id)
+        return
 
     def _build_cmd_with_identity(a):
         """Build claude command with agent identity injected into system prompt."""
