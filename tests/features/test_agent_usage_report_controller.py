@@ -1,4 +1,7 @@
+import os
+import tempfile
 import time
+from unittest import mock
 
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
@@ -12,6 +15,14 @@ from tests.test_case import TestCase
 class TestAgentUsageReportController(TestCase, DatabaseTransaction):
     async def asyncSetUp(self):
         await super().asyncSetUp()
+        empty = tempfile.TemporaryDirectory()
+        self.addCleanup(empty.cleanup)
+        env = mock.patch.dict(
+            os.environ,
+            {"KEERA_CLAUDE_PROJECTS_DIR": empty.name, "KEERA_CODEX_SESSIONS_DIR": empty.name},
+        )
+        env.start()
+        self.addCleanup(env.stop)
         # A path with no transcripts, so the usage endpoint only reflects reports.
         self.project = await ProjectFactory.new().create(path="/nonexistent/keera-usage-test")
         self.agent = await AgentFactory.new().create(project_id=self.project.id)
