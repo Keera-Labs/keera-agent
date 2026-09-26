@@ -3,28 +3,60 @@ import {
     ArrowDown, ArrowUp, Check, ChevronDown, CircleAlert, CircleCheck, Ellipsis, GitBranch, GitPullRequest, History, Plus, X,
 } from '@lucide/vue'
 import { computed, ref } from 'vue'
+import { useGitWorktree, worktreeLabel } from '@/composables/useGitWorktree'
 import {
-    isOpenPullRequest, useGitActions, useGitCommits, useGitPullRequest, useGitStatus, type GitFileChange, type GitPaths,
+    isOpenPullRequest, useGitActions, useGitCommits, useGitPullRequest, useGitStatus, type GitFileChange, type GitPaths, type GitWorktree,
 } from '@/queries/gitQuery'
+import { useDiffStore } from '@/stores/diffStore'
 import { useEditorStore } from '@/stores/editorStore'
 import type { Project } from '@/types/type'
 import ChangeList from './ChangeList.vue'
 import PanelMenu from './PanelMenu.vue'
 import { menuItemClass, useCommitDraft } from './sourceControl'
+import WorktreePicker from './WorktreePicker.vue'
 
 const props = defineProps<{ project: Project }>()
 const projectId = () => props.project.id
 
-const { status, error: statusError, isLoading, refetch } = useGitStatus(projectId)
+const { worktrees, selected: selectedWorktree, target, select: selectWorktree } = useGitWorktree(projectId)
+const { status, error: statusError, isLoading, refetch } = useGitStatus(target)
 const isRepo = computed(() => status.value?.is_repo === true)
-const pullRequestQuery = useGitPullRequest(projectId, isRepo)
-const actions = useGitActions(projectId)
+const pullRequestQuery = useGitPullRequest(target, isRepo)
+const actions = useGitActions(target)
 const editor = useEditorStore()
+const diffs = useDiffStore()
 
 const historyOpen = ref(false)
-const commitsQuery = useGitCommits(projectId, historyOpen)
+const commitsQuery = useGitCommits(target, historyOpen)
 
-const message = useCommitDraft(projectId)
+const message = useCommitDraft(target)
+
+const branchLabel = computed(() => {
+    if (!status.value) return ''
+    return status.value.detached ? `detached @ ${status.value.head?.slice(0, 7)}` : status.value.branch ?? 'no branch'
+})
+const branchTitle = computed(() =>
+    status.value?.upstream ? `${status.value.branch} → ${status.value.upstream}` : branchLabel.value,
+)
+// The file editor reads the project's own checkout, so files of another worktree only open as diffs.
+const canOpenFile = computed(() => target.value?.worktree === null)
+
+// Git lists a worktree nested in the shown checkout (e.g. .claude/worktrees/agent-7) as an untracked
+// directory; its row switches to that worktree, since there is no file diff to show for it.
+const nestedWorktrees = computed(() => {
+    const root = selectedWorktree.value?.path
+    const byRow: Record<string, GitWorktree> = {}
+    if (!root) return byRow
+    for (const file of status.value?.changes ?? []) {
+        const path = `${root}/${file.path.replace(/\/$/, '')}`
+        const worktree = worktrees.value.find(w => w.path === path)
+        if (worktree) byRow[file.path] = worktree
+    }
+    return byRow
+})
+const nestedWorktreeLabels = computed(() =>
+    Object.fromEntries(Object.entries(nestedWorktrees.value).map(([path, worktree]) => [path, worktreeLabel(worktree)])),
+)
 
 const staged = computed(() => status.value?.staged ?? [])
 const changes = computed(() => status.value?.changes ?? [])
@@ -87,6 +119,14 @@ function onMessageKeydown(event: KeyboardEvent) {
     }
 }
 
+function openDiff(file: GitFileChange, staged: boolean) {
+    if (!target.value) return
+    const nested = staged ? undefined : nestedWorktrees.value[file.path]
+    if (nested) return selectWorktree(nested.path)
+    const worktree = selectedWorktree.value
+    diffs.open(target.value, file.path, staged, worktree && !worktree.is_current ? worktreeLabel(worktree) : null)
+}
+
 function openFile(file: GitFileChange) {
     editor.open(props.project.id, file.path)
 }
@@ -101,12 +141,15 @@ const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded
     <div class="flex-1 min-h-0 flex flex-col min-w-0 text-[12px] text-zinc-700" data-testid="source-control">
         <div class="flex items-center gap-2 h-10 pl-3 pr-2 shrink-0">
             <h2 class="shrink-0 text-[13px] font-medium text-zinc-900">Source Control</h2>
-            <span
-                v-if="status?.is_repo && (status.branch || status.head)"
-                data-testid="branch-pill"
-                class="min-w-0 truncate px-1.5 py-0.5 rounded bg-zinc-200/70 font-mono text-[11px] text-zinc-700"
-                :title="status.upstream ? `${status.branch} → ${status.upstream}` : (status.branch ?? undefined)"
-            >{{ status.detached ? `detached @ ${status.head?.slice(0, 7)}` : status.branch }}</span>
+            <WorktreePicker
+                v-if="status?.is_repo"
+                class="min-w-0"
+                :worktrees="worktrees"
+                :selected="selectedWorktree"
+                :branch-label="branchLabel"
+                :title="branchTitle"
+                @select="selectWorktree"
+            />
             <span
                 v-if="status?.ahead || status?.behind"
                 class="shrink-0 flex items-center gap-1 font-mono text-[11px] text-zinc-500"
@@ -157,7 +200,7 @@ const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded
             </div>
         </div>
 
-        <p v-if="isLoading && !status" class="px-3 py-2 text-zinc-400">Loading…</p>
+        <p v-if="(isLoading || !target) && !status" class="px-3 py-2 text-zinc-400">Loading…</p>
 
         <div v-else-if="statusError && !status" role="alert" class="px-3 py-2 space-y-1.5">
             <p class="text-danger">{{ statusError.message }}</p>
@@ -286,8 +329,10 @@ const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded
                     :files="staged"
                     staged
                     :disabled="actions.isBusy.value"
+                    :can-open-file="canOpenFile"
                     @toggle="paths => setStaged(false, paths)"
-                    @open="openFile"
+                    @open="file => openDiff(file, true)"
+                    @open-file="openFile"
                 />
                 <ChangeList
                     v-if="changes.length"
@@ -295,8 +340,11 @@ const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded
                     :files="changes"
                     :staged="false"
                     :disabled="actions.isBusy.value"
+                    :can-open-file="canOpenFile"
+                    :worktree-labels="nestedWorktreeLabels"
                     @toggle="paths => setStaged(true, paths)"
-                    @open="openFile"
+                    @open="file => openDiff(file, false)"
+                    @open-file="openFile"
                 />
             </div>
         </template>

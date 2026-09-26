@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
 
-withDefaults(defineProps<{ label: string; menuClass?: string }>(), { menuClass: 'min-w-44' })
+withDefaults(defineProps<{ label: string; menuClass?: string; align?: 'left' | 'right' }>(), { menuClass: 'min-w-44', align: 'right' })
 const open = defineModel<boolean>('open', { default: false })
 
 const root = ref<HTMLElement | null>(null)
@@ -36,7 +36,7 @@ onBeforeUnmount(() => listen(false))
             v-if="open"
             role="menu"
             :aria-label="label"
-            :class="['absolute right-0 top-full mt-1 z-20 py-1 rounded-md bg-surface border border-stroke shadow-lg', menuClass]"
+            :class="['absolute top-full', align === 'left' ? 'left-0' : 'right-0', 'mt-1 z-20 py-1 rounded-md bg-surface border border-stroke shadow-lg', menuClass]"
         >
             <slot :close="close" />
         </div>

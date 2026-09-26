@@ -1,5 +1,5 @@
 import { computed, reactive, toValue, type MaybeRefOrGetter } from 'vue'
-import type { GitFileChange } from '@/queries/gitQuery'
+import type { GitFileChange, GitTarget } from '@/queries/gitQuery'
 
 export type StatusBadge = { letter: string; label: string; tone: string }
 
@@ -19,15 +19,20 @@ export function statusBadge(file: GitFileChange): StatusBadge {
     return file.untracked ? UNTRACKED : BADGES[file.status]
 }
 
-// Module scope so a half-written message survives switching panel views or projects.
-const drafts = reactive(new Map<number, string>())
+// Module scope so a half-written message survives switching panel views, projects or worktrees.
+const drafts = reactive(new Map<string, string>())
 
-export function useCommitDraft(projectId: MaybeRefOrGetter<number>) {
+/** One draft per project checkout: a message written for an agent's worktree stays with it. */
+export function useCommitDraft(target: MaybeRefOrGetter<GitTarget | null>) {
+    const key = () => {
+        const current = toValue(target)
+        return current ? `${current.projectId}:${current.worktree ?? ''}` : ''
+    }
     return computed({
-        get: () => drafts.get(toValue(projectId)) ?? '',
+        get: () => drafts.get(key()) ?? '',
         set: message => {
-            if (message) drafts.set(toValue(projectId), message)
-            else drafts.delete(toValue(projectId))
+            if (message) drafts.set(key(), message)
+            else drafts.delete(key())
         },
     })
 }

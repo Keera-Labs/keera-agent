@@ -5,7 +5,9 @@ import { createPinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, ref } from 'vue'
 import { gitFile, gitStatus } from '@/layouts/right-panel/source-control/testing'
-import { isOpenPullRequest, useGitActions, useGitPullRequest, useGitStatus, type GitPullRequest } from './gitQuery'
+import {
+    isOpenPullRequest, useGitActions, useGitDiff, useGitPullRequest, useGitStatus, type GitDiff, type GitDiffRequest, type GitPullRequest, type GitTarget,
+} from './gitQuery'
 
 function jsonResponse(body: unknown, status = 200) {
     return { ok: status < 400, status, json: async () => body }
@@ -18,17 +20,29 @@ const pullRequest: GitPullRequest = {
 const fetchMock = vi.fn()
 const calls = (suffix: string) => fetchMock.mock.calls.filter(([url]) => String(url).endsWith(suffix))
 
-function mountGit(projectId: number | null = 1) {
-    const id = ref(projectId)
+const MAIN: GitTarget = { projectId: 1, worktree: null }
+const AGENT_TREE = '/code/keera/.claude/worktrees/agent-7'
+
+function mountGit(initial: GitTarget | null = MAIN, diffRequest: GitDiffRequest | null = null) {
+    const target = ref(initial)
+    const diff = ref(diffRequest)
     let api!: {
         status: ReturnType<typeof useGitStatus>
         pullRequest: ReturnType<typeof useGitPullRequest>
         actions: ReturnType<typeof useGitActions>
+        diff: ReturnType<typeof useGitDiff>
+        target: typeof target
     }
     mount(
         defineComponent({
             setup() {
-                api = { status: useGitStatus(id), pullRequest: useGitPullRequest(id), actions: useGitActions(id) }
+                api = {
+                    status: useGitStatus(target),
+                    pullRequest: useGitPullRequest(target),
+                    actions: useGitActions(target),
+                    diff: useGitDiff(diff),
+                    target,
+                }
                 return () => null
             },
         }),
@@ -157,6 +171,75 @@ describe('useGitActions', () => {
         await flushPromises()
 
         expect(calls('/git/pull-request').filter(([, init]) => !init?.method)).toHaveLength(2)
+    })
+})
+
+describe('worktrees', () => {
+    const mainStatus = gitStatus({ branch: 'dev', changes: [gitFile('README.md')], count: 1 })
+    const agentStatus = gitStatus({ branch: 'task/diff', changes: [gitFile('app/diff.ts')], count: 1 })
+    const diffBody: GitDiff = {
+        path: 'app/diff.ts', original_path: null, status: 'M', staged: false, original: 'a', modified: 'b', binary: false, too_large: false, language: 'typescript',
+    }
+
+    beforeEach(() => {
+        fetchMock.mockImplementation((url: string) => {
+            const { pathname, searchParams } = new URL(url, 'http://app')
+            const agent = searchParams.get('worktree') === AGENT_TREE
+            if (pathname.endsWith('/git/status')) return Promise.resolve(jsonResponse(agent ? agentStatus : mainStatus))
+            if (pathname.endsWith('/git/diff')) return Promise.resolve(jsonResponse(diffBody))
+            return Promise.resolve(jsonResponse({ available: true, error: null, pull_request: null }))
+        })
+    })
+
+    it('sends the worktree as a query param and never shows another checkout\'s cached status', async () => {
+        const api = mountGit()
+        await flushPromises()
+        expect(api.status.status.value?.branch).toBe('dev')
+
+        api.target.value = { projectId: 1, worktree: AGENT_TREE }
+        await Promise.resolve()
+        expect(api.status.status.value).toBeUndefined()
+        await flushPromises()
+
+        expect(fetchMock).toHaveBeenCalledWith(`/api/projects/1/git/status?worktree=${encodeURIComponent(AGENT_TREE)}`, expect.anything())
+        expect(api.status.status.value?.branch).toBe('task/diff')
+    })
+
+    it('runs mutations against the selected worktree, even bodyless ones', async () => {
+        const api = mountGit({ projectId: 1, worktree: AGENT_TREE })
+        await flushPromises()
+        fetchMock.mockResolvedValueOnce(jsonResponse({ branch: 'task/diff', upstream: 'origin/task/diff', output: '', status: agentStatus }))
+
+        await api.actions.push.mutateAsync()
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            `/api/projects/1/git/push?worktree=${encodeURIComponent(AGENT_TREE)}`,
+            expect.objectContaining({ method: 'POST', body: '{}' }),
+        )
+    })
+
+    it('loads a diff for one side and re-reads it after staging', async () => {
+        const target = { projectId: 1, worktree: AGENT_TREE }
+        const api = mountGit(target, { target, path: 'app/diff.ts', staged: false })
+        await flushPromises()
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            `/api/projects/1/git/diff?path=app%2Fdiff.ts&staged=false&worktree=${encodeURIComponent(AGENT_TREE)}`,
+            { headers: { Accept: 'application/json' } },
+        )
+        expect(api.diff.data.value).toEqual(diffBody)
+
+        fetchMock.mockResolvedValueOnce(jsonResponse(gitStatus()))
+        await api.actions.stage.mutateAsync({ paths: ['app/diff.ts'] })
+        await flushPromises()
+        expect(calls('/git/diff?path=app%2Fdiff.ts&staged=false&worktree=' + encodeURIComponent(AGENT_TREE))).toHaveLength(2)
+    })
+
+    it('keeps the HTTP status of a failed diff so a vanished file can be told apart', async () => {
+        fetchMock.mockResolvedValue(jsonResponse({ detail: 'No unstaged changes for app/diff.ts' }, 404))
+        const api = mountGit(MAIN, { target: MAIN, path: 'app/diff.ts', staged: false })
+        await flushPromises()
+        expect(api.diff.error.value).toMatchObject({ status: 404, message: 'No unstaged changes for app/diff.ts' })
     })
 })
 

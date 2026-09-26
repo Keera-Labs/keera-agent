@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { router, usePage } from '@inertiajs/vue3'
+import { FileDiff } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
 import { computed } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import AgentAddModal from '@/pages/agents/AgentAddModal.vue'
 import type { ProjectAgent } from '@/queries/agentQuery'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
+import { useDiffStore, type DiffTab } from '@/stores/diffStore'
 import { SAVE_STATUS_LABEL, saveStatus, useEditorStore, type EditorTab, type SaveStatus } from '@/stores/editorStore'
 import { useProjectStore } from '@/stores/projectStore'
 
@@ -20,6 +22,8 @@ const { activeAgentId, claudeStatus, liveSessionCount } = storeToRefs(layout)
 const { activeProject } = storeToRefs(useProjectStore())
 const editor = useEditorStore()
 const { projectTabs: fileTabs, activeTab: activeFileTab } = storeToRefs(editor)
+const diffs = useDiffStore()
+const { projectTabs: diffTabs, activeTab: activeDiffTab } = storeToRefs(diffs)
 
 const isPm = (agent: ProjectAgent) => agent.agent_type === 'pm'
 
@@ -53,10 +57,14 @@ const DOT_CLASS: Record<TabState, string> = {
 }
 
 function isActive(agent: ProjectAgent) {
-    return activeFileTab.value === null && agent.id === activeAgentId.value && TERMINAL_PAGES.includes(page.component)
+    return activeFileTab.value === null && activeDiffTab.value === null && agent.id === activeAgentId.value && TERMINAL_PAGES.includes(page.component)
 }
 
 const isFileActive = (tab: EditorTab) => activeFileTab.value?.path === tab.path
+const isDiffActive = (tab: DiffTab) => activeDiffTab.value?.id === tab.id
+
+const diffTitle = (tab: DiffTab) =>
+    [tab.path, tab.staged ? 'Staged (HEAD ↔ Index)' : 'Changes (Index ↔ Working tree)', tab.worktreeLabel].filter(Boolean).join(' · ')
 
 const SAVE_DOT_CLASS: Record<SaveStatus, string> = {
     saving: 'bg-zinc-500 animate-pulse',
@@ -158,6 +166,35 @@ function close(agent: ProjectAgent) {
                     <!-- The unsaved dot turns into the close cross on hover, as in most editors. -->
                     <span v-if="tab.dirty" :class="['w-2 h-2 rounded-full group-hover:hidden', SAVE_DOT_CLASS[saveStatus(tab)]]" />
                     <Icon name="x" :size="11" :class="tab.dirty && 'hidden group-hover:block'" />
+                </button>
+            </div>
+
+            <div
+                v-for="tab in diffTabs"
+                :key="`diff:${tab.id}`"
+                data-testid="diff-tab"
+                :class="tabClass(isDiffActive(tab))"
+                :title="diffTitle(tab)"
+                @click="diffs.activate(tab)"
+            >
+                <FileDiff :size="12" class="shrink-0 text-accent" />
+                <button
+                    type="button"
+                    role="tab"
+                    :aria-selected="isDiffActive(tab)"
+                    class="truncate bg-transparent border-0 p-0 text-inherit cursor-pointer"
+                >
+                    {{ tab.name }} <span class="text-zinc-400">({{ tab.staged ? 'Index' : 'Working Tree' }})</span>
+                </button>
+                <button
+                    type="button"
+                    data-testid="diff-tab-close"
+                    :aria-label="`Close diff of ${tab.name}`"
+                    title="Close diff"
+                    :class="[closeButtonClass, isDiffActive(tab) ? 'visible' : 'invisible group-hover:visible']"
+                    @click.stop="diffs.close(tab.target.projectId, tab.id)"
+                >
+                    <Icon name="x" :size="11" />
                 </button>
             </div>
         </div>

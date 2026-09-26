@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryCache } from '@pinia/colada'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
-// Contract of the git API (task #2028), served under /api/projects/{id}/git.
+// Contract of the git API (tasks #2028 and #2033), served under /api/projects/{id}/git.
 
 export type GitFileStatusCode = 'M' | 'A' | 'D' | 'R' | 'U' | 'C'
 
@@ -47,12 +47,62 @@ export type GitPullRequestInfo = { available: boolean; error: string | null; pul
 
 export type GitPaths = { paths: string[] } | { all: true }
 
-const base = (projectId: number) => `/api/projects/${projectId}/git`
+export type GitWorktree = {
+    path: string
+    branch: string | null
+    head: string | null
+    detached: boolean
+    is_main: boolean
+    /** The checkout the API uses when no worktree is given. */
+    is_current: boolean
+    locked: boolean
+    prunable: boolean
+    agent_id: number | null
+    agent_name: string | null
+}
+
+export type GitDiff = {
+    path: string
+    original_path: string | null
+    status: GitFileStatusCode
+    staged: boolean
+    original: string | null
+    modified: string | null
+    binary: boolean
+    too_large: boolean
+    language: string | null
+}
+
+/** The checkout git calls run against; a null worktree is the project's own checkout. */
+export type GitTarget = { projectId: number; worktree: string | null }
+
+export type GitDiffRequest = { target: GitTarget; path: string; staged: boolean }
+
+export class GitRequestError extends Error {
+    constructor(readonly status: number, message: string) {
+        super(message)
+    }
+}
+
+function gitUrl(target: GitTarget, path: string, params: Record<string, string> = {}) {
+    const search = new URLSearchParams(params)
+    if (target.worktree) search.set('worktree', target.worktree)
+    const query = search.toString()
+    return `/api/projects/${target.projectId}/git/${path}${query ? `?${query}` : ''}`
+}
+
+// Keys include the worktree so switching checkouts never shows another one's cached data,
+// while ['git', projectId] still prefixes everything for a project-wide refresh.
+const treeKey = (target: GitTarget | null) => ['git', target?.projectId ?? null, 'tree', target?.worktree ?? '']
 
 export const gitKeys = {
-    status: (projectId: number | null) => ['git', projectId, 'status'],
-    pullRequest: (projectId: number | null) => ['git', projectId, 'pull-request'],
-    commits: (projectId: number | null) => ['git', projectId, 'commits'],
+    worktrees: (projectId: number | null) => ['git', projectId, 'worktrees'],
+    status: (target: GitTarget | null) => [...treeKey(target), 'status'],
+    pullRequest: (target: GitTarget | null) => [...treeKey(target), 'pull-request'],
+    commits: (target: GitTarget | null) => [...treeKey(target), 'commits'],
+    diffs: (target: GitTarget | null) => [...treeKey(target), 'diff'],
+    diff: (diff: GitDiffRequest | null) =>
+        [...gitKeys.diffs(diff?.target ?? null), diff?.path ?? '', diff?.staged ? 'staged' : 'unstaged'],
 }
 
 async function request<T>(url: string, init?: { method: 'POST'; body: object }): Promise<T> {
@@ -63,19 +113,31 @@ async function request<T>(url: string, init?: { method: 'POST'; body: object }):
         : { headers })
     if (!res.ok) {
         const body = await res.json().catch(() => null)
-        throw new Error(typeof body?.detail === 'string' ? body.detail : `Request failed (${res.status})`)
+        throw new GitRequestError(res.status, typeof body?.detail === 'string' ? body.detail : `Request failed (${res.status})`)
     }
     return res.json()
 }
 
 export const isOpenPullRequest = (info: GitPullRequestInfo | undefined) => info?.pull_request?.state === 'OPEN'
 
-export function useGitStatus(projectIdSource: MaybeRefOrGetter<number | null>) {
+export function useGitWorktrees(projectIdSource: MaybeRefOrGetter<number | null>) {
     const projectId = () => toValue(projectIdSource)
-    const query = useQuery({
-        key: () => gitKeys.status(projectId()),
-        query: () => request<GitStatus>(`${base(projectId()!)}/status`),
+    return useQuery({
+        key: () => gitKeys.worktrees(projectId()),
+        query: async () =>
+            (await request<{ worktrees: GitWorktree[] }>(`/api/projects/${projectId()!}/git/worktrees`)).worktrees,
         enabled: () => projectId() !== null,
+        staleTime: 30_000,
+        refetchOnWindowFocus: true,
+    })
+}
+
+export function useGitStatus(targetSource: MaybeRefOrGetter<GitTarget | null>) {
+    const target = () => toValue(targetSource)
+    const query = useQuery({
+        key: () => gitKeys.status(target()),
+        query: () => request<GitStatus>(gitUrl(target()!, 'status')),
+        enabled: () => target() !== null,
         staleTime: 5000,
         refetchOnWindowFocus: true,
     })
@@ -88,44 +150,62 @@ export function useGitStatus(projectIdSource: MaybeRefOrGetter<number | null>) {
     }
 }
 
-export function useGitPullRequest(projectIdSource: MaybeRefOrGetter<number | null>, enabled: MaybeRefOrGetter<boolean> = true) {
-    const projectId = () => toValue(projectIdSource)
+export function useGitPullRequest(targetSource: MaybeRefOrGetter<GitTarget | null>, enabled: MaybeRefOrGetter<boolean> = true) {
+    const target = () => toValue(targetSource)
     // Each read shells out to `gh`, so this refreshes on focus and on demand rather than on the status cadence.
     return useQuery({
-        key: () => gitKeys.pullRequest(projectId()),
-        query: () => request<GitPullRequestInfo>(`${base(projectId()!)}/pull-request`),
-        enabled: () => projectId() !== null && toValue(enabled),
+        key: () => gitKeys.pullRequest(target()),
+        query: () => request<GitPullRequestInfo>(gitUrl(target()!, 'pull-request')),
+        enabled: () => target() !== null && toValue(enabled),
         staleTime: 30_000,
     })
 }
 
-export function useGitCommits(projectIdSource: MaybeRefOrGetter<number | null>, enabled: MaybeRefOrGetter<boolean>) {
-    const projectId = () => toValue(projectIdSource)
+export function useGitCommits(targetSource: MaybeRefOrGetter<GitTarget | null>, enabled: MaybeRefOrGetter<boolean>) {
+    const target = () => toValue(targetSource)
     return useQuery({
-        key: () => gitKeys.commits(projectId()),
-        query: async () => (await request<{ commits: GitCommit[] }>(`${base(projectId()!)}/commits?limit=20`)).commits,
-        enabled: () => projectId() !== null && toValue(enabled),
+        key: () => gitKeys.commits(target()),
+        query: async () => (await request<{ commits: GitCommit[] }>(gitUrl(target()!, 'commits', { limit: '20' }))).commits,
+        enabled: () => target() !== null && toValue(enabled),
     })
 }
 
-export function useGitActions(projectIdSource: MaybeRefOrGetter<number | null>) {
-    const queryCache = useQueryCache()
-    const projectId = () => toValue(projectIdSource)!
-    const url = (path: string) => `${base(projectId())}/${path}`
+export function useGitDiff(diffSource: MaybeRefOrGetter<GitDiffRequest | null>) {
+    const diff = () => toValue(diffSource)
+    return useQuery({
+        key: () => gitKeys.diff(diff()),
+        query: () => {
+            const { target, path, staged } = diff()!
+            return request<GitDiff>(gitUrl(target, 'diff', { path, staged: String(staged) }))
+        },
+        enabled: () => diff() !== null,
+        staleTime: 5000,
+        refetchOnWindowFocus: true,
+    })
+}
 
-    const setStatus = (status: GitStatus) => queryCache.setQueryData(gitKeys.status(projectId()), status)
+export function useGitActions(targetSource: MaybeRefOrGetter<GitTarget | null>) {
+    const queryCache = useQueryCache()
+    const target = () => toValue(targetSource)!
+    const url = (path: string) => gitUrl(target(), path)
+
+    // Staging and committing move content between HEAD, the index and the tree, so open diffs are re-read too.
+    const setStatus = (status: GitStatus) => {
+        queryCache.setQueryData(gitKeys.status(target()), status)
+        queryCache.invalidateQueries({ key: gitKeys.diffs(target()) })
+    }
     // A failed push or a rejected commit hook can still have changed the tree, so failures re-read it.
-    const refreshStatus = () => queryCache.invalidateQueries({ key: gitKeys.status(projectId()), exact: true })
-    const refreshCommits = () => queryCache.invalidateQueries({ key: gitKeys.commits(projectId()), exact: true })
+    const refreshStatus = () => queryCache.invalidateQueries({ key: gitKeys.status(target()), exact: true })
+    const refreshCommits = () => queryCache.invalidateQueries({ key: gitKeys.commits(target()), exact: true })
 
     const stage = useMutation({
-        mutation: (target: GitPaths) => request<GitStatus>(url('stage'), { method: 'POST', body: target }),
+        mutation: (paths: GitPaths) => request<GitStatus>(url('stage'), { method: 'POST', body: paths }),
         onSuccess: setStatus,
         onError: refreshStatus,
     })
 
     const unstage = useMutation({
-        mutation: (target: GitPaths) => request<GitStatus>(url('unstage'), { method: 'POST', body: target }),
+        mutation: (paths: GitPaths) => request<GitStatus>(url('unstage'), { method: 'POST', body: paths }),
         onSuccess: setStatus,
         onError: refreshStatus,
     })
@@ -150,13 +230,13 @@ export function useGitActions(projectIdSource: MaybeRefOrGetter<number | null>) 
         mutation: async () =>
             (await request<{ pull_request: GitPullRequest }>(url('pull-request'), { method: 'POST', body: {} })).pull_request,
         onSuccess: pullRequest =>
-            queryCache.setQueryData<GitPullRequestInfo>(gitKeys.pullRequest(projectId()), {
+            queryCache.setQueryData<GitPullRequestInfo>(gitKeys.pullRequest(target()), {
                 available: true,
                 error: null,
                 pull_request: pullRequest,
             }),
         // A 503 means gh is missing or signed out; re-reading swaps the Create PR action for gh's own message.
-        onError: () => queryCache.invalidateQueries({ key: gitKeys.pullRequest(projectId()), exact: true }),
+        onError: () => queryCache.invalidateQueries({ key: gitKeys.pullRequest(target()), exact: true }),
         onSettled: refreshStatus,
     })
 
