@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import DotsIndicator from '@/components/ui/DotsIndicator.vue'
 import { color } from '@/tokens'
 import ProjectCard from './ProjectCard.vue'
@@ -7,7 +8,11 @@ import StatCard from './StatCard.vue'
 import WorkingAgentCard from './WorkingAgentCard.vue'
 import type { DashboardData } from './types'
 
-defineProps<{ data: DashboardData }>()
+const props = defineProps<{ data: DashboardData }>()
+
+// The headline, the running indicator and the Active card all read stats.active so they can't disagree.
+const activeCount = computed(() => props.data.stats.active)
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 </script>
 
 <template>
@@ -19,13 +24,14 @@ defineProps<{ data: DashboardData }>()
                         {{ data.workspaceName }}
                     </div>
                     <div class="text-zinc-500 text-[13px] mt-1">
-                        {{ data.agentCount }} agents working across {{ data.projectCount }} projects.
+                        {{ plural(activeCount, 'agent') }} working across {{ plural(data.projectCount, 'project') }}.
                     </div>
                 </div>
-                <span class="flex items-center gap-1.5 shrink-0 mt-0.5">
+                <span v-if="activeCount > 0" data-testid="dashboard-status" class="flex items-center gap-1.5 shrink-0 mt-0.5">
                     <DotsIndicator />
                     <span class="text-amber-700 text-[11px] font-mono">running</span>
                 </span>
+                <span v-else data-testid="dashboard-status" class="shrink-0 mt-0.5 text-zinc-400 text-[11px] font-mono">idle</span>
             </div>
 
             <div class="flex gap-3 mb-7">

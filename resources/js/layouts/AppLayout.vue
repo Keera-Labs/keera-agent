@@ -5,15 +5,13 @@ import { defineAsyncComponent, ref, watch } from 'vue'
 import AppHeader from '@/layouts/app/AppHeader.vue'
 import StatusBar from '@/layouts/app/StatusBar.vue'
 import ModalLayer from '@/layouts/ModalLayer.vue'
-import FileExplorer from '@/layouts/right-panel/FileExplorer.vue'
+import RightPanel from '@/layouts/right-panel/RightPanel.vue'
 import Sidebar from '@/layouts/sidebar/Sidebar.vue'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import { useEditorStore } from '@/stores/editorStore'
-import { useProjectStore } from '@/stores/projectStore'
 
 const layout = useAppLayoutStore()
 const { sidebarOpen, rightPanelOpen, statusBarOpen } = storeToRefs(layout)
-const { activeProject } = storeToRefs(useProjectStore())
 const { activeTab: activeEditorTab } = storeToRefs(useEditorStore())
 
 // Loaded with the first opened file (Monaco is its own large chunk), then kept
@@ -53,10 +51,7 @@ function setHolder(el: unknown) {
                 id="app-right-panel"
                 class="w-[272px] shrink-0 bg-canvas border-l border-stroke flex flex-col overflow-hidden"
             >
-                <!-- Mounted on first open, then kept alive per project so each tree keeps its expanded folders. -->
-                <KeepAlive :max="8">
-                    <FileExplorer v-if="rightPanelOpen && activeProject" :key="activeProject.id" :project="activeProject" />
-                </KeepAlive>
+                <RightPanel />
             </aside>
         </div>
 
