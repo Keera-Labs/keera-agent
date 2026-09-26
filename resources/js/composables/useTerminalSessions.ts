@@ -193,8 +193,7 @@ export function useTerminalSessions(params: UseTerminalSessionsParams) {
     function launchAgentSession(agentId: number, focus: boolean = true) {
         const project = activeProject.value
         if (!project) return
-        const container = agentContainerRefs.get(agentId)
-        if (!container) return
+        if (!agentContainerRefs.get(agentId)) return
 
         const existing = agentSessions.get(agentId)
         if (existing) {
@@ -205,6 +204,9 @@ export function useTerminalSessions(params: UseTerminalSessionsParams) {
         requestAnimationFrame(() => {
             // Two triggers in the same tick can both pass the guard above; never open a second PTY.
             if (agentSessions.has(agentId)) return
+            // Read the slot now: a page may have handed over a new one since this frame was queued.
+            const container = agentContainerRefs.get(agentId)
+            if (!container) return
             const session = connectTerminal(container, project, agentId, {
                 onEvent: event => {
                     if (event.type === 'agent_created') agentCreatedFrom(event)
@@ -220,8 +222,7 @@ export function useTerminalSessions(params: UseTerminalSessionsParams) {
         const project = activeProject.value
         const pmId = pmAgentId.value
         if (!project || pmId === null) return
-        const container = containerRefs.get(project.id)
-        if (!container) return
+        if (!containerRefs.get(project.id)) return
 
         const existing = sessions.get(project.id)
         if (existing) {
@@ -231,6 +232,10 @@ export function useTerminalSessions(params: UseTerminalSessionsParams) {
 
         requestAnimationFrame(() => {
             if (sessions.has(project.id)) return
+            // On landing, the layout's hidden slot is registered first and the agent page's visible
+            // slot in the same tick the PM id loads; opening in the stale hidden one leaves a 0x0 terminal.
+            const container = containerRefs.get(project.id)
+            if (!container) return
 
             let recentText = ''
             let lastInputSoundAt = 0
