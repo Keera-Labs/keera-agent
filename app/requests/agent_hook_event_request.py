@@ -4,9 +4,12 @@ from pydantic import BaseModel, ConfigDict
 
 ATTENTION_PROMPT_LENGTH = 500
 
-# Notification types that mean Claude is blocked on the user. `idle_prompt` is not one:
-# after Stop the agent is already `waiting`.
-_BLOCKING_NOTIFICATIONS = {"permission_prompt", "elicitation_dialog"}
+# Notification types that mean Claude is blocked on the user, mapped to the attention_kind
+# they imply. `idle_prompt` is not one: after Stop the agent is already `waiting`.
+_NOTIFICATION_ATTENTION_KIND = {
+    "permission_prompt": "permission",
+    "elicitation_dialog": "question",
+}
 
 
 class Attention(NamedTuple):
@@ -30,11 +33,10 @@ class AgentHookEventRequest(BaseModel):
         """What the agent is now waiting on the user for, if this event blocks it."""
         if self.hook_event_name == "PreToolUse" and self.tool_name == "AskUserQuestion":
             return Attention("question", truncate_prompt(self._question_text()))
-        if (
-            self.hook_event_name == "Notification"
-            and self.notification_type in _BLOCKING_NOTIFICATIONS
-        ):
-            return Attention("permission", truncate_prompt(self.message))
+        if self.hook_event_name == "Notification":
+            kind = _NOTIFICATION_ATTENTION_KIND.get(self.notification_type)
+            if kind:
+                return Attention(kind, truncate_prompt(self.message))
         return None
 
     def resumes_work(self) -> bool:
