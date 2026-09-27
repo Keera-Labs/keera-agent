@@ -374,13 +374,12 @@ export function useTerminalSessions(params: UseTerminalSessionsParams) {
         }
     }
 
+    /** The server stops and relaunches the CLI so it stays supervised; typing a command here would not be. */
     function restartClaude() {
         const project = activeProject.value
         if (!project) return
         const session = sessions.get(project.id)
-        if (!session || session.ws.readyState !== WebSocket.OPEN) return
-        session.ws.send(new Uint8Array([0x03]))
-        setTimeout(() => sendIfOpen(session.ws, 'claude --continue\n'), 800)
+        if (session) sendIfOpen(session.ws, JSON.stringify({ type: 'restart_cli' }))
     }
 
     /** Close one agent's terminal; its container stays registered so it can be relaunched. */
