@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi_startkit.application import app
 
 from app.actions.agent_startup import wait_for_agent_cli
-from app.actions.agent_status_action import CLEARED_ATTENTION
+from app.actions.agent_status_action import CLEARED_ATTENTION, notify_agent_status
 from app.actions.claude_hook_action import agent_env
 from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.actions.terminal_write_action import TerminalWriteAction
@@ -38,11 +38,11 @@ def _activity_summary(message: str) -> str:
     return "Working…"
 
 
-async def _mark_agent_working(agent_id: int, message: str) -> None:
+async def _mark_agent_working(agent: Agent, message: str) -> None:
     """Record that an agent just started actively working — powers the dashboard's
     running state, current-activity text, and elapsed timer."""
     now = datetime.datetime.now().isoformat(sep=" ", timespec="seconds")
-    await Agent.where("id", agent_id).update(
+    await Agent.where("id", agent.id).update(
         {
             "status": "running",
             "started_at": now,
@@ -50,6 +50,10 @@ async def _mark_agent_working(agent_id: int, message: str) -> None:
             **CLEARED_ATTENTION,
         }
     )
+    # Triggering a running or booting agent bypasses the hook-event path entirely, so
+    # without this push the frontend's per-agent question dedupe never clears and a
+    # question the agent asks after being re-triggered stays silent.
+    await notify_agent_status(agent, "running")
 
 
 async def _inject_when_ready(session_id: str, message: str, timeout: float = 30.0) -> None:
@@ -83,7 +87,7 @@ async def trigger(request: Request, agent_id: int):
     terminal_manager: TerminalManager = app().make("terminal")
     if session_id and terminal_manager.find(session_id):
         asyncio.create_task(_inject_when_ready(session_id, message))
-        await _mark_agent_working(agent_id, message)
+        await _mark_agent_working(agent, message)
         return JSONResponse({"status": "injected", "message": "Message queued for running agent"})
 
     # No PTY running — spawn a headless terminal and run claude interactively
@@ -247,7 +251,7 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     # relay message sent meanwhile is queued instead of typed into the shell.
     ready_event = mark_booting(session_id)
     await Agent.where("id", agent.id).update({"session_id": session_id})
-    await _mark_agent_working(agent.id, initial_message)
+    await _mark_agent_working(agent, initial_message)
 
     terminal_manager: TerminalManager = app().make("terminal")
     terminal_manager.create(cwd=agent_cwd, session_id=session_id, env=agent_env(agent.id))
