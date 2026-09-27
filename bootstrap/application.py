@@ -20,8 +20,9 @@ from config.fastapi import FastAPIConfig
 from config.logging import LoggingConfig
 from config.storage import StorageConfig
 from config.vite import ViteConfig
+from fastapi_startkit.config import AppConfig
 
-app = Application(
+app = Application[AppConfig](
     base_path=Path(__file__).parent.parent,
     providers=[
         (LogProvider, LoggingConfig),
