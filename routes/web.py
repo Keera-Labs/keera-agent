@@ -34,6 +34,7 @@ from app.controllers import (
     project_file_content_controller,
     project_file_controller,
     project_usage_controller,
+    remote_control_setting_controller,
     settings_controller,
     task_controller,
     tasks_page_controller,
@@ -142,6 +143,8 @@ router.get("/api/global-settings", global_settings_controller.get_global_setting
 router.patch("/api/global-settings", global_settings_controller.update_global_settings)
 router.get("/api/settings/editor", editor_settings_controller.show)
 router.patch("/api/settings/editor", editor_settings_controller.update)
+router.get("/api/settings/remote-control", remote_control_setting_controller.show)
+router.patch("/api/settings/remote-control", remote_control_setting_controller.update)
 
 # Plugin system — list discovered plugins and toggle activation (before wildcard)
 router.get("/api/plugins", plugin_controller.index)

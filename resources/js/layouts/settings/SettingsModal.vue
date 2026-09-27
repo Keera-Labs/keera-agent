@@ -9,6 +9,7 @@ import TemplatesTab from '@/pages/settings/TemplatesTab.vue'
 import { useAgentSettingsStore } from '@/stores/agentSettingsStore'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import { useEditorSettingsStore } from '@/stores/editorSettingsStore'
+import { useRemoteControlSettingsStore } from '@/stores/remoteControlSettingsStore'
 import AgentsTab from './AgentsTab.vue'
 import EditorSection from './EditorSection.vue'
 import { filterSections, SETTINGS_SECTIONS, type SettingsSectionId } from './sections'
@@ -26,8 +27,9 @@ const layout = useAppLayoutStore()
 const { settingsSection } = storeToRefs(layout)
 const editorSettings = useEditorSettingsStore()
 const agentSettings = useAgentSettingsStore()
+const remoteControlSettings = useRemoteControlSettingsStore()
 // Every draft the footer's Save and Discard act on.
-const drafts = [editorSettings, agentSettings]
+const drafts = [editorSettings, agentSettings, remoteControlSettings]
 
 const dirty = computed(() => drafts.some(d => d.dirty))
 const saveState = computed(() => {
