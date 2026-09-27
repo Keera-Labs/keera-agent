@@ -96,6 +96,10 @@ export function chimeOnNewQuestion(event: SocketEvent) {
     playQuestionSound()
 }
 
+export function resetChimedQuestions() {
+    chimedQuestions.clear()
+}
+
 function disposeSession({ term, ws, observer }: Session) {
     observer.disconnect()
     term.dispose()

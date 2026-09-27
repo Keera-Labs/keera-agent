@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope } from 'vue'
 import { playQuestionSound } from '@/composables/useAudio'
-import { chimeOnNewQuestion, reportSize, useTerminalSessions, type Session } from './useTerminalSessions'
+import { chimeOnNewQuestion, reportSize, resetChimedQuestions, useTerminalSessions, type Session } from './useTerminalSessions'
 
 vi.mock('@/composables/useAudio', () => ({ playQuestionSound: vi.fn() }))
 
@@ -27,6 +27,8 @@ let slot: HTMLElement
 let holder: HTMLElement
 
 beforeEach(() => {
+    resetChimedQuestions()
+    vi.mocked(playQuestionSound).mockClear()
     visibility = 'visible'
     vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibility)
     // happy-dom does no layout; a terminal counts as displayed unless inside a display:none box.
@@ -191,6 +193,14 @@ describe('chimeOnNewQuestion', () => {
 
         chimeOnNewQuestion({ agent_id: 41, status: 'running' })
         chimeOnNewQuestion(question)
+        expect(playQuestionSound).toHaveBeenCalledTimes(2)
+    })
+
+    it('chimes again for a question asked after the agent stopped waiting', () => {
+        chimeOnNewQuestion(question)
+        chimeOnNewQuestion({ agent_id: 41, status: 'waiting', attention_kind: null })
+        chimeOnNewQuestion(question)
+
         expect(playQuestionSound).toHaveBeenCalledTimes(2)
     })
 })
