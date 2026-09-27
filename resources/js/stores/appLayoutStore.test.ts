@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { createApp, reactive } from 'vue'
 import { PiniaColada, useQueryCache } from '@pinia/colada'
-import { playSound } from '@/composables/useAudio'
+import { playQuestionSound } from '@/composables/useAudio'
 import { applyTerminalFont, disposeProjectSessions, type Session } from '@/composables/useTerminalSessions'
 import { flushPromises } from '@vue/test-utils'
 import type { Project } from '@/types/type'
@@ -32,7 +32,7 @@ vi.mock('@xterm/xterm', () => ({
     },
 }))
 vi.mock('@xterm/addon-fit', () => ({ FitAddon: class { fit() {} } }))
-vi.mock('@/composables/useAudio', () => ({ playSound: vi.fn() }))
+vi.mock('@/composables/useAudio', () => ({ playQuestionSound: vi.fn() }))
 
 function fakeSession(): Session {
     const element = document.createElement('div')
@@ -231,11 +231,19 @@ describe('agent status pushes', () => {
         expect(sockets).toHaveLength(1)
 
         const invalidate = vi.spyOn(useQueryCache(), 'invalidateQueries')
-        sockets[0].onmessage!({ data: JSON.stringify({ type: 'agent_status', agent_id: 3, status: 'needs_input' }) })
+        const push = (event: object) => sockets[0].onmessage!({ data: JSON.stringify(event) })
+        push({ type: 'agent_status', agent_id: 3, status: 'needs_input', attention_kind: 'permission' })
 
         expect(invalidate).toHaveBeenCalledWith({ key: ['agent-summaries'] })
         expect(invalidate).toHaveBeenCalledWith({ key: ['agents'] })
-        expect(playSound).toHaveBeenCalledWith('input')
+        expect(playQuestionSound).not.toHaveBeenCalled()
+
+        push({ type: 'claude_stopped' })
+        push({ type: 'agent_message', message_id: 1 })
+        expect(playQuestionSound).not.toHaveBeenCalled()
+
+        push({ type: 'agent_status', agent_id: 3, status: 'needs_input', attention_kind: 'question' })
+        expect(playQuestionSound).toHaveBeenCalledOnce()
         disposeProjectSessions(9, [])
     })
 })

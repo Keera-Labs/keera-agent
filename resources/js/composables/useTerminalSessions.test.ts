@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope } from 'vue'
-import { reportSize, useTerminalSessions, type Session } from './useTerminalSessions'
+import { playQuestionSound } from '@/composables/useAudio'
+import { chimeOnNewQuestion, reportSize, useTerminalSessions, type Session } from './useTerminalSessions'
 
-vi.mock('@/composables/useAudio', () => ({ playSound: vi.fn() }))
+vi.mock('@/composables/useAudio', () => ({ playQuestionSound: vi.fn() }))
 
 let visibility: DocumentVisibilityState = 'visible'
 
@@ -169,5 +170,27 @@ describe('restartClaude', () => {
 
         expect(pm.send).not.toHaveBeenCalled()
         cleanup()
+    })
+})
+
+describe('chimeOnNewQuestion', () => {
+    const question = { agent_id: 41, status: 'needs_input', attention_kind: 'question' }
+
+    it('stays silent for permission prompts and other statuses', () => {
+        chimeOnNewQuestion({ agent_id: 40, status: 'needs_input', attention_kind: 'permission' })
+        chimeOnNewQuestion({ agent_id: 40, status: 'running' })
+        chimeOnNewQuestion({ agent_id: 40, status: 'waiting' })
+
+        expect(playQuestionSound).not.toHaveBeenCalled()
+    })
+
+    it('chimes once per question and again for the next one', () => {
+        chimeOnNewQuestion(question)
+        chimeOnNewQuestion(question)
+        expect(playQuestionSound).toHaveBeenCalledTimes(1)
+
+        chimeOnNewQuestion({ agent_id: 41, status: 'running' })
+        chimeOnNewQuestion(question)
+        expect(playQuestionSound).toHaveBeenCalledTimes(2)
     })
 })
