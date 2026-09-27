@@ -4,7 +4,7 @@ export type MonacoApi = typeof Monaco
 export type TextModel = Monaco.editor.ITextModel
 
 // The app only has a light theme so far; a dark theme plugs in here.
-export const EDITOR_THEME = 'vs'
+export const EDITOR_THEME = 'github-light'
 
 let loading: Promise<MonacoApi> | null = null
 

@@ -20,7 +20,7 @@ const monaco = vi.hoisted(() => {
 })
 
 vi.mock('@/editor/monaco', () => ({
-    EDITOR_THEME: 'vs',
+    EDITOR_THEME: 'github-light',
     loadMonaco: () => Promise.resolve({
         Uri: { from: ({ scheme, path }: { scheme: string; path: string }) => `${scheme}:${path}` },
         editor: {
