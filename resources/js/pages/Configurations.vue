@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import CommandsPanel from '@/pages/configurations/CommandsPanel.vue'
-import type { Command } from '@/pages/configurations/types'
+import CommandsPanel from '@/components/commands/CommandsPanel.vue'
+import type { Command } from '@/components/commands/types'
 
 // Commands arrive as props on every visit, so the panel never has an initial fetch to fail.
 defineProps<{ project: string; project_id: number | null; commands?: Command[] }>()
