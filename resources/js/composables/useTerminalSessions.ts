@@ -172,6 +172,16 @@ export function reportSize(session: Session) {
 
 type SocketEvent = { type?: string; [key: string]: unknown }
 
+/**
+ * Tell the server once xterm has parsed the replayed history. Until then the
+ * server drops input that is only terminal responses: xterm answering queries
+ * inside the replay, which must not be typed into the live PTY.
+ */
+export function acknowledgeReplay(session: Pick<Session, 'term' | 'ws'>) {
+    const { term, ws } = session
+    term.write('', () => sendIfOpen(ws, JSON.stringify({ type: 'replay_done' })))
+}
+
 interface ConnectHandlers {
     onOpen?: () => void
     onEvent: (event: SocketEvent) => void
@@ -206,6 +216,10 @@ function connectTerminal(container: HTMLElement, project: Project, agentId: numb
             try {
                 event = JSON.parse(e.data)
             } catch {
+                return
+            }
+            if (event.type === 'replay_end') {
+                acknowledgeReplay(session)
                 return
             }
             handlers.onEvent(event)

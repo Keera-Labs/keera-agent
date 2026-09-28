@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope } from 'vue'
 import { playQuestionSound } from '@/composables/useAudio'
-import { chimeOnNewQuestion, reportSize, resetChimedQuestions, useTerminalSessions, type Session } from './useTerminalSessions'
+import { acknowledgeReplay, chimeOnNewQuestion, reportSize, resetChimedQuestions, useTerminalSessions, type Session } from './useTerminalSessions'
 
 vi.mock('@/composables/useAudio', () => ({ playQuestionSound: vi.fn() }))
 
@@ -100,6 +100,21 @@ describe('reportSize', () => {
         reportSize(session)
 
         expect(send).not.toHaveBeenCalled()
+    })
+})
+
+describe('acknowledgeReplay', () => {
+    it('confirms the replay only after xterm has parsed the queued output', () => {
+        const pending: Array<() => void> = []
+        const send = vi.fn()
+        const term = { write: vi.fn((_data: string, done: () => void) => pending.push(done)) }
+        const session = { term, ws: { readyState: WebSocket.OPEN, send } } as unknown as Session
+
+        acknowledgeReplay(session)
+        expect(send).not.toHaveBeenCalled()
+
+        pending.forEach(done => done())
+        expect(sent(send)).toEqual([{ type: 'replay_done' }])
     })
 })
 

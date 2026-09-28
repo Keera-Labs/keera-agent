@@ -12,6 +12,8 @@ import termios
 import threading
 import time
 
+from app.terminal.terminal_queries import PARTIAL_SEQUENCE, strip_queries
+
 
 def _with_color_env(env: dict) -> dict:
     # The PTY is always rendered by xterm.js (a 256-color, truecolor-capable
@@ -48,6 +50,8 @@ _ESCAPES = re.compile(rb"\x1b\[[0-9;?<>=]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|
 _PARTIAL_ESCAPE = re.compile(rb"\x1b(?:\[[0-9;?<>=]*[ -/]*|\][^\x07\x1b]*)?\Z")
 # Plain text kept from previous chunks so a dialog split across reads still matches.
 _TAIL_CHARS = _DIALOG_SPAN + 100
+# An unterminated sequence longer than this is not a query; stop holding it back.
+_MAX_PENDING = 4096
 _UTF8_CONTINUATION = re.compile(rb"[\x80-\xbf]*")
 
 
@@ -231,6 +235,7 @@ class Terminal:
         self._chars_since_dialog = 0
         self._plain = _PlainText()
         self._history = bytearray()
+        self._history_pending = b""
         # asyncio keeps one reader callback per fd, so the terminal owns the only
         # reader and fans each chunk out; a bridge registering its own would take
         # the output from every other bridge, and unregistering it would starve them.
@@ -243,16 +248,9 @@ class Terminal:
     def size(self) -> tuple[int, int]:
         return self._cols, self._rows
 
-    def subscribe(self, with_history: bool = False) -> "asyncio.Queue[bytes]":
-        """A queue that receives every output chunk until it is unsubscribed.
-
-        with_history first queues the recent output, in the same step as
-        subscribing, so the replay and the live chunks after it neither overlap
-        nor leave a gap.
-        """
+    def subscribe(self) -> "asyncio.Queue[bytes]":
+        """A queue that receives every output chunk until it is unsubscribed."""
         queue: asyncio.Queue[bytes] = asyncio.Queue()
-        if with_history and self._history:
-            queue.put_nowait(self.history())
         self._subscribers.append(queue)
         if self._reader is None and self.master_fd is not None:
             loop = asyncio.get_running_loop()
@@ -362,10 +360,23 @@ class Terminal:
                 return
 
     def history(self) -> bytes:
-        return bytes(self._history)
+        """Recent output with its queries removed, for replay into a new client.
+
+        A held-back partial sequence is included so the live chunk completing
+        it still renders correctly after the replay.
+        """
+        return bytes(self._history) + self._history_pending
 
     def record_history(self, data: bytes) -> None:
-        self._history += data
+        data = self._history_pending + data
+        partial = PARTIAL_SEQUENCE.search(data)
+        cut = (
+            partial.start()
+            if partial and len(data) - partial.start() <= _MAX_PENDING
+            else len(data)
+        )
+        data, self._history_pending = data[:cut], data[cut:]
+        self._history += strip_queries(data)
         excess = len(self._history) - self.history_limit
         if excess > 0:
             del self._history[:excess]

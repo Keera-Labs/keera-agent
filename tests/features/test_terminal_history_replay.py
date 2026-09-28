@@ -5,6 +5,7 @@ redraw, so the user can't see what the agent is doing.
 """
 
 import asyncio
+import json
 import unittest
 
 from app.terminal.terminal import Terminal
@@ -58,6 +59,45 @@ class TestTerminalHistory(unittest.TestCase):
         history = terminal.history()
         self.assertEqual(history, "·ab".encode())
         history.decode("utf-8")
+
+
+class TestHistoryQueries(unittest.TestCase):
+    """Replayed queries would make the new xterm answer them into the live PTY."""
+
+    def test_queries_are_left_out_of_the_history(self):
+        terminal = Terminal()
+
+        terminal.record_history(
+            b"a\x1b[cb\x1b[0cc\x1b[>cd\x1b[6ne\x1b[?6nf\x1b]11;?\x07g\x1b]10;?\x1b\\h"
+            b"\x1b[>qi\x1b[?2026$pj\x1b[?uk\x1b[18tl\x1bP$qm\x1b\\n"
+        )
+
+        self.assertEqual(terminal.history(), b"abcdefghijkln")
+
+    def test_colour_and_cursor_sequences_are_kept(self):
+        terminal = Terminal()
+        output = b"\x1b[38;5;208mhi\x1b[0m\x1b[2K\x1b[1A\x1b]0;title\x07\x1b[?25l"
+
+        terminal.record_history(output)
+
+        self.assertEqual(terminal.history(), output)
+
+    def test_a_query_split_across_chunks_is_still_left_out(self):
+        terminal = Terminal()
+
+        terminal.record_history(b"X\x1b[")
+        terminal.record_history(b"c\n\x1b]11")
+        terminal.record_history(b";?\x1b")
+        terminal.record_history(b"\\Y")
+
+        self.assertEqual(terminal.history(), b"X\nY")
+
+    def test_a_partial_sequence_is_replayed_so_the_live_rest_still_renders(self):
+        terminal = Terminal()
+
+        terminal.record_history(b"X\x1b[38;5")
+
+        self.assertEqual(terminal.history(), b"X\x1b[38;5")
 
 
 class TestHistoryReplay(unittest.IsolatedAsyncioTestCase):
@@ -127,6 +167,35 @@ class TestHistoryReplay(unittest.IsolatedAsyncioTestCase):
         first.type("true\n")
 
         self.assertTrue(await _until(lambda: b"redrawn" in first.received))
+
+    async def test_a_query_in_the_history_is_not_replayed(self):
+        first = self.attach(replay_history=False)
+        await asyncio.sleep(0.1)
+        first.type("printf 'X\\033[cY\\n'\n")
+        await _until(lambda: b"XY" in first.received)
+
+        late = self.attach(replay_history=True)
+
+        self.assertTrue(await _until(lambda: b"XY" in late.received))
+        self.assertNotIn(b"\x1b[c", late.received)
+
+    async def test_terminal_responses_are_dropped_until_the_replay_is_rendered(self):
+        first = self.attach(replay_history=False)
+        await asyncio.sleep(0.1)
+        first.type("echo ready\n")
+        await _until(lambda: b"ready" in first.received.split(b"echo ready")[-1])
+
+        late = self.attach(replay_history=True)
+        await _until(lambda: b"ready" in late.received)
+        late.type("\x1b[?1;2c")
+        late.type("echo typed-$((40+2))\n")
+        self.assertTrue(await _until(lambda: b"typed-42" in first.received))
+        self.assertNotIn(b"1;2c", first.received)
+
+        late.type(json.dumps({"type": "replay_done"}))
+        late.type("\x1b[?1;2c")
+
+        self.assertTrue(await _until(lambda: b"1;2c" in first.received))
 
     async def test_a_client_without_replay_only_sees_new_output(self):
         first = self.attach(replay_history=False)
