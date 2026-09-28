@@ -32,6 +32,7 @@ class WebsocketTerminal:
         # terminal responses is xterm answering replayed queries, not the user.
         self._replay_deadline: float | None = None
         self._restart_task: asyncio.Task | None = None
+        self._redraw_task: asyncio.Task | None = None
         self._stopped = asyncio.Event()
 
     @property
@@ -78,6 +79,7 @@ class WebsocketTerminal:
         try:
             if history and self._ws is not None:
                 self._replay_deadline = loop.time() + REPLAY_ACK_TIMEOUT
+                await self._ws.send_text(json.dumps({"type": "replay_start"}))
                 await self._ws.send_bytes(history)
                 await self._ws.send_text(json.dumps({"type": "replay_end"}))
             while not self._stopped.is_set():
@@ -139,13 +141,13 @@ class WebsocketTerminal:
             int(message["rows"]),
             visible=bool(message.get("visible", True)),
         )
-        # A size change already signals the CLI; an unchanged size needs an explicit
+        # A size change already makes the CLI repaint; an unchanged size needs a
         # nudge, since a replayed byte stream of a cursor-addressed TUI captured at
         # another size or cut mid-screen can land in the wrong cells.
         if self._needs_redraw:
             self._needs_redraw = False
             if self._terminal.size == before:
-                self._terminal.force_redraw()
+                self._redraw_task = asyncio.create_task(self._terminal.force_redraw())
 
     def _request_restart(self) -> None:
         # Runs off the receive loop: a restart waits for the CLI to stop and boot.

@@ -5,12 +5,33 @@ redraw, so the user can't see what the agent is doing.
 """
 
 import asyncio
+import fcntl
 import json
+import os
+import struct
+import sys
+import tempfile
+import termios
 import unittest
 
 from app.terminal.terminal import Terminal
 from app.terminal.websocket_terminal import WebsocketTerminal
 from tests.test_terminal_shared_pty import FakeWebSocket, _until
+
+SIZE_WATCHER = """
+import os, signal, time
+last = os.get_terminal_size(0)
+def on_winch(*_):
+    global last
+    size = os.get_terminal_size(0)
+    if size != last:
+        last = size
+        print(f"resized-{size.lines}x{size.columns}", flush=True)
+signal.signal(signal.SIGWINCH, on_winch)
+print("watching", flush=True)
+while True:
+    time.sleep(0.05)
+"""
 
 
 class TestTerminalHistory(unittest.TestCase):
@@ -105,12 +126,20 @@ class TestHistoryReplay(unittest.IsolatedAsyncioTestCase):
         self.terminal = Terminal(shell="/bin/sh", cwd="/tmp")
         self.terminal.start()
         self.tasks: list[asyncio.Task] = []
+        self.tmp = tempfile.TemporaryDirectory()
 
     async def asyncTearDown(self):
         for task in self.tasks:
             task.cancel()
         await asyncio.gather(*self.tasks, return_exceptions=True)
         await self.terminal.aclose()
+        self.tmp.cleanup()
+
+    def pty_size(self) -> tuple[int, int]:
+        rows, cols, _, _ = struct.unpack(
+            "HHHH", fcntl.ioctl(self.terminal.master_fd, termios.TIOCGWINSZ, b"\0" * 8)
+        )
+        return cols, rows
 
     def attach(self, replay_history: bool) -> FakeWebSocket:
         ws = FakeWebSocket()
@@ -153,20 +182,40 @@ class TestHistoryReplay(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(first.received.endswith(late.received))
         self.assertIn(b"tick-299", late.received)
 
-    async def test_a_reattaching_client_makes_the_cli_redraw_at_an_unchanged_size(self):
+    async def start_size_watcher(self, client: FakeWebSocket) -> None:
+        """Run a program that, like Node, reacts only when the size really changes."""
+        script = os.path.join(self.tmp.name, "watch_size.py")
+        with open(script, "w") as f:
+            f.write(SIZE_WATCHER)
+        client.type(f"{sys.executable} {script}\n")
+        self.assertTrue(await _until(lambda: b"watching" in client.received))
+
+    async def test_a_reattaching_client_makes_the_cli_see_a_real_resize_at_an_unchanged_size(self):
         first = self.attach(replay_history=False)
         await asyncio.sleep(0.1)
-        first.type("trap 'echo redrawn' WINCH\n")
         first.resize(80, 24)
-        await asyncio.sleep(0.2)
-        first.received = b""
+        await self.start_size_watcher(first)
 
         late = self.attach(replay_history=True)
         await asyncio.sleep(0.1)
         late.resize(80, 24)
-        first.type("true\n")
 
-        self.assertTrue(await _until(lambda: b"redrawn" in first.received))
+        self.assertTrue(await _until(lambda: b"resized-24x80" in first.received))
+        self.assertIn(b"resized-23x80", first.received)
+        self.assertEqual(self.pty_size(), (80, 24))
+
+    async def test_a_client_resize_during_the_nudge_wins(self):
+        client = self.attach(replay_history=True)
+        await asyncio.sleep(0.1)
+        await self.start_size_watcher(client)
+
+        client.resize(80, 24)
+        await asyncio.sleep(0.05)
+        client.resize(100, 30)
+        await asyncio.sleep(self.terminal.redraw_nudge + 0.3)
+
+        self.assertEqual(self.pty_size(), (100, 30))
+        self.assertTrue(client.received.rstrip().endswith(b"resized-30x100"))
 
     async def test_a_query_in_the_history_is_not_replayed(self):
         first = self.attach(replay_history=False)

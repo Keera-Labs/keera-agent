@@ -203,6 +203,9 @@ class Terminal:
     stop_grace = 1.0
     # How long wait_for_cli_ready() holds for an unanswered startup dialog.
     dialog_timeout = 120.0
+    # How long force_redraw() holds the nudged size, long enough for the CLI to
+    # read it before the real size returns, so it sees two actual changes.
+    redraw_nudge = 0.2
     # Raw output kept for replay into a client that attaches to a running PTY.
     history_limit = 256 * 1024
 
@@ -382,12 +385,24 @@ class Terminal:
             del self._history[:excess]
             del self._history[: _safe_start(self._history)]
 
-    def force_redraw(self) -> None:
-        """Make the foreground program repaint its screen, as a resize would."""
+    async def force_redraw(self) -> None:
+        """Make the foreground program repaint by changing its size and restoring it.
+
+        A bare SIGWINCH at an unchanged size does nothing for Node CLIs such as
+        Claude Code: they only emit 'resize' when the size they read differs.
+        """
         if self.master_fd is None:
             return
+        cols, rows = self.size
         with contextlib.suppress(OSError):
-            os.killpg(os.tcgetpgrp(self.master_fd), signal.SIGWINCH)
+            self._set_size(self.master_fd, rows - 1 if rows > 1 else rows + 1, cols)
+        try:
+            await asyncio.sleep(self.redraw_nudge)
+        finally:
+            # Reads the size again, so a client resize that landed meanwhile wins.
+            if self.master_fd is not None:
+                with contextlib.suppress(OSError):
+                    self._set_size(self.master_fd, self._rows, self._cols)
 
     def mark_output(self, data: bytes) -> None:
         """Record PTY output; the terminal's reader calls this per chunk."""
