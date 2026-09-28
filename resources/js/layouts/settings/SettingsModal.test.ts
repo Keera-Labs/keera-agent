@@ -8,6 +8,8 @@ import { router } from '@inertiajs/vue3'
 import { useAppearanceSettingsStore } from '@/stores/appearanceSettingsStore'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import { useEditorSettingsStore } from '@/stores/editorSettingsStore'
+import { useProjectStore } from '@/stores/projectStore'
+import type { Project } from '@/types/type'
 import SettingsModal from './SettingsModal.vue'
 
 const page = reactive({ component: 'Home', url: '/', props: {} })
@@ -53,7 +55,21 @@ function remoteControlFetch(init?: RequestInit) {
     return Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(json) })
 }
 
+let projectCommands: Record<string, unknown>[]
+
+function commandsFetch(init?: RequestInit) {
+    const method = init?.method ?? 'GET'
+    if (method === 'POST') {
+        const body = JSON.parse(String(init?.body))
+        calls.push({ method, body })
+        const created = { id: 99, project_id: 7, description: '', category: '', shortcut: '', status: 'stopped', pid: null, ...body }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(created) })
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(projectCommands) })
+}
+
 function fakeFetch(url: string, init?: RequestInit) {
+    if (url === '/api/projects/7/commands') return commandsFetch(init)
     if (url === '/api/settings/remote-control') return remoteControlFetch(init)
     if (url === '/api/settings/appearance') return appearanceFetch(init)
     if (url === '/api/global-settings') {
@@ -71,8 +87,9 @@ function fakeFetch(url: string, init?: RequestInit) {
 
 let wrapper: VueWrapper | undefined
 
-async function open(section: Parameters<ReturnType<typeof useAppLayoutStore>['openSettings']>[0] = 'ai') {
+async function open(section: Parameters<ReturnType<typeof useAppLayoutStore>['openSettings']>[0] = 'ai', project: Project | null = null) {
     const pinia = createPinia()
+    useProjectStore(pinia).setActiveProject(project)
     wrapper = mount(SettingsModal, { attachTo: document.body, global: { plugins: [pinia, PiniaColada], stubs } })
     const layout = useAppLayoutStore(pinia)
     layout.openSettings(section)
@@ -88,6 +105,7 @@ beforeEach(() => {
     globalPatch = { status: 200, body: { max_agents_per_project: 25 } }
     remoteControl = { status: 200, enabled: false }
     appearance = { ui_font_size: 13 }
+    projectCommands = [{ id: 1, project_id: 7, label: 'dev', command: 'npm run dev', description: '', category: '', shortcut: '', status: 'stopped', pid: null }]
     localStorage.clear()
     document.documentElement.style.removeProperty('--ui-scale')
     page.component = 'Home'
@@ -108,7 +126,7 @@ describe('SettingsModal', () => {
     it('lists every section and switches the pane', async () => {
         const { w } = await open()
 
-        expect(navLabels(w)).toEqual(['ai', 'general', 'appearance', 'editor', 'terminal', 'git', 'workspaces', 'keybindings', 'billing'])
+        expect(navLabels(w)).toEqual(['ai', 'general', 'appearance', 'editor', 'terminal', 'commands', 'git', 'workspaces', 'keybindings', 'billing'])
         expect(w.find('[data-view="providers"]').exists()).toBe(true)
 
         await w.get('[data-ai-tab="templates"]').trigger('click')
@@ -410,6 +428,59 @@ describe('SettingsModal', () => {
             expect(layout.settingsSection).toBeNull()
             expect(uiScale()).toBeCloseTo(15 / 13)
             expect(calls.some(c => c.method === 'PATCH')).toBe(false)
+        })
+    })
+
+    describe('Commands', () => {
+        const project = { id: 7, name: 'acme-web', slug: 'acme-web' } as Project
+
+        it('lists the active project commands and creates new ones', async () => {
+            const { w } = await open('commands', project)
+            const pane = w.get('[data-pane="commands"]')
+
+            expect(pane.text()).toContain('/dev')
+
+            await pane.findAll('button').find(b => b.text() === 'New command')!.trigger('click')
+            const [label, cmd] = pane.findAll('form input')
+            await label.setValue('build')
+            await cmd.setValue('npm run build')
+            await pane.get('form').trigger('submit')
+            await flushPromises()
+
+            expect(calls).toContainEqual({ method: 'POST', body: { label: 'build', command: 'npm run build' } })
+            expect(pane.text()).toContain('/build')
+
+            await pane.get('button[title="Delete"]').trigger('click')
+            await flushPromises()
+
+            expect(fetch).toHaveBeenCalledWith('/api/commands/1', { method: 'DELETE' })
+            expect(pane.text()).not.toContain('/dev')
+        })
+
+        it('is found by searching for scripts', async () => {
+            const { w } = await open()
+
+            await w.get('[data-testid="settings-search"]').setValue('dev server')
+
+            expect(navLabels(w)).toEqual(['commands'])
+        })
+
+        it('asks for a project when none is open', async () => {
+            const { w } = await open('commands')
+
+            expect(w.find('[data-testid="commands-no-project"]').exists()).toBe(true)
+            expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/commands'))).toBe(false)
+        })
+
+        it('shows an error when the commands cannot be loaded', async () => {
+            vi.mocked(fetch).mockImplementation((url, init) =>
+                url === '/api/projects/7/commands'
+                    ? Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) } as Response)
+                    : fakeFetch(String(url), init) as Promise<Response>)
+
+            const { w } = await open('commands', project)
+
+            expect(w.find('[data-testid="commands-error"]').exists()).toBe(true)
         })
     })
 })

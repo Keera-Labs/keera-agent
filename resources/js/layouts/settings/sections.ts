@@ -6,6 +6,7 @@ export type SettingsSectionId =
     | 'appearance'
     | 'editor'
     | 'terminal'
+    | 'commands'
     | 'git'
     | 'workspaces'
     | 'keybindings'
@@ -25,6 +26,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     { id: 'appearance', label: 'Appearance', icon: 'type', keywords: 'ui font size text scale zoom interface sidebar' },
     { id: 'editor', label: 'Editor', icon: 'code', keywords: 'font family size typography monaco preview' },
     { id: 'terminal', label: 'Terminal & Shell', icon: 'terminal', keywords: 'xterm shell font' },
+    { id: 'commands', label: 'Commands', icon: 'command', keywords: 'scripts run dev server processes configurations' },
     { id: 'git', label: 'Git & Version Control', icon: 'git-branch', keywords: 'commit branch source control' },
     { id: 'workspaces', label: 'Workspaces & Sync', icon: 'folder', keywords: 'workspace sync' },
     { id: 'keybindings', label: 'Keybindings', icon: 'command', keywords: 'shortcuts keyboard hotkeys' },

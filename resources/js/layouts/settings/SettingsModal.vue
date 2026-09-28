@@ -13,6 +13,7 @@ import { useEditorSettingsStore } from '@/stores/editorSettingsStore'
 import { useRemoteControlSettingsStore } from '@/stores/remoteControlSettingsStore'
 import AgentsTab from './AgentsTab.vue'
 import AppearanceSection from './AppearanceSection.vue'
+import CommandsSection from './CommandsSection.vue'
 import EditorSection from './EditorSection.vue'
 import { filterSections, SETTINGS_SECTIONS, type SettingsSectionId } from './sections'
 
@@ -56,7 +57,7 @@ const aiTab = ref<AiTab>('providers')
 const sections = computed(() => filterSections(query.value))
 const current = computed(() => SETTINGS_SECTIONS.find(s => s.id === settingsSection.value) ?? SETTINGS_SECTIONS[0])
 // Sections that embed a full-height tab manage their own padding and scrolling.
-const embedsTab = computed(() => current.value.id === 'ai' || current.value.id === 'general')
+const embedsTab = computed(() => ['ai', 'general', 'commands'].includes(current.value.id))
 
 const EMPTY_STATE: Partial<Record<SettingsSectionId, string>> = {
     git: 'Git and version control preferences will appear here.',
@@ -183,6 +184,7 @@ const navItem = (active: boolean) => [
                         <TemplatesTab v-else-if="aiTab === 'templates'" />
                         <DefaultPermissionsTab v-else />
                     </template>
+                    <CommandsSection v-else-if="current.id === 'commands'" />
                     <PluginsTab v-else />
                 </div>
 

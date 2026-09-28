@@ -86,7 +86,7 @@ const pillClass = 'text-ui-11 tabular-nums rounded-full py-px px-2 border'
                     v-model="query"
                     type="search"
                     aria-label="Search tasks"
-                    placeholder="Search tasks, branches, or PRs..."
+                    placeholder="Search tasks..."
                     class="flex-1 min-w-0 bg-transparent border-none outline-none text-ui-13 text-zinc-900 placeholder:text-zinc-400"
                     @keydown.esc="query = ''"
                 >
