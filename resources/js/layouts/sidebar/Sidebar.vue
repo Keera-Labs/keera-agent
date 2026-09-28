@@ -64,7 +64,7 @@ const iconButtonClass = 'flex items-center justify-center w-6 h-6 rounded-md tex
 </script>
 
 <template>
-    <aside class="w-[216px] shrink-0 bg-canvas border-r border-stroke flex flex-col overflow-hidden">
+    <aside class="shrink-0 bg-canvas border-r border-stroke flex flex-col overflow-hidden">
         <!-- Same height as the header so their borders line up. -->
         <div class="shrink-0 flex items-center h-10 pr-2 border-b border-stroke">
             <!-- The logo doubles as the Dashboard (home) link. -->
