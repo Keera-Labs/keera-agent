@@ -7,6 +7,7 @@ from app.controllers import (
     agent_dispatch_controller,
     agent_hook_event_controller,
     agent_message_controller,
+    agent_pause_controller,
     agent_permission_controller,
     agent_relay_controller,
     agent_summary_controller,
@@ -94,6 +95,7 @@ router.get("/api/agent-summaries", agent_summary_controller.index)
 router.get("/api/projects/{project_id}/agents", agent_controller.index)
 router.post("/api/projects/{project_id}/agents", agent_controller.store)
 router.post("/api/projects/{project_id}/agents/spawn", agent_dispatch_controller.spawn)
+router.post("/api/projects/{project_id}/agents/pause", agent_pause_controller.store)
 router.get("/api/projects/{project_id}/default-agent", agent_default_controller.show)
 router.post("/api/projects/{project_id}/default-agent", agent_default_controller.store)
 router.patch("/api/agents/{agent_id}", agent_controller.update)

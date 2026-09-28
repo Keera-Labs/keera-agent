@@ -9,6 +9,7 @@ import datetime
 from unittest.mock import patch
 
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
+from pydantic import ValidationError
 
 from app.mcp.tools import (
     KEERA_TOOLS,
@@ -20,6 +21,8 @@ from app.mcp.tools import (
     ListTasksTool,
     SendMessageTool,
     SpawnAgentTool,
+    UpdateTaskInput,
+    UpdateTaskStatusInput,
     UpdateTaskStatusTool,
     UpdateTaskTool,
 )
@@ -323,6 +326,29 @@ class TestUpdateTaskTool(TestCase, DatabaseTransaction):
         response = await self.tool.handle({"task_id": 999999, "title": "X"})
         self.assertIn("Error", _text(response))
 
+    async def test_update_sets_review_fields(self):
+        task = await TaskFactory.new().create(project_id=self.project.id, title="Review me")
+        fields = {
+            "pr_number": 7,
+            "pr_url": "https://github.com/acme/app/pull/7",
+            "branch": "task/review-me",
+            "additions": 30,
+            "deletions": 2,
+            "review_note": "Ready for review",
+            "progress_step": 3,
+            "progress_total": 3,
+        }
+
+        await self.tool.handle({"task_id": task.id, **fields})
+
+        updated = await Task.find(task.id)
+        self.assertEqual({k: getattr(updated, k) for k in fields}, fields)
+
+    async def test_update_schema_accepts_review_fields(self):
+        UpdateTaskInput(task_id=1, pr_number=1, additions=0, progress_total=5)
+        with self.assertRaises(ValidationError):
+            UpdateTaskInput(task_id=1, deletions=-3)
+
 
 class TestUpdateTaskStatusTool(TestCase, DatabaseTransaction):
     async def asyncSetUp(self):
@@ -350,6 +376,28 @@ class TestUpdateTaskStatusTool(TestCase, DatabaseTransaction):
         completed = await Task.find(task.id)
         self.assertEqual(completed.status, "completed")
         self.assertIsNotNone(completed.completed_at)
+
+    async def test_in_review_status_is_accepted_and_not_completed(self):
+        UpdateTaskStatusInput(task_id=1, status="in_review")
+        task = await TaskFactory.new().create(project_id=self.project.id, title="Reviewing")
+
+        await self.tool.handle({"task_id": task.id, "status": "in_review"})
+
+        reviewed = await Task.find(task.id)
+        self.assertEqual(reviewed.status, "in_review")
+        self.assertIsNone(reviewed.completed_at)
+
+    async def test_reopening_a_completed_task_clears_completion_timestamp(self):
+        task = await TaskFactory.new().create(project_id=self.project.id, title="Reopen")
+        await self.tool.handle({"task_id": task.id, "status": "completed"})
+
+        await self.tool.handle({"task_id": task.id, "status": "in_progress"})
+
+        self.assertIsNone((await Task.find(task.id)).completed_at)
+
+    async def test_status_schema_rejects_unknown_status(self):
+        with self.assertRaises(ValidationError):
+            UpdateTaskStatusInput(task_id=1, status="shipped")
 
     async def test_update_status_not_found(self):
         response = await self.tool.handle({"task_id": 999999, "status": "completed"})

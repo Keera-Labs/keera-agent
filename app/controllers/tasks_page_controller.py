@@ -4,7 +4,7 @@ from fastapi import Request
 from fastapi_startkit.inertia.inertia import Inertia
 
 from app.models.Project import Project
-from app.models.Task import Task
+from app.models.Task import REVIEW_FIELDS, Task
 
 
 def _slugify(name: str) -> str:
@@ -38,6 +38,8 @@ def _serialize(t: Task) -> dict:
         "testing_methods": _load_json(t.testing_methods),
         "validation_steps": _load_json(t.validation_steps),
         "status": t.status,
+        **{field: getattr(t, field, None) for field in REVIEW_FIELDS},
+        "completed_at": t.completed_at,
         "created_at": str(t.created_at),
     }
 
