@@ -1,4 +1,6 @@
 import datetime
+import os
+import time
 from unittest.mock import patch
 
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
@@ -213,6 +215,31 @@ class TestTaskController(TestCase, DatabaseTransaction):
                 )
             )
         )
+
+    async def test_update_to_terminal_status_stamps_completed_at_in_utc(self):
+        # Run the server clock in a non-UTC zone: if completed_at were stamped
+        # with local time (the bug), it would land hours away from real UTC now.
+        task = await TaskFactory.new().create(project_id=self.project.id)
+        original_tz = os.environ.get("TZ")
+        os.environ["TZ"] = "America/New_York"
+        time.tzset()
+        try:
+            before = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
+            response = await self.patch(f"/api/tasks/{task.id}", json={"status": "completed"})
+            after = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
+        finally:
+            if original_tz is None:
+                os.environ.pop("TZ", None)
+            else:
+                os.environ["TZ"] = original_tz
+            time.tzset()
+
+        completed_at = response.json()["data"]["attributes"]["completed_at"]
+        # Naive, like created_at — no UTC offset or "Z" suffix.
+        self.assertNotRegex(completed_at, r"(Z|[+-]\d{2}:?\d{2})$")
+        stamped = datetime.datetime.fromisoformat(completed_at)
+        self.assertGreaterEqual(stamped, before - datetime.timedelta(seconds=5))
+        self.assertLessEqual(stamped, after + datetime.timedelta(seconds=5))
 
     async def test_update_to_non_terminal_status_clears_completed_at(self):
         task = await TaskFactory.new().create(project_id=self.project.id)
