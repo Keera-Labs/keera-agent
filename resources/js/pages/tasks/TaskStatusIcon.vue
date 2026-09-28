@@ -21,6 +21,7 @@ withDefaults(defineProps<{ status: Task['status']; size?: number }>(), { size: 1
         :class="[
             'shrink-0',
             status === 'in_progress' && 'text-accent animate-spin',
+            status === 'in_review' && 'text-amber-500',
             status === 'completed' && 'text-success',
             (status === 'pending' || status === 'cancelled') && 'text-zinc-400',
         ]"
@@ -29,6 +30,10 @@ withDefaults(defineProps<{ status: Task['status']; size?: number }>(), { size: 1
         <template v-if="status === 'in_progress'">
             <circle cx="8" cy="8" r="6" stroke-opacity="0.2" />
             <path d="M8 2a6 6 0 0 1 6 6" />
+        </template>
+        <template v-else-if="status === 'in_review'">
+            <circle cx="8" cy="8" r="6" />
+            <path d="M5.5 8h.01M8 8h.01M10.5 8h.01" stroke-width="2" />
         </template>
         <template v-else-if="status === 'completed'">
             <circle cx="8" cy="8" r="6" />

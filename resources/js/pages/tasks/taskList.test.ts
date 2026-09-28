@@ -1,14 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Task } from '@/types/type'
-import { asUtc, countByFilter, groupTasks, inFilter, matchesSearch, taskAge } from './taskList'
-
-function makeTask(overrides: Partial<Task> = {}): Task {
-    return {
-        id: 1, project_id: 1, title: 'Write docs', body: null, priority: 'medium', assignees: [],
-        acceptance_criteria: [], testing_methods: [], validation_steps: [], status: 'pending',
-        created_at: '2026-01-01T00:00:00Z', completed_at: null, ...overrides,
-    }
-}
+import {
+    asUtc,
+    countByFilter,
+    groupTasks,
+    inFilter,
+    matchesSearch,
+    progressLabel,
+    startOfLocalDay,
+    taskAge,
+    taskRef,
+} from './taskList'
+import { makeTask } from './testing'
 
 describe('matchesSearch', () => {
     const task = makeTask({ id: 42, title: 'Fix checkout tax', body: 'Regional rules', assignees: ['Claude'] })
@@ -26,6 +28,38 @@ describe('matchesSearch', () => {
         expect(matchesSearch(task, 'checkout invoice')).toBe(false)
         expect(matchesSearch(task, 'acme')).toBe(false)
     })
+
+    it('matches the branch and PR number, and still the task id', () => {
+        const pr = makeTask({ id: 7, pr_number: 1842, branch: 'fix/eu-promo-checkout' })
+        expect(matchesSearch(pr, 'eu-promo')).toBe(true)
+        expect(matchesSearch(pr, '#1842')).toBe(true)
+        expect(matchesSearch(pr, 'pr #1842')).toBe(true)
+        expect(matchesSearch(pr, '1842')).toBe(true)
+        expect(matchesSearch(pr, 'task-7')).toBe(true)
+        expect(matchesSearch(pr, '#1841')).toBe(false)
+    })
+})
+
+describe('taskRef', () => {
+    it('prefers the PR number and falls back to the task id', () => {
+        expect(taskRef(makeTask({ id: 3, pr_number: 12 }))).toBe('PR #12')
+        expect(taskRef(makeTask({ id: 3 }))).toBe('TASK-3')
+    })
+})
+
+describe('progressLabel', () => {
+    it('formats step, total and a rounded percentage', () => {
+        expect(progressLabel(makeTask({ progress_step: 3, progress_total: 4 }))).toBe('Step 3/4 (75%)')
+        expect(progressLabel(makeTask({ progress_step: 1, progress_total: 3 }))).toBe('Step 1/3 (33%)')
+        expect(progressLabel(makeTask({ progress_step: 0, progress_total: 5 }))).toBe('Step 0/5 (0%)')
+    })
+
+    it('is null without complete, usable progress', () => {
+        expect(progressLabel(makeTask())).toBeNull()
+        expect(progressLabel(makeTask({ progress_step: 2 }))).toBeNull()
+        expect(progressLabel(makeTask({ progress_total: 4 }))).toBeNull()
+        expect(progressLabel(makeTask({ progress_step: 0, progress_total: 0 }))).toBeNull()
+    })
 })
 
 describe('filters', () => {
@@ -35,15 +69,17 @@ describe('filters', () => {
         makeTask({ id: 3, status: 'in_progress' }),
         makeTask({ id: 4, status: 'completed' }),
         makeTask({ id: 5, status: 'cancelled' }),
+        makeTask({ id: 6, status: 'in_review' }),
     ]
 
     it('counts each tab, with cancelled tasks only under All', () => {
-        expect(countByFilter(tasks)).toEqual({ all: 5, running: 2, done: 1, backlog: 1 })
+        expect(countByFilter(tasks)).toEqual({ all: 6, running: 2, review: 1, done: 1, backlog: 1 })
     })
 
     it('keeps only the tab\'s statuses', () => {
         expect(tasks.filter(t => inFilter(t, 'running')).map(t => t.id)).toEqual([2, 3])
-        expect(tasks.filter(t => inFilter(t, 'all'))).toHaveLength(5)
+        expect(tasks.filter(t => inFilter(t, 'review')).map(t => t.id)).toEqual([6])
+        expect(tasks.filter(t => inFilter(t, 'all'))).toHaveLength(6)
     })
 })
 
@@ -54,16 +90,48 @@ describe('groupTasks', () => {
             makeTask({ id: 2, status: 'in_progress', created_at: '2026-01-02T00:00:00Z' }),
             makeTask({ id: 3, status: 'in_progress', created_at: '2026-01-03T00:00:00Z' }),
             makeTask({ id: 4, status: 'completed', created_at: '2026-01-04T00:00:00Z' }),
+            makeTask({ id: 5, status: 'in_review' }),
+            makeTask({ id: 6, status: 'pending' }),
         ])
 
         expect(sections.map(s => [s.label, s.tasks.map(t => t.id)])).toEqual([
             ['Active agents', [3, 2]],
+            ['Awaiting review', [5]],
+            ['Backlog', [6]],
             ['Completed', [1, 4]],
         ])
     })
 
     it('returns no sections for no tasks', () => {
         expect(groupTasks([])).toEqual([])
+    })
+
+    describe('completed today', () => {
+        afterEach(() => vi.unstubAllEnvs())
+
+        it('keeps only completions since the local midnight, read from naive UTC timestamps', () => {
+            vi.stubEnv('TZ', 'America/Los_Angeles')
+            // 03:00 UTC on Jan 1 is 19:00 on Dec 31 in Los Angeles, whose day began at 08:00 UTC.
+            const since = startOfLocalDay(Date.parse('2026-01-01T03:00:00Z'))
+            expect(since).toBe(Date.parse('2025-12-31T08:00:00Z'))
+
+            const sections = groupTasks([
+                makeTask({ id: 1, status: 'completed', completed_at: '2025-12-31 09:00:00' }),
+                makeTask({ id: 2, status: 'completed', completed_at: '2025-12-31T07:59:00' }),
+                makeTask({ id: 3, status: 'completed', completed_at: null }),
+                makeTask({ id: 4, status: 'pending' }),
+            ], since)
+
+            expect(sections.map(s => [s.label, s.tasks.map(t => t.id)])).toEqual([
+                ['Backlog', [4]],
+                ['Completed today', [1]],
+            ])
+        })
+
+        it('drops the section when nothing completed today', () => {
+            const sections = groupTasks([makeTask({ status: 'completed', completed_at: '2020-01-01T00:00:00Z' })], Date.now())
+            expect(sections).toEqual([])
+        })
     })
 })
 

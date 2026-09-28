@@ -25,7 +25,15 @@ export interface Task {
     acceptance_criteria: string[]
     testing_methods: string[]
     validation_steps: string[]
-    status: 'pending' | 'in_progress' | 'completed' | 'cancelled'
+    status: 'pending' | 'in_progress' | 'in_review' | 'completed' | 'cancelled'
+    pr_number: number | null
+    pr_url: string | null
+    branch: string | null
+    additions: number | null
+    deletions: number | null
+    review_note: string | null
+    progress_step: number | null
+    progress_total: number | null
     created_at: string
     completed_at: string | null
 }
