@@ -108,9 +108,9 @@ async function handleSubmit(close: () => void) {
         <template #trigger><slot name="trigger" /></template>
         <template #default="{ close }">
             <form class="flex flex-col gap-3.5" @submit.prevent="handleSubmit(close)">
-                <h2 class="m-0 text-zinc-900 text-[15px] font-semibold">Edit Agent</h2>
+                <h2 class="m-0 text-zinc-900 text-ui-15 font-semibold">Edit Agent</h2>
 
-                <span v-if="error" class="text-danger text-[12px]">{{ error }}</span>
+                <span v-if="error" class="text-danger text-ui-12">{{ error }}</span>
 
                 <div class="flex flex-col gap-1.5">
                     <span :class="labelClass">Type</span>
@@ -120,7 +120,7 @@ async function handleSubmit(close: () => void) {
                             :key="type"
                             type="button"
                             data-testid="agent-type"
-                            :class="['py-[5px] px-3 rounded border text-[12px] cursor-pointer', agentType === type ? 'font-semibold' : 'font-normal']"
+                            :class="['py-[5px] px-3 rounded border text-ui-12 cursor-pointer', agentType === type ? 'font-semibold' : 'font-normal']"
                             :style="typeStyle(type)"
                             @click="agentType = type"
                         >

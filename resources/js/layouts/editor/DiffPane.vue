@@ -119,7 +119,7 @@ const toggleClass = 'h-5 px-1.5 flex items-center gap-1 rounded cursor-pointer t
 
 <template>
     <section class="absolute inset-0 z-10 flex flex-col bg-white" aria-label="Diff" data-testid="diff-pane">
-        <div v-if="activeTab" class="flex items-center gap-2 h-7 px-3 shrink-0 border-b border-stroke text-[12px] text-zinc-500">
+        <div v-if="activeTab" class="flex items-center gap-2 h-7 px-3 shrink-0 border-b border-stroke text-ui-12 text-zinc-500">
             <FileDiff :size="13" class="shrink-0 text-accent" />
             <span class="truncate font-mono text-zinc-700" data-testid="diff-path">{{ activeTab.path }}</span>
             <span class="shrink-0" data-testid="diff-compared">{{ compared }}</span>
@@ -149,12 +149,12 @@ const toggleClass = 'h-5 px-1.5 flex items-center gap-1 rounded cursor-pointer t
             </div>
         </div>
 
-        <p v-if="!diff && query.isLoading.value" class="px-3 py-2 text-[12px] text-zinc-400" data-testid="diff-loading">Loading diff…</p>
+        <p v-if="!diff && query.isLoading.value" class="px-3 py-2 text-ui-12 text-zinc-400" data-testid="diff-loading">Loading diff…</p>
         <div
             v-else-if="!diff && query.error.value"
             role="alert"
             data-testid="diff-error"
-            class="flex items-center gap-2 px-3 py-2 text-[12px] text-danger"
+            class="flex items-center gap-2 px-3 py-2 text-ui-12 text-danger"
         >
             <TriangleAlert :size="13" class="shrink-0" />
             <span class="flex-1">{{ query.error.value.message }}</span>
@@ -163,7 +163,7 @@ const toggleClass = 'h-5 px-1.5 flex items-center gap-1 rounded cursor-pointer t
         <div
             v-else-if="placeholder"
             data-testid="diff-placeholder"
-            class="flex-1 flex flex-col items-center justify-center gap-2 text-[13px] text-zinc-500"
+            class="flex-1 flex flex-col items-center justify-center gap-2 text-ui-13 text-zinc-500"
         >
             <FileDiff :size="22" class="text-zinc-400" />
             {{ placeholder }}

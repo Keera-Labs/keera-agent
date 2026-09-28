@@ -75,7 +75,7 @@ function changeView(view: ProjectView) {
 }
 
 const navClass = (active: boolean) => [
-    'flex items-center gap-2 h-7 px-2 w-full rounded-md text-[13px] text-left cursor-pointer transition-colors duration-100',
+    'flex items-center gap-2 h-7 px-2 w-full rounded-md text-ui-13 text-left cursor-pointer transition-colors duration-100',
     active ? 'bg-black/[0.06] text-zinc-900 font-medium' : 'text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-900',
 ]
 const iconButtonClass = 'flex items-center justify-center w-6 h-6 rounded-md text-zinc-500 cursor-pointer hover:bg-black/[0.05] hover:text-zinc-800'
@@ -96,7 +96,7 @@ const iconButtonClass = 'flex items-center justify-center w-6 h-6 rounded-md tex
                 <div class="w-6 h-6 rounded-md flex items-center justify-center shrink-0 bg-accent">
                     <Icon name="info" :size="13" color="white" />
                 </div>
-                <span class="font-semibold text-[13px] text-zinc-900 tracking-[-0.01em] whitespace-nowrap">Keera Agent</span>
+                <span class="font-semibold text-ui-13 text-zinc-900 tracking-[-0.01em] whitespace-nowrap">Keera Agent</span>
             </button>
             <button
                 type="button"
@@ -114,12 +114,12 @@ const iconButtonClass = 'flex items-center justify-center w-6 h-6 rounded-md tex
             <button
                 type="button"
                 data-testid="sidebar-search"
-                class="flex items-center gap-2 w-full h-7 px-2.5 rounded-md bg-black/[0.04] text-zinc-500 text-[13px] text-left cursor-pointer hover:bg-black/[0.06]"
+                class="flex items-center gap-2 w-full h-7 px-2.5 rounded-md bg-black/[0.04] text-zinc-500 text-ui-13 text-left cursor-pointer hover:bg-black/[0.06]"
                 @click="showProjectSearch = true"
             >
                 <Icon name="search" :size="13" />
                 <span class="flex-1">Search</span>
-                <kbd class="font-sans text-[11px] text-zinc-400">⌘P</kbd>
+                <kbd class="font-sans text-ui-11 text-zinc-400">⌘P</kbd>
             </button>
 
             <nav class="mt-2 flex flex-col gap-px">
@@ -136,7 +136,7 @@ const iconButtonClass = 'flex items-center justify-center w-6 h-6 rounded-md tex
                     <span class="flex-1">{{ item.label }}</span>
                     <span
                         v-if="item.id === 'tasks' && tasks.length > 0"
-                        class="text-[11px] tabular-nums text-zinc-500"
+                        class="text-ui-11 tabular-nums text-zinc-500"
                     >
                         {{ tasks.length }}
                     </span>
@@ -146,7 +146,7 @@ const iconButtonClass = 'flex items-center justify-center w-6 h-6 rounded-md tex
 
         <div class="flex-1 overflow-y-auto min-h-0 px-2 pb-2">
             <div data-testid="section-projects" class="flex items-center h-7 pl-1.5 pr-0.5 mt-1">
-                <span class="flex-1 text-zinc-800 text-[12px] font-semibold">Projects</span>
+                <span class="flex-1 text-zinc-800 text-ui-12 font-semibold">Projects</span>
                 <ProjectCreateModal :default-workspace-id="currentWorkspaceId">
                     <template #trigger>
                         <button type="button" title="Add project" :class="iconButtonClass">
@@ -158,13 +158,13 @@ const iconButtonClass = 'flex items-center justify-center w-6 h-6 rounded-md tex
 
             <ul class="list-none m-0 p-0 mb-1 flex flex-col gap-1">
                 <template v-if="projects.length === 0">
-                    <li class="py-1 px-2 text-zinc-400 text-[12px]">No projects</li>
+                    <li class="py-1 px-2 text-zinc-400 text-ui-12">No projects</li>
                     <li>
                         <ProjectCreateModal :default-workspace-id="currentWorkspaceId">
                             <template #trigger>
                                 <button
                                     type="button"
-                                    class="mt-0.5 w-full bg-transparent border border-dashed border-stroke rounded-md text-zinc-500 text-[12px] p-1.5 cursor-pointer text-center block hover:text-zinc-700 hover:border-zinc-400"
+                                    class="mt-0.5 w-full bg-transparent border border-dashed border-stroke rounded-md text-zinc-500 text-ui-12 p-1.5 cursor-pointer text-center block hover:text-zinc-700 hover:border-zinc-400"
                                 >
                                     + Add project
                                 </button>
@@ -220,7 +220,7 @@ const iconButtonClass = 'flex items-center justify-center w-6 h-6 rounded-md tex
                         <button
                             type="button"
                             :disabled="!activeProject"
-                            class="flex items-center gap-1 h-6 px-2 rounded-md text-[12px] font-medium text-zinc-600 cursor-pointer hover:bg-black/[0.05] hover:text-zinc-900 disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent"
+                            class="flex items-center gap-1 h-6 px-2 rounded-md text-ui-12 font-medium text-zinc-600 cursor-pointer hover:bg-black/[0.05] hover:text-zinc-900 disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent"
                         >
                             <Icon name="plus" :size="12" />
                             New Agent

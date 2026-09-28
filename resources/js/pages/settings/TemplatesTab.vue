@@ -157,7 +157,7 @@ async function confirmDelete(close: () => void) {
                 >{{ syncing ? 'Syncing…' : 'Sync from defaults' }}</button>
             </div>
             <div class="flex-1 overflow-y-auto">
-                <div v-if="loading" class="py-3 px-4 text-zinc-400 text-[12px]">Loading…</div>
+                <div v-if="loading" class="py-3 px-4 text-zinc-400 text-ui-12">Loading…</div>
                 <button
                     v-for="tpl in templates"
                     :key="tpl.id"
@@ -170,10 +170,10 @@ async function confirmDelete(close: () => void) {
                     @click="loadTemplate(tpl)"
                 >
                     <div class="flex items-center gap-1.5 w-full">
-                        <span class="text-zinc-900 text-[12px] font-medium flex-1 truncate">{{ tpl.name }}</span>
-                        <span v-if="tpl.is_builtin" class="text-zinc-400 text-[9px] tracking-[0.03em]">built-in</span>
+                        <span class="text-zinc-900 text-ui-12 font-medium flex-1 truncate">{{ tpl.name }}</span>
+                        <span v-if="tpl.is_builtin" class="text-zinc-400 text-ui-9 tracking-[0.03em]">built-in</span>
                     </div>
-                    <span class="text-[10px]" :style="{ color: AGENT_TYPE_COLORS[tpl.agent_type] ?? color.textFaint }">
+                    <span class="text-ui-10" :style="{ color: AGENT_TYPE_COLORS[tpl.agent_type] ?? color.textFaint }">
                         {{ TEMPLATE_TYPE_LABELS[tpl.agent_type] ?? tpl.agent_type }}
                     </span>
                 </button>
@@ -181,11 +181,11 @@ async function confirmDelete(close: () => void) {
         </div>
 
         <div v-if="showEditor" class="flex-1 flex flex-col overflow-hidden">
-            <div v-if="selected?.is_builtin" class="py-[7px] px-4 bg-canvas border-b border-stroke text-zinc-500 text-[11px]">
+            <div v-if="selected?.is_builtin" class="py-[7px] px-4 bg-canvas border-b border-stroke text-zinc-500 text-ui-11">
                 Built-in template — your edits are saved and persist across restarts. It can’t be deleted.
             </div>
             <div class="flex-1 overflow-y-auto py-[18px] px-6 flex flex-col gap-3.5">
-                <span v-if="formError" class="text-danger text-[12px]">{{ formError }}</span>
+                <span v-if="formError" class="text-danger text-ui-12">{{ formError }}</span>
 
                 <div class="flex gap-2.5">
                     <label class="flex-1 flex flex-col gap-1">
@@ -232,7 +232,7 @@ async function confirmDelete(close: () => void) {
                         name="system_prompt"
                         placeholder="Instructions passed to Claude when an agent using this template starts…"
                         rows="9"
-                        :class="[inputClass, 'w-full box-border resize-y leading-[1.6] font-mono text-[11px]']"
+                        :class="[inputClass, 'w-full box-border resize-y leading-[1.6] font-mono text-ui-11']"
                     />
                 </label>
 
@@ -240,8 +240,8 @@ async function confirmDelete(close: () => void) {
                     <span :class="labelClass">Launch Flags</span>
                     <div v-for="flag in BOOLEAN_FLAGS" :key="flag.key" :class="flagRowClass" @click="toggleFlag(flag.key)">
                         <div>
-                            <div class="text-[12px] font-medium text-zinc-700">{{ flag.label }}</div>
-                            <div class="text-[10px] text-zinc-400">{{ flag.hint }}</div>
+                            <div class="text-ui-12 font-medium text-zinc-700">{{ flag.label }}</div>
+                            <div class="text-ui-10 text-zinc-400">{{ flag.hint }}</div>
                         </div>
                         <button
                             type="button"
@@ -259,8 +259,8 @@ async function confirmDelete(close: () => void) {
                     </div>
                     <div :class="flagRowClass" @click="form.plan_mode = !form.plan_mode">
                         <div>
-                            <div class="text-[12px] font-medium text-zinc-700">Plan Mode</div>
-                            <div class="text-[10px] text-zinc-400">Read-only — analyse and plan, never edit files</div>
+                            <div class="text-ui-12 font-medium text-zinc-700">Plan Mode</div>
+                            <div class="text-ui-10 text-zinc-400">Read-only — analyse and plan, never edit files</div>
                         </div>
                         <button type="button" aria-label="Plan Mode" :aria-pressed="form.plan_mode" :class="toggleClass(form.plan_mode)">
                             <span
@@ -273,8 +273,8 @@ async function confirmDelete(close: () => void) {
                     </div>
                     <div :class="[flagRowClass, 'gap-3']">
                         <div class="flex-1">
-                            <div class="text-[12px] font-medium text-zinc-700">Max Turns</div>
-                            <div class="text-[10px] text-zinc-400">--max-turns N — limit conversation turns</div>
+                            <div class="text-ui-12 font-medium text-zinc-700">Max Turns</div>
+                            <div class="text-ui-10 text-zinc-400">--max-turns N — limit conversation turns</div>
                         </div>
                         <input
                             type="number"
@@ -295,16 +295,16 @@ async function confirmDelete(close: () => void) {
                         <button type="button" :class="[cancelBtnClass, 'text-danger border-danger']">Delete</button>
                     </template>
                     <template #default="{ close }">
-                        <h2 class="m-0 text-zinc-900 text-[15px] font-semibold">Delete Template</h2>
-                        <p class="m-0 text-zinc-700 text-[13px] leading-normal">
+                        <h2 class="m-0 text-zinc-900 text-ui-15 font-semibold">Delete Template</h2>
+                        <p class="m-0 text-zinc-700 text-ui-13 leading-normal">
                             Delete
-                            <span class="text-zinc-900 font-mono text-[12px]">{{ selected?.name }}</span>?
+                            <span class="text-zinc-900 font-mono text-ui-12">{{ selected?.name }}</span>?
                             This can’t be undone.
                         </p>
                         <div class="flex gap-2 justify-end">
                             <button
                                 type="button"
-                                class="bg-transparent border border-stroke rounded text-zinc-700 text-[12px] py-1.5 px-3.5 cursor-pointer"
+                                class="bg-transparent border border-stroke rounded text-zinc-700 text-ui-12 py-1.5 px-3.5 cursor-pointer"
                                 @click="close"
                             >
                                 Cancel
@@ -312,7 +312,7 @@ async function confirmDelete(close: () => void) {
                             <button
                                 type="button"
                                 data-testid="confirm-delete-template"
-                                class="bg-[#da3633] border border-danger rounded text-white text-[12px] py-1.5 px-3.5 cursor-pointer"
+                                class="bg-[#da3633] border border-danger rounded text-white text-ui-12 py-1.5 px-3.5 cursor-pointer"
                                 @click="confirmDelete(close)"
                             >
                                 Delete
@@ -329,7 +329,7 @@ async function confirmDelete(close: () => void) {
             </div>
         </div>
         <div v-else class="flex-1 flex items-center justify-center">
-            <span class="text-zinc-400 text-[13px]">Select a template to view, or create a new one</span>
+            <span class="text-zinc-400 text-ui-13">Select a template to view, or create a new one</span>
         </div>
     </div>
 </template>

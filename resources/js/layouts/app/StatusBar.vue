@@ -43,7 +43,7 @@ function barColor(percent: number): string {
 <template>
     <div
         data-testid="status-bar"
-        class="h-6 flex items-center gap-4 px-3 bg-canvas border-t border-stroke text-[11px] text-zinc-500 whitespace-nowrap overflow-hidden"
+        class="h-6 flex items-center gap-4 px-3 bg-canvas border-t border-stroke text-ui-11 text-zinc-500 whitespace-nowrap overflow-hidden"
     >
         <span
             v-if="today"

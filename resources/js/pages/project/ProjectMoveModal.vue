@@ -37,7 +37,7 @@ async function select(workspaceId: number | null, close: () => void) {
 }
 
 const optionClass = (selected: boolean) => [
-    'text-left py-2 px-3 rounded bg-transparent border text-[13px] flex items-center gap-2',
+    'text-left py-2 px-3 rounded bg-transparent border text-ui-13 flex items-center gap-2',
     selected ? 'border-accent text-accent' : 'border-stroke text-zinc-700',
     loading.value ? 'cursor-default' : 'cursor-pointer',
 ]
@@ -50,11 +50,11 @@ const optionClass = (selected: boolean) => [
         </template>
 
         <template #default="{ close }">
-            <h2 class="m-0 text-zinc-900 text-[14px] font-semibold">
+            <h2 class="m-0 text-zinc-900 text-ui-14 font-semibold">
                 Move
                 <span class="font-mono text-accent">{{ props.project.name }}</span>
             </h2>
-            <span v-if="error" class="text-danger text-[12px]">{{ error }}</span>
+            <span v-if="error" class="text-danger text-ui-12">{{ error }}</span>
             <div class="flex flex-col gap-1.5">
                 <button
                     type="button"
@@ -63,7 +63,7 @@ const optionClass = (selected: boolean) => [
                     @click="select(null, close)"
                 >
                     <span class="text-zinc-400">—</span> Unassigned
-                    <span v-if="props.project.workspace_id === null" class="ml-auto text-zinc-400 text-[11px]">current</span>
+                    <span v-if="props.project.workspace_id === null" class="ml-auto text-zinc-400 text-ui-11">current</span>
                 </button>
                 <button
                     v-for="w in workspaces"
@@ -74,14 +74,14 @@ const optionClass = (selected: boolean) => [
                     @click="select(w.id, close)"
                 >
                     {{ w.name }}
-                    <span v-if="w.id === props.project.workspace_id" class="ml-auto text-zinc-400 text-[11px]">current</span>
+                    <span v-if="w.id === props.project.workspace_id" class="ml-auto text-zinc-400 text-ui-11">current</span>
                 </button>
             </div>
             <div class="flex justify-end">
                 <button
                     type="button"
                     :disabled="loading"
-                    class="bg-transparent border border-stroke rounded text-zinc-700 text-[12px] py-1.5 px-3.5 cursor-pointer"
+                    class="bg-transparent border border-stroke rounded text-zinc-700 text-ui-12 py-1.5 px-3.5 cursor-pointer"
                     @click="close"
                 >
                     Cancel

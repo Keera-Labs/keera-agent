@@ -5,6 +5,7 @@ import { PiniaColada } from '@pinia/colada'
 import { createPinia } from 'pinia'
 import { reactive } from 'vue'
 import { router } from '@inertiajs/vue3'
+import { useAppearanceSettingsStore } from '@/stores/appearanceSettingsStore'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import { useEditorSettingsStore } from '@/stores/editorSettingsStore'
 import SettingsModal from './SettingsModal.vue'
@@ -29,6 +30,16 @@ let saved: Record<string, unknown>
 
 let globalPatch: { status: number; body: Record<string, unknown> }
 let remoteControl: { status: number; enabled: boolean; error?: string }
+let appearance: { ui_font_size: number }
+
+function appearanceFetch(init?: RequestInit) {
+    const method = init?.method ?? 'GET'
+    if (method === 'PATCH') {
+        appearance = JSON.parse(String(init?.body))
+        calls.push({ method, body: appearance })
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: { attributes: appearance } }) })
+}
 
 function remoteControlFetch(init?: RequestInit) {
     const method = init?.method ?? 'GET'
@@ -44,6 +55,7 @@ function remoteControlFetch(init?: RequestInit) {
 
 function fakeFetch(url: string, init?: RequestInit) {
     if (url === '/api/settings/remote-control') return remoteControlFetch(init)
+    if (url === '/api/settings/appearance') return appearanceFetch(init)
     if (url === '/api/global-settings') {
         calls.push({ method: init?.method ?? 'GET', body: JSON.parse(String(init?.body)) })
         const { status, body } = globalPatch
@@ -75,6 +87,9 @@ beforeEach(() => {
     saved = { font_family: 'dank-mono', font_size: 13, hide_hidden: false, hide_ignored: false, hidden_patterns: [], customized: false }
     globalPatch = { status: 200, body: { max_agents_per_project: 25 } }
     remoteControl = { status: 200, enabled: false }
+    appearance = { ui_font_size: 13 }
+    localStorage.clear()
+    document.documentElement.style.removeProperty('--ui-scale')
     page.component = 'Home'
     vi.stubGlobal('fetch', vi.fn(fakeFetch))
     // happy-dom has no FontFaceSet; saving applies the font to terminals through it.
@@ -93,7 +108,7 @@ describe('SettingsModal', () => {
     it('lists every section and switches the pane', async () => {
         const { w } = await open()
 
-        expect(navLabels(w)).toEqual(['ai', 'general', 'editor', 'terminal', 'git', 'workspaces', 'keybindings', 'billing'])
+        expect(navLabels(w)).toEqual(['ai', 'general', 'appearance', 'editor', 'terminal', 'git', 'workspaces', 'keybindings', 'billing'])
         expect(w.find('[data-view="providers"]').exists()).toBe(true)
 
         await w.get('[data-ai-tab="templates"]').trigger('click')
@@ -119,8 +134,9 @@ describe('SettingsModal', () => {
         const search = w.get('[data-testid="settings-search"]')
 
         await search.setValue('font')
-        expect(navLabels(w)).toEqual(['editor', 'terminal'])
+        expect(navLabels(w)).toEqual(['appearance', 'editor', 'terminal'])
 
+        await search.setValue('monaco')
         await search.trigger('keydown', { key: 'Enter' })
         expect(layout.settingsSection).toBe('editor')
 
@@ -337,5 +353,63 @@ describe('SettingsModal', () => {
         await toggle().trigger('click')
         expect(w.get('[data-testid="settings-save"]').attributes('disabled')).toBeDefined()
         expect(w.get('[data-testid="remote-control-error"]').text()).toContain('not valid JSON')
+    })
+
+    describe('Appearance', () => {
+        const uiScale = () => Number(document.documentElement.style.getPropertyValue('--ui-scale'))
+
+        async function openAppearance() {
+            const opened = await open('appearance')
+            await useAppearanceSettingsStore().load()
+            await flushPromises()
+            return opened
+        }
+
+        it('previews the UI font size across the app, then saves it', async () => {
+            const { w } = await openAppearance()
+            expect(uiScale()).toBe(1)
+
+            await w.get('[data-testid="ui-font-size-slider"]').setValue('18')
+            expect(w.get('[data-testid="ui-font-size-badge"]').text()).toBe('18px')
+            expect(uiScale()).toBeCloseTo(18 / 13)
+            expect(w.get('[data-testid="settings-status"]').text()).toBe('Unsaved changes')
+
+            await w.get('[data-testid="settings-save"]').trigger('click')
+            await flushPromises()
+            expect(calls.filter(c => c.method === 'PATCH')).toEqual([{ method: 'PATCH', body: { ui_font_size: 18 } }])
+            expect(localStorage.getItem('keera.ui-font-size')).toBe('18')
+            expect(w.get('[data-testid="settings-status"]').text()).toBe('Saved to Keera settings')
+        })
+
+        it('clamps the stepper to 11-18 and resets to the default', async () => {
+            appearance = { ui_font_size: 11 }
+            const { w } = await openAppearance()
+
+            expect(w.get('[aria-label="Decrease UI font size"]').attributes('disabled')).toBeDefined()
+            await w.get('[data-testid="ui-font-size-input"]').setValue('40')
+            expect(w.get('[data-testid="ui-font-size-badge"]').text()).toBe('18px')
+            expect(w.get('[aria-label="Increase UI font size"]').attributes('disabled')).toBeDefined()
+
+            await w.get('[data-testid="ui-font-size-reset"]').trigger('click')
+            expect(w.get('[data-testid="ui-font-size-badge"]').text()).toBe('13px')
+            expect(uiScale()).toBe(1)
+            expect(w.get('[data-testid="ui-font-size-reset"]').attributes('disabled')).toBeDefined()
+        })
+
+        it('puts the saved size back when the edit is discarded or the modal closes', async () => {
+            appearance = { ui_font_size: 15 }
+            const { w, layout } = await openAppearance()
+
+            await w.get('[data-ui-preset="11"]').trigger('click')
+            expect(uiScale()).toBeCloseTo(11 / 13)
+            await w.get('[data-testid="settings-discard"]').trigger('click')
+            expect(uiScale()).toBeCloseTo(15 / 13)
+
+            await w.get('[data-ui-preset="18"]').trigger('click')
+            await w.get('[data-testid="settings-backdrop"]').trigger('click')
+            expect(layout.settingsSection).toBeNull()
+            expect(uiScale()).toBeCloseTo(15 / 13)
+            expect(calls.some(c => c.method === 'PATCH')).toBe(false)
+        })
     })
 })

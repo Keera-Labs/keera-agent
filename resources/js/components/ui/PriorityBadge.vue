@@ -13,7 +13,7 @@ const colorClass = computed(() => PRIORITY_CLASSES[props.priority] ?? PRIORITY_C
 </script>
 
 <template>
-    <span :class="['text-[10px] font-semibold tracking-[0.04em] py-px px-1.5 rounded-lg border uppercase shrink-0', colorClass]">
+    <span :class="['text-ui-10 font-semibold tracking-[0.04em] py-px px-1.5 rounded-lg border uppercase shrink-0', colorClass]">
         {{ priority }}
     </span>
 </template>

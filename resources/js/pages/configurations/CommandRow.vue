@@ -82,13 +82,13 @@ async function handleSave() {
         </button>
 
         <div class="flex-1 min-w-0">
-            <div class="text-[12px] font-semibold text-zinc-900 font-mono truncate">/{{ command.label }}</div>
-            <div class="text-[10px] text-zinc-400 font-mono truncate mt-0.5">{{ command.command }}</div>
+            <div class="text-ui-12 font-semibold text-zinc-900 font-mono truncate">/{{ command.label }}</div>
+            <div class="text-ui-10 text-zinc-400 font-mono truncate mt-0.5">{{ command.command }}</div>
         </div>
 
         <span
             v-if="isRunning"
-            class="text-[10px] py-px px-1.5 rounded-md bg-[rgba(63,185,80,0.08)] border border-[rgba(63,185,80,0.25)] text-success font-mono shrink-0 [animation:cmd-pulse_2s_infinite]"
+            class="text-ui-10 py-px px-1.5 rounded-md bg-[rgba(63,185,80,0.08)] border border-[rgba(63,185,80,0.25)] text-success font-mono shrink-0 [animation:cmd-pulse_2s_infinite]"
         >
             {{ command.pid ? `pid ${command.pid}` : 'running' }}
         </span>

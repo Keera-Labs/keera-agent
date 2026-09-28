@@ -7,10 +7,12 @@ import PluginsTab from '@/pages/settings/PluginsTab.vue'
 import ProvidersTab from '@/pages/settings/ProvidersTab.vue'
 import TemplatesTab from '@/pages/settings/TemplatesTab.vue'
 import { useAgentSettingsStore } from '@/stores/agentSettingsStore'
+import { useAppearanceSettingsStore } from '@/stores/appearanceSettingsStore'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import { useEditorSettingsStore } from '@/stores/editorSettingsStore'
 import { useRemoteControlSettingsStore } from '@/stores/remoteControlSettingsStore'
 import AgentsTab from './AgentsTab.vue'
+import AppearanceSection from './AppearanceSection.vue'
 import EditorSection from './EditorSection.vue'
 import { filterSections, SETTINGS_SECTIONS, type SettingsSectionId } from './sections'
 
@@ -28,8 +30,9 @@ const { settingsSection } = storeToRefs(layout)
 const editorSettings = useEditorSettingsStore()
 const agentSettings = useAgentSettingsStore()
 const remoteControlSettings = useRemoteControlSettingsStore()
+const appearanceSettings = useAppearanceSettingsStore()
 // Every draft the footer's Save and Discard act on.
-const drafts = [editorSettings, agentSettings, remoteControlSettings]
+const drafts = [appearanceSettings, editorSettings, agentSettings, remoteControlSettings]
 
 const dirty = computed(() => drafts.some(d => d.dirty))
 const saveState = computed(() => {
@@ -98,7 +101,7 @@ const statusText = computed(() => {
 })
 
 const navItem = (active: boolean) => [
-    'flex items-center gap-2.5 h-8 px-2.5 w-full rounded-md text-[13px] text-left cursor-pointer transition-colors duration-100',
+    'flex items-center gap-2.5 h-8 px-2.5 w-full rounded-md text-ui-13 text-left cursor-pointer transition-colors duration-100',
     active ? 'bg-white text-accent font-medium shadow-[0_0_0_1px_var(--color-stroke)]' : 'text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-900',
 ]
 </script>
@@ -116,7 +119,7 @@ const navItem = (active: boolean) => [
             class="bg-white border border-stroke rounded-xl shadow-2xl w-full max-w-[960px] h-[min(680px,calc(100vh-32px))] flex flex-col overflow-hidden"
         >
             <header class="flex items-center gap-3 h-14 px-4 border-b border-stroke shrink-0">
-                <h1 class="m-0 text-zinc-900 text-[15px] font-semibold">Settings</h1>
+                <h1 class="m-0 text-zinc-900 text-ui-15 font-semibold">Settings</h1>
                 <label class="flex items-center gap-2 h-8 w-[280px] max-w-full px-2.5 rounded-md border border-stroke bg-canvas text-zinc-400 focus-within:border-accent">
                     <Icon name="search" :size="13" />
                     <input
@@ -126,11 +129,11 @@ const navItem = (active: boolean) => [
                         type="search"
                         placeholder="Search settings (⌘K)"
                         aria-label="Search settings"
-                        class="flex-1 min-w-0 bg-transparent border-0 outline-none text-[12px] text-zinc-900 placeholder:text-zinc-400"
+                        class="flex-1 min-w-0 bg-transparent border-0 outline-none text-ui-12 text-zinc-900 placeholder:text-zinc-400"
                         @keydown.enter.prevent="onSearchEnter"
                     >
                 </label>
-                <span class="ml-auto rounded border border-stroke px-1.5 py-px text-[10px] text-zinc-400 font-mono">ESC</span>
+                <span class="ml-auto rounded border border-stroke px-1.5 py-px text-ui-10 text-zinc-400 font-mono">ESC</span>
                 <button
                     type="button"
                     aria-label="Close settings"
@@ -155,7 +158,7 @@ const navItem = (active: boolean) => [
                         <Icon :name="section.icon" :size="14" class="shrink-0" />
                         <span class="truncate">{{ section.label }}</span>
                     </button>
-                    <p v-if="!sections.length" data-testid="settings-no-match" class="m-0 px-2.5 py-2 text-[12px] text-zinc-400">
+                    <p v-if="!sections.length" data-testid="settings-no-match" class="m-0 px-2.5 py-2 text-ui-12 text-zinc-400">
                         No settings match “{{ query }}”.
                     </p>
                 </nav>
@@ -169,7 +172,7 @@ const navItem = (active: boolean) => [
                                 type="button"
                                 :data-ai-tab="tab.id"
                                 :class="[
-                                    'rounded text-[12px] py-1 px-3 cursor-pointer border',
+                                    'rounded text-ui-12 py-1 px-3 cursor-pointer border',
                                     aiTab === tab.id ? 'bg-canvas border-stroke text-zinc-900' : 'bg-transparent border-transparent text-zinc-500',
                                 ]"
                                 @click="aiTab = tab.id"
@@ -184,24 +187,25 @@ const navItem = (active: boolean) => [
                 </div>
 
                 <div v-else class="flex-1 min-w-0 overflow-y-auto px-6 py-5" :data-pane="current.id">
-                    <EditorSection v-if="current.id === 'editor'" />
+                    <AppearanceSection v-if="current.id === 'appearance'" />
+                    <EditorSection v-else-if="current.id === 'editor'" />
 
                     <div v-else-if="current.id === 'terminal'" class="flex flex-col gap-3">
-                        <h2 class="m-0 text-zinc-900 text-[16px] font-semibold">Terminal & Shell</h2>
-                        <p class="m-0 text-zinc-500 text-[12px]">
+                        <h2 class="m-0 text-zinc-900 text-ui-16 font-semibold">Terminal & Shell</h2>
+                        <p class="m-0 text-zinc-500 text-ui-12">
                             Agent terminals use the font family and size chosen under Editor.
                         </p>
                         <button
                             type="button"
-                            class="self-start rounded-md border border-stroke px-3 py-1.5 text-[12px] text-zinc-700 hover:bg-black/[0.03] cursor-pointer"
+                            class="self-start rounded-md border border-stroke px-3 py-1.5 text-ui-12 text-zinc-700 hover:bg-black/[0.03] cursor-pointer"
                             @click="select('editor')"
                         >Open Editor settings</button>
                     </div>
 
                     <div v-else data-testid="settings-empty" class="h-full flex flex-col items-center justify-center gap-2 text-center">
                         <Icon :name="current.icon" :size="22" class="text-zinc-300" />
-                        <h2 class="m-0 text-zinc-900 text-[14px] font-semibold">{{ current.label }}</h2>
-                        <p class="m-0 text-zinc-500 text-[12px] max-w-[320px]">
+                        <h2 class="m-0 text-zinc-900 text-ui-14 font-semibold">{{ current.label }}</h2>
+                        <p class="m-0 text-zinc-500 text-ui-12 max-w-[320px]">
                             {{ EMPTY_STATE[current.id] ?? 'Nothing to configure here yet.' }}
                         </p>
                     </div>
@@ -211,7 +215,7 @@ const navItem = (active: boolean) => [
             <footer class="flex items-center gap-3 h-14 px-4 border-t border-stroke shrink-0 bg-canvas">
                 <span
                     data-testid="settings-status"
-                    :class="['flex items-center gap-1.5 text-[12px] font-mono', saveState === 'error' ? 'text-danger' : 'text-zinc-500']"
+                    :class="['flex items-center gap-1.5 text-ui-12 font-mono', saveState === 'error' ? 'text-danger' : 'text-zinc-500']"
                 >
                     <Icon v-if="!dirty && saveState !== 'error'" name="check" :size="13" class="text-success" />
                     {{ statusText }}
@@ -219,14 +223,14 @@ const navItem = (active: boolean) => [
                 <button
                     type="button"
                     data-testid="settings-discard"
-                    class="ml-auto rounded-md border border-stroke bg-white px-3.5 py-1.5 text-[12px] text-zinc-700 cursor-pointer hover:bg-black/[0.03] disabled:opacity-50 disabled:cursor-default"
+                    class="ml-auto rounded-md border border-stroke bg-white px-3.5 py-1.5 text-ui-12 text-zinc-700 cursor-pointer hover:bg-black/[0.03] disabled:opacity-50 disabled:cursor-default"
                     :disabled="!dirty || saveState === 'saving'"
                     @click="discard"
                 >Discard</button>
                 <button
                     type="button"
                     data-testid="settings-save"
-                    class="rounded-md border border-accent bg-accent px-3.5 py-1.5 text-[12px] font-medium text-white cursor-pointer hover:opacity-90 disabled:opacity-50 disabled:cursor-default"
+                    class="rounded-md border border-accent bg-accent px-3.5 py-1.5 text-ui-12 font-medium text-white cursor-pointer hover:opacity-90 disabled:opacity-50 disabled:cursor-default"
                     :disabled="!dirty || saveState === 'saving'"
                     @click="save"
                 >Save Preferences</button>

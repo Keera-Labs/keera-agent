@@ -29,16 +29,16 @@ async function confirmDelete(close: () => void) {
         </template>
 
         <template #default="{ close }">
-            <h2 class="m-0 text-zinc-900 text-[15px] font-semibold">Delete Project</h2>
-            <p class="m-0 text-zinc-700 text-[13px] leading-normal">
+            <h2 class="m-0 text-zinc-900 text-ui-15 font-semibold">Delete Project</h2>
+            <p class="m-0 text-zinc-700 text-ui-13 leading-normal">
                 Remove
-                <span class="text-zinc-900 font-mono text-[12px]">{{ props.project.name }}</span>
+                <span class="text-zinc-900 font-mono text-ui-12">{{ props.project.name }}</span>
                 from Keera? This only removes it from the app — files on disk are not deleted.
             </p>
             <div class="flex gap-2 justify-end">
                 <button
                     type="button"
-                    class="bg-transparent border border-stroke rounded text-zinc-700 text-[12px] py-1.5 px-3.5 cursor-pointer"
+                    class="bg-transparent border border-stroke rounded text-zinc-700 text-ui-12 py-1.5 px-3.5 cursor-pointer"
                     @click="close"
                 >
                     Cancel
@@ -47,7 +47,7 @@ async function confirmDelete(close: () => void) {
                     type="button"
                     :disabled="deleting"
                     :class="[
-                        'bg-[#da3633] border border-danger rounded text-white text-[12px] py-1.5 px-3.5',
+                        'bg-[#da3633] border border-danger rounded text-white text-ui-12 py-1.5 px-3.5',
                         deleting ? 'cursor-default opacity-70' : 'cursor-pointer opacity-100',
                     ]"
                     @click="confirmDelete(close)"

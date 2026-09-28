@@ -55,19 +55,19 @@ async function toggle(plugin: Plugin) {
     <div class="flex-1 overflow-y-auto py-7 px-8">
         <div class="max-w-[720px] flex flex-col gap-[18px]">
             <div>
-                <h3 class="mt-0 mx-0 mb-1.5 text-zinc-900 text-[14px] font-semibold">Plugins</h3>
-                <p class="m-0 text-zinc-500 text-[12px] leading-[1.6]">
+                <h3 class="mt-0 mx-0 mb-1.5 text-zinc-900 text-ui-14 font-semibold">Plugins</h3>
+                <p class="m-0 text-zinc-500 text-ui-12 leading-[1.6]">
                     Plugins are auto-discovered from the <code class="font-[monospace] text-accent">plugins/</code> folder.
                     Activate one to mount its routes and expose its tools live — no restart required.
                 </p>
             </div>
 
-            <span v-if="error" class="text-danger text-[12px]">{{ error }}</span>
+            <span v-if="error" class="text-danger text-ui-12">{{ error }}</span>
 
-            <div v-if="loading" class="text-zinc-400 text-[12px]">Loading…</div>
+            <div v-if="loading" class="text-zinc-400 text-ui-12">Loading…</div>
             <div
                 v-else-if="plugins.length === 0"
-                class="border border-dashed border-stroke rounded-md py-8 px-6 text-center text-zinc-400 text-[12px] leading-[1.6]"
+                class="border border-dashed border-stroke rounded-md py-8 px-6 text-center text-zinc-400 text-ui-12 leading-[1.6]"
             >
                 No plugins discovered.<br>
                 Drop a folder with a <code class="font-[monospace]">provider.py</code> into <code class="font-[monospace]">plugins/</code>.
@@ -85,15 +85,15 @@ async function toggle(plugin: Plugin) {
                 >
                     <div class="flex-1 min-w-0">
                         <div class="flex items-baseline gap-2">
-                            <span class="text-zinc-900 text-[13px] font-semibold">{{ plugin.name }}</span>
-                            <span v-if="plugin.version" class="text-zinc-400 text-[11px] font-mono">v{{ plugin.version }}</span>
+                            <span class="text-zinc-900 text-ui-13 font-semibold">{{ plugin.name }}</span>
+                            <span v-if="plugin.version" class="text-zinc-400 text-ui-11 font-mono">v{{ plugin.version }}</span>
                         </div>
-                        <p v-if="plugin.description" class="mt-[3px] mx-0 mb-0 text-zinc-500 text-[12px] leading-[1.5]">
+                        <p v-if="plugin.description" class="mt-[3px] mx-0 mb-0 text-zinc-500 text-ui-12 leading-[1.5]">
                             {{ plugin.description }}
                         </p>
                     </div>
 
-                    <span :class="['text-[11px] font-medium shrink-0', plugin.active ? 'text-success' : 'text-zinc-400']">
+                    <span :class="['text-ui-11 font-medium shrink-0', plugin.active ? 'text-success' : 'text-zinc-400']">
                         {{ plugin.active ? 'Active' : 'Inactive' }}
                     </span>
 

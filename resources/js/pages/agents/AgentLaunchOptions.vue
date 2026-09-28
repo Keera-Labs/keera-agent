@@ -51,8 +51,8 @@ function onMaxTurns(e: Event) {
 
         <div v-for="t in toggles" :key="t.key" :class="flagRowClass" @click="t.toggle">
             <div>
-                <div class="text-[12px] font-medium text-zinc-700">{{ t.label }}</div>
-                <div class="text-[10px] text-zinc-400">{{ t.hint }}</div>
+                <div class="text-ui-12 font-medium text-zinc-700">{{ t.label }}</div>
+                <div class="text-ui-10 text-zinc-400">{{ t.hint }}</div>
             </div>
             <button
                 type="button"
@@ -70,8 +70,8 @@ function onMaxTurns(e: Event) {
 
         <div :class="[flagRowClass, 'gap-3']">
             <div class="flex-1">
-                <div class="text-[12px] font-medium text-zinc-700">Max Turns</div>
-                <div class="text-[10px] text-zinc-400">--max-turns N — limit conversation turns</div>
+                <div class="text-ui-12 font-medium text-zinc-700">Max Turns</div>
+                <div class="text-ui-10 text-zinc-400">--max-turns N — limit conversation turns</div>
             </div>
             <input
                 type="number"

@@ -38,4 +38,4 @@ export function useCommitDraft(target: MaybeRefOrGetter<GitTarget | null>) {
 }
 
 export const menuItemClass =
-    'flex items-center gap-2 w-full px-3 h-7 text-left text-[12px] text-zinc-700 hover:bg-zinc-100 cursor-pointer disabled:text-zinc-300 disabled:cursor-default disabled:hover:bg-transparent'
+    'flex items-center gap-2 w-full px-3 h-7 text-left text-ui-12 text-zinc-700 hover:bg-zinc-100 cursor-pointer disabled:text-zinc-300 disabled:cursor-default disabled:hover:bg-transparent'

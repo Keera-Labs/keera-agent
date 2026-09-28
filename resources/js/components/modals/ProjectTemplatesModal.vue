@@ -158,8 +158,8 @@ const knobClass = (on: boolean) => [
         <div class="bg-modal border border-stroke rounded-md w-[760px] max-w-[95vw] h-[560px] max-h-[90vh] flex flex-col overflow-hidden">
             <div class="py-4 px-5 border-b border-stroke flex items-center justify-between">
                 <div>
-                    <h2 class="m-0 text-zinc-900 text-[15px] font-semibold">Agent Templates</h2>
-                    <p class="mt-0.5 mx-0 mb-0 text-zinc-500 text-[12px]">
+                    <h2 class="m-0 text-zinc-900 text-ui-15 font-semibold">Agent Templates</h2>
+                    <p class="mt-0.5 mx-0 mb-0 text-zinc-500 text-ui-12">
                         Project: <span class="text-accent">{{ props.projectName }}</span> — edits here stay in this project (copy-on-write).
                     </p>
                 </div>
@@ -182,7 +182,7 @@ const knobClass = (on: boolean) => [
                         </button>
                     </div>
                     <div class="flex-1 overflow-y-auto">
-                        <div v-if="loading" class="p-3 text-zinc-400 text-[12px]">Loading…</div>
+                        <div v-if="loading" class="p-3 text-zinc-400 text-ui-12">Loading…</div>
                         <button
                             v-for="tpl in templates"
                             :key="tpl.id"
@@ -195,11 +195,11 @@ const knobClass = (on: boolean) => [
                             @click="load(tpl)"
                         >
                             <div class="flex items-center gap-1.5">
-                                <span class="text-zinc-900 text-[12px] font-medium flex-1 truncate">{{ tpl.name }}</span>
-                                <span v-if="tpl.is_override" class="text-accent text-[9px] font-semibold">OVERRIDE</span>
-                                <span v-else-if="tpl.is_builtin" class="text-zinc-400 text-[9px]">global</span>
+                                <span class="text-zinc-900 text-ui-12 font-medium flex-1 truncate">{{ tpl.name }}</span>
+                                <span v-if="tpl.is_override" class="text-accent text-ui-9 font-semibold">OVERRIDE</span>
+                                <span v-else-if="tpl.is_builtin" class="text-zinc-400 text-ui-9">global</span>
                             </div>
-                            <span class="text-[10px]" :style="{ color: AGENT_TYPE_COLORS[tpl.agent_type] ?? color.textFaint }">
+                            <span class="text-ui-10" :style="{ color: AGENT_TYPE_COLORS[tpl.agent_type] ?? color.textFaint }">
                                 {{ AGENT_TYPE_LABELS[tpl.agent_type] ?? tpl.agent_type }}
                             </span>
                         </button>
@@ -209,10 +209,10 @@ const knobClass = (on: boolean) => [
                 <div class="flex-1 flex flex-col overflow-hidden">
                     <template v-if="showEditor">
                         <div class="flex-1 overflow-y-auto py-4 px-5 flex flex-col gap-3">
-                            <span v-if="error" class="text-danger text-[12px]">{{ error }}</span>
+                            <span v-if="error" class="text-danger text-ui-12">{{ error }}</span>
                             <div
                                 v-if="selected?.is_override"
-                                class="text-[11px] text-zinc-500 bg-canvas border border-stroke rounded py-[7px] px-2.5"
+                                class="text-ui-11 text-zinc-500 bg-canvas border border-stroke rounded py-[7px] px-2.5"
                             >
                                 Project override — shadows a global template. Use Revert to drop it.
                             </div>
@@ -257,8 +257,8 @@ const knobClass = (on: boolean) => [
                             </label>
                             <div :class="flagRowClass" data-testid="flag-skip-permissions" @click="toggleSkipPermissions">
                                 <div>
-                                    <div class="text-[12px] font-medium text-zinc-700">Skip Permissions</div>
-                                    <div class="text-[10px] text-zinc-400">--dangerously-skip-permissions — no prompts</div>
+                                    <div class="text-ui-12 font-medium text-zinc-700">Skip Permissions</div>
+                                    <div class="text-ui-10 text-zinc-400">--dangerously-skip-permissions — no prompts</div>
                                 </div>
                                 <button type="button" :class="toggleClass(!!flags.dangerously_skip_permissions)" @click.stop>
                                     <span :class="knobClass(!!flags.dangerously_skip_permissions)" />
@@ -266,8 +266,8 @@ const knobClass = (on: boolean) => [
                             </div>
                             <div :class="flagRowClass" data-testid="flag-plan-mode" @click="planMode = !planMode">
                                 <div>
-                                    <div class="text-[12px] font-medium text-zinc-700">Plan Mode</div>
-                                    <div class="text-[10px] text-zinc-400">Read-only — analyse and plan, never edit files</div>
+                                    <div class="text-ui-12 font-medium text-zinc-700">Plan Mode</div>
+                                    <div class="text-ui-10 text-zinc-400">Read-only — analyse and plan, never edit files</div>
                                 </div>
                                 <button type="button" :class="toggleClass(planMode)" @click.stop>
                                     <span :class="knobClass(planMode)" />
@@ -296,7 +296,7 @@ const knobClass = (on: boolean) => [
                             </button>
                         </div>
                     </template>
-                    <div v-else class="flex-1 flex items-center justify-center text-zinc-400 text-[13px] p-5 text-center">
+                    <div v-else class="flex-1 flex items-center justify-center text-zinc-400 text-ui-13 p-5 text-center">
                         Select a template to edit it for this project, or create a project-only one.
                     </div>
                 </div>

@@ -24,8 +24,8 @@ function toggleRemoteControl() {
     <div class="flex-1 overflow-y-auto p-6" data-testid="agents-tab">
         <div class="max-w-[680px] flex flex-col gap-4">
             <div>
-                <h2 class="m-0 text-zinc-900 text-[15px] font-semibold">Agents</h2>
-                <p class="mt-1 mb-0 text-zinc-500 text-[12px]">Limits that apply to agents across all projects.</p>
+                <h2 class="m-0 text-zinc-900 text-ui-15 font-semibold">Agents</h2>
+                <p class="mt-1 mb-0 text-zinc-500 text-ui-12">Limits that apply to agents across all projects.</p>
             </div>
             <section class="border border-stroke rounded-md bg-canvas p-4 flex flex-col gap-1.5">
                 <label class="flex flex-col gap-1.5">
@@ -40,15 +40,15 @@ function toggleRemoteControl() {
                         @change="onChange($event.target as HTMLInputElement)"
                     >
                 </label>
-                <span class="text-zinc-400 text-[11px] leading-normal">
+                <span class="text-zinc-400 text-ui-11 leading-normal">
                     Agents that aren't deleted count toward the limit. Default: 10.
                 </span>
             </section>
             <section class="border border-stroke rounded-md bg-canvas p-4 flex flex-col gap-1.5">
                 <div :class="flagRowClass" @click="toggleRemoteControl">
                     <div>
-                        <div class="text-[12px] font-medium text-zinc-700">Enable Remote Control for all sessions</div>
-                        <div class="text-[10px] text-zinc-400">
+                        <div class="text-ui-12 font-medium text-zinc-700">Enable Remote Control for all sessions</div>
+                        <div class="text-ui-10 text-zinc-400">
                             Applies to new Claude sessions; running agents are unaffected.
                         </div>
                     </div>
@@ -68,10 +68,10 @@ function toggleRemoteControl() {
                         />
                     </button>
                 </div>
-                <span v-if="remoteControl.loadError" data-testid="remote-control-error" class="text-danger text-[11px]">
+                <span v-if="remoteControl.loadError" data-testid="remote-control-error" class="text-danger text-ui-11">
                     {{ remoteControl.loadError }}
                 </span>
-                <span v-else data-testid="remote-control-hint" class="text-zinc-400 text-[11px] leading-normal">
+                <span v-else data-testid="remote-control-hint" class="text-zinc-400 text-ui-11 leading-normal">
                     Saved as <code class="font-mono">remoteControlAtStartup</code> in
                     <code class="font-mono">{{ remoteControl.configPath }}</code>, the same as Claude Code's /config.
                 </span>

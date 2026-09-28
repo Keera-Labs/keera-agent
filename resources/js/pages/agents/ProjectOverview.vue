@@ -51,14 +51,14 @@ function agentUsage(agent: ProjectAgent) {
     return { usage: tokens ? formatTokens(tokens.total) : PLACEHOLDER, usageDetail: detail || undefined }
 }
 
-const pillClass = 'inline-flex items-center gap-1.5 bg-surface border border-stroke rounded-full py-[5px] px-3 text-[12.5px] text-zinc-700 whitespace-nowrap'
+const pillClass = 'inline-flex items-center gap-1.5 bg-surface border border-stroke rounded-full py-[5px] px-3 text-ui-12.5 text-zinc-700 whitespace-nowrap'
 </script>
 
 <template>
     <div class="flex-1 overflow-y-auto bg-[#f7f7f5]">
         <div class="max-w-[1180px] pt-[26px] px-[34px] pb-10">
             <!-- Breadcrumb -->
-            <div class="text-[13px] mb-3.5">
+            <div class="text-ui-13 mb-3.5">
                 <template v-if="workspaceName">
                     <span class="text-zinc-500">{{ workspaceName }}</span>
                     <span class="text-zinc-400 my-0 mx-[7px]">/</span>
@@ -69,9 +69,9 @@ const pillClass = 'inline-flex items-center gap-1.5 bg-surface border border-str
             <!-- Header row: title + description + pills, and New Agent button -->
             <div class="flex items-start gap-5">
                 <div class="flex-1 min-w-0">
-                    <h1 class="m-0 text-[30px] font-extrabold tracking-[-0.02em] text-zinc-900">{{ project.name }}</h1>
+                    <h1 class="m-0 text-ui-30 font-extrabold tracking-[-0.02em] text-zinc-900">{{ project.name }}</h1>
 
-                    <p v-if="project.system_prompt" class="mt-2 mb-0 mx-0 text-[15px] leading-normal text-zinc-500 max-w-[680px]">
+                    <p v-if="project.system_prompt" class="mt-2 mb-0 mx-0 text-ui-15 leading-normal text-zinc-500 max-w-[680px]">
                         {{ project.system_prompt }}
                     </p>
 
@@ -92,7 +92,7 @@ const pillClass = 'inline-flex items-center gap-1.5 bg-surface border border-str
                     <template #trigger>
                         <button
                             type="button"
-                            class="shrink-0 flex items-center gap-[7px] bg-[#111318] border-0 rounded-lg text-white text-[13.5px] font-semibold py-2.5 px-4 cursor-pointer transition-opacity duration-100 hover:opacity-[0.88]"
+                            class="shrink-0 flex items-center gap-[7px] bg-[#111318] border-0 rounded-lg text-white text-ui-13.5 font-semibold py-2.5 px-4 cursor-pointer transition-opacity duration-100 hover:opacity-[0.88]"
                         >
                             <Icon name="plus" :size="13" />
                             New Agent
@@ -105,7 +105,7 @@ const pillClass = 'inline-flex items-center gap-1.5 bg-surface border border-str
                 v-if="agents.length === 0"
                 class="mt-7 p-12 text-center bg-surface border border-dashed border-stroke rounded-[16px]"
             >
-                <p class="m-0 text-[14px] text-zinc-500">
+                <p class="m-0 text-ui-14 text-zinc-500">
                     {{ isPending ? 'Loading agents…' : 'No agents yet. Create one to get started.' }}
                 </p>
             </div>

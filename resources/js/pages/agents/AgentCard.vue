@@ -58,19 +58,19 @@ const iconButtonClass = 'bg-transparent border border-stroke text-zinc-500 curso
         <!-- Header: avatar + name/role + status -->
         <div class="flex items-center gap-[13px]">
             <div
-                class="w-[46px] h-[46px] rounded-xl shrink-0 flex items-center justify-center text-[15px] font-bold text-white tracking-[0.02em]"
+                class="w-[46px] h-[46px] rounded-xl shrink-0 flex items-center justify-center text-ui-15 font-bold text-white tracking-[0.02em]"
                 :style="{ background: agentAvatarColor(agent) }"
             >
                 {{ agentInitials(agent.name) }}
             </div>
             <div class="flex-1 min-w-0">
-                <div class="text-[16px] font-bold text-zinc-900 truncate">{{ agent.name }}</div>
-                <div class="text-[13px] text-zinc-500 mt-px truncate">{{ agentRoleLabel(agent) }}</div>
+                <div class="text-ui-16 font-bold text-zinc-900 truncate">{{ agent.name }}</div>
+                <div class="text-ui-13 text-zinc-500 mt-px truncate">{{ agentRoleLabel(agent) }}</div>
             </div>
             <span
                 data-testid="agent-status"
                 :data-status="agent.status"
-                class="inline-flex items-center gap-1.5 text-[12px] font-semibold py-1 px-2.5 rounded-full shrink-0"
+                class="inline-flex items-center gap-1.5 text-ui-12 font-semibold py-1 px-2.5 rounded-full shrink-0"
                 :style="{ background: statusTone.bg, color: statusTone.fg }"
             >
                 <AgentStatusIndicator v-if="statusTone.indicator" :status="statusTone.indicator" :size="11" />
@@ -84,17 +84,17 @@ const iconButtonClass = 'bg-transparent border border-stroke text-zinc-500 curso
             data-testid="agent-card-prompt"
             class="flex items-start gap-3 py-2.5 px-3 rounded-lg bg-amber-50 border border-amber-200"
         >
-            <p class="m-0 flex-1 min-w-0 text-[13.5px] leading-[1.55] text-amber-900 line-clamp-3">{{ promptLine }}</p>
+            <p class="m-0 flex-1 min-w-0 text-ui-13.5 leading-[1.55] text-amber-900 line-clamp-3">{{ promptLine }}</p>
             <button
                 type="button"
                 data-testid="agent-card-reply"
-                class="shrink-0 h-7 px-3 rounded-md bg-amber-500 text-white text-[12.5px] font-semibold cursor-pointer border-0 hover:bg-amber-600"
+                class="shrink-0 h-7 px-3 rounded-md bg-amber-500 text-white text-ui-12.5 font-semibold cursor-pointer border-0 hover:bg-amber-600"
                 @click.stop="emit('open')"
             >
                 Reply
             </button>
         </div>
-        <p v-else :class="['m-0 text-[13.5px] leading-[1.55]', statusLine ? 'text-zinc-700' : 'text-zinc-400']">
+        <p v-else :class="['m-0 text-ui-13.5 leading-[1.55]', statusLine ? 'text-zinc-700' : 'text-zinc-400']">
             {{ statusLine ?? 'No status reported.' }}
         </p>
 
@@ -103,9 +103,9 @@ const iconButtonClass = 'bg-transparent border border-stroke text-zinc-500 curso
         <!-- Runtime and provider configuration -->
         <div class="grid grid-cols-2 gap-4">
             <div v-for="stat in statCells" :key="stat.label" class="flex flex-col gap-[3px] min-w-0">
-                <span class="text-[10px] font-semibold uppercase tracking-[0.07em] text-zinc-400">{{ stat.label }}</span>
+                <span class="text-ui-10 font-semibold uppercase tracking-[0.07em] text-zinc-400">{{ stat.label }}</span>
                 <span
-                    :class="['text-[13px] font-mono truncate', stat.value === PLACEHOLDER ? 'text-zinc-400' : 'text-zinc-900']"
+                    :class="['text-ui-13 font-mono truncate', stat.value === PLACEHOLDER ? 'text-zinc-400' : 'text-zinc-900']"
                     :title="'title' in stat ? stat.title : undefined"
                 >
                     {{ stat.value }}
@@ -165,7 +165,7 @@ const iconButtonClass = 'bg-transparent border border-stroke text-zinc-500 curso
 
             <button
                 type="button"
-                class="ml-auto bg-transparent border-0 text-blue-600 cursor-pointer text-[13.5px] font-semibold flex items-center gap-[5px] py-1 px-0.5 hover:opacity-70"
+                class="ml-auto bg-transparent border-0 text-blue-600 cursor-pointer text-ui-13.5 font-semibold flex items-center gap-[5px] py-1 px-0.5 hover:opacity-70"
                 @click="emit('open')"
             >
                 Open

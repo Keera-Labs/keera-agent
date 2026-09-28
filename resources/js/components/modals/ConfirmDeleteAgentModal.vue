@@ -41,23 +41,23 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                 data-testid="confirm-delete-agent"
                 class="bg-modal border border-stroke rounded-md p-6 w-[360px] flex flex-col gap-3.5"
             >
-                <h2 id="confirm-delete-agent-title" class="m-0 text-zinc-900 text-[15px] font-semibold">
+                <h2 id="confirm-delete-agent-title" class="m-0 text-zinc-900 text-ui-15 font-semibold">
                     Delete agent {{ agentName }}?
                 </h2>
-                <p class="m-0 text-zinc-500 text-[13px] leading-normal">
+                <p class="m-0 text-zinc-500 text-ui-13 leading-normal">
                     This stops its terminal and process and removes the agent.
                 </p>
-                <p v-if="orchestratedCount" data-testid="confirm-delete-agent-orchestrated" class="m-0 text-zinc-500 text-[13px] leading-normal">
+                <p v-if="orchestratedCount" data-testid="confirm-delete-agent-orchestrated" class="m-0 text-zinc-500 text-ui-13 leading-normal">
                     This PM orchestrates {{ orchestratedCount }} {{ orchestratedCount === 1 ? 'agent' : 'agents' }}. They are not deleted and keep running.
                 </p>
-                <span v-if="error" role="alert" class="text-danger text-[12px]">{{ error }}</span>
+                <span v-if="error" role="alert" class="text-danger text-ui-12">{{ error }}</span>
                 <div class="flex gap-2 items-center">
                     <button
                         v-if="closeOnly"
                         type="button"
                         data-testid="confirm-delete-agent-close-only"
                         :disabled="pending"
-                        class="bg-transparent border-0 p-0 text-zinc-500 text-[12px] cursor-pointer hover:text-zinc-800 hover:underline"
+                        class="bg-transparent border-0 p-0 text-zinc-500 text-ui-12 cursor-pointer hover:text-zinc-800 hover:underline"
                         @click="emit('closeOnly')"
                     >
                         Just close tab
@@ -77,7 +77,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                             type="button"
                             data-testid="confirm-delete-agent-confirm"
                             :disabled="pending"
-                            class="bg-[#da3633] border border-danger rounded text-white text-[12px] py-1.5 px-3.5 cursor-pointer disabled:opacity-60"
+                            class="bg-[#da3633] border border-danger rounded text-white text-ui-12 py-1.5 px-3.5 cursor-pointer disabled:opacity-60"
                             @click="emit('confirm')"
                         >
                             {{ pending ? 'Deleting…' : 'Delete' }}

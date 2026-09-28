@@ -11,8 +11,8 @@ const ERROR_MAP: Record<string, string> = {
     path_not_found: 'Path does not exist on disk.',
 }
 
-const inputCls = 'bg-canvas border border-stroke rounded-md text-zinc-900 placeholder:text-zinc-500 text-[13px] px-2.5 py-1.5 font-mono outline-none w-full'
-const labelSpanCls = 'text-zinc-600 text-[11px] uppercase tracking-[0.05em]'
+const inputCls = 'bg-canvas border border-stroke rounded-md text-zinc-900 placeholder:text-zinc-500 text-ui-13 px-2.5 py-1.5 font-mono outline-none w-full'
+const labelSpanCls = 'text-zinc-600 text-ui-11 uppercase tracking-[0.05em]'
 const cancelCls = 'bg-transparent border border-stroke rounded-md text-zinc-700 text-xs px-3.5 py-1.5 cursor-pointer disabled:opacity-50'
 const submitCls = 'bg-success border border-success rounded-md text-white text-xs px-3.5 py-1.5 cursor-pointer disabled:opacity-50'
 
@@ -90,8 +90,8 @@ async function submit(close: () => void, createDir = false) {
 
         <template #default="{ close }">
             <template v-if="confirmCreate">
-                <h2 class="m-0 text-zinc-900 text-[15px] font-semibold">Directory not found</h2>
-                <p class="m-0 text-zinc-700 text-[13px] leading-relaxed">
+                <h2 class="m-0 text-zinc-900 text-ui-15 font-semibold">Directory not found</h2>
+                <p class="m-0 text-zinc-700 text-ui-13 leading-relaxed">
                     <span class="text-zinc-900 font-mono text-xs">{{ confirmCreate.expanded }}</span>
                     does not exist. Create it?
                 </p>
@@ -105,7 +105,7 @@ async function submit(close: () => void, createDir = false) {
             </template>
 
             <form v-else class="flex flex-col gap-3.5" @submit.prevent="submit(close)">
-                <h2 class="m-0 text-zinc-900 text-[15px] font-semibold">New Project</h2>
+                <h2 class="m-0 text-zinc-900 text-ui-15 font-semibold">New Project</h2>
                 <span v-if="error" class="text-danger text-xs">{{ error }}</span>
                 <label class="flex flex-col gap-1">
                     <span :class="labelSpanCls">Workspace</span>

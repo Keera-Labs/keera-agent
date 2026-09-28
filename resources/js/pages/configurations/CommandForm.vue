@@ -45,7 +45,7 @@ async function handleSubmit() {
                     />
                 </div>
             </div>
-            <span v-if="error" class="text-danger text-[12px]">{{ error }}</span>
+            <span v-if="error" class="text-danger text-ui-12">{{ error }}</span>
             <div class="flex gap-2 justify-end">
                 <button type="button" :class="cancelBtnClass" @click="emit('cancel')">Cancel</button>
                 <button type="submit" :disabled="loading" :class="submitBtnClass">

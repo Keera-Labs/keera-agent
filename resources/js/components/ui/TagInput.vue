@@ -51,7 +51,7 @@ function onBlur() {
         <span
             v-for="(tag, i) in tags"
             :key="tag"
-            class="inline-flex items-center gap-1 border rounded-sm py-0.5 px-1.5 font-mono text-[11px] leading-[1.4]"
+            class="inline-flex items-center gap-1 border rounded-sm py-0.5 px-1.5 font-mono text-ui-11 leading-[1.4]"
             :style="{ background: `${tagColor}22`, borderColor: `${tagColor}55`, color: tagColor }"
         >
             {{ tag }}
@@ -59,7 +59,7 @@ function onBlur() {
                 v-if="!disabled"
                 type="button"
                 :aria-label="`Remove ${tag}`"
-                class="bg-transparent border-0 cursor-pointer p-0 leading-none text-[12px] flex items-center opacity-70"
+                class="bg-transparent border-0 cursor-pointer p-0 leading-none text-ui-12 flex items-center opacity-70"
                 :style="{ color: tagColor }"
                 @click.stop="removeTag(i)"
             >×</button>
@@ -69,11 +69,11 @@ function onBlur() {
             ref="inputEl"
             v-model="input"
             :placeholder="tags.length === 0 ? placeholder : ''"
-            class="bg-transparent border-0 outline-none py-0.5 px-0 font-mono text-[11px] text-zinc-900 min-w-[120px] flex-1"
+            class="bg-transparent border-0 outline-none py-0.5 px-0 font-mono text-ui-11 text-zinc-900 min-w-[120px] flex-1"
             @keydown="onKeydown"
             @blur="onBlur"
         >
-        <span v-if="disabled && tags.length === 0" class="text-zinc-400 text-[11px] font-mono">
+        <span v-if="disabled && tags.length === 0" class="text-zinc-400 text-ui-11 font-mono">
             Loading…
         </span>
     </div>

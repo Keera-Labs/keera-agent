@@ -128,7 +128,7 @@ function onDrop(e: DragEvent) {
                     </button>
 
                     <div
-                        class="w-7 h-7 rounded-md shrink-0 flex items-center justify-center text-[11px] font-bold text-white"
+                        class="w-7 h-7 rounded-md shrink-0 flex items-center justify-center text-ui-11 font-bold text-white"
                         :style="{ background: agentBg }"
                     >
                         {{ displayName.charAt(0).toUpperCase() }}
@@ -136,15 +136,15 @@ function onDrop(e: DragEvent) {
 
                     <div class="flex-1 min-w-0 flex flex-col justify-center gap-px">
                         <div class="flex items-center gap-2">
-                            <span class="text-zinc-900 text-[13px] font-semibold truncate">{{ displayName }}</span>
+                            <span class="text-zinc-900 text-ui-13 font-semibold truncate">{{ displayName }}</span>
                             <span
-                                class="text-[10px] font-semibold py-0.5 px-[7px] rounded-lg tracking-[0.04em] border shrink-0"
+                                class="text-ui-10 font-semibold py-0.5 px-[7px] rounded-lg tracking-[0.04em] border shrink-0"
                                 :style="{ background: `${agentBg}18`, borderColor: `${agentBg}40`, color: agentBg }"
                             >
                                 {{ typeLabel }}
                             </span>
                         </div>
-                        <span v-if="subtitle" class="text-zinc-500 text-[12px] truncate">{{ subtitle }}</span>
+                        <span v-if="subtitle" class="text-zinc-500 text-ui-12 truncate">{{ subtitle }}</span>
                     </div>
 
                     <div class="flex items-center gap-3 shrink-0">
@@ -155,13 +155,13 @@ function onDrop(e: DragEvent) {
                             class="flex items-center gap-2 ml-2 max-w-[360px] py-1 pl-1.5 pr-1 rounded-md bg-amber-50 border border-amber-200"
                         >
                             <AgentStatusIndicator status="needs_input" :size="14" />
-                            <span class="text-amber-800 text-[12px] truncate" :title="activeAgent.attention_prompt ?? undefined">
+                            <span class="text-amber-800 text-ui-12 truncate" :title="activeAgent.attention_prompt ?? undefined">
                                 {{ activeAgent.attention_prompt ?? 'Needs input' }}
                             </span>
                             <button
                                 type="button"
                                 data-testid="agent-reply"
-                                class="shrink-0 h-6 px-2 rounded bg-amber-500 text-white text-[11px] font-semibold cursor-pointer border-0 hover:bg-amber-600"
+                                class="shrink-0 h-6 px-2 rounded bg-amber-500 text-white text-ui-11 font-semibold cursor-pointer border-0 hover:bg-amber-600"
                                 @click="focusTerminal"
                             >
                                 Reply
@@ -176,7 +176,7 @@ function onDrop(e: DragEvent) {
                 >
                     <div class="flex flex-col items-center gap-2.5">
                         <Icon name="image" :size="36" :color="color.accent" class="opacity-80" />
-                        <span class="text-accent text-[13px] font-mono">Drop image to attach</span>
+                        <span class="text-accent text-ui-13 font-mono">Drop image to attach</span>
                     </div>
                 </div>
 
