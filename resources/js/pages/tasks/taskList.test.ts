@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Task } from '@/types/type'
-import { countByFilter, groupTasks, inFilter, matchesSearch, taskAge } from './taskList'
+import { asUtc, countByFilter, groupTasks, inFilter, matchesSearch, taskAge } from './taskList'
 
 function makeTask(overrides: Partial<Task> = {}): Task {
     return {
@@ -75,5 +75,24 @@ describe('taskAge', () => {
         expect(taskAge(makeTask({ created_at: '2026-01-01T02:59:50Z' }), now)).toBe('now')
         expect(taskAge(makeTask({ created_at: '2025-12-31T00:00:00Z', completed_at: '2026-01-01T01:00:00Z' }), now)).toBe('2h ago')
         expect(taskAge(makeTask({ created_at: 'not a date' }), now)).toBe('')
+    })
+
+    it('reads naive backend timestamps as UTC, not local time', () => {
+        vi.stubEnv('TZ', 'America/Los_Angeles')
+        expect(taskAge(makeTask({ created_at: '2026-01-01 02:58:00' }), now)).toBe('2m ago')
+        expect(taskAge(makeTask({ created_at: '2026-01-01T02:58:00' }), now)).toBe('2m ago')
+        expect(taskAge(makeTask({ created_at: '2026-01-01T04:58:00+02:00' }), now)).toBe('2m ago')
+    })
+
+    afterEach(() => vi.unstubAllEnvs())
+})
+
+describe('asUtc', () => {
+    it('adds a UTC designator only when the timestamp has no offset', () => {
+        expect(asUtc('2026-01-01 02:58:00')).toBe('2026-01-01T02:58:00Z')
+        expect(asUtc('2026-01-01T02:58:00.123456')).toBe('2026-01-01T02:58:00.123456Z')
+        expect(asUtc('2026-01-01T02:58:00Z')).toBe('2026-01-01T02:58:00Z')
+        expect(asUtc('2026-01-01T02:58:00-07:00')).toBe('2026-01-01T02:58:00-07:00')
+        expect(asUtc(null)).toBeNull()
     })
 })

@@ -52,7 +52,14 @@ export function groupTasks(tasks: Task[]): TaskSection[] {
         .filter(section => section.tasks.length > 0)
 }
 
+// The backend serializes timestamps as naive UTC ("2026-01-01 10:00:00"), which Date.parse would read as local time.
+export function asUtc(timestamp: string | null): string | null {
+    if (!timestamp) return timestamp
+    const iso = timestamp.trim().replace(' ', 'T')
+    return /(Z|[+-]\d{2}:?\d{2})$/i.test(iso) ? iso : `${iso}Z`
+}
+
 export function taskAge(task: Task, now: number): string {
-    const age = relativeTime(task.completed_at ?? task.created_at, now)
+    const age = relativeTime(asUtc(task.completed_at ?? task.created_at), now)
     return age && age !== 'now' ? `${age} ago` : age
 }

@@ -92,7 +92,6 @@ const chipClass = 'inline-flex items-center gap-1 font-mono text-ui-11 py-px px-
                         data-testid="task-assignee"
                         :class="[chipClass, 'border-violet-200 bg-violet-50 text-violet-700']"
                     >
-                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500" />
                         {{ assignee }}
                     </span>
                     <span v-if="task.acceptance_criteria.length > 0" class="text-ui-11 text-zinc-500">
