@@ -12,6 +12,8 @@ import termios
 import threading
 import time
 
+from app.terminal.terminal_queries import PARTIAL_SEQUENCE, strip_queries
+
 
 def _with_color_env(env: dict) -> dict:
     # The PTY is always rendered by xterm.js (a 256-color, truecolor-capable
@@ -48,6 +50,25 @@ _ESCAPES = re.compile(rb"\x1b\[[0-9;?<>=]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|
 _PARTIAL_ESCAPE = re.compile(rb"\x1b(?:\[[0-9;?<>=]*[ -/]*|\][^\x07\x1b]*)?\Z")
 # Plain text kept from previous chunks so a dialog split across reads still matches.
 _TAIL_CHARS = _DIALOG_SPAN + 100
+# An unterminated sequence longer than this is not a query; stop holding it back.
+_MAX_PENDING = 4096
+_UTF8_CONTINUATION = re.compile(rb"[\x80-\xbf]*")
+
+
+def _safe_start(data: bytes) -> int:
+    """Where a trimmed output buffer can start without splitting an escape or UTF-8 char.
+
+    Neither an escape sequence nor a multi-byte char contains a newline, so the
+    byte after one is always clean; an ESC byte starts a fresh sequence. Output
+    with neither just skips any orphaned UTF-8 continuation bytes.
+    """
+    newline = data.find(b"\n")
+    if newline != -1:
+        return newline + 1
+    escape = data.find(b"\x1b")
+    if escape != -1:
+        return escape
+    return _UTF8_CONTINUATION.match(data).end()
 
 
 def _visible_len(text: str) -> int:
@@ -182,6 +203,11 @@ class Terminal:
     stop_grace = 1.0
     # How long wait_for_cli_ready() holds for an unanswered startup dialog.
     dialog_timeout = 120.0
+    # How long force_redraw() holds the nudged size, long enough for the CLI to
+    # read it before the real size returns, so it sees two actual changes.
+    redraw_nudge = 0.2
+    # Raw output kept for replay into a client that attaches to a running PTY.
+    history_limit = 256 * 1024
 
     def __init__(
         self,
@@ -211,6 +237,8 @@ class Terminal:
         self.startup_prompt: str | None = None
         self._chars_since_dialog = 0
         self._plain = _PlainText()
+        self._history = bytearray()
+        self._history_pending = b""
         # asyncio keeps one reader callback per fd, so the terminal owns the only
         # reader and fans each chunk out; a bridge registering its own would take
         # the output from every other bridge, and unregistering it would starve them.
@@ -249,6 +277,7 @@ class Terminal:
         if not data:
             return
         self.mark_output(data)
+        self.record_history(data)
         for queue in self._subscribers:
             queue.put_nowait(data)
 
@@ -332,6 +361,48 @@ class Terminal:
             except OSError:
                 # fd closed or child gone — nothing more we can deliver.
                 return
+
+    def history(self) -> bytes:
+        """Recent output with its queries removed, for replay into a new client.
+
+        A held-back partial sequence is included so the live chunk completing
+        it still renders correctly after the replay.
+        """
+        return bytes(self._history) + self._history_pending
+
+    def record_history(self, data: bytes) -> None:
+        data = self._history_pending + data
+        partial = PARTIAL_SEQUENCE.search(data)
+        cut = (
+            partial.start()
+            if partial and len(data) - partial.start() <= _MAX_PENDING
+            else len(data)
+        )
+        data, self._history_pending = data[:cut], data[cut:]
+        self._history += strip_queries(data)
+        excess = len(self._history) - self.history_limit
+        if excess > 0:
+            del self._history[:excess]
+            del self._history[: _safe_start(self._history)]
+
+    async def force_redraw(self) -> None:
+        """Make the foreground program repaint by changing its size and restoring it.
+
+        A bare SIGWINCH at an unchanged size does nothing for Node CLIs such as
+        Claude Code: they only emit 'resize' when the size they read differs.
+        """
+        if self.master_fd is None:
+            return
+        cols, rows = self.size
+        with contextlib.suppress(OSError):
+            self._set_size(self.master_fd, rows - 1 if rows > 1 else rows + 1, cols)
+        try:
+            await asyncio.sleep(self.redraw_nudge)
+        finally:
+            # Reads the size again, so a client resize that landed meanwhile wins.
+            if self.master_fd is not None:
+                with contextlib.suppress(OSError):
+                    self._set_size(self.master_fd, self._rows, self._cols)
 
     def mark_output(self, data: bytes) -> None:
         """Record PTY output; the terminal's reader calls this per chunk."""

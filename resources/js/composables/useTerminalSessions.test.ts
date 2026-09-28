@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope } from 'vue'
 import { playQuestionSound } from '@/composables/useAudio'
-import { chimeOnNewQuestion, reportSize, resetChimedQuestions, useTerminalSessions, type Session } from './useTerminalSessions'
+import { acknowledgeReplay, chimeOnNewQuestion, reportSize, socketMessageHandler, resetChimedQuestions, useTerminalSessions, type Session } from './useTerminalSessions'
 
 vi.mock('@/composables/useAudio', () => ({ playQuestionSound: vi.fn() }))
 
@@ -100,6 +100,59 @@ describe('reportSize', () => {
         reportSize(session)
 
         expect(send).not.toHaveBeenCalled()
+    })
+})
+
+describe('acknowledgeReplay', () => {
+    it('confirms the replay only after xterm has parsed the queued output', () => {
+        const pending: Array<() => void> = []
+        const send = vi.fn()
+        const term = { write: vi.fn((_data: string, done: () => void) => pending.push(done)) }
+        const session = { term, ws: { readyState: WebSocket.OPEN, send } } as unknown as Session
+
+        acknowledgeReplay(session)
+        expect(send).not.toHaveBeenCalled()
+
+        pending.forEach(done => done())
+        expect(sent(send)).toEqual([{ type: 'replay_done' }])
+    })
+})
+
+describe('socketMessageHandler', () => {
+    function setup() {
+        const send = vi.fn()
+        const term = { write: vi.fn((_data: unknown, done?: () => void) => done?.()) }
+        const session = { term, ws: { readyState: WebSocket.OPEN, send } } as unknown as Session
+        const onOutput = vi.fn()
+        const onEvent = vi.fn()
+        const handle = socketMessageHandler(() => session, { onOutput, onEvent })
+        const bytes = (text: string) => new TextEncoder().encode(text).buffer as ArrayBuffer
+        return { term, send, onOutput, onEvent, handle, bytes }
+    }
+
+    it('draws replayed history without counting it as agent activity', () => {
+        const { term, send, onOutput, onEvent, handle, bytes } = setup()
+
+        handle(JSON.stringify({ type: 'replay_start' }))
+        handle(bytes('old output'))
+        handle(JSON.stringify({ type: 'replay_end' }))
+        handle(bytes('new output'))
+
+        expect(term.write).toHaveBeenCalledTimes(3)
+        expect(onOutput).toHaveBeenCalledTimes(1)
+        expect(new TextDecoder().decode(onOutput.mock.calls[0][0])).toBe('new output')
+        expect(onEvent).not.toHaveBeenCalled()
+        expect(sent(send)).toEqual([{ type: 'replay_done' }])
+    })
+
+    it('passes other events and live output through', () => {
+        const { onOutput, onEvent, handle, bytes } = setup()
+
+        handle(JSON.stringify({ type: 'claude_stopped' }))
+        handle(bytes('live'))
+
+        expect(onEvent).toHaveBeenCalledWith({ type: 'claude_stopped' })
+        expect(onOutput).toHaveBeenCalledTimes(1)
     })
 })
 

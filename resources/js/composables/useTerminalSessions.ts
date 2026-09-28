@@ -172,10 +172,51 @@ export function reportSize(session: Session) {
 
 type SocketEvent = { type?: string; [key: string]: unknown }
 
-interface ConnectHandlers {
+/**
+ * Tell the server once xterm has parsed the replayed history. Until then the
+ * server drops input that is only terminal responses: xterm answering queries
+ * inside the replay, which must not be typed into the live PTY.
+ */
+export function acknowledgeReplay(session: Pick<Session, 'term' | 'ws'>) {
+    const { term, ws } = session
+    term.write('', () => sendIfOpen(ws, JSON.stringify({ type: 'replay_done' })))
+}
+
+export interface ConnectHandlers {
     onOpen?: () => void
     onEvent: (event: SocketEvent) => void
     onOutput?: (bytes: Uint8Array) => void
+}
+
+/**
+ * Handles one socket's messages. History replayed on reattach arrives between
+ * replay_start and replay_end: it is drawn but is not fresh agent activity.
+ */
+export function socketMessageHandler(getSession: () => Pick<Session, 'term' | 'ws'>, handlers: ConnectHandlers) {
+    let replaying = false
+    return (data: string | ArrayBuffer) => {
+        const session = getSession()
+        if (typeof data === 'string') {
+            let event: SocketEvent
+            try {
+                event = JSON.parse(data)
+            } catch {
+                return
+            }
+            if (event.type === 'replay_start') {
+                replaying = true
+            } else if (event.type === 'replay_end') {
+                replaying = false
+                acknowledgeReplay(session)
+            } else {
+                handlers.onEvent(event)
+            }
+            return
+        }
+        const bytes = new Uint8Array(data)
+        session.term.write(bytes)
+        if (!replaying) handlers.onOutput?.(bytes)
+    }
 }
 
 function connectTerminal(container: HTMLElement, project: Project, agentId: number, handlers: ConnectHandlers): Session {
@@ -200,21 +241,8 @@ function connectTerminal(container: HTMLElement, project: Project, agentId: numb
         reportSize(session)
         handlers.onOpen?.()
     }
-    ws.onmessage = e => {
-        if (typeof e.data === 'string') {
-            let event: SocketEvent
-            try {
-                event = JSON.parse(e.data)
-            } catch {
-                return
-            }
-            handlers.onEvent(event)
-            return
-        }
-        const bytes = new Uint8Array(e.data as ArrayBuffer)
-        term.write(bytes)
-        handlers.onOutput?.(bytes)
-    }
+    const handleMessage = socketMessageHandler(() => session, handlers)
+    ws.onmessage = e => handleMessage(e.data as string | ArrayBuffer)
     ws.onclose = () => term.write('\r\n\x1b[31m[disconnected]\x1b[0m\r\n')
 
     term.onData(data => sendIfOpen(ws, data))
