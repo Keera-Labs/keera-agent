@@ -3,20 +3,32 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import CreateTaskModal, { type NewTask } from '@/pages/tasks/CreateTaskModal.vue'
 import TaskCard from '@/pages/tasks/TaskCard.vue'
-import { TASK_FILTERS, countByFilter, groupTasks, inFilter, matchesSearch, type TaskFilter } from '@/pages/tasks/taskList'
+import {
+    TASK_FILTERS,
+    countByFilter,
+    groupTasks,
+    inFilter,
+    matchesSearch,
+    startOfLocalDay,
+    type TaskFilter,
+} from '@/pages/tasks/taskList'
 import type { Project, Task, Workspace } from '@/types/type'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
     tasks: Task[]
     projects: Project[]
     workspaces: Workspace[]
     defaultProjectId: number | null
-}>()
+    /** Whether the project has running agents that "pause all" would stop. */
+    canPauseAll?: boolean
+    notice?: string | null
+}>(), { canPauseAll: false, notice: null })
 
 const emit = defineEmits<{
     createTask: [task: NewTask]
     updateStatus: [task: Task, status: Task['status']]
     deleteTask: [task: Task]
+    pauseAll: []
 }>()
 
 const query = ref('')
@@ -29,11 +41,22 @@ const projectName = (task: Task) => projectNames.value.get(task.project_id) ?? '
 const runningCount = computed(() => props.tasks.filter(t => t.status === 'in_progress').length)
 const searched = computed(() => props.tasks.filter(t => matchesSearch(t, query.value, projectName(t))))
 const counts = computed(() => countByFilter(searched.value))
-const sections = computed(() => groupTasks(searched.value.filter(t => inFilter(t, filter.value))))
 
-// Relative times only change with the clock, not with the data.
+// Relative times and "today" only change with the clock, not with the data.
 const now = ref(Date.now())
 const clock = setInterval(() => { now.value = Date.now() }, 30_000)
+
+// The overview only keeps today's completions; the Done tab lists every one.
+const sections = computed(() => groupTasks(
+    searched.value.filter(t => inFilter(t, filter.value)),
+    filter.value === 'all' ? startOfLocalDay(now.value) : undefined,
+))
+
+const emptyMessage = computed(() => {
+    if (props.tasks.length === 0) return 'No tasks yet'
+    if (counts.value[filter.value] === 0) return 'No tasks match'
+    return 'Nothing completed today. Earlier tasks are under Done.'
+})
 
 function onKeyDown(e: KeyboardEvent) {
     // An open dialog (e.g. Settings) owns its own ⌘K.
@@ -86,7 +109,7 @@ const pillClass = 'text-ui-11 tabular-nums rounded-full py-px px-2 border'
                     v-model="query"
                     type="search"
                     aria-label="Search tasks"
-                    placeholder="Search tasks..."
+                    placeholder="Search tasks, branches, or PRs..."
                     class="flex-1 min-w-0 bg-transparent border-none outline-none text-ui-13 text-zinc-900 placeholder:text-zinc-400"
                     @keydown.esc="query = ''"
                 >
@@ -115,7 +138,7 @@ const pillClass = 'text-ui-11 tabular-nums rounded-full py-px px-2 border'
 
         <div class="flex-1 overflow-y-auto px-6 py-5">
             <p v-if="sections.length === 0" data-testid="tasks-empty" class="m-0 py-12 text-center text-ui-13 text-zinc-400">
-                {{ tasks.length === 0 ? 'No tasks yet' : 'No tasks match' }}
+                {{ emptyMessage }}
             </p>
 
             <section
@@ -128,6 +151,13 @@ const pillClass = 'text-ui-11 tabular-nums rounded-full py-px px-2 border'
                     <span :class="['w-1.5 h-1.5 rounded-full', section.dot]" />
                     {{ section.label }}
                     <span data-testid="section-count" class="font-normal text-zinc-400">· {{ section.tasks.length }}</span>
+                    <button
+                        v-if="section.status === 'in_progress' && canPauseAll"
+                        type="button"
+                        data-testid="pause-all"
+                        class="ml-auto bg-transparent border-none p-0 text-ui-11 font-medium normal-case tracking-normal text-accent cursor-pointer hover:underline"
+                        @click="emit('pauseAll')"
+                    >pause all</button>
                 </h2>
                 <div class="flex flex-col gap-2">
                     <TaskCard
@@ -141,6 +171,18 @@ const pillClass = 'text-ui-11 tabular-nums rounded-full py-px px-2 border'
                     />
                 </div>
             </section>
+        </div>
+
+        <div
+            role="status"
+            aria-live="polite"
+            class="pointer-events-none fixed bottom-10 right-6 z-50"
+        >
+            <p
+                v-if="notice"
+                data-testid="tasks-notice"
+                class="m-0 py-2 px-3 rounded-md bg-zinc-900 text-white text-ui-12 shadow-lg"
+            >{{ notice }}</p>
         </div>
     </div>
 </template>

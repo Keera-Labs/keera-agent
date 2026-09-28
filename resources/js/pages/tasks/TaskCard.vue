@@ -4,7 +4,7 @@ import Icon from '@/components/ui/Icon.vue'
 import PriorityBadge from '@/components/ui/PriorityBadge.vue'
 import TaskDetailModal from '@/pages/tasks/TaskDetailModal.vue'
 import TaskStatusIcon from '@/pages/tasks/TaskStatusIcon.vue'
-import { taskAge, taskRef } from '@/pages/tasks/taskList'
+import { progressLabel, taskAge, taskRef } from '@/pages/tasks/taskList'
 import { STATUS_CYCLE, STATUS_LABELS } from '@/types/task'
 import type { Task } from '@/types/type'
 
@@ -18,8 +18,23 @@ const emit = defineEmits<{
 const isClosed = computed(() => props.task.status === 'completed' || props.task.status === 'cancelled')
 // "medium" is the default every task gets, so only a deliberate priority earns a chip.
 const showPriority = computed(() => props.task.priority !== 'medium')
+const hasDiff = computed(() =>
+    props.task.status === 'in_review' && (props.task.additions !== null || props.task.deletions !== null),
+)
+const progress = computed(() => (props.task.status === 'in_progress' ? progressLabel(props.task) : null))
 const hasMeta = computed(() =>
-    showPriority.value || props.task.assignees.length > 0 || props.task.acceptance_criteria.length > 0,
+    showPriority.value
+    || props.task.assignees.length > 0
+    || props.task.acceptance_criteria.length > 0
+    || props.task.branch !== null
+    || hasDiff.value
+    || props.task.review_note !== null
+    || progress.value !== null,
+)
+const refClass = computed(() =>
+    props.task.status === 'in_review' && props.task.pr_number !== null
+        ? 'border-amber-200 bg-amber-50 text-amber-700'
+        : 'border-stroke bg-canvas text-zinc-500 in-focus:bg-blue-50 in-focus:border-blue-200 in-focus:text-accent',
 )
 
 function onStatusChange(e: Event) {
@@ -43,10 +58,18 @@ const chipClass = 'inline-flex items-center gap-1 font-mono text-ui-11 py-px px-
 
                 <div :class="['flex items-center gap-2 min-w-0', isClosed && 'opacity-60']">
                     <TaskStatusIcon :status="task.status" />
-                    <span
+                    <!-- Stops click/Enter so following the PR link doesn't also open the task modal. -->
+                    <a
+                        v-if="task.pr_url && task.pr_number !== null"
                         data-testid="task-ref"
-                        :class="[chipClass, 'border-stroke bg-canvas text-zinc-500 in-focus:bg-blue-50 in-focus:border-blue-200 in-focus:text-accent']"
-                    >{{ taskRef(task) }}</span>
+                        :href="task.pr_url"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        :class="[chipClass, refClass, 'no-underline hover:underline']"
+                        @click.stop
+                        @keydown.enter.stop
+                    >{{ taskRef(task) }}</a>
+                    <span v-else data-testid="task-ref" :class="[chipClass, refClass]">{{ taskRef(task) }}</span>
                     <span v-if="projectName" class="font-mono text-ui-11 text-zinc-400 truncate">· {{ projectName }}</span>
 
                     <!-- Key and click events stop here: the card's trigger would otherwise open the modal and swallow them. -->
@@ -85,6 +108,15 @@ const chipClass = 'inline-flex items-center gap-1 font-mono text-ui-11 py-px px-
                 >{{ task.title }}</span>
 
                 <div v-if="hasMeta" :class="['flex items-center gap-1.5 flex-wrap', isClosed && 'opacity-60']">
+                    <span
+                        v-if="task.branch !== null"
+                        data-testid="task-branch"
+                        :title="task.branch"
+                        :class="[chipClass, 'min-w-0 max-w-[260px] border-stroke bg-surface text-zinc-600']"
+                    >
+                        <Icon name="git-branch" :size="10" class="shrink-0 text-zinc-400" />
+                        <span class="truncate">{{ task.branch }}</span>
+                    </span>
                     <PriorityBadge v-if="showPriority" :priority="task.priority" />
                     <span
                         v-for="assignee in task.assignees"
@@ -97,6 +129,15 @@ const chipClass = 'inline-flex items-center gap-1 font-mono text-ui-11 py-px px-
                     <span v-if="task.acceptance_criteria.length > 0" class="text-ui-11 text-zinc-500">
                         {{ task.acceptance_criteria.length }} criteria
                     </span>
+                    <span v-if="hasDiff" data-testid="task-diff" class="inline-flex gap-1.5 font-mono text-ui-11 font-semibold tabular-nums">
+                        <span v-if="task.additions !== null" class="text-success">+{{ task.additions }}</span>
+                        <span v-if="task.deletions !== null" class="text-danger">-{{ task.deletions }}</span>
+                    </span>
+                    <span v-if="hasDiff && task.review_note !== null" aria-hidden="true" class="text-ui-11 text-zinc-300">·</span>
+                    <span v-if="task.review_note !== null" data-testid="task-review-note" class="text-ui-11 text-zinc-500">
+                        {{ task.review_note }}
+                    </span>
+                    <span v-if="progress" data-testid="task-progress" class="text-ui-11 text-accent tabular-nums">{{ progress }}</span>
                 </div>
             </article>
         </template>
