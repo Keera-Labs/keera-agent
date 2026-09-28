@@ -1,0 +1,144 @@
+"""A browser opening an agent whose PTY is already running (page reload, or a
+trigger started it headless) gets a fresh xterm. Without the PTY's recent
+output replayed into it, that xterm stays blank until the CLI happens to
+redraw, so the user can't see what the agent is doing.
+"""
+
+import asyncio
+import unittest
+
+from app.terminal.terminal import Terminal
+from app.terminal.websocket_terminal import WebsocketTerminal
+from tests.test_terminal_shared_pty import FakeWebSocket, _until
+
+
+class TestTerminalHistory(unittest.TestCase):
+    def test_history_keeps_raw_output_including_escapes(self):
+        terminal = Terminal()
+
+        terminal.record_history(b"\x1b[32mhello\x1b[0m\r\n")
+        terminal.record_history(b"world")
+
+        self.assertEqual(terminal.history(), b"\x1b[32mhello\x1b[0m\r\nworld")
+
+    def test_history_is_bounded_and_starts_on_a_line_boundary(self):
+        terminal = Terminal()
+        terminal.history_limit = 32
+
+        for n in range(20):
+            terminal.record_history(f"line-{n:02d}\r\n".encode())
+
+        history = terminal.history()
+        self.assertLessEqual(len(history), 32)
+        self.assertTrue(history.startswith(b"line-"))
+        self.assertTrue(history.endswith(b"line-19\r\n"))
+
+    def test_a_single_oversized_chunk_keeps_its_tail(self):
+        terminal = Terminal()
+        terminal.history_limit = 16
+
+        terminal.record_history(b"x" * 100)
+
+        self.assertEqual(terminal.history(), b"x" * 16)
+
+    def test_trimming_never_starts_inside_an_escape_sequence(self):
+        terminal = Terminal()
+        terminal.history_limit = 12
+
+        terminal.record_history(b"\x1b[38;5;208mab\x1b[0mcd")
+
+        self.assertEqual(terminal.history(), b"\x1b[0mcd")
+
+    def test_trimming_never_starts_inside_a_multibyte_char(self):
+        terminal = Terminal()
+        terminal.history_limit = 5
+
+        terminal.record_history("··ab".encode())
+
+        history = terminal.history()
+        self.assertEqual(history, "·ab".encode())
+        history.decode("utf-8")
+
+
+class TestHistoryReplay(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.terminal = Terminal(shell="/bin/sh", cwd="/tmp")
+        self.terminal.start()
+        self.tasks: list[asyncio.Task] = []
+
+    async def asyncTearDown(self):
+        for task in self.tasks:
+            task.cancel()
+        await asyncio.gather(*self.tasks, return_exceptions=True)
+        await self.terminal.aclose()
+
+    def attach(self, replay_history: bool) -> FakeWebSocket:
+        ws = FakeWebSocket()
+        bridge = WebsocketTerminal(ws, self.terminal, replay_history=replay_history)
+        self.tasks.append(asyncio.create_task(bridge.run(stop_on_disconnect=False)))
+        return ws
+
+    async def test_a_reattaching_client_first_receives_earlier_output(self):
+        first = self.attach(replay_history=False)
+        await asyncio.sleep(0.1)
+        first.type("echo before-$((40+2))\n")
+        await _until(lambda: b"before-42" in first.received)
+
+        late = self.attach(replay_history=True)
+
+        self.assertTrue(await _until(lambda: b"before-42" in late.received))
+
+    async def test_replayed_output_is_not_duplicated_by_live_output(self):
+        first = self.attach(replay_history=False)
+        await asyncio.sleep(0.1)
+        first.type("echo before-$((40+2))\n")
+        await _until(lambda: b"before-42" in first.received)
+
+        late = self.attach(replay_history=True)
+        first.type("echo after-$((6*7))\n")
+        await _until(lambda: b"after-42" in late.received)
+        await asyncio.sleep(0.2)
+
+        self.assertEqual(late.received.count(b"before-42"), first.received.count(b"before-42"))
+        self.assertEqual(late.received.count(b"after-42"), first.received.count(b"after-42"))
+
+    async def test_replay_comes_before_live_output_with_no_gap(self):
+        first = self.attach(replay_history=False)
+        await asyncio.sleep(0.1)
+        first.type("i=0; while [ $i -lt 300 ]; do echo tick-$i; i=$((i+1)); done\n")
+        late = self.attach(replay_history=True)
+        await _until(lambda: b"tick-299" in first.received)
+        await _until(lambda: b"tick-299" in late.received)
+
+        self.assertTrue(first.received.endswith(late.received))
+        self.assertIn(b"tick-299", late.received)
+
+    async def test_a_reattaching_client_makes_the_cli_redraw_at_an_unchanged_size(self):
+        first = self.attach(replay_history=False)
+        await asyncio.sleep(0.1)
+        first.type("trap 'echo redrawn' WINCH\n")
+        first.resize(80, 24)
+        await asyncio.sleep(0.2)
+        first.received = b""
+
+        late = self.attach(replay_history=True)
+        await asyncio.sleep(0.1)
+        late.resize(80, 24)
+        first.type("true\n")
+
+        self.assertTrue(await _until(lambda: b"redrawn" in first.received))
+
+    async def test_a_client_without_replay_only_sees_new_output(self):
+        first = self.attach(replay_history=False)
+        await asyncio.sleep(0.1)
+        first.type("echo before-$((40+2))\n")
+        await _until(lambda: b"before-42" in first.received)
+
+        late = self.attach(replay_history=False)
+        await asyncio.sleep(0.2)
+
+        self.assertNotIn(b"before-42", late.received)
+
+
+if __name__ == "__main__":
+    unittest.main()

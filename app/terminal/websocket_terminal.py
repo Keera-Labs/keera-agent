@@ -14,11 +14,16 @@ class WebsocketTerminal:
         terminal: Terminal,
         on_output: Callable[[bytes], Awaitable[None]] | None = None,
         on_restart: Callable[[], Awaitable[object]] | None = None,
+        replay_history: bool = False,
     ):
         self._ws = websocket
         self._terminal = terminal
         self._on_output = on_output
         self._on_restart = on_restart
+        # A client attaching to a running PTY starts from a blank xterm: replay
+        # recent output, then have the CLI repaint once the client's size is known.
+        self._replay_history = replay_history
+        self._needs_redraw = replay_history
         self._restart_task: asyncio.Task | None = None
         self._stopped = asyncio.Event()
 
@@ -59,7 +64,7 @@ class WebsocketTerminal:
                 await self._terminal.aclose()
 
     async def _read_pty(self, loop: asyncio.AbstractEventLoop) -> None:
-        queue = self._terminal.subscribe()
+        queue = self._terminal.subscribe(with_history=self._replay_history)
         try:
             while not self._stopped.is_set():
                 try:
@@ -89,12 +94,7 @@ class WebsocketTerminal:
                     try:
                         parsed = json.loads(text)
                         if isinstance(parsed, dict) and parsed.get("type") == "resize":
-                            self._terminal.set_client_size(
-                                self,
-                                int(parsed["cols"]),
-                                int(parsed["rows"]),
-                                visible=bool(parsed.get("visible", True)),
-                            )
+                            self._resize(parsed)
                         elif isinstance(parsed, dict) and parsed.get("type") == "restart_cli":
                             self._request_restart()
                         else:
@@ -105,6 +105,22 @@ class WebsocketTerminal:
             except (WebSocketDisconnect, Exception):
                 break
         self._stopped.set()
+
+    def _resize(self, message: dict) -> None:
+        before = self._terminal.size
+        self._terminal.set_client_size(
+            self,
+            int(message["cols"]),
+            int(message["rows"]),
+            visible=bool(message.get("visible", True)),
+        )
+        # A size change already signals the CLI; an unchanged size needs an explicit
+        # nudge, since a replayed byte stream of a cursor-addressed TUI captured at
+        # another size or cut mid-screen can land in the wrong cells.
+        if self._needs_redraw:
+            self._needs_redraw = False
+            if self._terminal.size == before:
+                self._terminal.force_redraw()
 
     def _request_restart(self) -> None:
         # Runs off the receive loop: a restart waits for the CLI to stop and boot.

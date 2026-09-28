@@ -111,7 +111,10 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
     existing_terminal = terminal_manager.find(existing_key) if existing_key else None
     if existing_terminal and existing_terminal.is_alive():
         reattach_bridge = WebsocketTerminal(
-            websocket, existing_terminal, on_restart=lambda: restart_cli(existing_key)
+            websocket,
+            existing_terminal,
+            on_restart=lambda: restart_cli(existing_key),
+            replay_history=True,
         )
         conn_manager.set(existing_key, reattach_bridge, cwd=cwd)
         try:

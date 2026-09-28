@@ -48,6 +48,23 @@ _ESCAPES = re.compile(rb"\x1b\[[0-9;?<>=]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|
 _PARTIAL_ESCAPE = re.compile(rb"\x1b(?:\[[0-9;?<>=]*[ -/]*|\][^\x07\x1b]*)?\Z")
 # Plain text kept from previous chunks so a dialog split across reads still matches.
 _TAIL_CHARS = _DIALOG_SPAN + 100
+_UTF8_CONTINUATION = re.compile(rb"[\x80-\xbf]*")
+
+
+def _safe_start(data: bytes) -> int:
+    """Where a trimmed output buffer can start without splitting an escape or UTF-8 char.
+
+    Neither an escape sequence nor a multi-byte char contains a newline, so the
+    byte after one is always clean; an ESC byte starts a fresh sequence. Output
+    with neither just skips any orphaned UTF-8 continuation bytes.
+    """
+    newline = data.find(b"\n")
+    if newline != -1:
+        return newline + 1
+    escape = data.find(b"\x1b")
+    if escape != -1:
+        return escape
+    return _UTF8_CONTINUATION.match(data).end()
 
 
 def _visible_len(text: str) -> int:
@@ -182,6 +199,8 @@ class Terminal:
     stop_grace = 1.0
     # How long wait_for_cli_ready() holds for an unanswered startup dialog.
     dialog_timeout = 120.0
+    # Raw output kept for replay into a client that attaches to a running PTY.
+    history_limit = 256 * 1024
 
     def __init__(
         self,
@@ -211,6 +230,7 @@ class Terminal:
         self.startup_prompt: str | None = None
         self._chars_since_dialog = 0
         self._plain = _PlainText()
+        self._history = bytearray()
         # asyncio keeps one reader callback per fd, so the terminal owns the only
         # reader and fans each chunk out; a bridge registering its own would take
         # the output from every other bridge, and unregistering it would starve them.
@@ -223,9 +243,16 @@ class Terminal:
     def size(self) -> tuple[int, int]:
         return self._cols, self._rows
 
-    def subscribe(self) -> "asyncio.Queue[bytes]":
-        """A queue that receives every output chunk until it is unsubscribed."""
+    def subscribe(self, with_history: bool = False) -> "asyncio.Queue[bytes]":
+        """A queue that receives every output chunk until it is unsubscribed.
+
+        with_history first queues the recent output, in the same step as
+        subscribing, so the replay and the live chunks after it neither overlap
+        nor leave a gap.
+        """
         queue: asyncio.Queue[bytes] = asyncio.Queue()
+        if with_history and self._history:
+            queue.put_nowait(self.history())
         self._subscribers.append(queue)
         if self._reader is None and self.master_fd is not None:
             loop = asyncio.get_running_loop()
@@ -249,6 +276,7 @@ class Terminal:
         if not data:
             return
         self.mark_output(data)
+        self.record_history(data)
         for queue in self._subscribers:
             queue.put_nowait(data)
 
@@ -332,6 +360,23 @@ class Terminal:
             except OSError:
                 # fd closed or child gone — nothing more we can deliver.
                 return
+
+    def history(self) -> bytes:
+        return bytes(self._history)
+
+    def record_history(self, data: bytes) -> None:
+        self._history += data
+        excess = len(self._history) - self.history_limit
+        if excess > 0:
+            del self._history[:excess]
+            del self._history[: _safe_start(self._history)]
+
+    def force_redraw(self) -> None:
+        """Make the foreground program repaint its screen, as a resize would."""
+        if self.master_fd is None:
+            return
+        with contextlib.suppress(OSError):
+            os.killpg(os.tcgetpgrp(self.master_fd), signal.SIGWINCH)
 
     def mark_output(self, data: bytes) -> None:
         """Record PTY output; the terminal's reader calls this per chunk."""
