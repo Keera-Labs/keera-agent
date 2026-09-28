@@ -40,13 +40,20 @@ def utc_now() -> str:
     return datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S")
 
 
-async def notify_agent_status(agent: Agent, status: str) -> None:
+async def notify_agent_status(agent: Agent, status: str, attention_kind: str | None = None) -> None:
     """Tell open frontend terminals of the agent's project to refresh agent statuses."""
     project = await Project.find(agent.project_id)
     if not project:
         return
     conn_manager: ConnectionManager = app().make("connections")
-    payload = json.dumps({"type": "agent_status", "agent_id": agent.id, "status": status})
+    payload = json.dumps(
+        {
+            "type": "agent_status",
+            "agent_id": agent.id,
+            "status": status,
+            "attention_kind": attention_kind,
+        }
+    )
     for bridge in conn_manager.all_for_cwd(os.path.expanduser(project.path)):
         try:
             await bridge.write(payload)

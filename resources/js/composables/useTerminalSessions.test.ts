@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope } from 'vue'
-import { reportSize, useTerminalSessions, type Session } from './useTerminalSessions'
+import { playQuestionSound } from '@/composables/useAudio'
+import { chimeOnNewQuestion, reportSize, resetChimedQuestions, useTerminalSessions, type Session } from './useTerminalSessions'
 
-vi.mock('@/composables/useAudio', () => ({ playSound: vi.fn() }))
+vi.mock('@/composables/useAudio', () => ({ playQuestionSound: vi.fn() }))
 
 let visibility: DocumentVisibilityState = 'visible'
 
@@ -26,6 +27,8 @@ let slot: HTMLElement
 let holder: HTMLElement
 
 beforeEach(() => {
+    resetChimedQuestions()
+    vi.mocked(playQuestionSound).mockClear()
     visibility = 'visible'
     vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibility)
     // happy-dom does no layout; a terminal counts as displayed unless inside a display:none box.
@@ -169,5 +172,35 @@ describe('restartClaude', () => {
 
         expect(pm.send).not.toHaveBeenCalled()
         cleanup()
+    })
+})
+
+describe('chimeOnNewQuestion', () => {
+    const question = { agent_id: 41, status: 'needs_input', attention_kind: 'question' }
+
+    it('stays silent for permission prompts and other statuses', () => {
+        chimeOnNewQuestion({ agent_id: 40, status: 'needs_input', attention_kind: 'permission' })
+        chimeOnNewQuestion({ agent_id: 40, status: 'running' })
+        chimeOnNewQuestion({ agent_id: 40, status: 'waiting' })
+
+        expect(playQuestionSound).not.toHaveBeenCalled()
+    })
+
+    it('chimes once per question and again for the next one', () => {
+        chimeOnNewQuestion(question)
+        chimeOnNewQuestion(question)
+        expect(playQuestionSound).toHaveBeenCalledTimes(1)
+
+        chimeOnNewQuestion({ agent_id: 41, status: 'running' })
+        chimeOnNewQuestion(question)
+        expect(playQuestionSound).toHaveBeenCalledTimes(2)
+    })
+
+    it('chimes again for a question asked after the agent stopped waiting', () => {
+        chimeOnNewQuestion(question)
+        chimeOnNewQuestion({ agent_id: 41, status: 'waiting', attention_kind: null })
+        chimeOnNewQuestion(question)
+
+        expect(playQuestionSound).toHaveBeenCalledTimes(2)
     })
 })

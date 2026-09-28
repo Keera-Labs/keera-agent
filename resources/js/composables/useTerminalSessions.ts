@@ -3,7 +3,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import type { Project } from '@/types/type'
 import { normalizeAgent, type AgentResource, type ProjectAgent } from '@/queries/agentQuery'
-import { playSound } from '@/composables/useAudio'
+import { playQuestionSound } from '@/composables/useAudio'
 
 export interface Session {
     term: Terminal
@@ -80,15 +80,25 @@ function syncLiveSessionCount() {
     liveSessionCount.value = sessions.size + agentSessions.size
 }
 
-const INPUT_PROMPT_PATTERNS = [
-    /\?\s*$/m,
-    /\[Y\/n\]/i,
-    /\[y\/N\]/i,
-    /Do you want to/i,
-    /Would you like/i,
-    /Press Enter to/i,
-    /Type your (message|response|reply)/i,
-]
+// Agents whose pending question has already chimed; a later status push for the agent
+// (answered, running, stopped) clears it so its next question chimes again.
+const chimedQuestions = new Set<number>()
+
+/** Chime once when an agent starts waiting on a question — never for permission prompts. */
+export function chimeOnNewQuestion(event: SocketEvent) {
+    const agentId = Number(event.agent_id)
+    if (event.status !== 'needs_input' || event.attention_kind !== 'question') {
+        chimedQuestions.delete(agentId)
+        return
+    }
+    if (chimedQuestions.has(agentId)) return
+    chimedQuestions.add(agentId)
+    playQuestionSound()
+}
+
+export function resetChimedQuestions() {
+    chimedQuestions.clear()
+}
 
 function disposeSession({ term, ws, observer }: Session) {
     observer.disconnect()
@@ -291,9 +301,6 @@ export function useTerminalSessions(params: UseTerminalSessionsParams) {
             const container = containerRefs.get(project.id)
             if (!container) return
 
-            let recentText = ''
-            let lastInputSoundAt = 0
-
             const session = connectTerminal(container, project, pmId, {
                 onOpen: () => {
                     claudeStatus[project.id] = 'running'
@@ -304,20 +311,17 @@ export function useTerminalSessions(params: UseTerminalSessionsParams) {
                         claudeStatus[project.id] = 'done'
                         params.onClaudeStopped(project.id)
                         params.onAgentStatus()
-                        playSound('done')
                     } else if (event.type === 'agent_status') {
                         params.onAgentStatus()
-                        if (event.status === 'needs_input') playSound('input')
+                        chimeOnNewQuestion(event)
                     } else if (event.type === 'agent_message') {
                         params.onAgentMessage(event.message_id as number)
-                        playSound('input')
                     } else if (event.type === 'agent_created') {
                         agentCreatedFrom(event)
                     }
                 },
                 onOutput: bytes => {
                     const text = new TextDecoder().decode(bytes).replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
-                    recentText = (recentText + text).slice(-800)
 
                     const lines = text
                         .replace(/[^\x20-\x7E\n\r]/g, '')
@@ -326,12 +330,6 @@ export function useTerminalSessions(params: UseTerminalSessionsParams) {
                         .filter(line => line.length > 6 && !/^[$%>#❯]/.test(line))
                     if (lines.length) lastActivity[project.id] = lines[lines.length - 1]
                     outputChars[project.id] = (outputChars[project.id] ?? 0) + bytes.length
-
-                    const now = Date.now()
-                    if (now - lastInputSoundAt > 3000 && INPUT_PROMPT_PATTERNS.some(p => p.test(recentText))) {
-                        lastInputSoundAt = now
-                        playSound('input')
-                    }
                 },
             })
 

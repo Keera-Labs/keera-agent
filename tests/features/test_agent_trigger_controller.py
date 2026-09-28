@@ -5,9 +5,12 @@ Guards against regressions in POST /api/agents/:id/trigger — the headless
 spawn path that was broken when to_command() signature changed.
 """
 
+import json
+
+from fastapi_startkit.application import app
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
-from app.controllers.agent_trigger_controller import _build_relay_instructions
+from app.controllers.agent_trigger_controller import _build_relay_instructions, _mark_agent_working
 from app.controllers.terminal_controller import _build_identity_suffix
 from app.models.Agent import Agent
 from databases.factories.agent_factory import AgentFactory
@@ -284,3 +287,68 @@ class TestAgentRelayDeletedGuard(TestCase, DatabaseTransaction):
             },
         )
         response.assert_status(404)
+
+
+class _RecordingBridge:
+    def __init__(self):
+        self.sent: list[str] = []
+
+    async def write(self, message: str) -> None:
+        self.sent.append(message)
+
+
+class _FakeConnections:
+    def __init__(self, cwd: str, bridge: _RecordingBridge):
+        self._cwd = cwd
+        self._bridge = bridge
+
+    def all_for_cwd(self, cwd: str):
+        return [self._bridge] if cwd == self._cwd else []
+
+
+class TestMarkAgentWorkingPushesAgentStatus(TestCase, DatabaseTransaction):
+    """Regression (PR #366 review): triggering an already-running agent bypasses the
+    hook-event path, so _mark_agent_working must itself push `agent_status` or the
+    frontend's per-agent question-chime dedupe never clears."""
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        self.project = await ProjectFactory.new().create()
+        self.agent = await AgentFactory.new().create(
+            project_id=self.project.id,
+            status="needs_input",
+            attention_kind="question",
+            attention_prompt="Proceed?",
+        )
+        self.bridge = _RecordingBridge()
+        container = app()
+        self._orig_connections = container.make("connections")
+        import os
+
+        container.bind(
+            "connections",
+            _FakeConnections(os.path.expanduser(self.project.path), self.bridge),
+        )
+
+    async def asyncTearDown(self):
+        app().bind("connections", self._orig_connections)
+        await super().asyncTearDown()
+
+    async def test_marks_agent_running_and_pushes_agent_status(self):
+        await _mark_agent_working(self.agent, "Continue the task")
+
+        refreshed = await Agent.find(self.agent.id)
+        self.assertEqual(refreshed.status, "running")
+        self.assertIsNone(refreshed.attention_kind)
+
+        self.assertEqual(
+            [json.loads(m) for m in self.bridge.sent],
+            [
+                {
+                    "type": "agent_status",
+                    "agent_id": self.agent.id,
+                    "status": "running",
+                    "attention_kind": None,
+                }
+            ],
+        )

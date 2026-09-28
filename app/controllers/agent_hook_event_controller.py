@@ -20,15 +20,17 @@ async def store(
     """Receives Claude Code hooks that move an agent into or out of `needs_input`."""
     agent = await find_hook_agent(x_keera_agent_id, body.cwd)
     if agent:
-        status = await _apply(agent, body)
-        if status:
-            await notify_agent_status(agent, status)
+        transition = await _apply(agent, body)
+        if transition:
+            status, attention_kind = transition
+            await notify_agent_status(agent, status, attention_kind)
     # Claude Code parses an HTTP hook's response as hook output, so it must stay empty.
     return JSONResponse({})
 
 
-async def _apply(agent: Agent, event: AgentHookEventRequest) -> str | None:
-    """Persist the transition the event implies; the new status, or None if unchanged."""
+async def _apply(agent: Agent, event: AgentHookEventRequest) -> tuple[str, str | None] | None:
+    """Persist the transition the event implies; the (status, attention_kind), or None if
+    unchanged."""
     attention = event.attention()
     if attention:
         await Agent.where("id", agent.id).update(
@@ -39,7 +41,7 @@ async def _apply(agent: Agent, event: AgentHookEventRequest) -> str | None:
                 "updated_at": utc_now(),
             }
         )
-        return "needs_input"
+        return "needs_input", attention.kind
 
     # A tool call or a submitted prompt proves the agent is working, so any other status
     # (including a stale `waiting`) self-heals. PostToolUse fires on every tool call,
@@ -51,4 +53,4 @@ async def _apply(agent: Agent, event: AgentHookEventRequest) -> str | None:
     await Agent.where("id", agent.id).update(
         {"status": "running", **CLEARED_ATTENTION, "updated_at": utc_now()}
     )
-    return "running" if agent.status != "running" else None
+    return ("running", None) if agent.status != "running" else None

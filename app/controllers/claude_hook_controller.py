@@ -8,7 +8,12 @@ from fastapi import Header, Request
 from fastapi.responses import JSONResponse
 from fastapi_startkit.application import app
 
-from app.actions.agent_status_action import CLEARED_ATTENTION, hook_agent_id, utc_now
+from app.actions.agent_status_action import (
+    CLEARED_ATTENTION,
+    hook_agent_id,
+    notify_agent_status,
+    utc_now,
+)
 from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.models.Agent import Agent
 from app.models.AgentRelayMessage import AgentRelayMessage
@@ -114,18 +119,20 @@ async def _mark_stopped_agent_waiting(agent_id: int | None) -> None:
     # stopped; treating it as "every running agent stopped" froze still-working agents.
     if agent_id is None:
         return
-    await (
-        Agent.where("id", agent_id)
-        .where_in("status", ["running", "needs_input"])
-        .update(
-            {
-                "status": "waiting",
-                "current_activity": None,
-                **CLEARED_ATTENTION,
-                "updated_at": utc_now(),
-            }
-        )
+    agent = await Agent.where("id", agent_id).where_in("status", ["running", "needs_input"]).first()
+    if not agent:
+        return
+    await Agent.where("id", agent_id).update(
+        {
+            "status": "waiting",
+            "current_activity": None,
+            **CLEARED_ATTENTION,
+            "updated_at": utc_now(),
+        }
     )
+    # The Stop hook only pushes `claude_stopped` (no agent_id), so without this the
+    # frontend's per-agent question dedupe never clears and the next question stays silent.
+    await notify_agent_status(agent, "waiting")
 
 
 async def _handle_claude_stopped(project, project_cwd: str, agent_id: int | None = None) -> None:
@@ -162,8 +169,10 @@ async def _handle_claude_stopped(project, project_cwd: str, agent_id: int | None
                     "status": "running",
                     "started_at": now,
                     "current_activity": (next_task.body or next_task.title)[:140],
+                    **CLEARED_ATTENTION,
                 }
             )
+            await notify_agent_status(active_agent, "running")
 
             bridge = _find_project_bridge(project_cwd)
             if bridge:

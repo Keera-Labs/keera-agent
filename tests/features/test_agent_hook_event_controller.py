@@ -1,3 +1,7 @@
+import json
+import os
+
+from fastapi_startkit.application import app
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
 from app.models.Agent import Agent
@@ -23,6 +27,15 @@ def permission_prompt(message: str = "Claude needs your permission to use Bash")
         "hook_event_name": "Notification",
         "cwd": "/tmp/somewhere",
         "notification_type": "permission_prompt",
+        "message": message,
+    }
+
+
+def elicitation_dialog(message: str = "Pick a deployment target") -> dict:
+    return {
+        "hook_event_name": "Notification",
+        "cwd": "/tmp/somewhere",
+        "notification_type": "elicitation_dialog",
         "message": message,
     }
 
@@ -55,6 +68,13 @@ class TestAgentHookEventController(TestCase, DatabaseTransaction):
         self.assertEqual(agent.status, "needs_input")
         self.assertEqual(agent.attention_kind, "permission")
         self.assertEqual(agent.attention_prompt, "Claude needs your permission to use Bash")
+
+    async def test_elicitation_dialog_marks_agent_needs_input_with_question(self):
+        agent = await self._post(elicitation_dialog())
+
+        self.assertEqual(agent.status, "needs_input")
+        self.assertEqual(agent.attention_kind, "question")
+        self.assertEqual(agent.attention_prompt, "Pick a deployment target")
 
     async def test_idle_prompt_notification_is_ignored(self):
         agent = await self._post({**permission_prompt(), "notification_type": "idle_prompt"})
@@ -131,3 +151,90 @@ class TestAgentHookEventController(TestCase, DatabaseTransaction):
         await self._post(permission_prompt())
 
         self.assertEqual((await Agent.find(sibling.id)).status, "running")
+
+
+class _RecordingBridge:
+    def __init__(self):
+        self.sent: list[str] = []
+
+    async def write(self, message: str) -> None:
+        self.sent.append(message)
+
+
+class _FakeConnections:
+    def __init__(self, cwd: str, bridge: _RecordingBridge):
+        self._cwd = cwd
+        self._bridge = bridge
+
+    def all_for_cwd(self, cwd: str):
+        return [self._bridge] if cwd == self._cwd else []
+
+
+class TestAgentHookEventControllerPushPayload(TestCase, DatabaseTransaction):
+    """The frontend chimes on `agent_status` pushes whose `attention_kind` is `question`,
+    so the pushed payload must carry the mapped kind, not just the DB row."""
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        self.project = await ProjectFactory.new().create()
+        self.agent = await AgentFactory.new().create(project_id=self.project.id, status="running")
+        self.bridge = _RecordingBridge()
+        container = app()
+        self._orig_connections = container.make("connections")
+        container.bind(
+            "connections",
+            _FakeConnections(os.path.expanduser(self.project.path), self.bridge),
+        )
+
+    async def asyncTearDown(self):
+        app().bind("connections", self._orig_connections)
+        await super().asyncTearDown()
+
+    async def _post(self, payload: dict) -> dict:
+        response = await self.post(
+            URL, json=payload, headers={"X-Keera-Agent-Id": str(self.agent.id)}
+        )
+        response.assert_ok()
+        self.assertEqual(len(self.bridge.sent), 1)
+        return json.loads(self.bridge.sent[0])
+
+    async def test_ask_user_question_pushes_question_attention_kind(self):
+        pushed = await self._post(ask_question("Which database?"))
+
+        self.assertEqual(
+            pushed,
+            {
+                "type": "agent_status",
+                "agent_id": self.agent.id,
+                "status": "needs_input",
+                "attention_kind": "question",
+            },
+        )
+
+    async def test_elicitation_dialog_pushes_question_attention_kind(self):
+        pushed = await self._post(elicitation_dialog())
+
+        self.assertEqual(pushed["attention_kind"], "question")
+
+    async def test_permission_prompt_pushes_permission_attention_kind(self):
+        pushed = await self._post(permission_prompt())
+
+        self.assertEqual(pushed["attention_kind"], "permission")
+
+    async def test_resuming_work_pushes_null_attention_kind(self):
+        await self._post(ask_question("Proceed?"))
+        self.bridge.sent.clear()
+
+        pushed = await self._post(
+            {"hook_event_name": "PostToolUse", "tool_name": "AskUserQuestion"}
+        )
+
+        self.assertEqual(
+            pushed,
+            {
+                "type": "agent_status",
+                "agent_id": self.agent.id,
+                "status": "running",
+                "attention_kind": None,
+            },
+        )
