@@ -229,6 +229,67 @@ class TestTaskController(TestCase, DatabaseTransaction):
             )
         )
 
+    async def test_update_accepts_in_review_status_without_completing(self):
+        task = await TaskFactory.new().create(project_id=self.project.id)
+
+        response = await self.patch(f"/api/tasks/{task.id}", json={"status": "in_review"})
+        response.assert_ok().assert_json(
+            _data_attrs(
+                lambda a: (
+                    a.where("status", "in_review").where("completed_at", lambda v: v is None).etc()
+                )
+            )
+        )
+
+    async def test_update_rejects_unknown_status(self):
+        task = await TaskFactory.new().create(project_id=self.project.id)
+
+        response = await self.patch(f"/api/tasks/{task.id}", json={"status": "shipped"})
+        response.assert_status(422)
+
+    async def test_update_sets_review_fields(self):
+        task = await TaskFactory.new().create(project_id=self.project.id)
+        fields = {
+            "pr_number": 368,
+            "pr_url": "https://github.com/acme/app/pull/368",
+            "branch": "task/tasks-page",
+            "additions": 120,
+            "deletions": 14,
+            "review_note": "Needs a second look at the migration.",
+            "progress_step": 2,
+            "progress_total": 5,
+        }
+
+        response = await self.patch(f"/api/tasks/{task.id}", json=fields)
+
+        response.assert_ok()
+        attributes = response.json()["data"]["attributes"]
+        self.assertEqual({k: attributes[k] for k in fields}, fields)
+
+    async def test_new_task_has_null_review_fields(self):
+        response = await self.post(self.tasks_url, json={"title": "Fresh"})
+
+        attributes = response.json()["data"]["attributes"]
+        for field in ("pr_number", "pr_url", "branch", "progress_step", "completed_at"):
+            self.assertIsNone(attributes[field], field)
+
+    async def test_update_rejects_negative_diff_counts(self):
+        task = await TaskFactory.new().create(project_id=self.project.id)
+
+        response = await self.patch(f"/api/tasks/{task.id}", json={"additions": -1})
+        response.assert_status(422)
+
+    async def test_editing_a_completed_task_keeps_completed_at(self):
+        stamp = "2026-09-20T10:00:00"
+        task = await TaskFactory.new().create(
+            project_id=self.project.id, status="completed", completed_at=stamp
+        )
+
+        await self.patch(f"/api/tasks/{task.id}", json={"title": "renamed"})
+        response = await self.patch(f"/api/tasks/{task.id}", json={"status": "completed"})
+
+        response.assert_json(_data_attrs(lambda a: a.where("completed_at", stamp).etc()))
+
     async def test_update_missing_task_returns_404(self):
         response = await self.patch("/api/tasks/999999", json={"title": "nope"})
         response.assert_status(404)

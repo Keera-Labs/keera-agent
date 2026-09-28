@@ -89,3 +89,32 @@ class TestTasksPageController(TestCase, DatabaseTransaction):
         response.assert_ok().assert_json(
             lambda j: j.has("props", lambda p: p.where("tasks", []).etc()).etc()
         )
+
+    async def test_tasks_page_includes_review_fields_and_completed_at(self):
+        await TaskFactory.new().create(
+            project_id=self.project.id,
+            status="in_review",
+            pr_number=42,
+            pr_url="https://github.com/acme/app/pull/42",
+            branch="task/review",
+            additions=10,
+            deletions=3,
+            review_note="LGTM",
+            progress_step=4,
+            progress_total=4,
+        )
+
+        response = await self.get(
+            f"/{self.slug}/tasks",
+            headers={"X-Inertia": "true", "X-Inertia-Version": ""},
+        )
+
+        task = response.json()["props"]["tasks"][0]
+        self.assertEqual(task["status"], "in_review")
+        self.assertEqual(task["pr_number"], 42)
+        self.assertEqual(task["pr_url"], "https://github.com/acme/app/pull/42")
+        self.assertEqual(task["branch"], "task/review")
+        self.assertEqual((task["additions"], task["deletions"]), (10, 3))
+        self.assertEqual(task["review_note"], "LGTM")
+        self.assertEqual((task["progress_step"], task["progress_total"]), (4, 4))
+        self.assertIsNone(task["completed_at"])

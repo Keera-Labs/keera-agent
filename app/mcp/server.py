@@ -19,9 +19,7 @@ logger = logging.getLogger("keera.mcp")
 class ActiveTasksResource(Resource):
     uri = "keera://tasks/active"
     name = "active_tasks"
-    description = (
-        "Pending and in-progress tasks for this project. Read this at the start of every session."
-    )
+    description = "Pending, in-progress and in-review tasks for this project. Read this at the start of every session."
     mime_type = "text/plain"
 
     async def read(self, **kwargs) -> str:
@@ -43,13 +41,13 @@ class ActiveTasksResource(Resource):
 
         tasks = await (
             Task.where("project_id", project.id)
-            .where_in("status", ["pending", "in_progress"])
+            .where_in("status", ["pending", "in_progress", "in_review"])
             .order_by("id", "asc")
             .get()
         )
 
         if not tasks:
-            return f"No pending or in-progress tasks for project '{project.name}'."
+            return f"No pending, in-progress or in-review tasks for project '{project.name}'."
 
         def _load(v):
             try:

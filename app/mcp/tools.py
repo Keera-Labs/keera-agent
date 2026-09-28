@@ -8,8 +8,10 @@ from typing import Literal, Optional, Union
 from fastapi_startkit.mcp import Response, Tool
 from pydantic import BaseModel, Field
 
+from app.constant.task_status import TaskStatus
 from app.models.Project import Project
-from app.models.Task import TERMINAL_STATUSES, Task
+from app.models.Task import REVIEW_FIELDS, Task
+from app.requests.task_request import TaskReviewFields
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -38,6 +40,8 @@ def _serialize_task(t: Task) -> dict:
         "acceptance_criteria": _load_json(t.acceptance_criteria),
         "testing_methods": _load_json(t.testing_methods),
         "validation_steps": _load_json(t.validation_steps),
+        **{field: getattr(t, field, None) for field in REVIEW_FIELDS},
+        "completed_at": t.completed_at,
         "created_at": str(t.created_at),
     }
 
@@ -138,7 +142,7 @@ class ListTasksInput(BaseModel):
     )
     status: Optional[str] = Field(
         default=None,
-        pattern="^(pending|in_progress|completed|cancelled)$",
+        pattern=TaskStatus.pattern(),
         description="Filter by status. Omit to return all tasks.",
     )
 
@@ -208,6 +212,8 @@ class GetTaskTool(Tool):
             f"Priority: {t['priority']}",
             f"Assignees: {', '.join(t['assignees']) if t['assignees'] else 'none'}",
             f"Created:  {t['created_at']}",
+            *([f"Completed: {t['completed_at']}"] if t["completed_at"] else []),
+            *(f"{field}: {t[field]}" for field in REVIEW_FIELDS if t[field] is not None),
             "",
             "Body:",
             t["body"] or "(none)",
@@ -224,7 +230,7 @@ class GetTaskTool(Tool):
 # ── update_task ───────────────────────────────────────────────────────────────
 
 
-class UpdateTaskInput(BaseModel):
+class UpdateTaskInput(TaskReviewFields):
     task_id: int = Field(description="The numeric task ID.")
     title: Optional[str] = None
     body: Optional[str] = None
@@ -237,7 +243,12 @@ class UpdateTaskInput(BaseModel):
 
 class UpdateTaskTool(Tool):
     name = "update_task"
-    description = "Update any fields of a task (title, body, acceptance_criteria, testing_methods, validation_steps, priority, assignees)."
+    description = (
+        "Update any fields of a task (title, body, acceptance_criteria, testing_methods, "
+        "validation_steps, priority, assignees). Also report your work on it: pr_number, "
+        "pr_url, branch, additions/deletions (diff line counts), review_note, and "
+        "progress_step/progress_total (e.g. step 2 of 5)."
+    )
 
     def schema(self):
         return UpdateTaskInput
@@ -247,7 +258,7 @@ class UpdateTaskTool(Tool):
         if not task:
             return Response.text(f"Error: task #{arguments['task_id']} not found")
 
-        for field in ["title", "body", "priority"]:
+        for field in ["title", "body", "priority", *REVIEW_FIELDS]:
             if field in arguments and arguments[field] is not None:
                 setattr(task, field, arguments[field])
         for field in ["assignees", "acceptance_criteria", "testing_methods", "validation_steps"]:
@@ -263,7 +274,7 @@ class UpdateTaskTool(Tool):
 
 class UpdateTaskStatusInput(BaseModel):
     task_id: int = Field(description="The numeric task ID.")
-    status: str = Field(pattern="^(pending|in_progress|completed|cancelled)$")
+    status: str = Field(pattern=TaskStatus.pattern())
 
 
 class UpdateTaskStatusTool(Tool):
@@ -278,14 +289,7 @@ class UpdateTaskStatusTool(Tool):
         if not task:
             return Response.text(f"Error: task #{arguments['task_id']} not found")
         status = arguments["status"]
-        await task.update(
-            {
-                "status": status,
-                "completed_at": (
-                    datetime.datetime.now().isoformat() if status in TERMINAL_STATUSES else None
-                ),
-            }
-        )
+        await task.update({"status": status, "completed_at": task.completed_at_for(status)})
         return Response.text(f"Task #{task.id} '{task.title or task.body}' → {task.status}")
 
 
