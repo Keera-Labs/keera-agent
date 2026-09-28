@@ -163,7 +163,11 @@ class ListTasksTool(Tool):
 
         q = Task.where("project_id", project.id)
         status = arguments.get("status")
-        cutoff = (datetime.datetime.now() - datetime.timedelta(days=7)).isoformat()
+        # completed_at is stamped in UTC (see Task.completed_at_for), so the cutoff
+        # compared against it must be computed in UTC too.
+        cutoff = (
+            datetime.datetime.now(datetime.UTC).replace(tzinfo=None) - datetime.timedelta(days=7)
+        ).isoformat()
         if status:
             q = q.where("status", status)
             if status == "completed":

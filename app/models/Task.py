@@ -47,9 +47,14 @@ class Task(Model):
 
     def completed_at_for(self, status: str) -> str | None:
         """completed_at after moving to `status`: stamped on entering a terminal
-        status, kept while it stays terminal, cleared when reopened."""
+        status, kept while it stays terminal, cleared when reopened.
+
+        Stamped in naive UTC, like created_at — the frontend parses completed_at
+        as UTC, so a local-time stamp here shifts the "Completed today" grouping
+        by the server's UTC offset.
+        """
         if status not in TERMINAL_STATUSES:
             return None
         if self.status in TERMINAL_STATUSES and self.completed_at:
             return self.completed_at
-        return datetime.datetime.now().isoformat()
+        return datetime.datetime.now(datetime.UTC).replace(tzinfo=None).isoformat()
