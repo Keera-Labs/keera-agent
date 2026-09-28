@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest'
 import { mount, type VueWrapper } from '@vue/test-utils'
-import type { Task } from '@/types/type'
+import type { Project, Task } from '@/types/type'
 import TasksView from './TasksView.vue'
 
 let wrapper: VueWrapper | undefined
@@ -24,15 +24,18 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     }
 }
 
+const projects = [{ id: 1, name: 'acme-web' }, { id: 2, name: 'salut-ai' }] as Project[]
+
 function mountView(tasks: Task[]) {
     wrapper = mount(TasksView, {
         attachTo: document.body,
-        props: { tasks, projects: [], workspaces: [], defaultProjectId: 1 },
+        props: { tasks, projects, workspaces: [], defaultProjectId: 1 },
     })
     return wrapper
 }
 
-const column = (w: VueWrapper, status: Task['status']) => w.get(`[data-status="${status}"]`)
+const sectionTitles = (w: VueWrapper) => w.findAll('[data-testid="task-title"]').map(t => t.text())
+const tab = (w: VueWrapper, id: string) => w.get(`[data-filter="${id}"]`)
 const dialog = () => document.querySelector<HTMLElement>('[role="dialog"]')
 
 afterEach(() => {
@@ -41,45 +44,88 @@ afterEach(() => {
 })
 
 describe('TasksView', () => {
-    it('places each task in the column of its status', () => {
-        const w = mountView([
-            makeTask({ id: 1, title: 'A', status: 'pending' }),
-            makeTask({ id: 2, title: 'B', status: 'in_progress' }),
-            makeTask({ id: 3, title: 'C', status: 'in_progress' }),
-        ])
+    const tasks = [
+        makeTask({ id: 1, title: 'Plan', status: 'pending' }),
+        makeTask({ id: 2, title: 'Build checkout', status: 'in_progress', project_id: 2 }),
+        makeTask({ id: 3, title: 'Ship', status: 'completed' }),
+    ]
 
-        expect(column(w, 'pending').get('[data-testid="column-count"]').text()).toBe('1')
-        expect(column(w, 'in_progress').get('[data-testid="column-count"]').text()).toBe('2')
-        expect(column(w, 'in_progress').text()).toContain('B')
-        expect(column(w, 'completed').text()).toContain('No tasks')
+    it('shows the total, running count and tab counts in the header', () => {
+        const w = mountView(tasks)
+
+        expect(w.get('[data-testid="task-total"]').text()).toBe('3')
+        expect(w.get('[data-testid="running-pill"]').text()).toBe('1 running')
+        expect(tab(w, 'all').text()).toBe('All (3)')
+        expect(tab(w, 'running').text()).toBe('Running (1)')
+        expect(tab(w, 'done').text()).toBe('Done (1)')
+        expect(tab(w, 'backlog').text()).toBe('Backlog (1)')
+        expect(w.find('[data-filter="review"]').exists()).toBe(false)
     })
 
-    it('shows every column empty when there are no tasks', () => {
-        const w = mountView([])
-        const columns = w.findAll('[data-status]')
-        expect(columns).toHaveLength(4)
-        expect(columns.every(c => c.text().includes('No tasks'))).toBe(true)
+    it('hides the running pill when nothing runs', () => {
+        expect(mountView([makeTask()]).find('[data-testid="running-pill"]').exists()).toBe(false)
     })
 
-    it('moves a task to the column it is dropped on', async () => {
-        const task = makeTask({ id: 7, status: 'pending' })
+    it('groups tasks into status sections with counts', () => {
+        const w = mountView(tasks)
+
+        const sections = w.findAll('[data-section]')
+        expect(sections.map(s => s.attributes('data-section'))).toEqual(['in_progress', 'pending', 'completed'])
+        expect(sections[0].text()).toContain('Active agents')
+        expect(sections[0].get('[data-testid="section-count"]').text()).toBe('· 1')
+        expect(sections[0].text()).toContain('TASK-2')
+        expect(sections[0].text()).toContain('· salut-ai')
+        expect(sections[0].get('[data-testid="task-status-icon"]').attributes('aria-label')).toBe('Running')
+    })
+
+    it('strikes through the title of a closed task', () => {
+        const w = mountView(tasks)
+        const done = w.get('[data-section="completed"] [data-testid="task-title"]')
+        expect(done.classes()).toContain('line-through')
+    })
+
+    it('filters by tab', async () => {
+        const w = mountView(tasks)
+
+        await tab(w, 'running').trigger('click')
+
+        expect(tab(w, 'running').attributes('aria-selected')).toBe('true')
+        expect(sectionTitles(w)).toEqual(['Build checkout'])
+    })
+
+    it('filters by search, updating tab counts, and shows an empty state', async () => {
+        const w = mountView(tasks)
+        const search = w.get('input[type="search"]')
+
+        await search.setValue('salut')
+        expect(sectionTitles(w)).toEqual(['Build checkout'])
+        expect(tab(w, 'all').text()).toBe('All (1)')
+        expect(tab(w, 'done').text()).toBe('Done (0)')
+
+        await search.setValue('nothing like this')
+        expect(w.get('[data-testid="tasks-empty"]').text()).toBe('No tasks match')
+    })
+
+    it('focuses the search on ⌘K', async () => {
+        const w = mountView(tasks)
+
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))
+
+        expect(document.activeElement).toBe(w.get('input[type="search"]').element)
+    })
+
+    it('shows the empty state without tasks', () => {
+        expect(mountView([]).get('[data-testid="tasks-empty"]').text()).toBe('No tasks yet')
+    })
+
+    it('changes a task status from its card without opening its details', async () => {
+        const task = makeTask({ id: 7, title: 'Plan' })
         const w = mountView([task])
 
-        await w.get('[data-testid="task-card"]').trigger('dragstart')
-        await column(w, 'completed').trigger('dragover')
-        expect(column(w, 'completed').text()).toContain('Drop here')
-        await column(w, 'completed').trigger('drop')
+        await w.get('select[aria-label="Status of Plan"]').setValue('completed')
 
         expect(w.emitted('updateStatus')).toEqual([[task, 'completed']])
-    })
-
-    it('ignores a drop on the column the task already sits in', async () => {
-        const w = mountView([makeTask({ status: 'pending' })])
-
-        await w.get('[data-testid="task-card"]').trigger('dragstart')
-        await column(w, 'pending').trigger('drop')
-
-        expect(w.emitted('updateStatus')).toBeUndefined()
+        expect(dialog()).toBeNull()
     })
 
     it('opens the task details when a card is clicked', async () => {
@@ -108,17 +154,11 @@ describe('TasksView', () => {
         expect(dialog()).toBeNull()
     })
 
-    it('opens the create-task modal from the header and the To Do column', async () => {
+    it('opens the create-task modal from New Task', async () => {
         const w = mountView([])
 
         await w.get('[aria-label="New task"]').trigger('click')
-        expect(dialog()?.textContent).toContain('New Task')
-        await w.vm.$nextTick()
-        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-        await w.vm.$nextTick()
-        expect(dialog()).toBeNull()
 
-        await column(w, 'pending').get('[aria-label="New task"]').trigger('click')
         expect(dialog()?.textContent).toContain('New Task')
     })
 })

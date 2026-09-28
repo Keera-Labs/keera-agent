@@ -326,40 +326,33 @@ describe('Sidebar', () => {
         expect(dialog().exists()).toBe(false)
     })
 
-    it('marks Agents as current only on a project agents page', async () => {
-        const w = await mountSidebar()
-        useProjectStore().setActiveProject(projects[0])
-        const agentsTab = () => w.get('[data-tab="agents"]').attributes('aria-current')
-
-        for (const component of ['Dashboard', 'settings/Index', 'Broadcasting']) {
-            page.component = component
-            await flushPromises()
-            expect(agentsTab(), component).toBeUndefined()
-        }
-
-        page.component = 'agents/Detail'
-        await flushPromises()
-        expect(agentsTab()).toBe('page')
-    })
-
-    it('opens the active project from the Agents nav on a non-project page', async () => {
-        page.component = 'Dashboard'
+    it('offers only Tasks in the nav, marked current on the Tasks page', async () => {
         const w = await mountSidebar()
         useProjectStore().setActiveProject(projects[0])
         await flushPromises()
 
-        await w.get('[data-tab="agents"]').trigger('click')
-        expect(router.visit).toHaveBeenCalledWith('/p-10')
+        expect(w.findAll('[data-tab]').map(t => t.attributes('data-tab'))).toEqual(['tasks'])
+        expect(w.get('[data-tab="tasks"]').attributes('aria-current')).toBeUndefined()
+
+        page.component = 'Tasks'
+        await flushPromises()
+        expect(w.get('[data-tab="tasks"]').attributes('aria-current')).toBe('page')
+
+        await w.get('[data-tab="tasks"]').trigger('click')
+        expect(router.visit).toHaveBeenCalledWith('/p-10/tasks')
     })
 
-    it('returns from an agent to the project overview from the Agents nav', async () => {
+    it('returns from an agent to the project overview from the project row', async () => {
         page.component = 'agents/Detail'
+        summaries = [summary(5, 10, 'idle')]
+        vi.stubGlobal('WebSocket', class { close() {} })
         const w = await mountSidebar()
         useProjectStore().setActiveProject(projects[0])
         useAppLayoutStore().setActiveAgentId(5)
         await flushPromises()
+        expect(useAppLayoutStore().activeAgentId).toBe(5)
 
-        await w.get('[data-tab="agents"]').trigger('click')
+        await w.findAll('[data-testid="project-item"]')[0].trigger('click')
 
         expect(useAppLayoutStore().activeAgentId).toBeNull()
         expect(router.visit).toHaveBeenCalledWith('/p-10')

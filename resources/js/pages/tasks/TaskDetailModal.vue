@@ -4,6 +4,7 @@ import Modal from '@/components/ui/Modal.vue'
 import PriorityBadge from '@/components/ui/PriorityBadge.vue'
 import { labelClass } from '@/components/ui/styles'
 import { color } from '@/tokens'
+import TaskStatusIcon from '@/pages/tasks/TaskStatusIcon.vue'
 import { STATUS_COLORS, STATUS_LABELS } from '@/types/task'
 import type { Task } from '@/types/type'
 
@@ -37,9 +38,10 @@ const planningSections = computed(() => [
                     </div>
                     <div class="mt-1.5 flex items-center gap-2 flex-wrap">
                         <span
-                            class="text-ui-10 font-semibold py-0.5 px-2 rounded-lg uppercase tracking-[0.05em]"
+                            class="inline-flex items-center gap-1 text-ui-10 font-semibold py-0.5 px-2 rounded-lg uppercase tracking-[0.05em]"
                             :style="{ background: `${statusColor}20`, border: `1px solid ${statusColor}40`, color: statusColor }"
                         >
+                            <TaskStatusIcon :status="task.status" :size="11" />
                             {{ STATUS_LABELS[task.status] }}
                         </span>
                         <PriorityBadge :priority="task.priority" />
