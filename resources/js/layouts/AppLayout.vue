@@ -2,6 +2,8 @@
 import '@xterm/xterm/css/xterm.css'
 import { storeToRefs } from 'pinia'
 import { defineAsyncComponent, ref, watch } from 'vue'
+import ResizeHandle from '@/components/ui/ResizeHandle.vue'
+import { useResizablePanel } from '@/composables/useResizablePanel'
 import AppHeader from '@/layouts/app/AppHeader.vue'
 import StatusBar from '@/layouts/app/StatusBar.vue'
 import ModalLayer from '@/layouts/ModalLayer.vue'
@@ -15,6 +17,10 @@ const layout = useAppLayoutStore()
 const { sidebarOpen, rightPanelOpen, statusBarOpen } = storeToRefs(layout)
 const { activeTab: activeEditorTab } = storeToRefs(useEditorStore())
 const { activeTab: activeDiffTab } = storeToRefs(useDiffStore())
+
+// Terminals refit themselves: their ResizeObserver fires as the main area changes width.
+const sidebar = useResizablePanel({ storageKey: 'keera.layout.sidebarWidth', defaultWidth: 216, side: 'left' })
+const rightPanel = useResizablePanel({ storageKey: 'keera.layout.rightPanelWidth', defaultWidth: 272, side: 'right' })
 
 // Loaded with the first opened file or diff (Monaco is its own large chunk), then
 // kept mounted so switching back to a tab does not rebuild the editor.
@@ -42,7 +48,8 @@ function setHolder(el: unknown) {
 <template>
     <div class="flex flex-col w-full h-screen overflow-hidden bg-canvas">
         <div class="flex flex-1 overflow-hidden">
-            <Sidebar v-show="sidebarOpen" id="app-sidebar" />
+            <Sidebar v-show="sidebarOpen" id="app-sidebar" :style="{ width: `${sidebar.width.value}px` }" />
+            <ResizeHandle v-show="sidebarOpen" :panel="sidebar" label="Resize sidebar" />
 
             <div class="flex-1 min-w-0 flex flex-col overflow-hidden">
                 <AppHeader />
@@ -55,10 +62,12 @@ function setHolder(el: unknown) {
                 </main>
             </div>
 
+            <ResizeHandle v-show="rightPanelOpen" :panel="rightPanel" label="Resize right panel" />
             <aside
                 v-show="rightPanelOpen"
                 id="app-right-panel"
-                class="w-[272px] shrink-0 bg-canvas border-l border-stroke flex flex-col overflow-hidden"
+                :style="{ width: `${rightPanel.width.value}px` }"
+                class="shrink-0 bg-canvas border-l border-stroke flex flex-col overflow-hidden"
             >
                 <RightPanel />
             </aside>
