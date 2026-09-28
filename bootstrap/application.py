@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi_startkit import Application
 from fastapi_startkit.broadcasting import ReverbProvider
 from fastapi_startkit.broadcasting.config import BroadcastingConfig
+from fastapi_startkit.config import AppConfig
 from fastapi_startkit.fastapi import FastAPIProvider
 from fastapi_startkit.inertia import InertiaProvider
 from fastapi_startkit.logging import LogProvider
@@ -21,7 +22,7 @@ from config.logging import LoggingConfig
 from config.storage import StorageConfig
 from config.vite import ViteConfig
 
-app = Application(
+app = Application[AppConfig](
     base_path=Path(__file__).parent.parent,
     providers=[
         (LogProvider, LoggingConfig),
