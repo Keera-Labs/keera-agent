@@ -5,6 +5,7 @@ import Icon from '@/components/ui/Icon.vue'
 import ProjectDeleteModal from '@/pages/project/ProjectDeleteModal.vue'
 import ProjectEditModal from '@/pages/project/ProjectEditModal.vue'
 import ProjectMoveModal from '@/pages/project/ProjectMoveModal.vue'
+import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import type { Project } from '@/types/type'
 
 const props = defineProps<{
@@ -41,7 +42,11 @@ const STATUS_DOT: Record<'running' | 'done' | 'idle', string> = {
     idle: 'bg-zinc-300',
 }
 
+const layout = useAppLayoutStore()
+
+// With no Agents nav item, the project row is the way back to the agents overview.
 function visit() {
+    layout.setActiveAgentId(null)
     router.visit(`/${props.project.slug}`)
 }
 

@@ -15,15 +15,14 @@ import ProjectCard from './ProjectCard.vue'
 import { loadCollapsedProjects, saveCollapsedProjects } from './sidebarAgents'
 import WorkspacePicker from './WorkspacePicker.vue'
 
+// Agents stay reachable from each project's card below; Commands only by its URL.
 const PROJECT_NAV: { id: ProjectView; label: string; icon: IconName }[] = [
-    { id: 'agents', label: 'Agents', icon: 'info' },
-    { id: 'commands', label: 'Commands', icon: 'terminal' },
-    { id: 'tasks', label: 'Tasks', icon: 'square-check-big' },
+    { id: 'tasks', label: 'Tasks', icon: 'clipboard-check' },
 ]
 
 const page = usePage()
 const layout = useAppLayoutStore()
-const { activeAgentId, claudeStatus, projectView, settingsSection, showProjectSearch, sidebarOpen, statusBarOpen, tasks } = storeToRefs(layout)
+const { activeAgentId, claudeStatus, settingsSection, showProjectSearch, sidebarOpen, statusBarOpen, tasks } = storeToRefs(layout)
 const { activeProject } = storeToRefs(useProjectStore())
 const { projects } = useProjects()
 const { currentWorkspaceId } = storeToRefs(useWorkspaceStore())
@@ -50,28 +49,11 @@ function selectAgent(project: Project, agent: AgentSummary) {
 }
 
 const isSettingsOpen = computed(() => settingsSection.value !== null)
-const isTasksPage = computed(() => page.component === 'Tasks')
-const isConfigPage = computed(() => page.component === 'Configurations')
-// A project's agents view renders as "Home" (no agents yet) or "agents/*".
-const isAgentsPage = computed(() =>
-    !!activeProject.value && (page.component === 'Home' || page.component.startsWith('agents/')),
-)
-// null on pages outside a project (dashboard, settings, broadcasting): no nav item is current.
-const activeView = computed<ProjectView | null>(() => {
-    if (isTasksPage.value) return 'tasks'
-    if (isConfigPage.value) return 'commands'
-    return isAgentsPage.value ? projectView.value : null
-})
+const activeView = computed<ProjectView | null>(() => (page.component === 'Tasks' ? 'tasks' : null))
 
 function changeView(view: ProjectView) {
     const project = activeProject.value
-    if (!project) { projectView.value = view; return }
-    if (view === 'tasks') { router.visit(`/${project.slug}/tasks`); return }
-    if (view === 'commands') { router.visit(`/${project.slug}/configurations`); return }
-    // Always lands on the agents overview: this link replaced the project "Dashboard" tab.
-    projectView.value = 'agents'
-    layout.setActiveAgentId(null)
-    if (page.component !== 'Home') router.visit(`/${project.slug}`)
+    if (project && view === 'tasks') router.visit(`/${project.slug}/tasks`)
 }
 
 const navClass = (active: boolean) => [
