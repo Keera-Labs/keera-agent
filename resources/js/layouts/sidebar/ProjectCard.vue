@@ -27,7 +27,7 @@ defineEmits<{ toggle: []; selectAgent: [agent: AgentSummary] }>()
                     data-testid="project-collapse"
                     :aria-expanded="!props.collapsed"
                     :aria-label="props.collapsed ? 'Show agents' : 'Hide agents'"
-                    class="shrink-0 flex items-center gap-0.5 h-4 pl-1.5 pr-1 rounded bg-black/[0.06] text-[10.5px] tabular-nums text-zinc-500 cursor-pointer hover:bg-black/[0.1] hover:text-zinc-800"
+                    class="shrink-0 flex items-center gap-0.5 h-4 pl-1.5 pr-1 rounded bg-black/[0.06] text-ui-10.5 tabular-nums text-zinc-500 cursor-pointer hover:bg-black/[0.1] hover:text-zinc-800"
                     @click.stop="$emit('toggle')"
                     @keydown.enter.stop
                 >

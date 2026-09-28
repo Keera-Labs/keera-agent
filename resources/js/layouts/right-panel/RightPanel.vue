@@ -70,7 +70,7 @@ const toolButtonClass = 'text-zinc-500 cursor-pointer hover:bg-black/[0.05] hove
             <span
                 v-if="view.id === 'source-control' && changedCount > 0"
                 data-testid="source-control-badge"
-                class="min-w-4 h-4 px-1 flex items-center justify-center rounded-full bg-orange-400 text-white text-[10px] font-semibold leading-none"
+                class="min-w-4 h-4 px-1 flex items-center justify-center rounded-full bg-orange-400 text-white text-ui-10 font-semibold leading-none"
             >{{ badge }}</span>
         </button>
         <div class="ml-auto flex items-center gap-0.5">
@@ -114,7 +114,7 @@ const toolButtonClass = 'text-zinc-500 cursor-pointer hover:bg-black/[0.05] hove
     <div
         v-if="!activeProject"
         data-testid="right-panel-empty"
-        class="flex-1 flex items-center justify-center px-6 text-center text-zinc-400 text-[13px]"
+        class="flex-1 flex items-center justify-center px-6 text-center text-zinc-400 text-ui-13"
     >
         {{ EMPTY_TEXT[activeView] }}
     </div>

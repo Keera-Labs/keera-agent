@@ -20,18 +20,18 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
         <div class="max-w-[1200px] mx-auto pt-6 px-7 pb-10">
             <div class="flex items-start gap-3 mb-6">
                 <div class="flex-1 min-w-0">
-                    <div class="text-zinc-900 text-[22px] font-bold leading-[1.2]">
+                    <div class="text-zinc-900 text-ui-22 font-bold leading-[1.2]">
                         {{ data.workspaceName }}
                     </div>
-                    <div class="text-zinc-500 text-[13px] mt-1">
+                    <div class="text-zinc-500 text-ui-13 mt-1">
                         {{ plural(activeCount, 'agent') }} working across {{ plural(data.projectCount, 'project') }}.
                     </div>
                 </div>
                 <span v-if="activeCount > 0" data-testid="dashboard-status" class="flex items-center gap-1.5 shrink-0 mt-0.5">
                     <DotsIndicator />
-                    <span class="text-amber-700 text-[11px] font-mono">running</span>
+                    <span class="text-amber-700 text-ui-11 font-mono">running</span>
                 </span>
-                <span v-else data-testid="dashboard-status" class="shrink-0 mt-0.5 text-zinc-400 text-[11px] font-mono">idle</span>
+                <span v-else data-testid="dashboard-status" class="shrink-0 mt-0.5 text-zinc-400 text-ui-11 font-mono">idle</span>
             </div>
 
             <div class="flex gap-3 mb-7">

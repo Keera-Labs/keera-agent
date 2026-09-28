@@ -137,13 +137,13 @@ function openFile(file: GitFileChange) {
 const formatDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 
 const headerButton = 'p-1 rounded text-zinc-400 hover:text-zinc-700 hover:bg-zinc-200/70 transition-colors cursor-pointer disabled:text-zinc-300 disabled:cursor-default disabled:hover:bg-transparent'
-const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded-md border border-stroke bg-surface text-[13px] transition-colors'
+const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded-md border border-stroke bg-surface text-ui-13 transition-colors'
 </script>
 
 <template>
-    <div class="flex-1 min-h-0 flex flex-col min-w-0 text-[12px] text-zinc-700" data-testid="source-control">
+    <div class="flex-1 min-h-0 flex flex-col min-w-0 text-ui-12 text-zinc-700" data-testid="source-control">
         <div class="relative flex items-center gap-2 h-10 pl-3 pr-2 shrink-0">
-            <h2 class="shrink-0 text-[13px] font-medium text-zinc-900">Source Control</h2>
+            <h2 class="shrink-0 text-ui-13 font-medium text-zinc-900">Source Control</h2>
             <WorktreePicker
                 v-if="status?.is_repo"
                 class="min-w-0"
@@ -155,7 +155,7 @@ const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded
             />
             <span
                 v-if="status?.ahead || status?.behind"
-                class="shrink-0 flex items-center gap-1 font-mono text-[11px] text-zinc-500"
+                class="shrink-0 flex items-center gap-1 font-mono text-ui-11 text-zinc-500"
                 :title="`${status.ahead} to push, ${status.behind} to pull`"
             >
                 <span v-if="status.ahead" class="flex items-center"><ArrowUp :size="11" />{{ status.ahead }}</span>
@@ -175,7 +175,7 @@ const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded
                     <template v-else>
                         <div v-for="entry in commitsQuery.data.value" :key="entry.sha" class="px-3 py-1.5" :title="entry.sha">
                             <p class="truncate text-zinc-800">{{ entry.subject }}</p>
-                            <p class="text-[11px] text-zinc-400">
+                            <p class="text-ui-11 text-zinc-400">
                                 <span class="font-mono">{{ entry.short_sha }}</span> · {{ entry.author }} · {{ formatDate(entry.date) }}
                             </p>
                         </div>
@@ -216,8 +216,8 @@ const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded
             class="flex-1 flex flex-col items-center justify-center gap-2 px-6 text-center text-zinc-400"
         >
             <GitBranch :size="22" />
-            <p class="text-[13px] text-zinc-600">Not a git repository</p>
-            <p class="break-all font-mono text-[11px]">{{ project.path }}</p>
+            <p class="text-ui-13 text-zinc-600">Not a git repository</p>
+            <p class="break-all font-mono text-ui-11">{{ project.path }}</p>
         </div>
 
         <template v-else-if="status">
@@ -227,7 +227,7 @@ const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded
                     rows="3"
                     placeholder="Commit message (⌘⏎ to commit)"
                     aria-label="Commit message"
-                    class="block w-full resize-none rounded-md border border-stroke bg-surface px-3 py-2 text-[13px] leading-snug text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-accent"
+                    class="block w-full resize-none rounded-md border border-stroke bg-surface px-3 py-2 text-ui-13 leading-snug text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-accent"
                     @keydown="onMessageKeydown"
                 />
 
@@ -235,7 +235,7 @@ const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded
                     <button
                         type="button"
                         data-testid="primary-action"
-                        class="flex-1 min-w-0 flex items-center justify-center gap-1.5 rounded-l-md text-[13px] text-zinc-800 hover:bg-zinc-50 cursor-pointer disabled:text-zinc-400 disabled:cursor-default disabled:hover:bg-transparent"
+                        class="flex-1 min-w-0 flex items-center justify-center gap-1.5 rounded-l-md text-ui-13 text-zinc-800 hover:bg-zinc-50 cursor-pointer disabled:text-zinc-400 disabled:cursor-default disabled:hover:bg-transparent"
                         :disabled="primary.disabled"
                         :title="primary.title"
                         @click="primary.run"
@@ -323,7 +323,7 @@ const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded
                     class="flex flex-col items-center gap-1.5 px-6 py-8 text-center text-zinc-400"
                 >
                     <CircleCheck :size="20" />
-                    <p class="text-[13px] text-zinc-600">No changes</p>
+                    <p class="text-ui-13 text-zinc-600">No changes</p>
                     <p>The working tree is clean.</p>
                 </div>
                 <ChangeList

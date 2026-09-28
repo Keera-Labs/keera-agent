@@ -88,12 +88,12 @@ async function save() {
     <div class="flex-1 overflow-y-auto p-6">
         <div class="max-w-[680px] flex flex-col gap-4">
             <div>
-                <h2 class="m-0 text-zinc-900 text-[15px] font-semibold">Provider settings</h2>
-                <p class="mt-1 mb-0 text-zinc-500 text-[12px]">
+                <h2 class="m-0 text-zinc-900 text-ui-15 font-semibold">Provider settings</h2>
+                <p class="mt-1 mb-0 text-zinc-500 text-ui-12">
                     Choose the default provider, each provider's models, and the model used for each task complexity.
                 </p>
             </div>
-            <span v-if="error" class="text-danger text-[12px]">{{ error }}</span>
+            <span v-if="error" class="text-danger text-ui-12">{{ error }}</span>
             <section class="border border-stroke rounded-md bg-canvas p-4 flex flex-col gap-3">
                 <label class="flex flex-col gap-1.5 max-w-[320px]">
                     <span :class="labelClass">Default provider</span>
@@ -103,8 +103,8 @@ async function save() {
                 </label>
                 <div :class="flagRowClass" @click="enforceDefaultProvider = !enforceDefaultProvider">
                     <div>
-                        <div class="text-[12px] font-medium text-zinc-700">Enforce default provider</div>
-                        <div class="text-[10px] text-zinc-400">New agents must use the configured default provider.</div>
+                        <div class="text-ui-12 font-medium text-zinc-700">Enforce default provider</div>
+                        <div class="text-ui-10 text-zinc-400">New agents must use the configured default provider.</div>
                     </div>
                     <button
                         type="button"
@@ -127,8 +127,8 @@ async function save() {
                 class="border border-stroke rounded-md bg-canvas p-4 flex flex-col gap-2.5"
             >
                 <div class="flex items-center justify-between">
-                    <span class="text-zinc-900 text-[13px] font-semibold">{{ provider.name }}</span>
-                    <span class="font-mono text-zinc-400 text-[10px]">{{ provider.slug }}</span>
+                    <span class="text-zinc-900 text-ui-13 font-semibold">{{ provider.name }}</span>
+                    <span class="font-mono text-zinc-400 text-ui-10">{{ provider.slug }}</span>
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <label v-for="[complexity, label] in COMPLEXITY_LABELS" :key="complexity" class="flex flex-col gap-1.5 min-w-0">

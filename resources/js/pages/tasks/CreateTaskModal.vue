@@ -123,9 +123,9 @@ const selectClass = `${inputClass} w-full box-border cursor-pointer`
         </template>
 
         <template #default="{ close }">
-            <h2 class="m-0 text-zinc-900 text-[15px] font-semibold">New Task</h2>
+            <h2 class="m-0 text-zinc-900 text-ui-15 font-semibold">New Task</h2>
 
-            <span v-if="error" role="alert" class="text-danger text-[12px]">{{ error }}</span>
+            <span v-if="error" role="alert" class="text-danger text-ui-12">{{ error }}</span>
 
             <form class="flex flex-col gap-3.5" @submit.prevent="submit(close)">
                 <div class="flex gap-2">

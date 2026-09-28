@@ -169,15 +169,15 @@ const activeCardStyle = { background: `${color.accent}18` }
         <template #trigger><slot name="trigger" /></template>
         <template #default="{ close }">
             <form class="flex flex-col gap-3.5" @submit.prevent="handleSubmit(activeProject.id, close)">
-                <h2 class="m-0 text-zinc-900 text-[15px] font-semibold">Add Agent</h2>
+                <h2 class="m-0 text-zinc-900 text-ui-15 font-semibold">Add Agent</h2>
                 <div
                     v-if="isAtLimit"
-                    class="text-danger text-[12px] py-2 px-3 rounded"
+                    class="text-danger text-ui-12 py-2 px-3 rounded"
                     :style="{ background: `${color.danger}14`, border: `1px solid ${color.danger}40` }"
                 >
                     Agent limit reached ({{ agentCount }}/{{ maxAgentsPerProject }}). Delete an existing agent before adding a new one.
                 </div>
-                <span v-if="error" class="text-danger text-[12px]">{{ error }}</span>
+                <span v-if="error" class="text-danger text-ui-12">{{ error }}</span>
 
                 <div v-if="agentTemplates.length > 0" class="flex flex-col gap-1.5">
                     <span :class="labelClass">Template</span>
@@ -188,8 +188,8 @@ const activeCardStyle = { background: `${color.accent}18` }
                             :style="isBlankSelected ? activeCardStyle : undefined"
                             @click="applyTemplate(null)"
                         >
-                            <div class="text-[11px] font-semibold text-zinc-700">Blank</div>
-                            <div class="text-[10px] text-zinc-400 mt-0.5">Start from scratch</div>
+                            <div class="text-ui-11 font-semibold text-zinc-700">Blank</div>
+                            <div class="text-ui-10 text-zinc-400 mt-0.5">Start from scratch</div>
                         </button>
                         <button
                             v-for="tpl in agentTemplates"
@@ -200,20 +200,20 @@ const activeCardStyle = { background: `${color.accent}18` }
                             :style="selectedTemplateId === tpl.id ? activeCardStyle : undefined"
                             @click="applyTemplate(tpl)"
                         >
-                            <div :class="['text-[11px] font-semibold', selectedTemplateId === tpl.id ? 'text-accent' : 'text-zinc-700']">
+                            <div :class="['text-ui-11 font-semibold', selectedTemplateId === tpl.id ? 'text-accent' : 'text-zinc-700']">
                                 {{ tpl.name }}
                             </div>
-                            <div class="text-[10px] mt-0.5" :style="{ color: AGENT_TYPE_COLORS[tpl.agent_type] ?? color.textMuted }">
+                            <div class="text-ui-10 mt-0.5" :style="{ color: AGENT_TYPE_COLORS[tpl.agent_type] ?? color.textMuted }">
                                 {{ AGENT_TYPE_LABELS[tpl.agent_type] ?? tpl.agent_type }}
                             </div>
                             <div v-if="tpl.flags?.dangerously_skip_permissions || tpl.plan_mode" class="flex gap-[3px] mt-1 flex-wrap">
                                 <span
                                     v-if="tpl.flags?.dangerously_skip_permissions"
-                                    class="text-[9px] py-px px-1 rounded-[3px] bg-[#ff6b3518] text-[#ff6b35] font-semibold"
+                                    class="text-ui-9 py-px px-1 rounded-[3px] bg-[#ff6b3518] text-[#ff6b35] font-semibold"
                                 >FULL AUTO</span>
                                 <span
                                     v-if="tpl.plan_mode"
-                                    class="text-[9px] py-px px-1 rounded-[3px] text-accent font-semibold"
+                                    class="text-ui-9 py-px px-1 rounded-[3px] text-accent font-semibold"
                                     :style="activeCardStyle"
                                 >PLAN ONLY</span>
                             </div>

@@ -18,7 +18,7 @@ const branchOf = (worktree: GitWorktree) =>
             <button
                 type="button"
                 data-testid="branch-pill"
-                class="min-w-0 flex items-center gap-1 px-1.5 py-0.5 rounded bg-zinc-200/70 font-mono text-[11px] text-zinc-700 hover:bg-zinc-200 cursor-pointer"
+                class="min-w-0 flex items-center gap-1 px-1.5 py-0.5 rounded bg-zinc-200/70 font-mono text-ui-11 text-zinc-700 hover:bg-zinc-200 cursor-pointer"
                 :title="selected ? `${title ?? branchLabel}\n${selected.path}` : title"
                 aria-label="Switch worktree"
                 @click="toggle"
@@ -32,7 +32,7 @@ const branchOf = (worktree: GitWorktree) =>
             </button>
         </template>
         <template #default="{ close }">
-            <p class="px-3 pt-1 pb-1.5 text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-400">Worktrees</p>
+            <p class="px-3 pt-1 pb-1.5 text-ui-11 font-medium uppercase tracking-[0.06em] text-zinc-400">Worktrees</p>
             <button
                 v-for="worktree in worktrees"
                 :key="worktree.path"
@@ -47,7 +47,7 @@ const branchOf = (worktree: GitWorktree) =>
                 <Check :size="12" :class="['shrink-0 mt-0.5', worktree.path === selected?.path ? 'text-accent' : 'invisible']" />
                 <span class="min-w-0 flex-1">
                     <span class="block truncate font-mono text-zinc-800">{{ branchOf(worktree) }}</span>
-                    <span class="block truncate text-[11px] text-zinc-400">
+                    <span class="block truncate text-ui-11 text-zinc-400">
                         {{ worktreeLabel(worktree) }}<template v-if="worktree.locked"> · locked</template>
                     </span>
                 </span>

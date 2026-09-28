@@ -71,7 +71,7 @@ function onKey(e: KeyboardEvent) {
                     v-model="query"
                     placeholder="Search projects..."
                     :class="[inputClass, 'flex-1']"
-                    style="border: none; background: transparent; outline: none; padding: 0; font-size: 14px"
+                    style="border: none; background: transparent; outline: none; padding: 0; font-size: calc(14px * var(--ui-scale))"
                     @keydown="onKey"
                 >
                 <button
@@ -86,7 +86,7 @@ function onKey(e: KeyboardEvent) {
             </div>
 
             <div ref="list" class="max-h-[320px] overflow-y-auto py-1 px-0">
-                <div v-if="filtered.length === 0" class="p-5 text-center text-zinc-400 text-[13px]">No projects found</div>
+                <div v-if="filtered.length === 0" class="p-5 text-center text-zinc-400 text-ui-13">No projects found</div>
                 <template v-else>
                     <div
                         v-for="(project, idx) in filtered"
@@ -102,17 +102,17 @@ function onKey(e: KeyboardEvent) {
                     >
                         <Icon name="folder" :size="13" :color="color.textMuted" class="shrink-0" />
                         <div class="flex-1 min-w-0">
-                            <div class="text-[13px] font-medium text-zinc-900 truncate">{{ project.name }}</div>
-                            <div class="text-[11px] text-zinc-400 truncate font-mono">{{ project.path }}</div>
+                            <div class="text-ui-13 font-medium text-zinc-900 truncate">{{ project.name }}</div>
+                            <div class="text-ui-11 text-zinc-400 truncate font-mono">{{ project.path }}</div>
                         </div>
-                        <span v-if="idx === cursor" class="text-[10px] text-zinc-400 shrink-0">↵</span>
+                        <span v-if="idx === cursor" class="text-ui-10 text-zinc-400 shrink-0">↵</span>
                     </div>
                 </template>
             </div>
 
             <div class="border-t border-stroke py-1.5 px-3.5 flex gap-3">
-                <span v-for="[key, label] in HINTS" :key="key" class="flex items-center gap-1 text-[11px] text-zinc-400">
-                    <kbd class="bg-canvas border border-stroke rounded-[3px] py-px px-1 text-[10px] font-[inherit]">{{ key }}</kbd>
+                <span v-for="[key, label] in HINTS" :key="key" class="flex items-center gap-1 text-ui-11 text-zinc-400">
+                    <kbd class="bg-canvas border border-stroke rounded-[3px] py-px px-1 text-ui-10 font-[inherit]">{{ key }}</kbd>
                     {{ label }}
                 </span>
             </div>

@@ -166,16 +166,16 @@ async function handleDelete(c: Command) {
     <div class="flex-1 flex flex-col overflow-hidden">
         <div class="py-2.5 px-5 border-b border-stroke flex items-center gap-2 shrink-0 bg-canvas">
             <Icon name="terminal" :size="13" class="text-zinc-500" />
-            <span class="text-zinc-900 text-[13px] font-semibold flex-1">Commands</span>
+            <span class="text-zinc-900 text-ui-13 font-semibold flex-1">Commands</span>
             <span
                 v-if="runningCount > 0"
-                class="text-[10px] py-px px-[7px] rounded-lg bg-[rgba(63,185,80,0.1)] border border-[rgba(63,185,80,0.3)] text-success"
+                class="text-ui-10 py-px px-[7px] rounded-lg bg-[rgba(63,185,80,0.1)] border border-[rgba(63,185,80,0.3)] text-success"
             >
                 {{ runningCount }} running
             </span>
             <button
                 :class="[
-                    'border rounded-[5px] text-[11px] py-1 px-2.5 cursor-pointer flex items-center gap-[5px]',
+                    'border rounded-[5px] text-ui-11 py-1 px-2.5 cursor-pointer flex items-center gap-[5px]',
                     showForm ? 'bg-surface border-stroke text-zinc-500' : 'bg-success border-success text-white',
                 ]"
                 @click="showForm = !showForm"
@@ -205,13 +205,13 @@ async function handleDelete(c: Command) {
                         <Icon name="terminal" :size="22" />
                     </div>
                     <div>
-                        <p class="mt-0 mr-0 mb-1 ml-0 text-zinc-700 text-[13px] font-medium">No commands yet</p>
-                        <p class="m-0 text-zinc-400 text-[12px] leading-normal">
+                        <p class="mt-0 mr-0 mb-1 ml-0 text-zinc-700 text-ui-13 font-medium">No commands yet</p>
+                        <p class="m-0 text-zinc-400 text-ui-12 leading-normal">
                             Add build scripts, dev servers,<br />or any long-running process.
                         </p>
                     </div>
                     <button
-                        class="bg-transparent border border-dashed border-stroke rounded text-zinc-500 text-[12px] py-1.5 px-3.5 cursor-pointer hover:border-accent hover:text-accent"
+                        class="bg-transparent border border-dashed border-stroke rounded text-zinc-500 text-ui-12 py-1.5 px-3.5 cursor-pointer hover:border-accent hover:text-accent"
                         @click="showForm = true"
                     >
                         + Add your first command
@@ -230,7 +230,7 @@ async function handleDelete(c: Command) {
                         @delete="handleDelete(c)"
                     />
                     <button
-                        class="flex items-center gap-1.5 py-[9px] px-3.5 bg-transparent border-none text-zinc-400 text-[11px] cursor-pointer w-full text-left hover:text-zinc-500 hover:bg-surface"
+                        class="flex items-center gap-1.5 py-[9px] px-3.5 bg-transparent border-none text-zinc-400 text-ui-11 cursor-pointer w-full text-left hover:text-zinc-500 hover:bg-surface"
                         @click="showForm = true"
                     >
                         <Icon name="plus" :size="10" />
@@ -242,9 +242,9 @@ async function handleDelete(c: Command) {
             <div v-if="outputCmd" class="flex-1 flex flex-col overflow-hidden">
                 <div class="pt-4 pr-5 pb-3.5 pl-5 border-b border-stroke shrink-0 bg-canvas">
                     <div class="flex items-center gap-2.5 mb-3">
-                        <h2 class="m-0 text-zinc-900 text-[18px] font-bold font-mono tracking-[-0.01em]">/{{ outputCmd.label }}</h2>
+                        <h2 class="m-0 text-zinc-900 text-ui-18 font-bold font-mono tracking-[-0.01em]">/{{ outputCmd.label }}</h2>
                         <DotsIndicator v-if="outputCmd.status === 'running'" />
-                        <span v-else class="text-[10px] text-zinc-400 font-mono">exited</span>
+                        <span v-else class="text-ui-10 text-zinc-400 font-mono">exited</span>
                         <div class="flex-1" />
                         <button
                             title="Close"
@@ -255,8 +255,8 @@ async function handleDelete(c: Command) {
                         </button>
                     </div>
                     <div>
-                        <div class="text-zinc-400 text-[10px] font-bold uppercase tracking-[0.08em] mb-1.5">Shell</div>
-                        <div class="bg-canvas rounded py-2 px-3 border border-stroke font-mono text-[12px] text-zinc-700 flex items-center gap-2 overflow-hidden">
+                        <div class="text-zinc-400 text-ui-10 font-bold uppercase tracking-[0.08em] mb-1.5">Shell</div>
+                        <div class="bg-canvas rounded py-2 px-3 border border-stroke font-mono text-ui-12 text-zinc-700 flex items-center gap-2 overflow-hidden">
                             <span class="text-success shrink-0">$</span>
                             <span class="truncate">{{ outputCmd.command }}</span>
                         </div>

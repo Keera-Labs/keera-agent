@@ -19,7 +19,7 @@ const summary = computed(() => projectStatusSummary(props.project))
     >
         <div class="flex items-center gap-2">
             <FolderIcon />
-            <span class="flex-1 min-w-0 text-zinc-900 text-[13px] font-semibold truncate">{{ project.name }}</span>
+            <span class="flex-1 min-w-0 text-zinc-900 text-ui-13 font-semibold truncate">{{ project.name }}</span>
             <span :class="['w-2 h-2 rounded-full shrink-0', project.online ? 'bg-success' : 'bg-zinc-400']" />
         </div>
 
@@ -27,16 +27,16 @@ const summary = computed(() => projectStatusSummary(props.project))
             <span
                 v-for="(a, i) in project.agents"
                 :key="i"
-                class="w-6 h-6 rounded shrink-0 text-white text-[10px] font-bold flex items-center justify-center font-mono"
+                class="w-6 h-6 rounded shrink-0 text-white text-ui-10 font-bold flex items-center justify-center font-mono"
                 :style="{ background: avatarColor(a.agentType, a.initials) }"
             >{{ a.initials }}</span>
             <span
                 v-if="project.extraAgents > 0"
-                class="w-6 h-6 rounded shrink-0 bg-canvas border border-stroke text-zinc-500 text-[10px] font-bold flex items-center justify-center font-mono"
+                class="w-6 h-6 rounded shrink-0 bg-canvas border border-stroke text-zinc-500 text-ui-10 font-bold flex items-center justify-center font-mono"
             >+{{ project.extraAgents }}</span>
         </div>
 
-        <div class="flex items-center justify-between gap-2 text-[11px] text-zinc-400 font-mono">
+        <div class="flex items-center justify-between gap-2 text-ui-11 text-zinc-400 font-mono">
             <span class="truncate">{{ summary }}</span>
             <span class="shrink-0">{{ project.lastActivity }}</span>
         </div>

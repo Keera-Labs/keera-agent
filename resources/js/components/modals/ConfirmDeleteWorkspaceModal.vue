@@ -38,19 +38,19 @@ async function handleDelete() {
             aria-label="Delete workspace"
             class="bg-modal border border-stroke rounded-md p-6 w-[340px] flex flex-col gap-3.5"
         >
-            <h2 class="m-0 text-zinc-900 text-[15px] font-semibold">Delete Workspace</h2>
-            <p class="m-0 text-zinc-500 text-[13px] leading-normal">
+            <h2 class="m-0 text-zinc-900 text-ui-15 font-semibold">Delete Workspace</h2>
+            <p class="m-0 text-zinc-500 text-ui-13 leading-normal">
                 Delete
-                <span class="text-zinc-700 font-mono text-[12px]">{{ props.workspace.name }}</span>
+                <span class="text-zinc-700 font-mono text-ui-12">{{ props.workspace.name }}</span>
                 ? Projects in this workspace will become unassigned.
             </p>
-            <span v-if="error" class="text-danger text-[12px]">{{ error }}</span>
+            <span v-if="error" class="text-danger text-ui-12">{{ error }}</span>
             <div class="flex gap-2 justify-end">
                 <button type="button" :disabled="loading" :class="cancelBtnClass" @click="emit('close')">Cancel</button>
                 <button
                     type="button"
                     :disabled="loading"
-                    class="bg-[#da3633] border border-danger rounded text-white text-[12px] py-1.5 px-3.5 cursor-pointer"
+                    class="bg-[#da3633] border border-danger rounded text-white text-ui-12 py-1.5 px-3.5 cursor-pointer"
                     @click="handleDelete"
                 >
                     {{ loading ? 'Deleting…' : 'Delete' }}

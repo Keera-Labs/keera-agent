@@ -77,7 +77,7 @@ const SAVE_DOT_CLASS: Record<SaveStatus, string> = {
 
 function tabClass(active: boolean) {
     return [
-        'group relative flex items-center gap-1.5 shrink-0 max-w-[200px] pl-3 pr-1.5 text-[12.5px] border-x -mb-px cursor-pointer transition-colors',
+        'group relative flex items-center gap-1.5 shrink-0 max-w-[200px] pl-3 pr-1.5 text-ui-12.5 border-x -mb-px cursor-pointer transition-colors',
         active
             ? 'bg-white text-zinc-900 border-stroke'
             : 'text-zinc-500 border-transparent hover:text-zinc-800 hover:bg-black/[0.03]',

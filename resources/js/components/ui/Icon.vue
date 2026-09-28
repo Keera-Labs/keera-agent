@@ -95,6 +95,7 @@ const ICONS = {
         ['path', { d: 'm9 11 3 3L22 4' }],
     ],
     terminal: [['path', { d: 'M12 19h8' }], ['path', { d: 'm4 17 6-6-6-6' }]],
+    type: [['path', { d: 'M12 4v16' }], ['path', { d: 'M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2' }], ['path', { d: 'M9 20h6' }]],
     'trash-2': [
         ['path', { d: 'M10 11v6' }],
         ['path', { d: 'M14 11v6' }],

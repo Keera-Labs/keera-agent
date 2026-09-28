@@ -29,7 +29,7 @@ const iconButton = 'p-0.5 rounded text-zinc-500 hover:text-zinc-800 hover:bg-zin
                 type="button"
                 :aria-expanded="expanded"
                 :aria-controls="sectionId"
-                class="flex-1 min-w-0 flex items-center gap-1 text-left text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-500 cursor-pointer"
+                class="flex-1 min-w-0 flex items-center gap-1 text-left text-ui-11 font-medium uppercase tracking-[0.06em] text-zinc-500 cursor-pointer"
                 @click="expanded = !expanded"
             >
                 <ChevronRight :size="11" class="shrink-0 transition-transform" :class="expanded && 'rotate-90'" />
@@ -45,12 +45,12 @@ const iconButton = 'p-0.5 rounded text-zinc-500 hover:text-zinc-800 hover:bg-zin
             >
                 <component :is="staged ? Minus : Plus" :size="12" />
             </button>
-            <span class="min-w-5 h-5 px-1.5 flex items-center justify-center rounded bg-zinc-200/80 text-[11px] font-semibold text-zinc-600">
+            <span class="min-w-5 h-5 px-1.5 flex items-center justify-center rounded bg-zinc-200/80 text-ui-11 font-semibold text-zinc-600">
                 {{ files.length }}
             </span>
         </div>
 
-        <ul v-show="expanded" :id="sectionId" class="font-mono text-[12px]">
+        <ul v-show="expanded" :id="sectionId" class="font-mono text-ui-12">
             <li
                 v-for="file in files"
                 :key="file.path"
@@ -75,7 +75,7 @@ const iconButton = 'p-0.5 rounded text-zinc-500 hover:text-zinc-800 hover:bg-zin
                         class="shrink-0 max-w-full truncate text-zinc-900"
                         :class="[staged && 'font-semibold', file.status === 'D' && 'line-through text-zinc-500']"
                     >{{ worktreeLabels[file.path] ?? file.name }}</span>
-                    <span class="min-w-0 truncate text-zinc-400 text-[11px]">{{ file.dir }}</span>
+                    <span class="min-w-0 truncate text-zinc-400 text-ui-11">{{ file.dir }}</span>
                 </button>
 
                 <button
@@ -99,7 +99,7 @@ const iconButton = 'p-0.5 rounded text-zinc-500 hover:text-zinc-800 hover:bg-zin
                     <component :is="staged ? Minus : Plus" :size="12" />
                 </button>
 
-                <span class="shrink-0 text-[11px] tabular-nums" data-testid="line-stats">
+                <span class="shrink-0 text-ui-11 tabular-nums" data-testid="line-stats">
                     <span v-if="worktreeLabels[file.path]" class="text-zinc-500">worktree</span>
                     <span v-else-if="file.untracked" class="text-emerald-600">untracked</span>
                     <span v-else-if="file.binary" class="text-zinc-400">binary</span>

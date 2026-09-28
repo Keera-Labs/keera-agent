@@ -35,7 +35,7 @@ const title = computed(() => {
             :aria-current="props.active ? 'page' : undefined"
             :title="title"
             :class="[
-                'flex items-center gap-1.5 flex-1 min-w-0 h-7 px-1.5 rounded-md text-[12.5px] text-left cursor-pointer transition-colors duration-100',
+                'flex items-center gap-1.5 flex-1 min-w-0 h-7 px-1.5 rounded-md text-ui-12.5 text-left cursor-pointer transition-colors duration-100',
                 props.active
                     ? 'bg-surface shadow-[0_1px_2px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.04]'
                     : 'hover:bg-black/[0.04]',
@@ -54,7 +54,7 @@ const title = computed(() => {
             >
                 <template v-if="preview">– {{ preview }}</template>
             </span>
-            <span v-if="!needsInput" class="shrink-0 text-[11px] tabular-nums text-zinc-400">
+            <span v-if="!needsInput" class="shrink-0 text-ui-11 tabular-nums text-zinc-400">
                 {{ relativeTime(props.agent.last_activity_at, props.now) }}
             </span>
         </button>
@@ -63,7 +63,7 @@ const title = computed(() => {
             type="button"
             data-testid="agent-reply"
             :aria-label="`Reply to ${props.agent.name}`"
-            class="shrink-0 h-5 px-1.5 rounded border border-amber-300 bg-amber-50 text-amber-800 text-[11px] font-semibold cursor-pointer hover:bg-amber-100"
+            class="shrink-0 h-5 px-1.5 rounded border border-amber-300 bg-amber-50 text-amber-800 text-ui-11 font-semibold cursor-pointer hover:bg-amber-100"
             @click="$emit('select')"
         >
             Reply

@@ -9,6 +9,7 @@ import useProjects, { PROJECTS_QUERY_KEY } from '@/queries/projectsQuery'
 import { useTasks } from '@/queries/taskQuery'
 import { WORKSPACES_QUERY_KEY } from '@/queries/workspacesQuery'
 import type { SettingsSectionId } from '@/layouts/settings/sections'
+import { useAppearanceSettingsStore } from '@/stores/appearanceSettingsStore'
 import { useEditorSettingsStore } from '@/stores/editorSettingsStore'
 import { useProjectStore } from '@/stores/projectStore'
 import type { AgentTemplate } from '@/types/agent'
@@ -65,6 +66,7 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
 
     // Loaded up front: the saved font applies to terminals opened before any editor.
     useEditorSettingsStore().load()
+    useAppearanceSettingsStore().load()
 
     const showProjectSearch = ref(false)
     // The open Settings section, or null while the Settings modal is closed.

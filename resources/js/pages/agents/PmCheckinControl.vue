@@ -45,7 +45,7 @@ const dotColor = computed(() => (running.value ? '#16a34a' : '#d4d4d8'))
             :style="{ background: dotColor }"
             :title="running ? 'Check-in running' : 'Check-in stopped'"
         />
-        <label class="flex items-center gap-1 text-[11px] text-zinc-500">
+        <label class="flex items-center gap-1 text-ui-11 text-zinc-500">
             Every
             <input
                 type="number"
@@ -53,7 +53,7 @@ const dotColor = computed(() => (running.value ? '#16a34a' : '#d4d4d8'))
                 :max="1440"
                 :value="minutes"
                 :disabled="running"
-                class="w-10 border border-stroke rounded py-0.5 px-1 text-[11px] text-zinc-900 disabled:bg-zinc-100 disabled:text-zinc-400"
+                class="w-10 border border-stroke rounded py-0.5 px-1 text-ui-11 text-zinc-900 disabled:bg-zinc-100 disabled:text-zinc-400"
                 @input="onMinutesInput"
             >
             min
@@ -62,7 +62,7 @@ const dotColor = computed(() => (running.value ? '#16a34a' : '#d4d4d8'))
             type="button"
             :disabled="updating"
             :title="running ? 'Stop PM check-in' : 'Start PM check-in'"
-            :class="['inline-flex items-center gap-1 rounded-md py-1 px-2 text-[11px] font-semibold border cursor-pointer transition-opacity duration-100 hover:opacity-[0.85] disabled:opacity-50', toggleTone]"
+            :class="['inline-flex items-center gap-1 rounded-md py-1 px-2 text-ui-11 font-semibold border cursor-pointer transition-opacity duration-100 hover:opacity-[0.85] disabled:opacity-50', toggleTone]"
             @click="toggle"
         >
             <Icon :name="running ? 'square' : 'play'" :size="11" />
@@ -72,11 +72,11 @@ const dotColor = computed(() => (running.value ? '#16a34a' : '#d4d4d8'))
 
     <div v-else class="flex flex-col gap-2">
         <div class="flex items-center justify-between">
-            <span class="text-[10px] font-semibold uppercase tracking-[0.07em] text-zinc-400">
+            <span class="text-ui-10 font-semibold uppercase tracking-[0.07em] text-zinc-400">
                 PM Check-in
             </span>
             <span
-                class="inline-flex items-center gap-1.5 text-[11px] font-semibold"
+                class="inline-flex items-center gap-1.5 text-ui-11 font-semibold"
                 :style="{ color: running ? '#16a34a' : '#a1a1aa' }"
             >
                 <span class="w-1.5 h-1.5 rounded-full" :style="{ background: dotColor }" />
@@ -85,7 +85,7 @@ const dotColor = computed(() => (running.value ? '#16a34a' : '#d4d4d8'))
         </div>
 
         <div class="flex items-center gap-2">
-            <label class="flex items-center gap-1.5 text-[12.5px] text-zinc-600">
+            <label class="flex items-center gap-1.5 text-ui-12.5 text-zinc-600">
                 Every
                 <input
                     type="number"
@@ -93,7 +93,7 @@ const dotColor = computed(() => (running.value ? '#16a34a' : '#d4d4d8'))
                     :max="1440"
                     :value="minutes"
                     :disabled="running"
-                    class="w-14 border border-stroke rounded-md py-1 px-2 text-[12.5px] text-zinc-900 disabled:bg-zinc-100 disabled:text-zinc-400"
+                    class="w-14 border border-stroke rounded-md py-1 px-2 text-ui-12.5 text-zinc-900 disabled:bg-zinc-100 disabled:text-zinc-400"
                     @input="onMinutesInput"
                 >
                 min
@@ -102,7 +102,7 @@ const dotColor = computed(() => (running.value ? '#16a34a' : '#d4d4d8'))
             <button
                 type="button"
                 :disabled="updating"
-                :class="['ml-auto inline-flex items-center gap-1.5 rounded-md py-1.5 px-3 text-[12.5px] font-semibold border cursor-pointer transition-opacity duration-100 hover:opacity-[0.85] disabled:opacity-50', toggleTone]"
+                :class="['ml-auto inline-flex items-center gap-1.5 rounded-md py-1.5 px-3 text-ui-12.5 font-semibold border cursor-pointer transition-opacity duration-100 hover:opacity-[0.85] disabled:opacity-50', toggleTone]"
                 @click="toggle"
             >
                 <Icon :name="running ? 'square' : 'play'" :size="12" />

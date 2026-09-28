@@ -51,13 +51,13 @@ async function save() {
     <div class="flex-1 overflow-y-auto py-7 px-8">
         <div class="max-w-[560px] flex flex-col gap-[18px]">
             <div>
-                <h3 class="mt-0 mx-0 mb-1.5 text-zinc-900 text-[14px] font-semibold">Default Permissions</h3>
-                <p class="m-0 text-zinc-500 text-[12px] leading-[1.6]">
+                <h3 class="mt-0 mx-0 mb-1.5 text-zinc-900 text-ui-14 font-semibold">Default Permissions</h3>
+                <p class="m-0 text-zinc-500 text-ui-12 leading-[1.6]">
                     Allow/deny rules applied globally to all projects and agents. Changing these syncs to every project and agent in the database.
                 </p>
             </div>
 
-            <span v-if="error" class="text-danger text-[12px]">{{ error }}</span>
+            <span v-if="error" class="text-danger text-ui-12">{{ error }}</span>
 
             <div class="flex flex-col gap-1">
                 <span :class="labelClass">Allow</span>
@@ -79,7 +79,7 @@ async function save() {
                 />
             </div>
 
-            <p class="m-0 text-zinc-400 text-[11px] leading-[1.6]">
+            <p class="m-0 text-zinc-400 text-ui-11 leading-[1.6]">
                 Rules follow Claude Code syntax, e.g.
                 <code class="font-[monospace] text-accent">Bash(*)</code>,
                 <code class="font-[monospace] text-accent">Bash(npm run *)</code>,

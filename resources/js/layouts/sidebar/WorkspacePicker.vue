@@ -34,7 +34,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
 <template>
     <div ref="root" class="relative px-2 pt-2 pb-1 border-t border-stroke">
         <div class="flex items-center h-6 pl-1.5 pr-0.5 mb-1">
-            <span class="flex-1 text-[11px] font-semibold tracking-[0.06em] uppercase text-zinc-500">Workspaces</span>
+            <span class="flex-1 text-ui-11 font-semibold tracking-[0.06em] uppercase text-zinc-500">Workspaces</span>
             <WorkspaceAddModal @open-change="isOpen => { if (isOpen) open = false }">
                 <template #trigger>
                     <button
@@ -55,15 +55,15 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
             class="flex items-center gap-2 w-full py-1.5 px-2 rounded-lg bg-surface border border-stroke cursor-pointer text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:border-zinc-300"
             @click="open = !open"
         >
-            <div class="w-6 h-6 rounded-md bg-violet-600 flex items-center justify-center text-[12px] font-semibold text-white shrink-0">
+            <div class="w-6 h-6 rounded-md bg-violet-600 flex items-center justify-center text-ui-12 font-semibold text-white shrink-0">
                 {{ (current?.name[0] ?? 'A').toUpperCase() }}
             </div>
             <div class="flex-1 min-w-0">
-                <div data-testid="workspace-title" class="text-zinc-900 text-[12.5px] font-semibold truncate leading-tight">
+                <div data-testid="workspace-title" class="text-zinc-900 text-ui-12.5 font-semibold truncate leading-tight">
                     {{ current?.name ?? 'All Projects' }}
                 </div>
                 <!-- No project count: the projects query is paginated, so its length is not a total. -->
-                <div data-testid="workspace-subtitle" class="text-zinc-500 text-[11px] truncate leading-tight">
+                <div data-testid="workspace-subtitle" class="text-zinc-500 text-ui-11 truncate leading-tight">
                     {{ current ? 'Workspace' : 'All workspaces' }}
                 </div>
             </div>
@@ -80,7 +80,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
         >
             <button
                 type="button"
-                :class="['flex items-center gap-2 w-full h-7 px-2 rounded-md bg-transparent border-0 cursor-pointer text-[12.5px] hover:bg-black/[0.04]', selected === null ? 'text-zinc-900 font-medium' : 'text-zinc-700']"
+                :class="['flex items-center gap-2 w-full h-7 px-2 rounded-md bg-transparent border-0 cursor-pointer text-ui-12.5 hover:bg-black/[0.04]', selected === null ? 'text-zinc-900 font-medium' : 'text-zinc-700']"
                 @click="select(null)"
             >
                 All Projects
@@ -91,7 +91,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
                 <button
                     type="button"
                     data-testid="workspace-option"
-                    :class="['flex-1 min-w-0 flex items-center gap-2 h-7 px-2 bg-transparent border-0 cursor-pointer text-[12.5px] text-left', selected === w.id ? 'text-zinc-900 font-medium' : 'text-zinc-700']"
+                    :class="['flex-1 min-w-0 flex items-center gap-2 h-7 px-2 bg-transparent border-0 cursor-pointer text-ui-12.5 text-left', selected === w.id ? 'text-zinc-900 font-medium' : 'text-zinc-700']"
                     @click="select(w.id)"
                 >
                     <span class="truncate">{{ w.name }}</span>
@@ -113,7 +113,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
                 <template #trigger>
                     <button
                         type="button"
-                        class="flex items-center gap-1.5 w-full h-7 px-2 rounded-md bg-transparent border-0 cursor-pointer text-[12.5px] text-accent hover:bg-black/[0.04]"
+                        class="flex items-center gap-1.5 w-full h-7 px-2 rounded-md bg-transparent border-0 cursor-pointer text-ui-12.5 text-accent hover:bg-black/[0.04]"
                     >
                         <Icon name="plus" :size="12" />
                         New Workspace

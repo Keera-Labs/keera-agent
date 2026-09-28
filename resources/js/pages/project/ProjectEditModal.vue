@@ -5,9 +5,9 @@ import Modal from '@/components/ui/Modal.vue'
 import useProjects from '@/queries/projectsQuery'
 import type { Project } from '@/types/type'
 
-const inputClass = 'bg-canvas border border-stroke rounded text-zinc-900 text-[13px] py-[7px] px-2.5 outline-none w-full box-border font-mono'
-const labelClass = 'text-zinc-700 text-[11px] uppercase tracking-[0.05em]'
-const cancelClass = 'bg-transparent border border-stroke rounded text-zinc-700 text-[12px] py-1.5 px-3.5 cursor-pointer'
+const inputClass = 'bg-canvas border border-stroke rounded text-zinc-900 text-ui-13 py-[7px] px-2.5 outline-none w-full box-border font-mono'
+const labelClass = 'text-zinc-700 text-ui-11 uppercase tracking-[0.05em]'
+const cancelClass = 'bg-transparent border border-stroke rounded text-zinc-700 text-ui-12 py-1.5 px-3.5 cursor-pointer'
 
 const props = defineProps<{ project: Project }>()
 const emit = defineEmits<{ openChange: [open: boolean] }>()
@@ -66,15 +66,15 @@ async function save(close: () => void) {
         <template #default="{ close }">
             <form class="flex flex-col gap-[18px]" @submit.prevent="save(close)">
                 <div>
-                    <h2 class="m-0 text-zinc-900 text-[15px] font-bold">Edit project</h2>
-                    <p class="mt-[3px] mx-0 mb-0 text-accent text-[12px] font-mono">{{ props.project.name }}</p>
+                    <h2 class="m-0 text-zinc-900 text-ui-15 font-bold">Edit project</h2>
+                    <p class="mt-[3px] mx-0 mb-0 text-accent text-ui-12 font-mono">{{ props.project.name }}</p>
                 </div>
 
-                <span v-if="error" class="text-danger text-[12px]">{{ error }}</span>
+                <span v-if="error" class="text-danger text-ui-12">{{ error }}</span>
 
                 <label class="flex flex-col gap-1.5">
                     <span :class="labelClass">Path</span>
-                    <span class="text-zinc-500 text-[12px] leading-normal">
+                    <span class="text-zinc-500 text-ui-12 leading-normal">
                         Local filesystem path. Claude Code will run from this directory.
                     </span>
                     <input v-model="path" name="path" placeholder="~/code/my-project" required :class="inputClass">
@@ -82,7 +82,7 @@ async function save(close: () => void) {
 
                 <div class="flex flex-col gap-2 border-t border-stroke pt-4">
                     <span :class="labelClass">Agent templates</span>
-                    <span class="text-zinc-500 text-[12px] leading-normal">
+                    <span class="text-zinc-500 text-ui-12 leading-normal">
                         Customise templates for this project. Edits are copy-on-write — they create project overrides and never change the global defaults.
                     </span>
                     <button type="button" :class="[cancelClass, 'self-start']" @click="showTemplates = true">
@@ -97,7 +97,7 @@ async function save(close: () => void) {
                         :disabled="saving"
                         :class="[
                             saved ? 'bg-success' : 'bg-accent',
-                            'border-0 rounded text-white text-[12px] font-semibold py-1.5 px-3.5',
+                            'border-0 rounded text-white text-ui-12 font-semibold py-1.5 px-3.5',
                             saving ? 'cursor-default opacity-70' : 'cursor-pointer opacity-100',
                         ]"
                     >

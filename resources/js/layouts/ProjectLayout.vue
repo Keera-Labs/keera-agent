@@ -92,7 +92,7 @@ onBeforeUnmount(() => {
             <AgentsIndex v-if="showOverview" />
 
             <div v-if="!activeProject" class="flex-1 flex items-center justify-center">
-                <span class="text-zinc-400 text-[13px]">No project selected</span>
+                <span class="text-zinc-400 text-ui-13">No project selected</span>
             </div>
 
             <slot v-if="!showAgentsView || isAgentDetail" />

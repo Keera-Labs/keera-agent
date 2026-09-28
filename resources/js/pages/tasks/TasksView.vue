@@ -48,7 +48,7 @@ function onDragEnd() {
 <template>
     <div class="flex-1 flex flex-col overflow-hidden">
         <div class="py-3 px-5 border-b border-stroke flex items-center gap-2 shrink-0">
-            <span class="text-zinc-900 text-[13px] font-semibold flex-1">Tasks</span>
+            <span class="text-zinc-900 text-ui-13 font-semibold flex-1">Tasks</span>
             <CreateTaskModal
                 :projects="projects"
                 :workspaces="workspaces"
@@ -56,7 +56,7 @@ function onDragEnd() {
                 @created="emit('createTask', $event)"
             >
                 <template #trigger>
-                    <span class="inline-block bg-success border border-success rounded-[5px] text-white text-[11px] py-1 px-2.5 cursor-pointer">
+                    <span class="inline-block bg-success border border-success rounded-[5px] text-white text-ui-11 py-1 px-2.5 cursor-pointer">
                         + New task
                     </span>
                 </template>
@@ -78,10 +78,10 @@ function onDragEnd() {
             >
                 <div class="pt-2.5 px-3 pb-2 flex items-center gap-[7px] border-b border-stroke shrink-0">
                     <span class="w-2 h-2 rounded-full shrink-0 inline-block" :style="{ background: STATUS_COLORS[status] }" />
-                    <span class="text-[11px] font-semibold text-zinc-500 uppercase tracking-[0.06em] flex-1">
+                    <span class="text-ui-11 font-semibold text-zinc-500 uppercase tracking-[0.06em] flex-1">
                         {{ STATUS_LABELS[status] }}
                     </span>
-                    <span data-testid="column-count" class="text-[10px] text-zinc-400 bg-canvas rounded-lg py-px px-1.5 border border-stroke">
+                    <span data-testid="column-count" class="text-ui-10 text-zinc-400 bg-canvas rounded-lg py-px px-1.5 border border-stroke">
                         {{ tasksWithStatus(status).length }}
                     </span>
                 </div>
@@ -89,7 +89,7 @@ function onDragEnd() {
                 <div class="flex-1 overflow-y-auto p-2 flex flex-col gap-1.5">
                     <div
                         v-if="tasksWithStatus(status).length === 0"
-                        class="border border-dashed border-stroke rounded py-5 px-2.5 text-center text-zinc-400 text-[11px] italic transition-colors duration-100"
+                        class="border border-dashed border-stroke rounded py-5 px-2.5 text-center text-zinc-400 text-ui-11 italic transition-colors duration-100"
                     >
                         {{ dragOverStatus === status ? 'Drop here' : 'No tasks' }}
                     </div>
@@ -109,7 +109,7 @@ function onDragEnd() {
                                 <div class="flex items-start gap-1.5">
                                     <span
                                         :class="[
-                                            'flex-1 text-[12px] font-medium leading-[1.4] break-words',
+                                            'flex-1 text-ui-12 font-medium leading-[1.4] break-words',
                                             isClosed(task) ? 'text-zinc-400 line-through' : 'text-zinc-900 no-underline',
                                         ]"
                                     >
@@ -119,7 +119,7 @@ function onDragEnd() {
                                     <button
                                         type="button"
                                         :aria-label="`Delete ${task.title}`"
-                                        class="shrink-0 bg-transparent border-none cursor-pointer p-0 text-[14px] leading-none transition-opacity duration-100 opacity-0 hover:opacity-100 focus:opacity-100 text-zinc-400 hover:text-danger"
+                                        class="shrink-0 bg-transparent border-none cursor-pointer p-0 text-ui-14 leading-none transition-opacity duration-100 opacity-0 hover:opacity-100 focus:opacity-100 text-zinc-400 hover:text-danger"
                                         @click.stop="emit('deleteTask', task)"
                                         @keydown.enter.stop
                                         @keydown.space.stop
@@ -131,7 +131,7 @@ function onDragEnd() {
                                     </button>
                                 </div>
 
-                                <span v-if="task.body" class="text-[11px] text-zinc-500 leading-[1.4] break-words line-clamp-2">
+                                <span v-if="task.body" class="text-ui-11 text-zinc-500 leading-[1.4] break-words line-clamp-2">
                                     {{ task.body }}
                                 </span>
 
@@ -140,18 +140,18 @@ function onDragEnd() {
                                     <span
                                         v-for="assignee in task.assignees"
                                         :key="assignee"
-                                        class="bg-blue-50 border border-blue-600 rounded-lg py-px px-1.5 text-blue-600 text-[10px]"
+                                        class="bg-blue-50 border border-blue-600 rounded-lg py-px px-1.5 text-blue-600 text-ui-10"
                                     >{{ assignee }}</span>
                                 </div>
 
                                 <div v-if="hasPlanning(task)" class="flex gap-1 flex-wrap">
-                                    <span v-if="task.acceptance_criteria.length > 0" class="text-[10px] text-success">
+                                    <span v-if="task.acceptance_criteria.length > 0" class="text-ui-10 text-success">
                                         ✓ {{ task.acceptance_criteria.length }} criteria
                                     </span>
-                                    <span v-if="task.testing_methods.length > 0" class="text-[10px] text-accent">
+                                    <span v-if="task.testing_methods.length > 0" class="text-ui-10 text-accent">
                                         ⬡ {{ task.testing_methods.length }} tests
                                     </span>
-                                    <span v-if="task.validation_steps.length > 0" class="text-[10px] text-amber-700">
+                                    <span v-if="task.validation_steps.length > 0" class="text-ui-10 text-amber-700">
                                         ◎ {{ task.validation_steps.length }} steps
                                     </span>
                                 </div>
@@ -169,7 +169,7 @@ function onDragEnd() {
                         <template #trigger>
                             <span
                                 :class="[
-                                    'block bg-transparent border border-dashed border-stroke hover:border-stroke rounded text-zinc-400 hover:text-zinc-500 text-[11px] p-2 cursor-pointer text-center',
+                                    'block bg-transparent border border-dashed border-stroke hover:border-stroke rounded text-zinc-400 hover:text-zinc-500 text-ui-11 p-2 cursor-pointer text-center',
                                     tasksWithStatus(status).length > 0 ? 'mt-0.5' : 'mt-0',
                                 ]"
                             >

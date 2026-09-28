@@ -36,7 +36,7 @@ const reopenButtonClass = 'shrink-0 self-center w-[26px] h-[26px] flex items-cen
                 data-testid="command-button"
                 :aria-pressed="showProjectSearch"
                 :title="`Command (${commandShortcut})`"
-                class="h-6 flex items-center gap-1.5 px-2 rounded-md border border-stroke bg-white text-[12px] text-zinc-600 cursor-pointer transition-colors hover:text-zinc-900 hover:border-zinc-300"
+                class="h-6 flex items-center gap-1.5 px-2 rounded-md border border-stroke bg-white text-ui-12 text-zinc-600 cursor-pointer transition-colors hover:text-zinc-900 hover:border-zinc-300"
                 @click="showProjectSearch = !showProjectSearch"
             >
                 <Icon name="command" :size="11" />

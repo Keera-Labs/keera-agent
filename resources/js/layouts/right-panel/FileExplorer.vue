@@ -44,9 +44,9 @@ const iconButton = 'p-1 rounded text-zinc-400 hover:text-zinc-700 hover:bg-zinc-
 </script>
 
 <template>
-    <div class="flex-1 min-h-0 flex flex-col min-w-0 text-[12px] text-zinc-700">
+    <div class="flex-1 min-h-0 flex flex-col min-w-0 text-ui-12 text-zinc-700">
         <div class="flex items-center gap-1 h-10 pl-3 pr-2 shrink-0">
-            <span class="flex-1 truncate text-[13px] font-medium text-zinc-900" :title="project.path">{{ project.name }}</span>
+            <span class="flex-1 truncate text-ui-13 font-medium text-zinc-900" :title="project.path">{{ project.name }}</span>
             <button
                 type="button"
                 :class="[iconButton, hidingFiles && 'text-accent! bg-zinc-200/70']"

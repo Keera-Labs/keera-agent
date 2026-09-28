@@ -100,11 +100,11 @@ function formatData(data: Record<string, unknown>) {
 <template>
     <div class="flex flex-col h-full max-w-[720px] mx-auto py-8 px-6 gap-6 box-border">
         <div class="flex items-center gap-3">
-            <h1 class="m-0 text-[20px] font-bold text-[#111]">Broadcasting POC</h1>
+            <h1 class="m-0 text-ui-20 font-bold text-[#111]">Broadcasting POC</h1>
 
             <span
                 data-testid="connection-status"
-                class="inline-flex items-center gap-1.5 py-[3px] px-2.5 rounded-full text-[12px] font-semibold"
+                class="inline-flex items-center gap-1.5 py-[3px] px-2.5 rounded-full text-ui-12 font-semibold"
                 :style="{ background: statusColor.bg, color: statusColor.text }"
             >
                 <span
@@ -117,12 +117,12 @@ function formatData(data: Record<string, unknown>) {
                 {{ status }}
             </span>
 
-            <span class="text-[12px] text-[#94a3b8] ml-auto">
+            <span class="text-ui-12 text-[#94a3b8] ml-auto">
                 channel: <code class="bg-[#f1f5f9] py-px px-[5px] rounded-sm">{{ CHANNEL_NAME }}</code>
             </span>
         </div>
 
-        <p class="m-0 text-[13px] text-[#64748b] leading-[1.6]">
+        <p class="m-0 text-ui-13 text-[#64748b] leading-[1.6]">
             This page proves the full broadcast pipeline:
             <strong>HTTP POST → server broadcasts event → Reverb WebSocket → UI updates live.</strong>
             Type a message and click <strong>Ping</strong>; the event should appear in the log below within
@@ -135,13 +135,13 @@ function formatData(data: Record<string, unknown>) {
                 type="text"
                 placeholder='Message (default: "ping")'
                 :disabled="sending"
-                class="flex-1 py-2 px-3 border border-[#e2e8f0] rounded text-[14px] text-[#1e293b] bg-[#fff] outline-none"
+                class="flex-1 py-2 px-3 border border-[#e2e8f0] rounded text-ui-14 text-[#1e293b] bg-[#fff] outline-none"
                 @keydown.enter="handlePing"
             />
             <button
                 :disabled="!canPing"
                 :class="[
-                    'py-2 px-5 rounded border-none text-white font-semibold text-[14px] transition-colors duration-150',
+                    'py-2 px-5 rounded border-none text-white font-semibold text-ui-14 transition-colors duration-150',
                     canPing ? 'bg-[#6c47ff] cursor-pointer' : 'bg-[#94a3b8] cursor-not-allowed',
                 ]"
                 @click="handlePing"
@@ -150,15 +150,15 @@ function formatData(data: Record<string, unknown>) {
             </button>
         </div>
 
-        <div v-if="error" class="py-2 px-3 bg-[#fee2e2] border border-[#fca5a5] rounded text-[#b91c1c] text-[13px]">
+        <div v-if="error" class="py-2 px-3 bg-[#fee2e2] border border-[#fca5a5] rounded text-[#b91c1c] text-ui-13">
             ⚠ {{ error }}
         </div>
 
         <div class="flex-1 overflow-y-auto border border-[#e2e8f0] rounded-md bg-[#f8fafc] min-h-[200px]">
-            <div v-if="messages.length === 0" class="p-8 text-center text-[#94a3b8] text-[13px]">
+            <div v-if="messages.length === 0" class="p-8 text-center text-[#94a3b8] text-ui-13">
                 {{ status === 'connected' ? 'No events yet — click Ping to send one.' : 'Waiting for WebSocket connection…' }}
             </div>
-            <table v-else class="w-full border-collapse text-[13px]">
+            <table v-else class="w-full border-collapse text-ui-13">
                 <thead>
                     <tr class="bg-[#f1f5f9] border-b border-b-[#e2e8f0]">
                         <th class="py-2 px-3 text-left text-[#64748b] font-semibold w-10">#</th>
@@ -183,7 +183,7 @@ function formatData(data: Record<string, unknown>) {
             <div ref="bottom" />
         </div>
 
-        <div class="flex items-center gap-2 text-[11px] text-[#94a3b8] justify-center py-2">
+        <div class="flex items-center gap-2 text-ui-11 text-[#94a3b8] justify-center py-2">
             <template v-for="(step, i) in PIPELINE_STEPS" :key="step">
                 <span v-if="i > 0">→</span>
                 <span class="py-[3px] px-2 bg-[#f1f5f9] rounded-sm font-medium text-[#64748b]">{{ step }}</span>

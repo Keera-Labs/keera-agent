@@ -8,7 +8,7 @@ defineProps<{ project: string; project_id: number | null; commands?: Command[] }
 
 <template>
     <div v-if="project_id === null" class="flex-1 flex items-center justify-center">
-        <span class="text-zinc-400 text-[13px]">Project not found</span>
+        <span class="text-zinc-400 text-ui-13">Project not found</span>
     </div>
     <CommandsPanel
         v-else

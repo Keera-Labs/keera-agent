@@ -13,6 +13,7 @@ from app.controllers import (
     agent_template_controller,
     agent_trigger_controller,
     agent_usage_report_controller,
+    appearance_settings_controller,
     broadcasting_controller,
     claude_hook_controller,
     command_controller,
@@ -143,6 +144,8 @@ router.get("/api/global-settings", global_settings_controller.get_global_setting
 router.patch("/api/global-settings", global_settings_controller.update_global_settings)
 router.get("/api/settings/editor", editor_settings_controller.show)
 router.patch("/api/settings/editor", editor_settings_controller.update)
+router.get("/api/settings/appearance", appearance_settings_controller.show)
+router.patch("/api/settings/appearance", appearance_settings_controller.update)
 router.get("/api/settings/remote-control", remote_control_setting_controller.show)
 router.patch("/api/settings/remote-control", remote_control_setting_controller.update)
 

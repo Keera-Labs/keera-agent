@@ -24,6 +24,28 @@
     --color-success: #1a7f37;
     --color-danger:  #cf222e;
     --color-overlay: rgba(0,0,0,0.5);
+
+    --text-xs: calc(0.75rem * var(--ui-scale));
+    --text-sm: calc(0.875rem * var(--ui-scale));
+    --text-base: calc(1rem * var(--ui-scale));
+    --text-lg: calc(1.125rem * var(--ui-scale));
+}
+
+/*
+ * The Appearance "UI font size" (stores/appearanceSettingsStore.ts) sets
+ * --ui-scale on <html>. Only text scales, never spacing, so the Monaco editor
+ * and xterm, which size their text in px from their own settings, stay as they are.
+ */
+:root {
+    --ui-scale: 1;
+}
+
+body {
+    font-size: calc(1rem * var(--ui-scale));
+}
+
+@utility text-ui-* {
+    font-size: calc(--value(number) * 1px * var(--ui-scale));
 }
 
 /*

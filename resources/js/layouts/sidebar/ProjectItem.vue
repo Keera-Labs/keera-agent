@@ -33,7 +33,7 @@ function toggleMenu() {
 }
 
 const menuItemClass = (danger = false) =>
-    `flex items-center gap-2 h-7 px-2 rounded-md cursor-pointer text-[12.5px] ${danger ? 'text-danger' : 'text-zinc-700'} bg-transparent border-0 w-full text-left whitespace-nowrap hover:bg-black/[0.04]`
+    `flex items-center gap-2 h-7 px-2 rounded-md cursor-pointer text-ui-12.5 ${danger ? 'text-danger' : 'text-zinc-700'} bg-transparent border-0 w-full text-left whitespace-nowrap hover:bg-black/[0.04]`
 
 const STATUS_DOT: Record<'running' | 'done' | 'idle', string> = {
     running: 'bg-amber-500 animate-pulse',
@@ -94,14 +94,14 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
             <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-1.5 min-w-0">
                     <div
-                        :class="['text-[13px] truncate leading-5', props.active ? 'text-zinc-900 font-medium' : 'text-zinc-700']"
+                        :class="['text-ui-13 truncate leading-5', props.active ? 'text-zinc-900 font-medium' : 'text-zinc-700']"
                         :title="props.project.name"
                     >
                         {{ props.project.name }}
                     </div>
                     <slot name="badge" />
                 </div>
-                <div v-if="props.active" class="text-[11px] text-zinc-500 truncate leading-4" :title="props.project.path">
+                <div v-if="props.active" class="text-ui-11 text-zinc-500 truncate leading-4" :title="props.project.path">
                     {{ props.project.path }}
                 </div>
             </div>

@@ -5,6 +5,10 @@ import { createPinia } from 'pinia'
 import { createApp, h, type DefineComponent } from 'vue'
 import AppLayout from './layouts/AppLayout.vue'
 import ProjectLayout from './layouts/ProjectLayout.vue'
+import { applyUiFontSize, readCachedUiFontSize } from './utils/uiFontSize'
+
+// Before mounting, so the first paint already uses the saved UI font size.
+applyUiFontSize(readCachedUiFontSize())
 
 const appName = import.meta.env.VITE_APP_NAME || 'Keera Agent'
 

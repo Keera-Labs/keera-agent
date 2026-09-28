@@ -84,12 +84,12 @@ onBeforeUnmount(() => {
     editor = null
 })
 
-const bannerButton = 'h-6 px-2 rounded border text-[12px] cursor-pointer'
+const bannerButton = 'h-6 px-2 rounded border text-ui-12 cursor-pointer'
 </script>
 
 <template>
     <section class="absolute inset-0 z-10 flex flex-col bg-white" aria-label="Editor">
-        <div v-if="activeTab" class="flex items-center gap-2 h-7 px-3 shrink-0 border-b border-stroke text-[12px] text-zinc-500">
+        <div v-if="activeTab" class="flex items-center gap-2 h-7 px-3 shrink-0 border-b border-stroke text-ui-12 text-zinc-500">
             <span class="truncate font-mono" data-testid="editor-path">{{ activeTab.path }}</span>
             <span
                 data-testid="editor-save-status"
@@ -107,7 +107,7 @@ const bannerButton = 'h-6 px-2 rounded border text-[12px] cursor-pointer'
             v-if="activeTab?.conflict"
             role="alert"
             data-testid="editor-conflict"
-            class="flex items-center gap-2 px-3 py-1.5 shrink-0 border-b border-amber-200 bg-amber-50 text-[12px] text-amber-900"
+            class="flex items-center gap-2 px-3 py-1.5 shrink-0 border-b border-amber-200 bg-amber-50 text-ui-12 text-amber-900"
         >
             <Icon name="info" :size="13" class="shrink-0" />
             <span class="flex-1">{{ activeTab.name }} changed on disk since you opened it. Your changes were not saved.</span>
@@ -131,7 +131,7 @@ const bannerButton = 'h-6 px-2 rounded border text-[12px] cursor-pointer'
             v-else-if="activeTab?.error"
             role="alert"
             data-testid="editor-error"
-            class="flex items-center gap-2 px-3 py-1.5 shrink-0 border-b border-red-200 bg-red-50 text-[12px] text-danger"
+            class="flex items-center gap-2 px-3 py-1.5 shrink-0 border-b border-red-200 bg-red-50 text-ui-12 text-danger"
         >
             <Icon name="info" :size="13" class="shrink-0" />
             <span class="flex-1">Could not save {{ activeTab.name }}: {{ activeTab.error }}</span>
