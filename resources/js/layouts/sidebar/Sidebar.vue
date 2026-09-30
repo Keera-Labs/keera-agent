@@ -60,13 +60,13 @@ const navClass = (active: boolean) => [
     'flex items-center gap-2 h-7 px-2 w-full rounded-md text-ui-13 text-left cursor-pointer transition-colors duration-100',
     active ? 'bg-black/[0.06] text-zinc-900 font-medium' : 'text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-900',
 ]
-const iconButtonClass = 'flex items-center justify-center w-6 h-6 rounded-md text-zinc-500 cursor-pointer hover:bg-black/[0.05] hover:text-zinc-800'
+const iconButtonClass = 'shrink-0 flex items-center justify-center w-6 h-6 rounded-md text-zinc-500 cursor-pointer hover:bg-black/[0.05] hover:text-zinc-800'
 </script>
 
 <template>
-    <aside class="shrink-0 bg-canvas border-r border-stroke flex flex-col overflow-hidden">
-        <!-- Same height as the header so their borders line up. -->
-        <div class="shrink-0 flex items-center h-10 pr-2 border-b border-stroke">
+    <aside class="sidebar-spacing shrink-0 bg-canvas border-r border-stroke flex flex-col overflow-hidden">
+        <!-- Same height as the header so their borders line up, so it keeps the header's unscaled spacing. -->
+        <div class="shrink-0 flex items-center h-10 pr-2 border-b border-stroke [--spacing:0.25rem]">
             <!-- The logo doubles as the Dashboard (home) link. -->
             <button
                 type="button"
@@ -172,7 +172,8 @@ const iconButtonClass = 'flex items-center justify-center w-6 h-6 rounded-md tex
 
         <WorkspacePicker />
 
-        <div class="flex items-center gap-1 px-2.5 pt-1 pb-2">
+        <!-- A query container in the label's font size, so the em breakpoint below scales with the UI font size. -->
+        <div class="@container flex items-center gap-1 px-2.5 pt-1 pb-2 text-ui-12">
             <button
                 type="button"
                 title="Settings"
@@ -196,16 +197,19 @@ const iconButtonClass = 'flex items-center justify-center w-6 h-6 rounded-md tex
             </button>
 
             <!-- Always shown; inert until a project is active (AgentAddModal then renders no modal). -->
-            <div class="ml-auto">
+            <div class="ml-auto min-w-0">
                 <AgentAddModal>
                     <template #trigger>
                         <button
                             type="button"
                             :disabled="!activeProject"
-                            class="flex items-center gap-1 h-6 px-2 rounded-md text-ui-12 font-medium text-zinc-600 cursor-pointer hover:bg-black/[0.05] hover:text-zinc-900 disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent"
+                            title="New Agent"
+                            aria-label="New Agent"
+                            class="flex items-center gap-1 max-w-full h-6 px-2 rounded-md font-medium whitespace-nowrap text-zinc-600 cursor-pointer hover:bg-black/[0.05] hover:text-zinc-900 disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent"
                         >
-                            <Icon name="plus" :size="12" />
-                            New Agent
+                            <Icon name="plus" :size="12" class="shrink-0" />
+                            <!-- Only the icon when the label would not fit, rather than a clipped letter. -->
+                            <span class="hidden @min-[13.75em]:inline truncate">New Agent</span>
                         </button>
                     </template>
                 </AgentAddModal>

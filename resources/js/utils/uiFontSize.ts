@@ -10,9 +10,15 @@ export function clampUiFontSize(size: number): number {
     return Math.min(MAX_UI_FONT_SIZE, Math.max(MIN_UI_FONT_SIZE, Math.round(size)))
 }
 
-/** Drives every `text-ui-*` utility and the body text through `--ui-scale` (see app.css). */
+/**
+ * Drives every `text-ui-*` utility and the body text through `--ui-scale`, and the
+ * sidebar's spacing through `--ui-font-size` (see app.css).
+ */
 export function applyUiFontSize(size: number): void {
-    document.documentElement.style.setProperty('--ui-scale', String(clampUiFontSize(size) / DEFAULT_UI_FONT_SIZE))
+    const clamped = clampUiFontSize(size)
+    const root = document.documentElement.style
+    root.setProperty('--ui-scale', String(clamped / DEFAULT_UI_FONT_SIZE))
+    root.setProperty('--ui-font-size', String(clamped))
 }
 
 /**

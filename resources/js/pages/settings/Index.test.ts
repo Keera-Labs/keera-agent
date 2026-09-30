@@ -28,7 +28,7 @@ afterEach(() => vi.unstubAllGlobals())
 
 describe('Settings page', () => {
     it('opens the Settings modal on the first section', () => {
-        expect(mountAt('/settings').settingsSection).toBe('ai')
+        expect(mountAt('/settings').settingsSection).toBe('general')
     })
 
     it('deep-links to the section named in ?section=', () => {
@@ -36,6 +36,6 @@ describe('Settings page', () => {
     })
 
     it('ignores an unknown section', () => {
-        expect(mountAt('/settings?section=nope').settingsSection).toBe('ai')
+        expect(mountAt('/settings?section=nope').settingsSection).toBe('general')
     })
 })
