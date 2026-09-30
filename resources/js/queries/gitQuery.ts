@@ -98,6 +98,7 @@ function gitUrl(target: GitTarget, path: string, params: Record<string, string> 
 const treeKey = (target: GitTarget | null) => ['git', target?.projectId ?? null, 'tree', target?.worktree ?? '']
 
 export const gitKeys = {
+    project: (projectId: number | null) => ['git', projectId],
     worktrees: (projectId: number | null) => ['git', projectId, 'worktrees'],
     status: (target: GitTarget | null) => [...treeKey(target), 'status'],
     pullRequest: (target: GitTarget | null) => [...treeKey(target), 'pull-request'],
