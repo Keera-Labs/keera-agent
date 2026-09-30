@@ -126,7 +126,7 @@ describe('SettingsModal', () => {
     it('lists every section and switches the pane', async () => {
         const { w } = await open()
 
-        expect(navLabels(w)).toEqual(['ai', 'general', 'appearance', 'editor', 'terminal', 'commands', 'git', 'workspaces', 'keybindings', 'billing'])
+        expect(navLabels(w)).toEqual(['general', 'ai', 'appearance', 'editor', 'terminal', 'commands', 'git', 'workspaces', 'keybindings', 'billing'])
         expect(w.find('[data-view="providers"]').exists()).toBe(true)
 
         await w.get('[data-ai-tab="templates"]').trigger('click')

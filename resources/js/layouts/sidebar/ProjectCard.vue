@@ -37,10 +37,11 @@ defineEmits<{ toggle: []; selectAgent: [agent: AgentSummary] }>()
             </template>
         </ProjectItem>
 
+        <!-- The left margin centres the tree line under ProjectItem's status dot (its pl-2 plus half the 7px dot). -->
         <ul
             v-if="props.agents.length > 0 && !props.collapsed"
             data-testid="project-agents"
-            class="list-none m-0 mt-0.5 ml-[11px] mr-1 pl-1.5 border-l-2 border-black/[0.08] flex flex-col gap-px"
+            class="list-none m-0 mt-0.5 ml-[calc(var(--spacing)*2_+_3px)] mr-1 pl-1.5 border-l-2 border-black/[0.08] flex flex-col gap-px"
         >
             <li v-for="agent in props.agents" :key="agent.id">
                 <AgentRow

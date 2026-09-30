@@ -3,10 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyUiFontSize, cacheUiFontSize, clampUiFontSize, readCachedUiFontSize } from './uiFontSize'
 
 const uiScale = () => document.documentElement.style.getPropertyValue('--ui-scale')
+const uiFontSize = () => document.documentElement.style.getPropertyValue('--ui-font-size')
 
 beforeEach(() => {
     localStorage.clear()
     document.documentElement.style.removeProperty('--ui-scale')
+    document.documentElement.style.removeProperty('--ui-font-size')
 })
 
 afterEach(() => vi.unstubAllGlobals())
@@ -25,6 +27,14 @@ describe('uiFontSize', () => {
 
         applyUiFontSize(18)
         expect(Number(uiScale())).toBeCloseTo(18 / 13)
+    })
+
+    it('exposes the clamped px size so the sidebar spacing can scale from 11px exactly', () => {
+        applyUiFontSize(11)
+        expect(uiFontSize()).toBe('11')
+
+        applyUiFontSize(40)
+        expect(uiFontSize()).toBe('18')
     })
 
     it('reads back the cached size, defaulting when nothing or junk is stored', () => {

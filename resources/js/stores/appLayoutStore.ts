@@ -182,7 +182,7 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
         reportSize(session)
     }
 
-    function openSettings(section: SettingsSectionId = 'ai') {
+    function openSettings(section: SettingsSectionId = 'general') {
         settingsSection.value = section
     }
 

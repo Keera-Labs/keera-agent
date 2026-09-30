@@ -64,9 +64,9 @@ const iconButtonClass = 'flex items-center justify-center w-6 h-6 rounded-md tex
 </script>
 
 <template>
-    <aside class="shrink-0 bg-canvas border-r border-stroke flex flex-col overflow-hidden">
-        <!-- Same height as the header so their borders line up. -->
-        <div class="shrink-0 flex items-center h-10 pr-2 border-b border-stroke">
+    <aside class="sidebar-spacing shrink-0 bg-canvas border-r border-stroke flex flex-col overflow-hidden">
+        <!-- Same height as the header so their borders line up, so it keeps the header's unscaled spacing. -->
+        <div class="shrink-0 flex items-center h-10 pr-2 border-b border-stroke [--spacing:0.25rem]">
             <!-- The logo doubles as the Dashboard (home) link. -->
             <button
                 type="button"
@@ -202,7 +202,7 @@ const iconButtonClass = 'flex items-center justify-center w-6 h-6 rounded-md tex
                         <button
                             type="button"
                             :disabled="!activeProject"
-                            class="flex items-center gap-1 h-6 px-2 rounded-md text-ui-12 font-medium text-zinc-600 cursor-pointer hover:bg-black/[0.05] hover:text-zinc-900 disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent"
+                            class="flex items-center gap-1 h-6 px-2 rounded-md text-ui-12 font-medium whitespace-nowrap text-zinc-600 cursor-pointer hover:bg-black/[0.05] hover:text-zinc-900 disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent"
                         >
                             <Icon name="plus" :size="12" />
                             New Agent

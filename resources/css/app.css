@@ -33,11 +33,13 @@
 
 /*
  * The Appearance "UI font size" (stores/appearanceSettingsStore.ts) sets
- * --ui-scale on <html>. Only text scales, never spacing, so the Monaco editor
- * and xterm, which size their text in px from their own settings, stay as they are.
+ * --ui-scale and --ui-font-size on <html>. Only text scales, never spacing, so the
+ * Monaco editor and xterm, which size their text in px from their own settings,
+ * stay as they are. The sidebar opts into scaled spacing with `sidebar-spacing`.
  */
 :root {
     --ui-scale: 1;
+    --ui-font-size: 13;
 }
 
 body {
@@ -46,6 +48,17 @@ body {
 
 @utility text-ui-* {
     font-size: calc(--value(number) * 1px * var(--ui-scale));
+}
+
+/*
+ * The sidebar's spacing was tuned for the smallest (11px) font size, where the
+ * factor is exactly 1. Tailwind derives p-*, m-*, gap-*, h-*, w-* and leading-<n>
+ * from --spacing, so rebasing it here grows every row, gap and line-height in
+ * proportion to the text. Anything that must line up with unscaled chrome
+ * outside the sidebar (e.g. the header row) resets --spacing to 0.25rem.
+ */
+@utility sidebar-spacing {
+    --spacing: calc(0.25rem * var(--ui-font-size) / 11);
 }
 
 /*

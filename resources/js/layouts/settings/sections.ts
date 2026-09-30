@@ -1,8 +1,8 @@
 import type { IconName } from '@/components/ui/Icon.vue'
 
 export type SettingsSectionId =
-    | 'ai'
     | 'general'
+    | 'ai'
     | 'appearance'
     | 'editor'
     | 'terminal'
@@ -21,8 +21,8 @@ export interface SettingsSection {
 }
 
 export const SETTINGS_SECTIONS: SettingsSection[] = [
-    { id: 'ai', label: 'AI Models & Agents', icon: 'asterisk', keywords: 'providers models templates permissions claude codex complexity agents max agents limit remote control' },
     { id: 'general', label: 'General', icon: 'settings', keywords: 'plugins' },
+    { id: 'ai', label: 'AI Models & Agents', icon: 'asterisk', keywords: 'providers models templates permissions claude codex complexity agents max agents limit remote control' },
     { id: 'appearance', label: 'Appearance', icon: 'type', keywords: 'ui font size text scale zoom interface sidebar' },
     { id: 'editor', label: 'Editor', icon: 'code', keywords: 'font family size typography monaco preview' },
     { id: 'terminal', label: 'Terminal & Shell', icon: 'terminal', keywords: 'xterm shell font' },
