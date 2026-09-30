@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installPinia } from '@/pages/agents/testing'
 import type { GitBranchChanges, GitPullRequestInfo, GitStatus, GitWorktree } from '@/queries/gitQuery'
@@ -68,6 +68,7 @@ beforeEach(() => {
     vi.stubGlobal('fetch', fetchMock)
 })
 
+enableAutoUnmount(afterEach)
 afterEach(() => vi.unstubAllGlobals())
 
 async function mountPanel() {
@@ -258,6 +259,57 @@ describe('SourceControl', () => {
             await flushPromises()
         }
         expect(fetchMock.mock.calls.filter(([url, init]) => url.endsWith('/branch-changes') && !init?.method)).toHaveLength(3)
+    })
+
+    describe('window focus', () => {
+        const gets = (path: string) => fetchMock.mock.calls.filter(([url, init]) => url.startsWith(`/api/projects/9/git${path}`) && !init?.method).length
+        // Past the 5s staleTime of status and branch changes, within the 30s of the pull request lookup.
+        const AWAY_MS = 10_000
+
+        beforeEach(() => vi.useFakeTimers({ toFake: ['Date'] }))
+        afterEach(() => vi.useRealTimers())
+
+        const focus = () => window.dispatchEvent(new Event('focus'))
+        const becomeVisible = () => document.dispatchEvent(new Event('visibilitychange'))
+
+        it('refetches status and branch changes when switching back from another app', async () => {
+            status = gitStatus()
+            const w = await mountPanel()
+            const before = { status: gets('/status'), branch: gets('/branch-changes'), pr: gets('/pull-request') }
+            branchChanges = { base: 'dev', merge_base: 'base', head: 'new', ahead: 1, files: [gitFile('src/outside.ts')] }
+            vi.advanceTimersByTime(AWAY_MS)
+
+            focus()
+            await flushPromises()
+
+            expect(gets('/status')).toBe(before.status + 1)
+            expect(gets('/branch-changes')).toBe(before.branch + 1)
+            expect(gets('/pull-request')).toBe(before.pr)
+            expect(w.get('[data-testid="committed-changes"]').text()).toContain('outside.ts')
+        })
+
+        it('fetches once when focus and visibilitychange arrive together, in either order', async () => {
+            await mountPanel()
+            for (const events of [[focus, becomeVisible], [becomeVisible, focus]]) {
+                vi.advanceTimersByTime(AWAY_MS)
+                const before = { status: gets('/status'), branch: gets('/branch-changes') }
+                // Both while the fetch is in flight, then both again once it has landed.
+                events.forEach(dispatch => dispatch())
+                await flushPromises()
+                events.forEach(dispatch => dispatch())
+                await flushPromises()
+                expect(gets('/status')).toBe(before.status + 1)
+                expect(gets('/branch-changes')).toBe(before.branch + 1)
+            }
+        })
+
+        it('stops listening once the panel unmounts', async () => {
+            const w = await mountPanel()
+            const remove = vi.spyOn(window, 'removeEventListener')
+            w.unmount()
+            expect(remove).toHaveBeenCalledWith('focus', expect.any(Function))
+            remove.mockRestore()
+        })
     })
 
     it('keeps a section for commits whose net diff is empty', async () => {

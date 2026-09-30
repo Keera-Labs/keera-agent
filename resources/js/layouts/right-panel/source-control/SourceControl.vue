@@ -4,8 +4,9 @@ import {
 } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { useGitWorktree, worktreeLabel } from '@/composables/useGitWorktree'
+import { useRefetchOnWindowFocus } from '@/composables/useRefetchOnWindowFocus'
 import {
-    isOpenPullRequest, useGitActions, useGitBranchChanges, useGitCommits, useGitPullRequest, useGitStatus, type GitFileChange, type GitPaths, type GitWorktree,
+    gitKeys, isOpenPullRequest, useGitActions, useGitBranchChanges, useGitCommits, useGitPullRequest, useGitStatus, type GitFileChange, type GitPaths, type GitWorktree,
 } from '@/queries/gitQuery'
 import { useDiffStore } from '@/stores/diffStore'
 import { useEditorStore } from '@/stores/editorStore'
@@ -19,6 +20,8 @@ const props = defineProps<{ project: Project }>()
 const projectId = () => props.project.id
 
 const { worktrees, selected: selectedWorktree, target, select: selectWorktree } = useGitWorktree(projectId)
+// Commits made in a terminal or by an agent must show up after switching back from another app.
+useRefetchOnWindowFocus(() => gitKeys.project(projectId()))
 const { status, error: statusError, isLoading, refetch } = useGitStatus(target)
 const isRepo = computed(() => status.value?.is_repo === true)
 const branchQuery = useGitBranchChanges(target, isRepo)
