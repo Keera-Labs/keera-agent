@@ -19,6 +19,7 @@ const hovered = ref(false)
 const menuOpen = ref(false)
 const menu = ref<HTMLElement | null>(null)
 const root = ref<HTMLElement | null>(null)
+const trigger = ref<HTMLButtonElement | null>(null)
 const modalOpen = ref(false)
 const menuPosition = ref({ top: 0, left: 0 })
 
@@ -77,7 +78,14 @@ function onViewportChange(e: Event) {
     menuOpen.value = false
 }
 
+function onKeydown(e: KeyboardEvent) {
+    if (e.key !== 'Escape' || modalOpen.value) return
+    menuOpen.value = false
+    trigger.value?.focus()
+}
+
 function stopListening() {
+    document.removeEventListener('keydown', onKeydown)
     document.removeEventListener('mousedown', onClickOutside)
     document.removeEventListener('scroll', onViewportChange, true)
     window.removeEventListener('resize', onViewportChange)
@@ -85,6 +93,7 @@ function stopListening() {
 
 watch(menuOpen, isOpen => {
     if (!isOpen) return stopListening()
+    document.addEventListener('keydown', onKeydown)
     document.addEventListener('mousedown', onClickOutside)
     document.addEventListener('scroll', onViewportChange, true)
     window.addEventListener('resize', onViewportChange)
@@ -130,12 +139,15 @@ onBeforeUnmount(stopListening)
             </div>
         </div>
 
+        <!-- Hidden rather than unmounted, so focus can return here after Escape. -->
         <button
-            v-if="hovered || menuOpen"
+            ref="trigger"
             type="button"
             aria-label="Project actions"
+            :aria-expanded="menuOpen"
             :class="[
                 'absolute right-1 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md cursor-pointer text-zinc-500 flex items-center justify-center hover:text-zinc-800',
+                !(hovered || menuOpen) && 'opacity-0 focus-visible:opacity-100',
                 menuOpen ? 'bg-black/[0.06]' : 'hover:bg-black/[0.05]',
             ]"
             @mousedown.stop

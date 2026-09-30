@@ -277,6 +277,14 @@ describe('Sidebar', () => {
             expect(left).toBeGreaterThanOrEqual(8)
         })
 
+        it('closes on Escape and hands focus back to its trigger', async () => {
+            const { w } = await openMenuAt(40, { width: 180, height: 131 })
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+            await flushPromises()
+            expect(w.find('[data-testid="project-menu"]').exists()).toBe(false)
+            expect(document.activeElement).toBe(w.get('[aria-label="Project actions"]').element)
+        })
+
         it('closes when the list scrolls under it', async () => {
             const { w } = await openMenuAt(40, { width: 180, height: 131 })
             w.find('.overflow-y-auto').element.dispatchEvent(new Event('scroll'))
@@ -317,6 +325,16 @@ describe('Sidebar', () => {
 
         expect(document.querySelector('form')!.textContent).toContain('New Workspace')
         expect(w.get('[data-testid="workspace-menu"]').isVisible()).toBe(false)
+    })
+
+    // A narrow footer (e.g. 18px in a 180px sidebar) shows only the icon, named by
+    // aria-label and title, rather than clipping the label to "+ N".
+    it('names New Agent even when its label collapses to the icon', async () => {
+        const w = await mountSidebar()
+
+        const newAgent = w.get('[aria-label="New Agent"]')
+        expect(newAgent.attributes('title')).toBe('New Agent')
+        expect(newAgent.get('span').classes()).toEqual(expect.arrayContaining(['hidden', '@min-[13.75em]:inline']))
     })
 
     it('goes to the Dashboard from the logo at the top of the sidebar', async () => {
@@ -485,13 +503,29 @@ describe('Sidebar', () => {
             expect(row.attributes('data-status')).toBe('needs_input')
             expect(row.get('[data-testid="agent-status-indicator"]').attributes('aria-label')).toBe('Needs input')
             expect(row.attributes('title')).toBe('agent-1 — Which port should I use?')
-            expect(row.get('[data-testid="agent-preview"]').text()).toBe('')
+            expect(row.find('[data-testid="agent-preview"]').exists()).toBe(false)
 
             const reply = w.get('[data-testid="agent-reply"]')
             expect(reply.attributes('aria-label')).toBe('Reply to agent-1')
+            expect(reply.attributes('title')).toBe('Reply to agent-1')
             await reply.trigger('click')
 
             expect(router.visit).toHaveBeenCalledWith('/p-10/agents/1')
+        })
+
+        // happy-dom has no container queries, so this pins the markup the browser
+        // collapses: in a narrow row the badge drops its label and keeps only the icon,
+        // while the name takes all the remaining room instead of sliding under the badge.
+        it('lets a needs-input row give the name the room and collapse Reply to an icon', async () => {
+            summaries = [summary(1, 10, 'needs_input')]
+            const w = await mountSidebar()
+
+            expect(w.get('[data-testid="agent-name"]').classes()).toEqual(expect.arrayContaining(['flex-1', 'min-w-0', 'truncate']))
+            const reply = w.get('[data-testid="agent-reply"]')
+            expect(reply.classes()).toContain('shrink-0')
+            expect(reply.get('svg').classes()).toContain('@min-[10em]:hidden')
+            expect(reply.get('span').classes()).toEqual(expect.arrayContaining(['hidden', '@min-[10em]:inline']))
+            expect(reply.get('span').text()).toBe('Reply')
         })
 
         it('describes a permission prompt without text generically', async () => {

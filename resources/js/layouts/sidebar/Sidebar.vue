@@ -172,7 +172,8 @@ const iconButtonClass = 'shrink-0 flex items-center justify-center w-6 h-6 round
 
         <WorkspacePicker />
 
-        <div class="flex items-center gap-1 px-2.5 pt-1 pb-2">
+        <!-- A query container in the label's font size, so the em breakpoint below scales with the UI font size. -->
+        <div class="@container flex items-center gap-1 px-2.5 pt-1 pb-2 text-ui-12">
             <button
                 type="button"
                 title="Settings"
@@ -202,10 +203,13 @@ const iconButtonClass = 'shrink-0 flex items-center justify-center w-6 h-6 round
                         <button
                             type="button"
                             :disabled="!activeProject"
-                            class="flex items-center gap-1 max-w-full h-6 px-2 rounded-md text-ui-12 font-medium whitespace-nowrap text-zinc-600 cursor-pointer hover:bg-black/[0.05] hover:text-zinc-900 disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent"
+                            title="New Agent"
+                            aria-label="New Agent"
+                            class="flex items-center gap-1 max-w-full h-6 px-2 rounded-md font-medium whitespace-nowrap text-zinc-600 cursor-pointer hover:bg-black/[0.05] hover:text-zinc-900 disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent"
                         >
                             <Icon name="plus" :size="12" class="shrink-0" />
-                            <span class="truncate">New Agent</span>
+                            <!-- Only the icon when the label would not fit, rather than a clipped letter. -->
+                            <span class="hidden @min-[13.75em]:inline truncate">New Agent</span>
                         </button>
                     </template>
                 </AgentAddModal>

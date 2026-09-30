@@ -27,7 +27,8 @@ const title = computed(() => {
 </script>
 
 <template>
-    <div class="flex items-center gap-1">
+    <!-- A query container in its own font size, so the em breakpoint below scales with the UI font size. -->
+    <div class="@container flex items-center gap-1 text-ui-12.5">
         <button
             type="button"
             data-testid="sidebar-agent"
@@ -44,12 +45,16 @@ const title = computed(() => {
         >
             <AgentStatusIndicator :status="props.agent.status" :size="10" />
             <Icon :name="provider.name" :size="12" :color="provider.color" class="shrink-0" />
-            <!-- A few characters always stay visible, even when the Reply badge takes the room. -->
-            <span data-testid="agent-name" :class="['truncate min-w-[3ch]', props.active ? 'text-zinc-900 font-medium' : 'text-zinc-700']">
+            <!-- Next to Reply the name takes all the room left; the badge's breakpoint keeps that readable. -->
+            <span
+                data-testid="agent-name"
+                :class="['truncate', needsInput ? 'flex-1 min-w-0' : 'min-w-[3ch]', props.active ? 'text-zinc-900 font-medium' : 'text-zinc-700']"
+            >
                 {{ props.agent.name }}
             </span>
             <!-- The name gives up width first, so a preview is never squeezed to a lone dash. -->
             <span
+                v-if="!needsInput"
                 data-testid="agent-preview"
                 :class="['flex-1 truncate text-zinc-400', preview ? 'min-w-12' : 'min-w-0']"
             >
@@ -64,10 +69,13 @@ const title = computed(() => {
             type="button"
             data-testid="agent-reply"
             :aria-label="`Reply to ${props.agent.name}`"
-            class="shrink-0 h-5 px-1.5 rounded border border-amber-300 bg-amber-50 text-amber-800 text-ui-11 font-semibold cursor-pointer hover:bg-amber-100"
+            :title="`Reply to ${props.agent.name}`"
+            class="shrink-0 flex items-center h-5 px-1.5 rounded border border-amber-300 bg-amber-50 text-amber-800 text-ui-11 font-semibold cursor-pointer hover:bg-amber-100"
             @click="$emit('select')"
         >
-            Reply
+            <!-- In a narrow row only the icon shows, so the name keeps room to stay readable. -->
+            <Icon name="reply" :size="12" class="@min-[10em]:hidden" />
+            <span class="hidden @min-[10em]:inline">Reply</span>
         </button>
     </div>
 </template>
