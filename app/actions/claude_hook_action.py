@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 
 from fastapi_startkit import Config
 
+from app.services.claude_config_dir import claude_env
 from app.utils.json_utils import atomic_write_json
 
 # URL paths that identify keera-managed Claude hooks.
@@ -17,9 +18,9 @@ AGENT_ID_ENV = "KEERA_AGENT_ID"
 AGENT_ID_HEADER = "X-Keera-Agent-Id"
 
 
-def agent_env(agent_id: int) -> dict:
-    """The environment for an agent's PTY."""
-    return {**os.environ, AGENT_ID_ENV: str(agent_id)}
+def agent_env(agent_id: int, claude_config_dir: str | None = None) -> dict:
+    """The environment for an agent's PTY, pointing Claude at the workspace's config dir if set."""
+    return {**os.environ, **claude_env(claude_config_dir), AGENT_ID_ENV: str(agent_id)}
 
 
 class ClaudeHookAction:

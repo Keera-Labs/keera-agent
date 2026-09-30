@@ -20,8 +20,8 @@ vi.mock('@/queries/projectsQuery', () => ({
 vi.mock('@/queries/workspacesQuery', () => ({
     default: () => ({
         workspaces: computed<Workspace[]>(() => [
-            { id: 1, name: 'Alpha', description: null },
-            { id: 2, name: 'Beta', description: null },
+            { id: 1, name: 'Alpha', description: null, claude_config_dir: null },
+            { id: 2, name: 'Beta', description: null, claude_config_dir: null },
         ]),
     }),
 }))

@@ -5,12 +5,27 @@ import type { Workspace } from "@/types/type"
 
 export const WORKSPACES_QUERY_KEY = ["workspaces"]
 
-type WorkspaceFields = { name?: string; description?: string }
+type WorkspaceFields = { name?: string; description?: string; claude_config_dir?: string | null }
+
+type WorkspaceResource = { id: string; attributes: Omit<Workspace, "id"> }
+export type WorkspacesDocument = { data: WorkspaceResource[] }
+
+export function fromWorkspacesDocument(doc: WorkspacesDocument): Workspace[] {
+    return doc.data.map(({ id, attributes }) => ({ id: Number(id), ...attributes }))
+}
+
+/** The first message from the app's 422 body: `{ errors: { field: [message] } }`. */
+export function validationMessage(body: unknown): string | null {
+    const errors = (body as { errors?: Record<string, unknown> } | null)?.errors
+    const messages = errors ? Object.values(errors)[0] : null
+    const msg = Array.isArray(messages) ? messages[0] : null
+    return typeof msg === "string" ? msg.replace(/^Value error, /, "") : null
+}
 
 async function fetchWorkspaces(): Promise<Workspace[]> {
     const res = await fetch("/api/workspaces")
     if (!res.ok) throw new Error("Failed to fetch workspaces")
-    return res.json()
+    return fromWorkspacesDocument(await res.json())
 }
 
 async function sendWorkspace(url: string, method: "POST" | "PATCH" | "DELETE", body?: WorkspaceFields) {
@@ -19,17 +34,20 @@ async function sendWorkspace(url: string, method: "POST" | "PATCH" | "DELETE", b
         headers: body ? { "Content-Type": "application/json" } : undefined,
         body: body ? JSON.stringify(body) : undefined,
     })
-    if (!res.ok) throw new Error(`Failed to ${method.toLowerCase()} workspace`)
+    if (!res.ok) {
+        const message = res.status === 422 ? validationMessage(await res.json().catch(() => null)) : null
+        throw new Error(message ?? `Failed to ${method.toLowerCase()} workspace`)
+    }
 }
 
 export default function useWorkspaces() {
-    const page = usePage<{ workspaces?: Workspace[] }>()
+    const page = usePage<{ workspaces?: WorkspacesDocument }>()
     const queryCache = useQueryCache()
 
     const query = useQuery({
         key: WORKSPACES_QUERY_KEY,
         query: fetchWorkspaces,
-        initialData: () => page.props.workspaces,
+        initialData: () => (page.props.workspaces ? fromWorkspacesDocument(page.props.workspaces) : undefined),
         staleTime: 1000 * 30,
     })
 

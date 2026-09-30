@@ -12,6 +12,7 @@ from app.actions.claude_hook_action import agent_env
 from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.models.Agent import Agent
 from app.models.Project import Project
+from app.services.claude_config_dir import agent_config_dir
 from app.terminal.claude_monitor import make_claude_session_monitor
 from app.terminal.cli_supervisor import restart_cli, supervise_cli
 from app.terminal.connection_manager import ConnectionManager
@@ -136,7 +137,10 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
         await websocket.close(code=1011, reason="worktree creation failed")
         return
 
-    terminal_manager.create(cwd=agent_cwd, session_id=session_id, env=agent_env(agent_record.id))
+    config_dir = await agent_config_dir(agent_record, project_record)
+    terminal_manager.create(
+        cwd=agent_cwd, session_id=session_id, env=agent_env(agent_record.id, config_dir)
+    )
     terminal = terminal_manager.get(session_id)
 
     ready_event = mark_booting(session_id)

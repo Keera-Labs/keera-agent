@@ -22,7 +22,7 @@ async function mountDetail(agentId?: number, builder: Record<string, unknown> = 
     Object.assign(builderResource.attributes, builder)
     stubFetch({
         '/api/projects/1/agents': { data: [agentResource(10, 'Planner', 'pm'), builderResource] },
-        '/api/workspaces': [{ id: 7, name: 'Labs' }],
+        '/api/workspaces': { data: [{ type: 'workspaces', id: '7', attributes: { name: 'Labs', description: null, claude_config_dir: null } }] },
     })
     const plugins = installPinia()
     useProjectStore().setActiveProject(project)

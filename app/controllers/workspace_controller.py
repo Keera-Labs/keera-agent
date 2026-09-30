@@ -3,13 +3,12 @@ from fastapi.responses import JSONResponse
 
 from app.models.Project import Project
 from app.models.Workspace import Workspace
+from app.requests.workspace_request import WorkspaceUpdateRequest
+from app.resources.workspace_resource import WorkspaceResource
 
 
 async def index(request: Request):
-    workspaces = await Workspace.all()
-    return JSONResponse(
-        [{"id": w.id, "name": w.name, "description": w.description} for w in workspaces]
-    )
+    return WorkspaceResource.collection(await Workspace.all())
 
 
 async def store(request: Request):
@@ -23,34 +22,20 @@ async def store(request: Request):
 
     workspace = await Workspace.create({"name": name, "description": description})
 
-    return JSONResponse(
-        {
-            "id": workspace.id,
-            "name": workspace.name,
-            "description": workspace.description,
-        },
-        status_code=201,
-    )
+    return JSONResponse(WorkspaceResource(workspace).serialize(), status_code=201)
 
 
-async def update(request: Request, workspace_id: int):
-    body = await request.json()
-
+async def update(request: WorkspaceUpdateRequest, workspace_id: int):
     workspace = await Workspace.find_or_fail(workspace_id)
 
-    name = (body.get("name") or "").strip()
-    description = body.get("description")
+    data = request.model_dump(exclude_unset=True)
+    # A name can be renamed but never cleared.
+    if data.get("name") is None:
+        data.pop("name", None)
+    if data:
+        await workspace.update(data)
 
-    if name:
-        workspace.name = name
-    if description is not None:
-        workspace.description = description.strip() or None
-
-    await workspace.save()
-
-    return JSONResponse(
-        {"id": workspace.id, "name": workspace.name, "description": workspace.description}
-    )
+    return WorkspaceResource(workspace)
 
 
 async def destroy(request: Request, workspace_id: int):

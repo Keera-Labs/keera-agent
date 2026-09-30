@@ -50,7 +50,9 @@ def user_statusline_command(cwd: str | None) -> str | None:
         if cwd
         else []
     )
-    candidates.append(os.path.expanduser(os.path.join("~", ".claude", "settings.json")))
+    # Claude runs this script with its own env, so CLAUDE_CONFIG_DIR names the account in use.
+    config_dir = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join("~", ".claude")
+    candidates.append(os.path.expanduser(os.path.join(config_dir, "settings.json")))
     for path in candidates:
         try:
             with open(path) as handle:

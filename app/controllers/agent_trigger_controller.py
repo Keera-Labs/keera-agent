@@ -17,6 +17,7 @@ from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.actions.terminal_write_action import TerminalWriteAction
 from app.models.Agent import Agent
 from app.models.Project import Project
+from app.services.claude_config_dir import agent_config_dir
 from app.services.worktree_cleanup import cleanup_agent_worktree
 from app.terminal.claude_monitor import make_claude_session_monitor
 from app.terminal.cli_supervisor import supervise_cli
@@ -254,7 +255,10 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     await _mark_agent_working(agent, initial_message)
 
     terminal_manager: TerminalManager = app().make("terminal")
-    terminal_manager.create(cwd=agent_cwd, session_id=session_id, env=agent_env(agent.id))
+    config_dir = await agent_config_dir(agent, project)
+    terminal_manager.create(
+        cwd=agent_cwd, session_id=session_id, env=agent_env(agent.id, config_dir)
+    )
     terminal = terminal_manager.get(session_id)
 
     # Give the shell time to start, then launch claude

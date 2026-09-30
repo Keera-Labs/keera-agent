@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+import tempfile
 import threading
 from pathlib import Path
 
@@ -257,9 +258,20 @@ class TestWorktreesPruneCommand(TestCase):
         self.output: list[str] = []
         self.command.line = lambda text="", *a, **k: self.output.append(text)
 
-    def run_command(self, dry_run: bool) -> int:
+    def run_command(self, dry_run: bool, config_dirs: list[str] | None = None) -> int:
         plan = wc.plan_prune(str(self.repo.root), set(), min_age_hours=0)
-        return self.command._run([plan], dry_run)
+        return self.command._run([plan], dry_run, config_dirs or [])
+
+    def test_lists_session_dirs_from_every_claude_config_dir(self):
+        with tempfile.TemporaryDirectory() as default, tempfile.TemporaryDirectory() as work:
+            for config_dir in (default, work):
+                os.makedirs(wc.claude_project_dir(str(self.clean), config_dir))
+
+            self.run_command(dry_run=True, config_dirs=[default, work])
+
+        out = "\n".join(self.output)
+        self.assertIn(wc.claude_project_dir(str(self.clean), default), out)
+        self.assertIn(wc.claude_project_dir(str(self.clean), work), out)
 
     def test_dry_run_changes_nothing_and_reports_both_sides(self):
         before = self.repo.git("worktree", "list", "--porcelain")

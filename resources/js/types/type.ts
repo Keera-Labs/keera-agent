@@ -2,6 +2,8 @@ export interface Workspace {
     id: number
     name: string
     description: string | null
+    /** Claude Code's CLAUDE_CONFIG_DIR for this workspace's agents; null keeps ~/.claude. */
+    claude_config_dir: string | null
 }
 
 export interface Project {

@@ -43,6 +43,7 @@ class WorktreesPruneCommand(Command):
     async def handle_async(self):
         from app.models.Agent import Agent
         from app.models.Project import Project
+        from app.services.claude_config_dir import all_config_dirs
 
         dry_run = bool(self.option("dry-run"))
         project_id = self.option("project")
@@ -59,7 +60,7 @@ class WorktreesPruneCommand(Command):
             )
             for repo in repos
         ]
-        return self._run(plans, dry_run)
+        return self._run(plans, dry_run, await all_config_dirs())
 
     def _repos(self, projects) -> list[str]:
         """Main checkout of each project's repo, once per repo (projects can share one)."""
@@ -74,7 +75,7 @@ class WorktreesPruneCommand(Command):
                 repos.setdefault(common.stdout.strip(), top.stdout.strip())
         return list(repos.values())
 
-    def _run(self, plans: list[wc.PrunePlan], dry_run: bool) -> int:
+    def _run(self, plans: list[wc.PrunePlan], dry_run: bool, config_dirs: list[str]) -> int:
         verb = "WOULD REMOVE" if dry_run else "REMOVE"
         rows = []
         removed_kb = removed = skipped = failed = 0
@@ -109,7 +110,7 @@ class WorktreesPruneCommand(Command):
                     for line in wc.prune_missing(plan.repo):
                         self.line(f"  git: {line}")
 
-        self._claude_dirs([c for _, c, _ in rows])
+        self._claude_dirs([c for _, c, _ in rows], config_dirs)
 
         external = sum(p.external for p in plans)
         self.line("")
@@ -145,18 +146,23 @@ class WorktreesPruneCommand(Command):
         for row in [header, *cells]:
             self.line("  ".join(v.ljust(w) for v, w in zip(row, widths)) + "  " + row[-1])
 
-    def _claude_dirs(self, candidates) -> None:
+    def _claude_dirs(self, candidates, config_dirs: list[str]) -> None:
         """List (never delete) Claude CLI session transcripts kept for these worktrees."""
+        # Repos are shared across workspaces, so look in every configured account's dir.
         found = [
             (d, wc.disk_kb(d))
-            for d in (wc.claude_project_dir(c.worktree.path) for c in candidates)
+            for d in (
+                wc.claude_project_dir(c.worktree.path, config_dir)
+                for c in candidates
+                for config_dir in config_dirs
+            )
             if os.path.isdir(d)
         ]
         if not found:
             return
         total = sum(kb for _, kb in found)
         self.line(
-            f"\n~/.claude/projects session dirs for these worktrees ({len(found)}, {_size(total)}), listed only, never deleted:"
+            f"\nClaude session dirs for these worktrees ({len(found)}, {_size(total)}), listed only, never deleted:"
         )
         for d, kb in found:
             self.line(f"  {_size(kb):>7}  {d}")

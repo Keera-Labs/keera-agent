@@ -269,10 +269,10 @@ def last_activity(path: str) -> float:
     return max(times, default=os.path.getmtime(path))
 
 
-def claude_project_dir(worktree_path: str) -> str:
+def claude_project_dir(worktree_path: str, config_dir: str) -> str:
     """Where the Claude CLI keeps session transcripts for a working directory."""
     encoded = re.sub(r"[^A-Za-z0-9-]", "-", worktree_path)
-    return os.path.join(os.path.expanduser("~"), ".claude", "projects", encoded)
+    return os.path.join(config_dir, "projects", encoded)
 
 
 def _in_agent_dirs(repo: str, path: str) -> bool:
