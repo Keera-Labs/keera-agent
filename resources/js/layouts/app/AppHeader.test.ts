@@ -5,6 +5,7 @@ import { reactive } from 'vue'
 import { router } from '@inertiajs/vue3'
 import { agentResource, fakeSession, installPinia, project, stubFetch } from '@/pages/agents/testing'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
+import { useDiffStore } from '@/stores/diffStore'
 import { useEditorStore } from '@/stores/editorStore'
 import { useProjectStore } from '@/stores/projectStore'
 import AppHeader from './AppHeader.vue'
@@ -246,6 +247,24 @@ describe('SessionTabs', () => {
         const close = vi.spyOn(editor, 'close').mockResolvedValue(true)
         await fileTabs[0].get('[data-testid="editor-tab-close"]').trigger('click')
         expect(close).toHaveBeenCalledWith(project.id, 'src/app.ts')
+    })
+
+    it('labels committed diff tabs apart from index and working tree diffs of the same file', async () => {
+        const w = await mountHeader()
+        const diffs = useDiffStore()
+        const target = { projectId: project.id, worktree: null }
+        diffs.open(target, 'src/app.ts', false, { committed: true, base: 'dev' })
+        diffs.open(target, 'src/app.ts', false)
+        diffs.open(target, 'src/app.ts', true)
+        await flushPromises()
+
+        const tabs = w.findAll('[data-testid="diff-tab"]')
+        expect(tabs.map(t => t.text())).toEqual(['app.ts (Committed vs dev)', 'app.ts (Working Tree)', 'app.ts (Index)'])
+        expect(tabs.map(t => t.attributes('title'))).toEqual([
+            'src/app.ts · Committed (merge-base with dev ↔ HEAD)',
+            'src/app.ts · Changes (Index ↔ Working tree)',
+            'src/app.ts · Staged (HEAD ↔ Index)',
+        ])
     })
 })
 

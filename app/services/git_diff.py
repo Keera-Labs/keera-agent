@@ -163,6 +163,22 @@ async def _sides(repo: GitRepository, change: FileChange, staged: bool) -> tuple
     return original, None if change.status == "D" else working
 
 
+async def _committed_sides(
+    repo: GitRepository, change: FileChange, comparison: dict
+) -> tuple[Side, Side]:
+    # An added path may be a tree at the merge-base (directory replaced by a file), and a
+    # deleted one may be a tree at HEAD (file replaced by a directory), so skip the absent side.
+    source = change.original_path or change.path
+
+    async def read(rev: str, path: str, absent: bool) -> Side:
+        return None if absent else await _read_blob(repo, f"{rev}:{path}")
+
+    return await asyncio.gather(
+        read(comparison["merge_base"], source, change.status == "A"),
+        read(comparison["head"], change.path, change.status == "D"),
+    )
+
+
 async def file_diff(
     repo: GitRepository, path: str, staged: bool, committed: bool = False
 ) -> FileDiff:
@@ -184,11 +200,7 @@ async def file_diff(
         language=language_for(change.path),
     )
     if comparison is not None:
-        source = change.original_path or change.path
-        original, modified = await asyncio.gather(
-            _read_blob(repo, f"{comparison['merge_base']}:{source}"),
-            _read_blob(repo, f"{comparison['head']}:{change.path}"),
-        )
+        original, modified = await _committed_sides(repo, change, comparison)
     else:
         original, modified = await _sides(repo, change, staged)
     if original is TOO_LARGE or modified is TOO_LARGE:

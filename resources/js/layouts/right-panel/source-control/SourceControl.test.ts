@@ -238,7 +238,7 @@ describe('SourceControl', () => {
         expect(section.text()).toContain('2 commits ahead of dev')
         expect(section.find('[aria-label^="Stage"]').exists()).toBe(false)
         await section.get('button[title^="Show changes"]').trigger('click')
-        expect(useDiffStore().activeTab).toMatchObject({ path: 'src/feature.ts', committed: true })
+        expect(useDiffStore().activeTab).toMatchObject({ path: 'src/feature.ts', committed: true, base: 'dev' })
     })
 
     it('refreshes committed files immediately after commit and push', async () => {

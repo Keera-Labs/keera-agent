@@ -157,3 +157,30 @@ class TestGitBranchChangesController(TestCase, DatabaseTransaction):
         response = await self.post(f"/api/projects/{self.project.id}/git/push", json={})
         response.assert_ok()
         assert (await self.comparison())["ahead"] == 1
+
+    async def test_file_replaced_by_directory_opens_deleted_file(self):
+        (self.repo.root / "notes.txt").unlink()
+        self.repo.write("notes.txt/child.txt", "child\n")
+        self.repo.commit_all()
+        response = await self.diff("notes.txt")
+        response.assert_ok()
+        diff = response.json()
+        assert diff["status"] == "D"
+        assert diff["original"] == "base\n" and diff["modified"] is None
+        assert (await self.diff("notes.txt/child.txt")).json()["modified"] == "child\n"
+
+    async def test_directory_replaced_by_file_opens_added_file(self):
+        self.repo.git("checkout", "-q", "dev")
+        self.repo.write("node/child.txt", "child\n")
+        self.repo.commit_all()
+        self.repo.git("checkout", "-q", "task/feature")
+        self.repo.git("reset", "-q", "--hard", "dev")
+        self.repo.git("rm", "-rq", "node")
+        self.repo.write("node", "file\n")
+        self.repo.commit_all()
+        response = await self.diff("node")
+        response.assert_ok()
+        diff = response.json()
+        assert diff["status"] == "A"
+        assert diff["original"] is None and diff["modified"] == "file\n"
+        assert (await self.diff("node/child.txt")).json()["original"] == "child\n"

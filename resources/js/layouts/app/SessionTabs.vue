@@ -64,8 +64,17 @@ function isActive(agent: ProjectAgent) {
 const isFileActive = (tab: EditorTab) => activeFileTab.value?.path === tab.path
 const isDiffActive = (tab: DiffTab) => activeDiffTab.value?.id === tab.id
 
-const diffTitle = (tab: DiffTab) =>
-    [tab.path, tab.staged ? 'Staged (HEAD ↔ Index)' : 'Changes (Index ↔ Working tree)', tab.worktreeLabel].filter(Boolean).join(' · ')
+function diffLabel(tab: DiffTab) {
+    if (tab.committed) return tab.base ? `Committed vs ${tab.base}` : 'Committed'
+    return tab.staged ? 'Index' : 'Working Tree'
+}
+
+function diffDescription(tab: DiffTab) {
+    if (tab.committed) return `Committed (${tab.base ? `merge-base with ${tab.base}` : 'base'} ↔ HEAD)`
+    return tab.staged ? 'Staged (HEAD ↔ Index)' : 'Changes (Index ↔ Working tree)'
+}
+
+const diffTitle = (tab: DiffTab) => [tab.path, diffDescription(tab), tab.worktreeLabel].filter(Boolean).join(' · ')
 
 const SAVE_DOT_CLASS: Record<SaveStatus, string> = {
     saving: 'bg-zinc-500 animate-pulse',
@@ -225,7 +234,7 @@ async function confirmDelete() {
                     :aria-selected="isDiffActive(tab)"
                     class="truncate bg-transparent border-0 p-0 text-inherit cursor-pointer"
                 >
-                    {{ tab.name }} <span class="text-zinc-400">({{ tab.staged ? 'Index' : 'Working Tree' }})</span>
+                    {{ tab.name }} <span class="text-zinc-400">({{ diffLabel(tab) }})</span>
                 </button>
                 <button
                     type="button"

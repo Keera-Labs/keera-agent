@@ -138,6 +138,7 @@ function openDiff(file: GitFileChange, staged: boolean, committed = false) {
         worktreeLabel: worktree && !worktree.is_current ? worktreeLabel(worktree) : null,
         untracked: file.untracked,
         committed,
+        base: committed ? branchQuery.data.value?.base : null,
     })
 }
 
