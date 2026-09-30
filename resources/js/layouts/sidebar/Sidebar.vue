@@ -60,7 +60,7 @@ const navClass = (active: boolean) => [
     'flex items-center gap-2 h-7 px-2 w-full rounded-md text-ui-13 text-left cursor-pointer transition-colors duration-100',
     active ? 'bg-black/[0.06] text-zinc-900 font-medium' : 'text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-900',
 ]
-const iconButtonClass = 'flex items-center justify-center w-6 h-6 rounded-md text-zinc-500 cursor-pointer hover:bg-black/[0.05] hover:text-zinc-800'
+const iconButtonClass = 'shrink-0 flex items-center justify-center w-6 h-6 rounded-md text-zinc-500 cursor-pointer hover:bg-black/[0.05] hover:text-zinc-800'
 </script>
 
 <template>
@@ -196,16 +196,16 @@ const iconButtonClass = 'flex items-center justify-center w-6 h-6 rounded-md tex
             </button>
 
             <!-- Always shown; inert until a project is active (AgentAddModal then renders no modal). -->
-            <div class="ml-auto">
+            <div class="ml-auto min-w-0">
                 <AgentAddModal>
                     <template #trigger>
                         <button
                             type="button"
                             :disabled="!activeProject"
-                            class="flex items-center gap-1 h-6 px-2 rounded-md text-ui-12 font-medium whitespace-nowrap text-zinc-600 cursor-pointer hover:bg-black/[0.05] hover:text-zinc-900 disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent"
+                            class="flex items-center gap-1 max-w-full h-6 px-2 rounded-md text-ui-12 font-medium whitespace-nowrap text-zinc-600 cursor-pointer hover:bg-black/[0.05] hover:text-zinc-900 disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent"
                         >
-                            <Icon name="plus" :size="12" />
-                            New Agent
+                            <Icon name="plus" :size="12" class="shrink-0" />
+                            <span class="truncate">New Agent</span>
                         </button>
                     </template>
                 </AgentAddModal>

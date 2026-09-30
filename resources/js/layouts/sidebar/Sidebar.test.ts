@@ -9,6 +9,7 @@ import ModalLayer from '@/layouts/ModalLayer.vue'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import { useProjectStore } from '@/stores/projectStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
+import { applyUiFontSize } from '@/utils/uiFontSize'
 import type { Project, Workspace } from '@/types/type'
 import Sidebar from './Sidebar.vue'
 
@@ -233,27 +234,55 @@ describe('Sidebar', () => {
         expect(subtitle()).not.toMatch(/\d/)
     })
 
-    it('opens a project menu upward when it would overflow the list', async () => {
-        const w = await mountSidebar()
-        const rows = w.findAll('[data-testid="project-item"]').map(el => el.element.parentElement!)
-        const scroller = rows[0].closest('.overflow-y-auto')!
-        vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue({ bottom: 400 } as DOMRect)
-        vi.spyOn(rows[0], 'getBoundingClientRect').mockReturnValue({ bottom: 40 } as DOMRect)
-        vi.spyOn(rows[2], 'getBoundingClientRect').mockReturnValue({ bottom: 390 } as DOMRect)
+    describe('project menu placement', () => {
+        const nativeRect = HTMLElement.prototype.getBoundingClientRect
 
-        async function openMenu(row: HTMLElement) {
+        // happy-dom does no layout, so the row's position and the menu's rendered
+        // size (as measured in the browser) are pinned here.
+        async function openMenuAt(rowTop: number, menuSize: { width: number; height: number }) {
+            const w = await mountSidebar()
+            const row = w.findAll('[data-testid="project-item"]')[0].element.parentElement!
+            vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+                if (this === row) return { top: rowTop, bottom: rowTop + 30, left: 8, right: 208 } as DOMRect
+                if (this.dataset.testid === 'project-menu') return { ...menuSize, top: 0, bottom: menuSize.height } as DOMRect
+                return nativeRect.call(this)
+            })
+
             row.dispatchEvent(new MouseEvent('mouseenter'))
             await flushPromises()
             await w.get('[aria-label="Project actions"]').trigger('click')
-            const classes = w.get('[data-testid="project-menu"]').classes()
-            await w.get('[aria-label="Project actions"]').trigger('click')
-            row.dispatchEvent(new MouseEvent('mouseleave'))
             await flushPromises()
-            return classes
+            const style = (w.get('[data-testid="project-menu"]').element as HTMLElement).style
+            return { top: parseFloat(style.top), left: parseFloat(style.left), w }
         }
 
-        expect(await openMenu(rows[0])).toContain('top-full')
-        expect(await openMenu(rows[2])).toContain('bottom-full')
+        afterEach(() => {
+            vi.restoreAllMocks()
+            document.documentElement.removeAttribute('style')
+        })
+
+        it('opens below a row with room under it', async () => {
+            const { top } = await openMenuAt(40, { width: 180, height: 131 })
+            expect(top).toBe(74)
+        })
+
+        // Regression: at 18px the menu is 212px tall, so the old fixed 160px guess
+        // opened it downward with 170px of room and clipped "Delete project".
+        it('opens above when the measured 18px menu does not fit below', async () => {
+            applyUiFontSize(18)
+            const rowTop = window.innerHeight - 200
+            const { top, left } = await openMenuAt(rowTop, { width: 217, height: 212 })
+            expect(top).toBe(rowTop - 4 - 212)
+            expect(top + 212).toBeLessThanOrEqual(window.innerHeight)
+            expect(left).toBeGreaterThanOrEqual(8)
+        })
+
+        it('closes when the list scrolls under it', async () => {
+            const { w } = await openMenuAt(40, { width: 180, height: 131 })
+            w.find('.overflow-y-auto').element.dispatchEvent(new Event('scroll'))
+            await flushPromises()
+            expect(w.find('[data-testid="project-menu"]').exists()).toBe(false)
+        })
     })
 
     it('keeps a project menu modal open while interacting with it', async () => {

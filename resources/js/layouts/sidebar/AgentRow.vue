@@ -44,13 +44,14 @@ const title = computed(() => {
         >
             <AgentStatusIndicator :status="props.agent.status" :size="10" />
             <Icon :name="provider.name" :size="12" :color="provider.color" class="shrink-0" />
-            <span data-testid="agent-name" :class="['truncate min-w-0', props.active ? 'text-zinc-900 font-medium' : 'text-zinc-700']">
+            <!-- A few characters always stay visible, even when the Reply badge takes the room. -->
+            <span data-testid="agent-name" :class="['truncate min-w-[3ch]', props.active ? 'text-zinc-900 font-medium' : 'text-zinc-700']">
                 {{ props.agent.name }}
             </span>
             <!-- The name gives up width first, so a preview is never squeezed to a lone dash. -->
             <span
                 data-testid="agent-preview"
-                :class="['flex-1 truncate text-zinc-400', preview ? 'min-w-[48px]' : 'min-w-0']"
+                :class="['flex-1 truncate text-zinc-400', preview ? 'min-w-12' : 'min-w-0']"
             >
                 <template v-if="preview">– {{ preview }}</template>
             </span>

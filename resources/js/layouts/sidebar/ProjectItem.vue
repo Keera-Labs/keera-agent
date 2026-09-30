@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3'
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import ProjectDeleteModal from '@/pages/project/ProjectDeleteModal.vue'
 import ProjectEditModal from '@/pages/project/ProjectEditModal.vue'
 import ProjectMoveModal from '@/pages/project/ProjectMoveModal.vue'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import type { Project } from '@/types/type'
+import { placeMenu } from './menuPlacement'
 
 const props = defineProps<{
     project: Project
@@ -19,18 +20,21 @@ const menuOpen = ref(false)
 const menu = ref<HTMLElement | null>(null)
 const root = ref<HTMLElement | null>(null)
 const modalOpen = ref(false)
-const openUp = ref(false)
+const menuPosition = ref({ top: 0, left: 0 })
 
-const MENU_HEIGHT = 160
-
-function toggleMenu() {
-    if (!menuOpen.value && root.value) {
-        // The list scrolls, so a menu dropping below its last rows would be clipped.
-        const scroller = root.value.closest('.overflow-y-auto') ?? document.documentElement
-        const spaceBelow = scroller.getBoundingClientRect().bottom - root.value.getBoundingClientRect().bottom
-        openUp.value = spaceBelow < MENU_HEIGHT
+async function toggleMenu() {
+    if (menuOpen.value) {
+        menuOpen.value = false
+        return
     }
-    menuOpen.value = !menuOpen.value
+    menuOpen.value = true
+    await nextTick()
+    if (!menu.value || !root.value) return
+    // Fixed, so neither the scrolling list nor the sidebar can clip it. Placed after
+    // rendering because its size grows with the UI font size; this runs before the
+    // next paint, so it never shows at the wrong spot first.
+    const { width, height } = menu.value.getBoundingClientRect()
+    menuPosition.value = placeMenu(root.value.getBoundingClientRect(), { width, height }, { width: window.innerWidth, height: window.innerHeight })
 }
 
 const menuItemClass = (danger = false) =>
@@ -67,11 +71,25 @@ function onClickOutside(e: MouseEvent) {
     if (menu.value && !menu.value.contains(e.target as Node)) menuOpen.value = false
 }
 
+// A fixed menu would stay put while its row scrolls away, so it closes instead.
+function onViewportChange(e: Event) {
+    if (modalOpen.value || (e.target instanceof Node && menu.value?.contains(e.target))) return
+    menuOpen.value = false
+}
+
+function stopListening() {
+    document.removeEventListener('mousedown', onClickOutside)
+    document.removeEventListener('scroll', onViewportChange, true)
+    window.removeEventListener('resize', onViewportChange)
+}
+
 watch(menuOpen, isOpen => {
-    if (isOpen) document.addEventListener('mousedown', onClickOutside)
-    else document.removeEventListener('mousedown', onClickOutside)
+    if (!isOpen) return stopListening()
+    document.addEventListener('mousedown', onClickOutside)
+    document.addEventListener('scroll', onViewportChange, true)
+    window.addEventListener('resize', onViewportChange)
 })
-onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
+onBeforeUnmount(stopListening)
 </script>
 
 <template>
@@ -130,9 +148,9 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
             v-if="menuOpen"
             ref="menu"
             data-testid="project-menu"
+            :style="{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }"
             :class="[
-                'absolute right-0 z-[200]',
-                openUp ? 'bottom-full mb-1' : 'top-full mt-1',
+                'fixed z-[200]',
                 'bg-surface border border-stroke rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.12)] min-w-[180px] p-1',
                 // Stays mounted so the modal instance survives, but must not paint above the modal backdrop.
                 modalOpen && 'invisible pointer-events-none',
