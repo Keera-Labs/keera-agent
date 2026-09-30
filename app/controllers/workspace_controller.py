@@ -4,20 +4,11 @@ from fastapi.responses import JSONResponse
 from app.models.Project import Project
 from app.models.Workspace import Workspace
 from app.requests.workspace_request import WorkspaceUpdateRequest
-
-
-def serialize(workspace: Workspace) -> dict:
-    return {
-        "id": workspace.id,
-        "name": workspace.name,
-        "description": workspace.description,
-        "claude_config_dir": workspace.claude_config_dir,
-    }
+from app.resources.workspace_resource import WorkspaceResource
 
 
 async def index(request: Request):
-    workspaces = await Workspace.all()
-    return JSONResponse([serialize(w) for w in workspaces])
+    return WorkspaceResource.collection(await Workspace.all())
 
 
 async def store(request: Request):
@@ -31,7 +22,7 @@ async def store(request: Request):
 
     workspace = await Workspace.create({"name": name, "description": description})
 
-    return JSONResponse(serialize(workspace), status_code=201)
+    return JSONResponse(WorkspaceResource(workspace).serialize(), status_code=201)
 
 
 async def update(request: WorkspaceUpdateRequest, workspace_id: int):
@@ -44,7 +35,7 @@ async def update(request: WorkspaceUpdateRequest, workspace_id: int):
     if data:
         await workspace.update(data)
 
-    return JSONResponse(serialize(workspace))
+    return WorkspaceResource(workspace)
 
 
 async def destroy(request: Request, workspace_id: int):

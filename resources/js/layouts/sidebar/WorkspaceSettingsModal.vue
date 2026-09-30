@@ -29,14 +29,14 @@ function onOpenChange(open: boolean) {
 }
 
 // Mirrors the server rule so the common mistake is caught before a round trip.
-const isAbsoluteOrHome = (path: string) => path.startsWith('/') || path.startsWith('~')
+const isAbsoluteOrHome = (path: string) => path === '~' || path.startsWith('~/') || path.startsWith('/')
 
 async function handleSubmit(close: () => void) {
     error.value = ''
     const configDir = claudeConfigDir.value.trim()
     if (!name.value.trim()) { error.value = 'Name is required'; return }
     if (configDir && !isAbsoluteOrHome(configDir)) {
-        error.value = 'Claude config directory must be an absolute path or start with ~'
+        error.value = 'Claude config directory must be an absolute path or start with ~/'
         return
     }
     try {
@@ -47,8 +47,8 @@ async function handleSubmit(close: () => void) {
             claude_config_dir: configDir || null,
         })
         close()
-    } catch {
-        error.value = 'Failed to save workspace settings'
+    } catch (e) {
+        error.value = e instanceof Error ? e.message : 'Failed to save workspace settings'
     }
 }
 </script>
@@ -76,9 +76,14 @@ async function handleSubmit(close: () => void) {
                     <span :class="labelSpanCls">Claude config directory</span>
                     <input v-model="claudeConfigDir" name="claude_config_dir" placeholder="~/.claude" :class="inputCls">
                     <span class="text-zinc-500 text-ui-11 leading-snug">
-                        Sets <code>CLAUDE_CONFIG_DIR</code> for Claude agents in this workspace, so they run
-                        on a separate Claude account (e.g. <code>~/.claude-work</code>). Leave empty to use the
-                        default <code>~/.claude</code>. Applies to agents started after saving.
+                        Sets <code>CLAUDE_CONFIG_DIR</code> for Claude agents and the command terminal in this
+                        workspace, so they run on a separate Claude account (e.g. <code>~/.claude-work</code>).
+                        Leave empty to use the default <code>~/.claude</code>. Applies to agents started after saving.
+                    </span>
+                    <span data-testid="workspace-settings-setup" class="text-zinc-500 text-ui-11 leading-snug">
+                        A new directory needs a one-time setup first: run
+                        <code>CLAUDE_CONFIG_DIR=&lt;dir&gt; claude</code> in a terminal to log in, then accept
+                        workspace trust in each project. Until then agents fail with "Workspace trust not accepted".
                     </span>
                 </label>
                 <div class="flex gap-2 justify-end">

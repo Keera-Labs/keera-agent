@@ -1,4 +1,3 @@
-import os
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, field_validator
@@ -29,8 +28,9 @@ class WorkspaceUpdateRequest(BaseModel):
     @classmethod
     def config_dir_is_absolute(cls, value: str | None) -> str | None:
         # Blank clears the override. The dir need not exist yet: Claude creates it.
+        # Only the current user's home: ~other/... may not exist and would stay unexpanded.
         if not value:
             return None
-        if not os.path.isabs(os.path.expanduser(value)):
-            raise ValueError("claude_config_dir must be an absolute path or start with ~")
+        if not (value == "~" or value.startswith(("~/", "/"))):
+            raise ValueError("Claude config directory must be an absolute path or start with ~/")
         return value

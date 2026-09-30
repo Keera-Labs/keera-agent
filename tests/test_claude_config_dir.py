@@ -12,6 +12,7 @@ from app.services.claude_config_dir import (
     CONFIG_DIR_ENV,
     agent_config_dir,
     all_config_dirs,
+    default_config_dir,
     expand_config_dir,
     project_config_dir,
 )
@@ -71,6 +72,10 @@ class TestClaudeConfigDir(TestCase, DatabaseTransaction):
             self.assertEqual(agent_env(7, "/tmp/claude-work")[CONFIG_DIR_ENV], "/tmp/claude-work")
             self.assertNotIn(CONFIG_DIR_ENV, agent_env(7))
 
+    def test_inherited_config_dir_is_expanded(self):
+        with mock.patch.dict(os.environ, {CONFIG_DIR_ENV: "~/.claude-inherited"}):
+            self.assertEqual(default_config_dir(), os.path.expanduser("~/.claude-inherited"))
+
     def test_transcripts_dir_follows_the_config_dir(self):
         with mock.patch.dict(os.environ, {CONFIG_DIR_ENV: "/default/claude"}):
             os.environ.pop("KEERA_CLAUDE_PROJECTS_DIR", None)
@@ -106,43 +111,114 @@ class _Spawned(Exception):
 
 
 class TestAgentSpawnEnv(TestCase, DatabaseTransaction):
+    """Both ways an agent PTY starts: the headless trigger and the terminal WebSocket."""
+
     async def asyncSetUp(self):
         await super().asyncSetUp()
         from fastapi_startkit.application import app
 
         self.terminals = app().make("terminal")
         self.cwd = tempfile.mkdtemp()
+        env = mock.patch.dict(os.environ, {})
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop(CONFIG_DIR_ENV, None)
 
-    async def _spawn_env(self, workspace_dir: str | None, provider: str = "claude") -> dict:
-        from app.controllers.agent_trigger_controller import _spawn_headless_agent
-
+    async def _agent(self, workspace_dir: str | None, provider: str):
         workspace = await WorkspaceFactory.new().create(claude_config_dir=workspace_dir)
-        project = await ProjectFactory.new().create(path=self.cwd, workspace_id=workspace.id)
+        project = await ProjectFactory.new().create(
+            path=self.cwd, workspace_id=workspace.id, is_repository=True
+        )
         agent = await AgentFactory.new().create(
             project_id=project.id, provider=provider, use_worktree=False
         )
-        with (
-            mock.patch.dict(os.environ, {}),
-            mock.patch.object(self.terminals, "create", side_effect=_Spawned) as create,
+        return agent, project
+
+    async def _spawn_headless(self, agent, project) -> None:
+        from app.controllers.agent_trigger_controller import _spawn_headless_agent
+
+        await _spawn_headless_agent(agent, project, self.cwd, "hello")
+
+    async def _spawn_websocket(self, agent, project) -> None:
+        from app.controllers.terminal_controller import terminal_ws
+
+        await terminal_ws(mock.AsyncMock(), project.slug, agent_id=agent.id)
+
+    async def _spawn_envs(self, workspace_dir: str | None, provider: str = "claude"):
+        """The PTY env from each spawn path, captured before any CLI launches."""
+        envs = {}
+        for name, spawn in (
+            ("headless", self._spawn_headless),
+            ("websocket", self._spawn_websocket),
         ):
-            os.environ.pop(CONFIG_DIR_ENV, None)
-            with self.assertRaises(_Spawned):
-                await _spawn_headless_agent(agent, project, self.cwd, "hello")
-        return create.call_args.kwargs["env"]
+            agent, project = await self._agent(workspace_dir, provider)
+            with (
+                mock.patch.object(self.terminals, "create", side_effect=_Spawned) as create,
+                mock.patch(
+                    "app.controllers.agent_trigger_controller.ensure_codex_worktree",
+                    side_effect=lambda agent, cwd: cwd,
+                ),
+                self.assertRaises(_Spawned),
+            ):
+                await spawn(agent, project)
+            envs[name] = create.call_args.kwargs["env"]
+        return envs
 
     async def test_claude_agent_pty_gets_the_workspace_config_dir(self):
-        env = await self._spawn_env("~/.claude-work")
-
-        self.assertEqual(env[CONFIG_DIR_ENV], os.path.expanduser("~/.claude-work"))
+        for path, env in (await self._spawn_envs("~/.claude-work")).items():
+            self.assertEqual(env.get(CONFIG_DIR_ENV), os.path.expanduser("~/.claude-work"), path)
 
     async def test_no_override_without_the_setting(self):
-        self.assertNotIn(CONFIG_DIR_ENV, await self._spawn_env(None))
+        for path, env in (await self._spawn_envs(None)).items():
+            self.assertNotIn(CONFIG_DIR_ENV, env, path)
 
     async def test_codex_agent_pty_gets_no_override(self):
-        with mock.patch(
-            "app.controllers.agent_trigger_controller.ensure_codex_worktree",
-            side_effect=lambda agent, cwd: cwd,
-        ):
-            env = await self._spawn_env("~/.claude-work", provider="codex")
+        for path, env in (await self._spawn_envs("~/.claude-work", provider="codex")).items():
+            self.assertNotIn(CONFIG_DIR_ENV, env, path)
 
-        self.assertNotIn(CONFIG_DIR_ENV, env)
+
+class TestCommandEnv(TestCase, DatabaseTransaction):
+    """The Commands panel PTY runs on the workspace's Claude account too."""
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        env = mock.patch.dict(os.environ, {})
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop(CONFIG_DIR_ENV, None)
+
+    async def _command_ws_env(self, workspace_id: int | None) -> dict:
+        from app.controllers.command_controller import command_ws
+        from app.models.Command import Command
+
+        project = await ProjectFactory.new().create(
+            path=tempfile.mkdtemp(), workspace_id=workspace_id
+        )
+        cmd = await Command.create(
+            {"project_id": project.id, "label": "claude", "command": "claude", "status": "stopped"}
+        )
+        master, slave = os.openpty()
+        self.addCleanup(os.close, master)
+        with (
+            mock.patch(
+                "app.controllers.command_controller.pty.openpty", return_value=(master, slave)
+            ),
+            mock.patch(
+                "app.controllers.command_controller.subprocess.Popen", side_effect=_Spawned
+            ) as popen,
+            self.assertRaises(_Spawned),
+        ):
+            await command_ws(mock.AsyncMock(), project.slug, cmd.id)
+        os.close(slave)
+        return popen.call_args.kwargs["env"]
+
+    async def test_command_pty_gets_the_workspace_config_dir(self):
+        workspace = await WorkspaceFactory.new().create(claude_config_dir="~/.claude-work")
+
+        env = await self._command_ws_env(workspace.id)
+
+        self.assertEqual(env[CONFIG_DIR_ENV], os.path.expanduser("~/.claude-work"))
+        self.assertIn("PATH", env)
+
+    async def test_unassigned_project_command_gets_no_override(self):
+        self.assertNotIn(CONFIG_DIR_ENV, await self._command_ws_env(None))

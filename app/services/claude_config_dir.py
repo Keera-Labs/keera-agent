@@ -16,7 +16,7 @@ def expand_config_dir(value: str | None) -> str | None:
 
 def default_config_dir() -> str:
     """The dir Claude uses when Keera sets no override: Keera's own env, else ~/.claude."""
-    return os.environ.get(CONFIG_DIR_ENV) or os.path.expanduser(os.path.join("~", ".claude"))
+    return os.path.expanduser(os.environ.get(CONFIG_DIR_ENV) or os.path.join("~", ".claude"))
 
 
 def claude_env(config_dir: str | None) -> dict:

@@ -51,7 +51,7 @@ function fakeFetch(url: string, init?: RequestInit) {
     calls.push({ url, method: init?.method ?? 'GET' })
     const { pathname, searchParams } = new URL(url, 'http://test')
     let body: unknown = []
-    if (pathname === '/api/workspaces') body = workspaces
+    if (pathname === '/api/workspaces') body = { data: workspaces.map(({ id, ...attributes }) => ({ type: 'workspaces', id: String(id), attributes })) }
     if (pathname === '/api/agent-summaries') {
         const ids = searchParams.getAll('project_ids').map(Number)
         body = { data: summaries.filter(s => ids.includes(s.attributes.project_id)) }

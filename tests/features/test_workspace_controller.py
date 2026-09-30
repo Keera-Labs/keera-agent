@@ -21,7 +21,9 @@ class TestWorkspaceController(TestCase, DatabaseTransaction):
         response = await self.patch(self.url, json={"claude_config_dir": " ~/.claude-work "})
 
         response.assert_ok()
-        self.assertEqual(response.json()["claude_config_dir"], "~/.claude-work")
+        self.assertEqual(
+            response.json()["data"]["attributes"]["claude_config_dir"], "~/.claude-work"
+        )
         self.assertEqual((await self._fresh()).claude_config_dir, "~/.claude-work")
 
     async def test_update_accepts_an_absolute_path(self):
@@ -43,6 +45,14 @@ class TestWorkspaceController(TestCase, DatabaseTransaction):
         response = await self.patch(self.url, json={"claude_config_dir": "claude-work"})
 
         response.assert_status(422)
+        self.assertIsNone((await self._fresh()).claude_config_dir)
+
+    async def test_other_users_home_is_rejected_with_a_message(self):
+        response = await self.patch(self.url, json={"claude_config_dir": "~nosuchuser/x"})
+
+        response.assert_status(422)
+        messages = response.json()["errors"]["claude_config_dir"]
+        self.assertIn("absolute path or start with ~/", messages[0])
         self.assertIsNone((await self._fresh()).claude_config_dir)
 
     async def test_blank_name_is_rejected(self):
@@ -73,5 +83,5 @@ class TestWorkspaceController(TestCase, DatabaseTransaction):
         response = await self.get("/api/workspaces")
 
         response.assert_ok()
-        row = next(w for w in response.json() if w["id"] == self.workspace.id)
-        self.assertEqual(row["claude_config_dir"], "~/.claude-work")
+        row = next(w for w in response.json()["data"] if w["id"] == str(self.workspace.id))
+        self.assertEqual(row["attributes"]["claude_config_dir"], "~/.claude-work")

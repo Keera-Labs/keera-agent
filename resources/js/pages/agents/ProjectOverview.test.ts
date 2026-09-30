@@ -21,7 +21,7 @@ async function mountOverview(
 ) {
     stubFetch({
         '/api/projects/1/agents': { data: agents },
-        '/api/workspaces': [{ id: 7, name: 'Labs' }],
+        '/api/workspaces': { data: [{ type: 'workspaces', id: '7', attributes: { name: 'Labs', description: null, claude_config_dir: null } }] },
         ...routes,
     })
     const plugins = installPinia()

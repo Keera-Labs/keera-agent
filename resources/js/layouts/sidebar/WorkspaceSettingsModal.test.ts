@@ -11,13 +11,19 @@ vi.mock('@inertiajs/vue3', () => ({ usePage: () => ({ props: {} }) }))
 const workspace: Workspace = { id: 3, name: 'Office', description: null, claude_config_dir: '~/.claude-work' }
 
 let patches: Record<string, unknown>[]
+let patchResponse: { status: number; body: unknown }
 let wrapper: VueWrapper | undefined
 
 beforeEach(() => {
     patches = []
+    patchResponse = { status: 200, body: {} }
     vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
-        if (init?.method === 'PATCH') patches.push({ url, ...JSON.parse(String(init.body)) })
-        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+        if (init?.method === 'PATCH') {
+            patches.push({ url, ...JSON.parse(String(init.body)) })
+            const { status, body } = patchResponse
+            return Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) })
+        }
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ data: [] }) })
     }))
 })
 
@@ -39,6 +45,7 @@ async function openModal() {
     await flushPromises()
 }
 
+const errorText = () => document.querySelector('[data-testid="workspace-settings-error"]')?.textContent?.trim()
 const input = (name: string) => document.querySelector<HTMLInputElement>(`input[name="${name}"]`)!
 
 async function setAndSubmit(value: string) {
@@ -74,12 +81,31 @@ describe('WorkspaceSettingsModal', () => {
         expect(patches[0].claude_config_dir).toBeNull()
     })
 
-    it('rejects a relative path without calling the server', async () => {
+    it.each(['claude-work', '~nosuchuser/x'])('rejects %s without calling the server', async path => {
         await openModal()
-        await setAndSubmit('claude-work')
+        await setAndSubmit(path)
 
         expect(patches).toEqual([])
-        expect(document.querySelector('[data-testid="workspace-settings-error"]')?.textContent)
-            .toContain('absolute path')
+        expect(errorText()).toContain('absolute path or start with ~/')
+    })
+
+    it("shows the server's validation message", async () => {
+        patchResponse = {
+            status: 422,
+            body: { errors: { claude_config_dir: ['Value error, Server says no'] } },
+        }
+        await openModal()
+        await setAndSubmit('~/.claude-work')
+
+        expect(errorText()).toBe('Server says no')
+        expect(document.querySelector('[role="dialog"]')).not.toBeNull()
+    })
+
+    it('explains the one-time login and workspace trust setup', async () => {
+        await openModal()
+
+        const setup = document.querySelector('[data-testid="workspace-settings-setup"]')?.textContent
+        expect(setup).toContain('log in')
+        expect(setup).toContain('workspace trust')
     })
 })
