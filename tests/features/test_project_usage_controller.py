@@ -9,6 +9,7 @@ from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
 from app.services.claude_usage import encode_cwd
 from databases.factories.project_factory import ProjectFactory
+from databases.factories.workspace_factory import WorkspaceFactory
 from tests.test_case import TestCase
 
 NOW = datetime.datetime.now(datetime.UTC).isoformat().replace("+00:00", "Z")
@@ -175,6 +176,22 @@ class TestProjectUsageController(TestCase, DatabaseTransaction):
 
         self.assertEqual(usage["agents"], {})
         self.assertEqual(usage["today"]["total"], 0)
+
+    async def test_reads_transcripts_from_the_workspace_claude_config_dir(self):
+        config_dir = Path(os.path.realpath(self.tmp.name)) / "claude-work"
+        workspace = await WorkspaceFactory.new().create(claude_config_dir=str(config_dir))
+        await self.project.update({"workspace_id": workspace.id})
+        self._write(self._agent_cwd(7), "default-account.jsonl", assistant_line("m1"))
+        custom = config_dir / "projects" / encode_cwd(self._agent_cwd(7)) / "work.jsonl"
+        custom.parent.mkdir(parents=True)
+        custom.write_text(
+            assistant_line("m2", input_tokens=1, output_tokens=5, cache_creation=0, cache_read=0)
+            + "\n"
+        )
+
+        usage = await self._usage()
+
+        self.assertEqual(usage["agents"]["7"]["total"], 6)
 
     async def test_unknown_project_is_not_found(self):
         response = await self.get("/api/projects/999999/usage")

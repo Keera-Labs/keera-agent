@@ -5,7 +5,7 @@ import type { Workspace } from "@/types/type"
 
 export const WORKSPACES_QUERY_KEY = ["workspaces"]
 
-type WorkspaceFields = { name?: string; description?: string }
+type WorkspaceFields = { name?: string; description?: string; claude_config_dir?: string | null }
 
 async function fetchWorkspaces(): Promise<Workspace[]> {
     const res = await fetch("/api/workspaces")

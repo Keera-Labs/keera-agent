@@ -5,6 +5,7 @@ from fastapi.responses import RedirectResponse
 from fastapi_startkit.inertia.inertia import Inertia
 
 from app.controllers.global_settings_controller import read_global_settings
+from app.controllers.workspace_controller import serialize as serialize_workspace
 from app.models.Agent import Agent
 from app.models.Project import Project
 from app.models.Workspace import Workspace
@@ -33,9 +34,7 @@ async def _shared_props(**extra) -> dict:
     # The picker only needs workspace metadata. Project lists are loaded through
     # the scoped project endpoint, avoiding an N+1 query and full nested payload.
     workspaces_raw = await Workspace.all()
-    workspaces = [
-        {"id": w.id, "name": w.name, "description": w.description} for w in workspaces_raw
-    ]
+    workspaces = [serialize_workspace(w) for w in workspaces_raw]
 
     # Build flat projects list (same shape as project_controller.index),
     # most-recently-opened first and capped the same way, so the sidebar's

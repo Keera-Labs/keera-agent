@@ -1,7 +1,7 @@
 """Token usage read from Claude Code's session transcripts (never written to).
 
 Claude Code appends every assistant message, with its `usage`, to
-`~/.claude/projects/<encoded cwd>/<session>.jsonl` (subagents under
+`<CLAUDE_CONFIG_DIR, default ~/.claude>/projects/<encoded cwd>/<session>.jsonl` (subagents under
 `<session>/subagents/`). Keera agents run in `<project>/.claude/worktrees/agent-<id>`,
 so each transcript directory maps to one agent, or to the project itself.
 """
@@ -14,12 +14,18 @@ import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from app.services.claude_config_dir import default_config_dir
+
 AGENT_DIR_MARKER = "--claude-worktrees-agent-"
 SYNTHETIC_MODEL = "<synthetic>"
 
 
-def claude_projects_dir() -> Path:
-    return Path(os.environ.get("KEERA_CLAUDE_PROJECTS_DIR", "~/.claude/projects")).expanduser()
+def claude_projects_dir(config_dir: str | None = None) -> Path:
+    """Transcripts live under <config dir>/projects; the workspace's dir wins over the default."""
+    override = os.environ.get("KEERA_CLAUDE_PROJECTS_DIR")
+    if override and not config_dir:
+        return Path(override).expanduser()
+    return Path(config_dir or default_config_dir()).expanduser() / "projects"
 
 
 def encode_cwd(path: str) -> str:
@@ -107,12 +113,16 @@ class ClaudeUsageReader:
         self._lock = threading.Lock()
 
     def project_usage(
-        self, project_id: int, project_path: str, today: datetime.date | None = None
+        self,
+        project_id: int,
+        project_path: str,
+        today: datetime.date | None = None,
+        config_dir: str | None = None,
     ) -> ProjectUsage:
         today = today or datetime.date.today()
         usage = ProjectUsage(id=project_id)
         with self._lock:
-            for agent_id, directory in self._transcript_dirs(project_path):
+            for agent_id, directory in self._transcript_dirs(project_path, config_dir):
                 messages = self._messages(directory)
                 agent = AgentUsage() if agent_id is not None else None
                 for message in messages:
@@ -127,8 +137,10 @@ class ClaudeUsageReader:
                     usage.agents[agent_id] = agent
         return usage
 
-    def _transcript_dirs(self, project_path: str) -> list[tuple[int | None, Path]]:
-        base = claude_projects_dir()
+    def _transcript_dirs(
+        self, project_path: str, config_dir: str | None
+    ) -> list[tuple[int | None, Path]]:
+        base = claude_projects_dir(config_dir)
         if not base.is_dir():
             return []
         encoded = encode_cwd(project_path)

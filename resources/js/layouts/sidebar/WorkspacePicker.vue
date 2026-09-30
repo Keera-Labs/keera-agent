@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import WorkspaceAddModal from '@/components/WorkspaceAddModal.vue'
+import WorkspaceSettingsModal from './WorkspaceSettingsModal.vue'
 import Icon from '@/components/ui/Icon.vue'
 import useWorkspaces from '@/queries/workspacesQuery'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
@@ -97,6 +98,18 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
                     <span class="truncate">{{ w.name }}</span>
                     <Icon v-if="selected === w.id" name="check" :size="12" class="ml-auto shrink-0 text-accent" />
                 </button>
+                <WorkspaceSettingsModal :workspace="w" @open-change="isOpen => { if (isOpen) open = false }">
+                    <template #trigger>
+                        <button
+                            type="button"
+                            title="Workspace settings"
+                            data-testid="workspace-settings"
+                            class="bg-transparent border-0 cursor-pointer text-zinc-400 h-7 pl-1 flex items-center opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-zinc-700"
+                        >
+                            <Icon name="settings" :size="12" />
+                        </button>
+                    </template>
+                </WorkspaceSettingsModal>
                 <button
                     type="button"
                     title="Delete workspace"

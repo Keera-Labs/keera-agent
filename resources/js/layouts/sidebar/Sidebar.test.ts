@@ -27,8 +27,8 @@ function project(id: number, name: string, workspaceId: number | null): Project 
 }
 
 const workspaces: Workspace[] = [
-    { id: 1, name: 'Alpha', description: null },
-    { id: 2, name: 'Empty', description: null },
+    { id: 1, name: 'Alpha', description: null, claude_config_dir: null },
+    { id: 2, name: 'Empty', description: null, claude_config_dir: null },
 ]
 const projects = [project(10, 'alpha-api', 1), project(11, 'alpha-web', 1), project(12, 'loose', null)]
 
