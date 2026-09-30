@@ -12,15 +12,19 @@ export type DiffTab = GitDiffRequest & {
     worktreeLabel: string | null
     /** Status reports untracked files and conflicts alike as "U"; only the status row can tell them apart. */
     untracked: boolean
+    /** Branch a committed diff is compared against, for its label. */
+    base: string | null
 }
 
 export interface DiffTabOptions {
     worktreeLabel?: string | null
+    committed?: boolean
     untracked?: boolean
+    base?: string | null
 }
 
-const tabId = ({ target, path, staged }: GitDiffRequest) =>
-    `${target.worktree ?? ''}\0${staged ? 'staged' : 'unstaged'}\0${path}`
+const tabId = ({ target, path, staged, committed }: GitDiffRequest) =>
+    `${target.worktree ?? ''}\0${committed ? 'committed' : staged ? 'staged' : 'unstaged'}\0${path}`
 
 /** Read-only diff tabs, shown in the editor area beside the file tabs. */
 export const useDiffStore = defineStore('diff', () => {
@@ -42,13 +46,13 @@ export const useDiffStore = defineStore('diff', () => {
         activeId.value = tab?.id ?? null
     }
 
-    function open(target: GitTarget, path: string, staged: boolean, { worktreeLabel = null, untracked = false }: DiffTabOptions = {}) {
-        const request = { target, path, staged }
+    function open(target: GitTarget, path: string, staged: boolean, { worktreeLabel = null, untracked = false, committed = false, base = null }: DiffTabOptions = {}) {
+        const request = { target, path, staged, committed }
         const id = tabId(request)
         const tabs = (tabsByProject[target.projectId] ??= [])
         let tab = tabs.find(t => t.id === id)
         if (!tab) {
-            tab = { ...request, id, name: path.split('/').pop() || path, worktreeLabel, untracked }
+            tab = { ...request, id, name: path.split('/').pop() || path, worktreeLabel, untracked, base }
             tabs.push(tab)
         }
         activate(tab)

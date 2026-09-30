@@ -5,7 +5,7 @@ import {
 import { computed, ref } from 'vue'
 import { useGitWorktree, worktreeLabel } from '@/composables/useGitWorktree'
 import {
-    isOpenPullRequest, useGitActions, useGitCommits, useGitPullRequest, useGitStatus, type GitFileChange, type GitPaths, type GitWorktree,
+    isOpenPullRequest, useGitActions, useGitBranchChanges, useGitCommits, useGitPullRequest, useGitStatus, type GitFileChange, type GitPaths, type GitWorktree,
 } from '@/queries/gitQuery'
 import { useDiffStore } from '@/stores/diffStore'
 import { useEditorStore } from '@/stores/editorStore'
@@ -21,6 +21,13 @@ const projectId = () => props.project.id
 const { worktrees, selected: selectedWorktree, target, select: selectWorktree } = useGitWorktree(projectId)
 const { status, error: statusError, isLoading, refetch } = useGitStatus(target)
 const isRepo = computed(() => status.value?.is_repo === true)
+const branchQuery = useGitBranchChanges(target, isRepo)
+const committed = computed(() => branchQuery.data.value?.files ?? [])
+const branchSummary = computed(() => {
+    const comparison = branchQuery.data.value
+    const count = comparison?.ahead ?? 0
+    return `${count} ${count === 1 ? 'commit' : 'commits'} ahead of ${comparison?.base ?? 'base'}`
+})
 const pullRequestQuery = useGitPullRequest(target, isRepo)
 const actions = useGitActions(target)
 const editor = useEditorStore()
@@ -60,6 +67,9 @@ const nestedWorktreeLabels = computed(() =>
 
 const staged = computed(() => status.value?.staged ?? [])
 const changes = computed(() => status.value?.changes ?? [])
+const cleanTree = computed(() => !staged.value.length && !changes.value.length
+    && !!branchQuery.data.value?.merge_base && !branchQuery.data.value.ahead
+    && !committed.value.length && !branchQuery.error.value)
 const pullRequestInfo = computed(() => pullRequestQuery.data.value)
 const openPullRequest = computed(() => (isOpenPullRequest(pullRequestInfo.value) ? pullRequestInfo.value!.pull_request : null))
 const onBranch = computed(() => !!status.value?.branch && !status.value.detached)
@@ -119,14 +129,16 @@ function onMessageKeydown(event: KeyboardEvent) {
     }
 }
 
-function openDiff(file: GitFileChange, staged: boolean) {
+function openDiff(file: GitFileChange, staged: boolean, committed = false) {
     if (!target.value) return
-    const nested = staged ? undefined : nestedWorktrees.value[file.path]
+    const nested = staged || committed ? undefined : nestedWorktrees.value[file.path]
     if (nested) return selectWorktree(nested.path)
     const worktree = selectedWorktree.value
     diffs.open(target.value, file.path, staged, {
         worktreeLabel: worktree && !worktree.is_current ? worktreeLabel(worktree) : null,
         untracked: file.untracked,
+        committed,
+        base: committed ? branchQuery.data.value?.base : null,
     })
 }
 
@@ -317,8 +329,16 @@ const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded
             </div>
 
             <div class="flex-1 min-h-0 overflow-y-auto pt-2">
+                <p v-if="branchQuery.error.value" role="alert" class="px-3 py-2 text-danger">
+                    {{ branchQuery.error.value.message }}
+                    <button type="button" class="text-accent hover:underline cursor-pointer" @click="branchQuery.refetch()">Try again</button>
+                </p>
+                <p v-else-if="branchQuery.isLoading.value && !branchQuery.data.value" class="px-3 py-2 text-zinc-400">Loading branch changes…</p>
+                <p v-else-if="branchQuery.data.value && !branchQuery.data.value.merge_base" class="px-3 py-2 text-zinc-500">
+                    {{ !status?.has_commits ? 'No commits yet.' : 'No shared base branch found for comparison.' }}
+                </p>
                 <div
-                    v-if="!staged.length && !changes.length"
+                    v-if="cleanTree"
                     data-testid="clean-tree"
                     class="flex flex-col items-center gap-1.5 px-6 py-8 text-center text-zinc-400"
                 >
@@ -348,6 +368,17 @@ const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded
                     @toggle="paths => setStaged(true, paths)"
                     @open="file => openDiff(file, false)"
                     @open-file="openFile"
+                />
+                <ChangeList
+                    v-if="branchQuery.data.value?.ahead || committed.length"
+                    title="Committed on this branch"
+                    :description="branchSummary"
+                    :files="committed"
+                    :staged="false"
+                    committed
+                    :disabled="false"
+                    :can-open-file="false"
+                    @open="file => openDiff(file, false, true)"
                 />
             </div>
         </template>

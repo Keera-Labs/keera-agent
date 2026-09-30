@@ -22,6 +22,7 @@ from app.controllers import (
     dashboard_controller,
     default_permission_controller,
     editor_settings_controller,
+    git_branch_changes_controller,
     git_commit_controller,
     git_diff_controller,
     git_pull_request_controller,
@@ -65,6 +66,7 @@ router.put("/api/projects/{project_id}/files/content", project_file_content_cont
 # Source Control panel — git operations on the project's repository; every endpoint
 # takes an optional ?worktree=<path from /git/worktrees>.
 router.get("/api/projects/{project_id}/git/worktrees", git_worktree_controller.index)
+router.get("/api/projects/{project_id}/git/branch-changes", git_branch_changes_controller.show)
 router.get("/api/projects/{project_id}/git/diff", git_diff_controller.show)
 router.get("/api/projects/{project_id}/git/status", git_status_controller.show)
 router.post("/api/projects/{project_id}/git/stage", git_stage_controller.store)

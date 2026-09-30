@@ -76,6 +76,12 @@ async function mountPane(path = 'src/promo.ts', staged = false, options: DiffTab
 }
 
 describe('DiffPane', () => {
+    it('loads a committed diff and names its merge-base comparison', async () => {
+        const w = await mountPane('src/promo.ts', false, { committed: true })
+        expect(fetchMock).toHaveBeenCalledWith('/api/projects/1/git/diff?path=src%2Fpromo.ts&staged=false&committed=true', expect.anything())
+        expect(w.get('[data-testid="diff-compared"]').text()).toBe('Merge base ↔ HEAD')
+    })
+
     it('applies a newly saved editor font to the open diff', async () => {
         await mountPane()
         const settings = useEditorSettingsStore()

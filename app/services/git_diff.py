@@ -163,8 +163,34 @@ async def _sides(repo: GitRepository, change: FileChange, staged: bool) -> tuple
     return original, None if change.status == "D" else working
 
 
-async def file_diff(repo: GitRepository, path: str, staged: bool) -> FileDiff:
-    change = await _find_change(repo, _relative_path(path), staged)
+async def _committed_sides(
+    repo: GitRepository, change: FileChange, comparison: dict
+) -> tuple[Side, Side]:
+    # An added path may be a tree at the merge-base (directory replaced by a file), and a
+    # deleted one may be a tree at HEAD (file replaced by a directory), so skip the absent side.
+    source = change.original_path or change.path
+
+    async def read(rev: str, path: str, absent: bool) -> Side:
+        return None if absent else await _read_blob(repo, f"{rev}:{path}")
+
+    return await asyncio.gather(
+        read(comparison["merge_base"], source, change.status == "A"),
+        read(comparison["head"], change.path, change.status == "D"),
+    )
+
+
+async def file_diff(
+    repo: GitRepository, path: str, staged: bool, committed: bool = False
+) -> FileDiff:
+    rel = _relative_path(path)
+    comparison = await repo.branch_changes() if committed else None
+    if comparison is not None:
+        entry = next((file for file in comparison["files"] if file["path"] == rel), None)
+        if entry is None:
+            raise ChangeNotFound(f"No committed changes for {rel}")
+        change = FileChange(entry["path"], entry["status"], entry["original_path"])
+    else:
+        change = await _find_change(repo, rel, staged)
     diff = FileDiff(
         path=change.path,
         original_path=change.original_path,
@@ -173,7 +199,10 @@ async def file_diff(repo: GitRepository, path: str, staged: bool) -> FileDiff:
         untracked=change.untracked,
         language=language_for(change.path),
     )
-    original, modified = await _sides(repo, change, staged)
+    if comparison is not None:
+        original, modified = await _committed_sides(repo, change, comparison)
+    else:
+        original, modified = await _sides(repo, change, staged)
     if original is TOO_LARGE or modified is TOO_LARGE:
         diff.too_large = True
         return diff

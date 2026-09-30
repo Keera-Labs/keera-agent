@@ -356,3 +356,70 @@ class GitRepository:
                     }
                 )
         return commits
+
+    async def branch_base(self) -> str | None:
+        """Prefer dev, then the remote default, main/master, and finally upstream.
+
+        Local refs win over their remote counterparts. Detached HEAD uses the same
+        base; the base branch itself naturally has zero commits ahead. No network
+        request is made: remote defaults must have been discovered by git already.
+        """
+        candidates = ["refs/heads/dev", "refs/remotes/origin/dev"]
+        remotes = (await self.git_ok("remote")).text.split()
+        for remote in remotes:
+            if remote != "origin":
+                candidates.append(f"refs/remotes/{remote}/dev")
+        for remote in sorted(remotes, key=lambda name: name != "origin"):
+            default = await self.git("symbolic-ref", "--quiet", f"refs/remotes/{remote}/HEAD")
+            if default.ok:
+                ref = default.text.strip()
+                name = ref.removeprefix(f"refs/remotes/{remote}/")
+                candidates.extend([f"refs/heads/{name}", ref])
+        candidates.extend(["refs/heads/main", "refs/heads/master"])
+        for remote in remotes:
+            candidates.extend([f"refs/remotes/{remote}/main", f"refs/remotes/{remote}/master"])
+        upstream = await self.git("rev-parse", "--symbolic-full-name", "@{u}")
+        if upstream.ok:
+            candidates.append(upstream.text.strip())
+        for ref in candidates:
+            if await self.has_ref(ref):
+                return ref
+        return None
+
+    async def branch_changes(self) -> dict:
+        result = {"base": None, "merge_base": None, "head": None, "ahead": 0, "files": []}
+        if not await self.has_commits():
+            return result
+        base = await self.branch_base()
+        head = (await self.git_ok("rev-parse", "HEAD")).text.strip()
+        result.update(
+            base=base.removeprefix("refs/heads/").removeprefix("refs/remotes/") if base else None,
+            head=head,
+        )
+        if base is None:
+            return result
+        merge = await self.git("merge-base", base, head)
+        if not merge.ok:
+            return result
+        merge_base = merge.text.strip()
+        count, names, stats = await asyncio.gather(
+            self.git_ok("rev-list", "--count", f"{base}..{head}"),
+            self.git_ok("diff", "--name-status", "-z", "-M", merge_base, head, "--"),
+            self.git_ok("diff", "--numstat", "-z", "-M", merge_base, head, "--"),
+        )
+        tokens = names.text.split("\0")
+        changes = []
+        i = 0
+        while i < len(tokens) and tokens[i]:
+            status, path = tokens[i], tokens[i + 1]
+            i += 2
+            original = None
+            if status[0] in ("R", "C"):
+                original, path = path, tokens[i]
+                i += 1
+            changes.append(FileChange(path, _STATUS_LETTERS.get(status[0], "M"), original))
+        _apply_numstat(changes, _parse_numstat(stats.stdout))
+        result.update(
+            merge_base=merge_base, ahead=int(count.text), files=[c.to_dict() for c in changes]
+        )
+        return result

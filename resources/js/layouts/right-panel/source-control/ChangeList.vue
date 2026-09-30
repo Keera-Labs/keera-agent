@@ -5,6 +5,8 @@ import type { GitFileChange } from '@/queries/gitQuery'
 import { statusBadge } from './sourceControl'
 
 const props = withDefaults(defineProps<{
+    description?: string
+    committed?: boolean
     title: string
     files: GitFileChange[]
     staged: boolean
@@ -23,7 +25,7 @@ const iconButton = 'p-0.5 rounded text-zinc-500 hover:text-zinc-800 hover:bg-zin
 </script>
 
 <template>
-    <section class="pb-2" :data-testid="staged ? 'staged-changes' : 'changes'">
+    <section class="pb-2" :data-testid="committed ? 'committed-changes' : staged ? 'staged-changes' : 'changes'">
         <div class="group flex items-center gap-1 h-7 pl-2 pr-3">
             <button
                 type="button"
@@ -36,6 +38,7 @@ const iconButton = 'p-0.5 rounded text-zinc-500 hover:text-zinc-800 hover:bg-zin
                 <span class="truncate">{{ title }}</span>
             </button>
             <button
+                v-if="!committed"
                 type="button"
                 :class="[iconButton, 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100']"
                 :title="`${actionLabel} all`"
@@ -49,6 +52,8 @@ const iconButton = 'p-0.5 rounded text-zinc-500 hover:text-zinc-800 hover:bg-zin
                 {{ files.length }}
             </span>
         </div>
+
+        <p v-if="description" class="px-5 pb-1 text-ui-11 text-zinc-500 break-words">{{ description }}</p>
 
         <ul v-show="expanded" :id="sectionId" class="font-mono text-ui-12">
             <li
@@ -89,6 +94,7 @@ const iconButton = 'p-0.5 rounded text-zinc-500 hover:text-zinc-800 hover:bg-zin
                     <FileText :size="12" />
                 </button>
                 <button
+                    v-if="!committed"
                     type="button"
                     :class="[iconButton, 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100']"
                     :title="actionLabel"
