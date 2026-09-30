@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, ref } from 'vue'
 import { gitFile, gitStatus } from '@/layouts/right-panel/source-control/testing'
 import {
-    isOpenPullRequest, useGitActions, useGitDiff, useGitPullRequest, useGitStatus, type GitDiff, type GitDiffRequest, type GitPullRequest, type GitTarget,
+    isOpenPullRequest, useGitActions, useGitBranchChanges, useGitDiff, useGitPullRequest, useGitStatus, type GitDiff, type GitDiffRequest, type GitPullRequest, type GitTarget,
 } from './gitQuery'
 
 function jsonResponse(body: unknown, status = 200) {
@@ -27,6 +27,7 @@ function mountGit(initial: GitTarget | null = MAIN, diffRequest: GitDiffRequest 
     const target = ref(initial)
     const diff = ref(diffRequest)
     let api!: {
+        branchChanges: ReturnType<typeof useGitBranchChanges>
         status: ReturnType<typeof useGitStatus>
         pullRequest: ReturnType<typeof useGitPullRequest>
         actions: ReturnType<typeof useGitActions>
@@ -37,6 +38,7 @@ function mountGit(initial: GitTarget | null = MAIN, diffRequest: GitDiffRequest 
         defineComponent({
             setup() {
                 api = {
+                    branchChanges: useGitBranchChanges(target),
                     status: useGitStatus(target),
                     pullRequest: useGitPullRequest(target),
                     actions: useGitActions(target),
@@ -54,6 +56,7 @@ function mountGit(initial: GitTarget | null = MAIN, diffRequest: GitDiffRequest 
 /** Route GETs by URL suffix; POSTs are queued per test with mockResolvedValueOnce-style overrides. */
 function routeGets(routes: Record<string, () => unknown>) {
     fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+        if (url.endsWith('/git/branch-changes')) return Promise.resolve(jsonResponse({ base: 'dev', merge_base: 'base', head: 'head', ahead: 0, files: [] }))
         const suffix = Object.keys(routes).find(key => url.endsWith(key) && (init?.method ?? 'GET') === 'GET')
         return Promise.resolve(suffix ? jsonResponse(routes[suffix]()) : jsonResponse({}, 404))
     })
@@ -90,6 +93,22 @@ describe('useGitStatus', () => {
         const api = mountGit()
         await flushPromises()
         expect(api.status.error.value?.message).toBe('Project not found')
+    })
+})
+
+describe('useGitBranchChanges', () => {
+    it('loads the comparison and refetches it immediately after commit and push', async () => {
+        routeGets({ '/git/status': () => gitStatus(), '/git/pull-request': () => ({ available: true, error: null, pull_request: null }) })
+        const api = mountGit()
+        await flushPromises()
+        expect(api.branchChanges.data.value?.base).toBe('dev')
+        for (const action of ['commit', 'push'] as const) {
+            fetchMock.mockResolvedValueOnce(jsonResponse({ status: gitStatus() }))
+            if (action === 'commit') await api.actions.commit.mutateAsync('Feature')
+            else await api.actions.push.mutateAsync()
+            await flushPromises()
+        }
+        expect(calls('/git/branch-changes')).toHaveLength(3)
     })
 })
 

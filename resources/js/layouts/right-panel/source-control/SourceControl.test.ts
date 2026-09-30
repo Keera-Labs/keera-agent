@@ -2,7 +2,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installPinia } from '@/pages/agents/testing'
-import type { GitPullRequestInfo, GitStatus, GitWorktree } from '@/queries/gitQuery'
+import type { GitBranchChanges, GitPullRequestInfo, GitStatus, GitWorktree } from '@/queries/gitQuery'
 import { useDiffStore } from '@/stores/diffStore'
 import { useEditorStore } from '@/stores/editorStore'
 import { useProjectStore } from '@/stores/projectStore'
@@ -16,6 +16,7 @@ type Reply = { body: unknown; status?: number }
 
 const AGENT_TREE = '/code/shop/.claude/worktrees/agent-7'
 
+let branchChanges: GitBranchChanges
 let status: GitStatus
 let agentStatus: GitStatus
 let worktrees: GitWorktree[]
@@ -29,6 +30,7 @@ const fetchMock = vi.fn((url: string, init?: RequestInit) => {
         ? posts[path] ?? { body: { detail: 'unexpected' }, status: 500 }
         : {
             body: path === '/status' ? (inAgentTree ? agentStatus : status)
+                : path === '/branch-changes' ? branchChanges
                 : path === '/pull-request' ? pullRequestInfo
                 : path === '/worktrees' ? { worktrees }
                 : { commits: [] },
@@ -52,6 +54,7 @@ const referenceStatus = () => gitStatus({
 
 beforeEach(() => {
     localStorage.clear()
+    branchChanges = { base: 'dev', merge_base: 'base', head: 'head', ahead: 0, files: [] }
     status = referenceStatus()
     agentStatus = gitStatus({ branch: 'task/2034-diff', changes: [gitFile('resources/js/DiffPane.vue', { status: 'A', untracked: true })], count: 1 })
     worktrees = [
@@ -226,6 +229,53 @@ describe('SourceControl', () => {
         expect(w.get('[data-testid="create-pr"]').attributes('disabled')).toBeDefined()
     })
 
+    it('shows committed changes separately and opens a committed diff', async () => {
+        status = gitStatus()
+        branchChanges = { base: 'dev', merge_base: 'base', head: 'head', ahead: 2, files: [gitFile('src/feature.ts')] }
+        const w = await mountPanel()
+        expect(w.find('[data-testid="clean-tree"]').exists()).toBe(false)
+        const section = w.get('[data-testid="committed-changes"]')
+        expect(section.text()).toContain('2 commits ahead of dev')
+        expect(section.find('[aria-label^="Stage"]').exists()).toBe(false)
+        await section.get('button[title^="Show changes"]').trigger('click')
+        expect(useDiffStore().activeTab).toMatchObject({ path: 'src/feature.ts', committed: true })
+    })
+
+    it('refreshes committed files immediately after commit and push', async () => {
+        status = gitStatus({ upstream: 'origin/feature', staged: [gitFile('src/feature.ts')], count: 1 })
+        const w = await mountPanel()
+        branchChanges = { base: 'dev', merge_base: 'base', head: 'head', ahead: 1, files: [gitFile('src/feature.ts')] }
+        posts['/commits'] = { body: { status: gitStatus({ upstream: 'origin/feature' }) } }
+        posts['/push'] = posts['/commits']!
+        await w.get('textarea').setValue('Feature')
+        await w.get('[data-testid="primary-action"]').trigger('click')
+        await flushPromises()
+        expect(w.get('[data-testid="committed-changes"]').text()).toContain('feature.ts')
+        expect(w.find('[data-testid="clean-tree"]').exists()).toBe(false)
+        for (const action of ['Push']) {
+            await w.get('[aria-label="More actions"]').trigger('click')
+            await w.findAll('[role="menuitem"]').find(b => b.text() === action)!.trigger('click')
+            await flushPromises()
+        }
+        expect(fetchMock.mock.calls.filter(([url, init]) => url.endsWith('/branch-changes') && !init?.method)).toHaveLength(3)
+    })
+
+    it('keeps a section for commits whose net diff is empty', async () => {
+        status = gitStatus()
+        branchChanges.ahead = 2
+        const w = await mountPanel()
+        expect(w.find('[data-testid="clean-tree"]').exists()).toBe(false)
+        expect(w.get('[data-testid="committed-changes"]').text()).toContain('2 commits ahead')
+    })
+
+    it('does not claim a clean branch when no base can be resolved', async () => {
+        status = gitStatus()
+        branchChanges.merge_base = null
+        const w = await mountPanel()
+        expect(w.find('[data-testid="clean-tree"]').exists()).toBe(false)
+        expect(w.text()).toContain('No shared base branch found')
+    })
+
     it('shows a clean tree', async () => {
         status = gitStatus()
         const w = await mountPanel()
@@ -296,6 +346,7 @@ describe('SourceControl', () => {
         const worktreeParam = `worktree=${encodeURIComponent(AGENT_TREE)}`
         expect(fetchMock).toHaveBeenCalledWith(`/api/projects/9/git/status?${worktreeParam}`, expect.anything())
         expect(w.get('[data-testid="branch-pill"]').text()).toContain('task/2034-diff')
+        expect(fetchMock).toHaveBeenCalledWith(`/api/projects/9/git/branch-changes?${worktreeParam}`, expect.anything())
         expect(w.get('[data-testid="worktree-label"]').text()).toBe('Diff Frontend')
         expect(w.get('[data-testid="changes"]').text()).toContain('DiffPane.vue')
         expect(w.find('[data-testid="staged-changes"]').exists()).toBe(false)

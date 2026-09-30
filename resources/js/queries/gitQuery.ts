@@ -31,6 +31,8 @@ export type GitStatus = {
     count: number
 }
 
+export type GitBranchChanges = { base: string | null; merge_base: string | null; head: string | null; ahead: number; files: GitFileChange[] }
+
 export type GitCommit = { sha: string; short_sha: string; subject: string; author: string; date: string }
 
 export type GitPullRequest = {
@@ -76,7 +78,7 @@ export type GitDiff = {
 /** The checkout git calls run against; a null worktree is the project's own checkout. */
 export type GitTarget = { projectId: number; worktree: string | null }
 
-export type GitDiffRequest = { target: GitTarget; path: string; staged: boolean }
+export type GitDiffRequest = { target: GitTarget; path: string; staged: boolean; committed?: boolean }
 
 export class GitRequestError extends Error {
     constructor(readonly status: number, message: string) {
@@ -99,10 +101,11 @@ export const gitKeys = {
     worktrees: (projectId: number | null) => ['git', projectId, 'worktrees'],
     status: (target: GitTarget | null) => [...treeKey(target), 'status'],
     pullRequest: (target: GitTarget | null) => [...treeKey(target), 'pull-request'],
+    branchChanges: (target: GitTarget | null) => [...treeKey(target), 'branch-changes'],
     commits: (target: GitTarget | null) => [...treeKey(target), 'commits'],
     diffs: (target: GitTarget | null) => [...treeKey(target), 'diff'],
     diff: (diff: GitDiffRequest | null) =>
-        [...gitKeys.diffs(diff?.target ?? null), diff?.path ?? '', diff?.staged ? 'staged' : 'unstaged'],
+        [...gitKeys.diffs(diff?.target ?? null), diff?.path ?? '', diff?.committed ? 'committed' : diff?.staged ? 'staged' : 'unstaged'],
 }
 
 async function request<T>(url: string, init?: { method: 'POST'; body: object }): Promise<T> {
@@ -150,6 +153,17 @@ export function useGitStatus(targetSource: MaybeRefOrGetter<GitTarget | null>) {
     }
 }
 
+export function useGitBranchChanges(targetSource: MaybeRefOrGetter<GitTarget | null>, enabled: MaybeRefOrGetter<boolean> = true) {
+    const target = () => toValue(targetSource)
+    return useQuery({
+        key: () => gitKeys.branchChanges(target()),
+        query: () => request<GitBranchChanges>(gitUrl(target()!, 'branch-changes')),
+        enabled: () => target() !== null && toValue(enabled),
+        staleTime: 5000,
+        refetchOnWindowFocus: true,
+    })
+}
+
 export function useGitPullRequest(targetSource: MaybeRefOrGetter<GitTarget | null>, enabled: MaybeRefOrGetter<boolean> = true) {
     const target = () => toValue(targetSource)
     // Each read shells out to `gh`, so this refreshes on focus and on demand rather than on the status cadence.
@@ -175,8 +189,8 @@ export function useGitDiff(diffSource: MaybeRefOrGetter<GitDiffRequest | null>) 
     return useQuery({
         key: () => gitKeys.diff(diff()),
         query: () => {
-            const { target, path, staged } = diff()!
-            return request<GitDiff>(gitUrl(target, 'diff', { path, staged: String(staged) }))
+            const { target, path, staged, committed } = diff()!
+            return request<GitDiff>(gitUrl(target, 'diff', { path, staged: String(staged), ...(committed ? { committed: 'true' } : {}) }))
         },
         enabled: () => diff() !== null,
         staleTime: 5000,
@@ -196,7 +210,19 @@ export function useGitActions(targetSource: MaybeRefOrGetter<GitTarget | null>) 
     }
     // A failed push or a rejected commit hook can still have changed the tree, so failures re-read it.
     const refreshStatus = () => queryCache.invalidateQueries({ key: gitKeys.status(target()), exact: true })
+    const refreshBranch = () => queryCache.invalidateQueries({ key: gitKeys.branchChanges(target()), exact: true })
     const refreshCommits = () => queryCache.invalidateQueries({ key: gitKeys.commits(target()), exact: true })
+    const refreshAfterFailure = () => {
+        queryCache.invalidateQueries({ key: gitKeys.diffs(target()) })
+        refreshStatus()
+        refreshBranch()
+        refreshCommits()
+    }
+    const setCommittedStatus = (status: GitStatus) => {
+        setStatus(status)
+        refreshBranch()
+        refreshCommits()
+    }
 
     const stage = useMutation({
         mutation: (paths: GitPaths) => request<GitStatus>(url('stage'), { method: 'POST', body: paths }),
@@ -213,17 +239,14 @@ export function useGitActions(targetSource: MaybeRefOrGetter<GitTarget | null>) 
     const commit = useMutation({
         mutation: async (message: string) =>
             (await request<{ status: GitStatus }>(url('commits'), { method: 'POST', body: { message } })).status,
-        onSuccess: status => {
-            setStatus(status)
-            refreshCommits()
-        },
-        onError: refreshStatus,
+        onSuccess: setCommittedStatus,
+        onError: refreshAfterFailure,
     })
 
     const push = useMutation({
         mutation: async () => (await request<{ status: GitStatus }>(url('push'), { method: 'POST', body: {} })).status,
-        onSuccess: setStatus,
-        onError: refreshStatus,
+        onSuccess: setCommittedStatus,
+        onError: refreshAfterFailure,
     })
 
     const createPullRequest = useMutation({

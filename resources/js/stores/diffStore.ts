@@ -16,11 +16,12 @@ export type DiffTab = GitDiffRequest & {
 
 export interface DiffTabOptions {
     worktreeLabel?: string | null
+    committed?: boolean
     untracked?: boolean
 }
 
-const tabId = ({ target, path, staged }: GitDiffRequest) =>
-    `${target.worktree ?? ''}\0${staged ? 'staged' : 'unstaged'}\0${path}`
+const tabId = ({ target, path, staged, committed }: GitDiffRequest) =>
+    `${target.worktree ?? ''}\0${committed ? 'committed' : staged ? 'staged' : 'unstaged'}\0${path}`
 
 /** Read-only diff tabs, shown in the editor area beside the file tabs. */
 export const useDiffStore = defineStore('diff', () => {
@@ -42,8 +43,8 @@ export const useDiffStore = defineStore('diff', () => {
         activeId.value = tab?.id ?? null
     }
 
-    function open(target: GitTarget, path: string, staged: boolean, { worktreeLabel = null, untracked = false }: DiffTabOptions = {}) {
-        const request = { target, path, staged }
+    function open(target: GitTarget, path: string, staged: boolean, { worktreeLabel = null, untracked = false, committed = false }: DiffTabOptions = {}) {
+        const request = { target, path, staged, committed }
         const id = tabId(request)
         const tabs = (tabsByProject[target.projectId] ??= [])
         let tab = tabs.find(t => t.id === id)

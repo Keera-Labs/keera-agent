@@ -33,6 +33,7 @@ class GitDiffQuery(GitWorktreeQuery):
     # Validated by the diff service so a missing path is a 422 JSON error like a bad one.
     path: str = ""
     staged: bool = False
+    committed: bool = False
 
 
 class GitCommitStoreRequest(BaseModel):

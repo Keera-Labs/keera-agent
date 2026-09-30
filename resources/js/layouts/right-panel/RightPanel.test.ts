@@ -4,20 +4,22 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { installPinia } from '@/pages/agents/testing'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import { useProjectStore } from '@/stores/projectStore'
-import type { GitWorktree } from '@/queries/gitQuery'
+import type { GitBranchChanges, GitWorktree } from '@/queries/gitQuery'
 import type { Project } from '@/types/type'
 import RightPanel from './RightPanel.vue'
-import { gitStatus, gitWorktree } from './source-control/testing'
+import { gitFile, gitStatus, gitWorktree } from './source-control/testing'
 
 const page = vi.hoisted(() => ({ props: {}, component: 'Dashboard' }))
 vi.mock('@inertiajs/vue3', () => ({ router: { on: vi.fn(() => () => {}) }, usePage: () => page }))
 
+let branchChanges: GitBranchChanges
 let status = gitStatus()
 let worktrees: GitWorktree[] = []
 const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
     let body: unknown = []
     if (url.includes('/files?')) body = { path: '', entries: [], truncated: false }
     else if (url.startsWith('/api/projects/3/git/status')) body = status
+    else if (url.endsWith('/git/branch-changes')) body = branchChanges
     else if (url.endsWith('/git/pull-request')) body = { available: true, error: null, pull_request: null }
     else if (url.endsWith('/git/worktrees')) body = { worktrees }
     else if (url.endsWith('/api/projects/3/agents')) body = { data: [{ id: 7, attributes: { name: 'Diff Frontend', project_id: 3 } }] }
@@ -26,6 +28,7 @@ const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
 
 beforeEach(() => {
     localStorage.clear()
+    branchChanges = { base: 'dev', merge_base: 'base', head: 'head', ahead: 0, files: [] }
     status = gitStatus()
     worktrees = []
     page.component = 'Dashboard'
@@ -133,9 +136,12 @@ describe('RightPanel', () => {
         expect(w.get('button[title="Source control"]').attributes('aria-pressed')).toBe('true')
 
         const before = statusCalls()
+        branchChanges = { ...branchChanges, ahead: 1, files: [gitFile('src/committed.ts')] }
         await w.get('[data-testid="refresh-source-control"]').trigger('click')
         await flushPromises()
         expect(statusCalls()).toBe(before + 1)
+        expect(fetchMock.mock.calls.filter(([url]) => url.endsWith('/git/branch-changes'))).toHaveLength(2)
+        expect(w.get('[data-testid="committed-changes"]').text()).toContain('committed.ts')
         expect(fetchMock).toHaveBeenCalledWith('/api/projects/3/git/pull-request', { headers: { Accept: 'application/json' } })
     })
 })

@@ -16,7 +16,7 @@ const queryCache = useQueryCache()
 
 const diffRequest = computed(() => {
     const tab = activeTab.value
-    return tab ? { target: tab.target, path: tab.path, staged: tab.staged } : null
+    return tab ? { target: tab.target, path: tab.path, staged: tab.staged, committed: tab.committed } : null
 })
 const query = useGitDiff(diffRequest)
 const diff = query.data
@@ -38,7 +38,7 @@ const notice = computed(() => {
     return null
 })
 
-const compared = computed(() => (activeTab.value?.staged ? 'HEAD ↔ Index' : 'Index ↔ Working tree'))
+const compared = computed(() => (activeTab.value?.committed ? 'Merge base ↔ HEAD' : activeTab.value?.staged ? 'HEAD ↔ Index' : 'Index ↔ Working tree'))
 
 const host = ref<HTMLElement | null>(null)
 let monaco: MonacoApi | null = null
@@ -104,6 +104,7 @@ watch(query.error, error => {
     const tab = activeTab.value
     if (!(error instanceof GitRequestError) || error.status !== 404 || !tab) return
     queryCache.invalidateQueries({ key: gitKeys.status(tab.target), exact: true })
+    if (tab.committed) queryCache.invalidateQueries({ key: gitKeys.branchChanges(tab.target), exact: true })
     diffs.close(tab.target.projectId, tab.id)
 })
 
