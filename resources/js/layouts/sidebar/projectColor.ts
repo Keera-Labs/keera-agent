@@ -12,10 +12,10 @@ export interface ProjectColor {
 export const PROJECT_COLORS: readonly ProjectColor[] = [
     { name: 'blue', fill: 'bg-blue-600', text: 'text-white', border: 'border-blue-600' },
     { name: 'amber', fill: 'bg-amber-400', text: 'text-amber-950', border: 'border-amber-400' },
-    { name: 'green', fill: 'bg-emerald-600', text: 'text-white', border: 'border-emerald-600' },
+    { name: 'green', fill: 'bg-emerald-700', text: 'text-white', border: 'border-emerald-700' },
     { name: 'purple', fill: 'bg-violet-600', text: 'text-white', border: 'border-violet-600' },
     { name: 'pink', fill: 'bg-pink-600', text: 'text-white', border: 'border-pink-600' },
-    { name: 'teal', fill: 'bg-teal-600', text: 'text-white', border: 'border-teal-600' },
+    { name: 'teal', fill: 'bg-teal-700', text: 'text-white', border: 'border-teal-700' },
 ]
 
 /**
