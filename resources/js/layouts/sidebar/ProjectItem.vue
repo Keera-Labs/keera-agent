@@ -119,10 +119,11 @@ onBeforeUnmount(stopListening)
             @click="visit"
             @keydown.enter="visit"
         >
+            <!-- The solid white ring keeps every status color legible whatever the pill's fill. -->
             <span
                 data-testid="project-status"
                 :data-status="props.status ?? 'idle'"
-                :class="['w-[7px] h-[7px] rounded-full shrink-0 ring-1 ring-white/70', STATUS_DOT[props.status ?? 'idle']]"
+                :class="['w-[7px] h-[7px] rounded-full shrink-0 ring-2 ring-white', STATUS_DOT[props.status ?? 'idle']]"
             />
 
             <div class="flex-1 min-w-0">

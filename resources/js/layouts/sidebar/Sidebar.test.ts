@@ -574,9 +574,26 @@ describe('Sidebar', () => {
             const w = await mountSidebar()
 
             const card = w.findAll('[data-testid="project-card"]')[1]
-            expect(card.text()).toBe('alpha-web')
+            expect(card.get('[data-testid="project-item"]').attributes('aria-current')).toBeUndefined()
+            expect(card.get('[title="alpha-web"]').text()).toBe('alpha-web')
             expect(card.find('[data-testid="project-collapse"]').exists()).toBe(false)
             expect(card.find('[data-testid="project-agents"]').exists()).toBe(false)
+            expect(card.find('[data-testid="sidebar-agent"]').exists()).toBe(false)
+        })
+
+        it('rings only the active project\'s header and keeps the status dot on a solid white backdrop', async () => {
+            const w = await mountSidebar()
+            useProjectStore().setActiveProject(projects[0])
+            await flushPromises()
+
+            const [active, inactive] = w.findAll('[data-testid="project-item"]')
+            const ACTIVE_RING = ['ring-2', 'ring-inset', 'ring-black/15']
+            expect(active.classes()).toEqual(expect.arrayContaining(ACTIVE_RING))
+            ACTIVE_RING.forEach(c => expect(inactive.classes()).not.toContain(c))
+
+            for (const item of [active, inactive]) {
+                expect(item.get('[data-testid="project-status"]').classes()).toEqual(expect.arrayContaining(['ring-2', 'ring-white']))
+            }
         })
 
         it('flips the chevron when a group collapses', async () => {
