@@ -31,7 +31,7 @@ const color = computed(() => projectColor(props.project.id))
                     data-testid="project-collapse"
                     :aria-expanded="!props.collapsed"
                     :aria-label="props.collapsed ? 'Show agents' : 'Hide agents'"
-                    class="shrink-0 flex items-center gap-0.5 h-5 pl-1.5 pr-1 rounded-md text-ui-11 tabular-nums cursor-pointer opacity-85 hover:opacity-100 hover:bg-black/10"
+                    class="shrink-0 flex items-center gap-0.5 h-5 pl-1.5 pr-1 rounded-md text-ui-11 font-semibold tabular-nums cursor-pointer hover:bg-black/10"
                     @click.stop="$emit('toggle')"
                     @keydown.enter.stop
                 >

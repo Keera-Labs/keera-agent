@@ -127,19 +127,16 @@ onBeforeUnmount(stopListening)
             />
 
             <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-1.5 min-w-0">
-                    <div
-                        class="flex-1 min-w-0 text-ui-13 font-semibold truncate leading-5"
-                        :title="props.project.name"
-                    >
-                        {{ props.project.name }}
-                    </div>
-                    <slot name="badge" />
+                <div class="text-ui-13 font-semibold truncate leading-5" :title="props.project.name">
+                    {{ props.project.name }}
                 </div>
                 <div v-if="props.active" class="text-ui-11 opacity-80 truncate leading-4" :title="props.project.path">
                     {{ props.project.path }}
                 </div>
             </div>
+
+            <!-- A sibling of the text column, so it stays centred on the pill when the path line shows. -->
+            <slot name="badge" />
         </div>
 
         <!-- Hidden rather than unmounted, so focus can return here after Escape. -->

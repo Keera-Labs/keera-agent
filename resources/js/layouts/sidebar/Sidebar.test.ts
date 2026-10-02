@@ -596,6 +596,23 @@ describe('Sidebar', () => {
             }
         })
 
+        it('puts the agent count at the right end of the pill, just before the chevron', async () => {
+            summaries = [summary(1, 10, 'idle'), summary(2, 10, 'idle')]
+            const w = await mountSidebar()
+            useProjectStore().setActiveProject(projects[0])
+            await flushPromises()
+
+            const header = w.findAll('[data-testid="project-item"]')[0].element
+            const toggle = w.get('[data-testid="project-collapse"]').element
+            // A direct child of the pill row, after the stretching name column, so it is right-aligned
+            // and vertically centred even when the active project's path line shows.
+            expect(toggle.parentElement).toBe(header)
+            expect(header.lastElementChild).toBe(toggle)
+            expect(header.querySelector('[title="alpha-api"]')!.parentElement!.classList).toContain('flex-1')
+            expect(toggle.textContent!.trim()).toBe('2')
+            expect(toggle.lastElementChild!.tagName.toLowerCase()).toBe('svg')
+        })
+
         it('flips the chevron when a group collapses', async () => {
             summaries = [summary(1, 10, 'idle')]
             const w = await mountSidebar()
