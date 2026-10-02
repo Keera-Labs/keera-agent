@@ -11,6 +11,7 @@ import { useProjectStore } from '@/stores/projectStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import { applyUiFontSize } from '@/utils/uiFontSize'
 import type { Project, Workspace } from '@/types/type'
+import { projectColor } from './projectColor'
 import Sidebar from './Sidebar.vue'
 
 const page = reactive<{ component: string; props: Record<string, unknown> }>({ component: 'Home', props: {} })
@@ -137,7 +138,7 @@ describe('Sidebar', () => {
 
         expect(projectNames(w)).toEqual([])
         expect(w.text()).toContain('No projects')
-        expect(w.text()).toContain('+ Add project')
+        expect(w.find('[data-testid="add-project-group"]').exists()).toBe(true)
     })
 
     it('highlights the active project and shows its Claude status', async () => {
@@ -550,6 +551,52 @@ describe('Sidebar', () => {
             wrapper!.unmount()
             const again = await mountSidebar()
             expect(again.find('[data-testid="project-agents"]').exists()).toBe(false)
+        })
+    })
+
+    describe('tab-group styling', () => {
+        it('colors each project header and its agent rule from the project id', async () => {
+            summaries = [summary(1, 10, 'idle'), summary(2, 11, 'idle')]
+            const w = await mountSidebar()
+
+            const cards = w.findAll('[data-testid="project-card"]')
+            cards.forEach((card, i) => {
+                const color = projectColor(projects[i].id)
+                expect(card.attributes('data-color')).toBe(color.name)
+                expect(card.get('[data-testid="project-item"]').classes()).toEqual(expect.arrayContaining([color.fill, color.text]))
+            })
+            expect(cards[0].attributes('data-color')).not.toBe(cards[1].attributes('data-color'))
+            expect(cards[0].get('[data-testid="project-agents"]').classes()).toContain(projectColor(10).border)
+        })
+
+        it('renders a project without agents as a bare header with no count or chevron', async () => {
+            summaries = [summary(1, 10, 'idle')]
+            const w = await mountSidebar()
+
+            const card = w.findAll('[data-testid="project-card"]')[1]
+            expect(card.text()).toBe('alpha-web')
+            expect(card.find('[data-testid="project-collapse"]').exists()).toBe(false)
+            expect(card.find('[data-testid="project-agents"]').exists()).toBe(false)
+        })
+
+        it('flips the chevron when a group collapses', async () => {
+            summaries = [summary(1, 10, 'idle')]
+            const w = await mountSidebar()
+
+            const chevron = () => w.get('[data-testid="project-collapse"] svg')
+            expect(chevron().classes()).toContain('rotate-180')
+            await w.get('[data-testid="project-collapse"]').trigger('click')
+            expect(chevron().classes()).not.toContain('rotate-180')
+            expect(w.get('[data-testid="project-collapse"]').attributes('aria-expanded')).toBe('false')
+        })
+
+        it('opens the new-project dialog from the "+" button below the groups', async () => {
+            const w = await mountSidebar()
+
+            const list = w.get('[data-testid="add-project-group"]').element.closest('ul')!
+            expect(list.lastElementChild!.contains(w.get('[data-testid="add-project-group"]').element)).toBe(true)
+            await w.get('[data-testid="add-project-group"]').trigger('click')
+            expect(document.querySelector('[role="dialog"]')!.textContent).toContain('New Project')
         })
     })
 })

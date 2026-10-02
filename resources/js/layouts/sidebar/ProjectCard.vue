@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import type { AgentSummary } from '@/queries/agentSummariesQuery'
 import type { Project } from '@/types/type'
 import AgentRow from './AgentRow.vue'
 import ProjectItem from './ProjectItem.vue'
+import { projectColor } from './projectColor'
 
 const props = defineProps<{
     project: Project
@@ -16,32 +18,38 @@ const props = defineProps<{
 }>()
 
 defineEmits<{ toggle: []; selectAgent: [agent: AgentSummary] }>()
+
+const color = computed(() => projectColor(props.project.id))
 </script>
 
 <template>
-    <div data-testid="project-card" :class="['rounded-lg', props.agents.length > 0 && 'bg-black/[0.03] pb-1']">
-        <ProjectItem :project="props.project" :active="props.active" :status="props.status">
+    <div data-testid="project-card" :data-color="color.name">
+        <ProjectItem :project="props.project" :color="color" :active="props.active" :status="props.status">
             <template v-if="props.agents.length > 0" #badge>
                 <button
                     type="button"
                     data-testid="project-collapse"
                     :aria-expanded="!props.collapsed"
                     :aria-label="props.collapsed ? 'Show agents' : 'Hide agents'"
-                    class="shrink-0 flex items-center gap-0.5 h-4 pl-1.5 pr-1 rounded bg-black/[0.06] text-ui-10.5 tabular-nums text-zinc-500 cursor-pointer hover:bg-black/[0.1] hover:text-zinc-800"
+                    class="shrink-0 flex items-center gap-0.5 h-5 pl-1.5 pr-1 rounded-md text-ui-11 tabular-nums cursor-pointer opacity-85 hover:opacity-100 hover:bg-black/10"
                     @click.stop="$emit('toggle')"
                     @keydown.enter.stop
                 >
                     {{ props.agents.length }}
-                    <Icon :name="props.collapsed ? 'chevron-right' : 'chevron-down'" :size="10" />
+                    <!-- Points up while open, like a tab group's header, and flips once collapsed. -->
+                    <Icon
+                        name="chevron-down"
+                        :size="12"
+                        :class="['transition-transform duration-150', !props.collapsed && 'rotate-180']"
+                    />
                 </button>
             </template>
         </ProjectItem>
 
-        <!-- The left margin centres the tree line under ProjectItem's status dot (its pl-2 plus half the 7px dot). -->
         <ul
             v-if="props.agents.length > 0 && !props.collapsed"
             data-testid="project-agents"
-            class="list-none m-0 mt-0.5 ml-[calc(var(--spacing)*2_+_3px)] mr-1 pl-1.5 border-l-2 border-black/[0.08] flex flex-col gap-px"
+            :class="['list-none m-0 mt-1 mb-0.5 ml-1 pl-1 border-l-2 flex flex-col gap-px', color.border]"
         >
             <li v-for="agent in props.agents" :key="agent.id">
                 <AgentRow

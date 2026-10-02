@@ -138,22 +138,8 @@ const iconButtonClass = 'shrink-0 flex items-center justify-center w-6 h-6 round
                 </ProjectCreateModal>
             </div>
 
-            <ul class="list-none m-0 p-0 mb-1 flex flex-col gap-1">
-                <template v-if="projects.length === 0">
-                    <li class="py-1 px-2 text-zinc-400 text-ui-12">No projects</li>
-                    <li>
-                        <ProjectCreateModal :default-workspace-id="currentWorkspaceId">
-                            <template #trigger>
-                                <button
-                                    type="button"
-                                    class="mt-0.5 w-full bg-transparent border border-dashed border-stroke rounded-md text-zinc-500 text-ui-12 p-1.5 cursor-pointer text-center block hover:text-zinc-700 hover:border-zinc-400"
-                                >
-                                    + Add project
-                                </button>
-                            </template>
-                        </ProjectCreateModal>
-                    </li>
-                </template>
+            <ul class="list-none m-0 p-0 mb-1 flex flex-col gap-2">
+                <li v-if="projects.length === 0" class="py-1 px-2 text-zinc-400 text-ui-12">No projects</li>
                 <li v-for="project in projects" :key="project.id">
                     <ProjectCard
                         :project="project"
@@ -166,6 +152,20 @@ const iconButtonClass = 'shrink-0 flex items-center justify-center w-6 h-6 round
                         @toggle="toggleCollapsed(project.id)"
                         @select-agent="agent => selectAgent(project, agent)"
                     />
+                </li>
+                <li>
+                    <ProjectCreateModal :default-workspace-id="currentWorkspaceId">
+                        <template #trigger>
+                            <button
+                                type="button"
+                                data-testid="add-project-group"
+                                aria-label="Add project"
+                                class="w-full h-8 flex items-center justify-center rounded-lg bg-black/[0.04] text-zinc-700 cursor-pointer transition-colors duration-100 hover:bg-black/[0.07] hover:text-zinc-900"
+                            >
+                                <Icon name="plus" :size="15" />
+                            </button>
+                        </template>
+                    </ProjectCreateModal>
                 </li>
             </ul>
         </div>
