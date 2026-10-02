@@ -36,9 +36,9 @@ const title = computed(() => {
             :aria-current="props.active ? 'page' : undefined"
             :title="title"
             :class="[
-                'flex items-center gap-1.5 flex-1 min-w-0 h-7 px-1.5 rounded-md text-ui-12.5 text-left cursor-pointer transition-colors duration-100',
+                'flex items-center gap-1.5 flex-1 min-w-0 h-8 px-2 rounded-lg text-ui-12.5 text-left cursor-pointer transition-colors duration-100',
                 props.active
-                    ? 'bg-surface shadow-[0_1px_2px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.04]'
+                    ? 'bg-surface shadow-[0_1px_3px_rgba(0,0,0,0.1)] ring-1 ring-black/[0.05]'
                     : 'hover:bg-black/[0.04]',
             ]"
             @click="$emit('select')"

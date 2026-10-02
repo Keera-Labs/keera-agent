@@ -8,9 +8,11 @@ import ProjectMoveModal from '@/pages/project/ProjectMoveModal.vue'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import type { Project } from '@/types/type'
 import { placeMenu } from './menuPlacement'
+import type { ProjectColor } from './projectColor'
 
 const props = defineProps<{
     project: Project
+    color: ProjectColor
     active: boolean
     status?: 'running' | 'done'
 }>()
@@ -109,34 +111,32 @@ onBeforeUnmount(stopListening)
             data-testid="project-item"
             :aria-current="props.active ? 'page' : undefined"
             :class="[
-                'flex-1 min-w-0 flex items-center gap-2 py-1 pl-2 pr-7 rounded-md cursor-pointer text-left transition-colors duration-100',
-                props.active
-                    ? 'bg-surface shadow-[0_1px_2px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.04]'
-                    : 'hover:bg-black/[0.04]',
+                'flex-1 min-w-0 flex items-center gap-2 py-1 pl-2.5 pr-7 rounded-lg cursor-pointer text-left transition-[filter,box-shadow] duration-100 hover:brightness-105',
+                props.color.fill,
+                props.color.text,
+                props.active && 'shadow-[0_1px_3px_rgba(0,0,0,0.18)] ring-2 ring-black/15 ring-inset',
             ]"
             @click="visit"
             @keydown.enter="visit"
         >
+            <!-- The solid white ring keeps every status color legible whatever the pill's fill. -->
             <span
                 data-testid="project-status"
                 :data-status="props.status ?? 'idle'"
-                :class="['w-[7px] h-[7px] rounded-full shrink-0', STATUS_DOT[props.status ?? 'idle']]"
+                :class="['w-[7px] h-[7px] rounded-full shrink-0 ring-2 ring-white', STATUS_DOT[props.status ?? 'idle']]"
             />
 
             <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-1.5 min-w-0">
-                    <div
-                        :class="['text-ui-13 truncate leading-5', props.active ? 'text-zinc-900 font-medium' : 'text-zinc-700']"
-                        :title="props.project.name"
-                    >
-                        {{ props.project.name }}
-                    </div>
-                    <slot name="badge" />
+                <div class="text-ui-13 font-semibold truncate leading-5" :title="props.project.name">
+                    {{ props.project.name }}
                 </div>
-                <div v-if="props.active" class="text-ui-11 text-zinc-500 truncate leading-4" :title="props.project.path">
+                <div v-if="props.active" class="text-ui-11 opacity-80 truncate leading-4" :title="props.project.path">
                     {{ props.project.path }}
                 </div>
             </div>
+
+            <!-- A sibling of the text column, so it stays centred on the pill when the path line shows. -->
+            <slot name="badge" />
         </div>
 
         <!-- Hidden rather than unmounted, so focus can return here after Escape. -->
@@ -146,9 +146,10 @@ onBeforeUnmount(stopListening)
             aria-label="Project actions"
             :aria-expanded="menuOpen"
             :class="[
-                'absolute right-1 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md cursor-pointer text-zinc-500 flex items-center justify-center hover:text-zinc-800',
+                'absolute right-1 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md cursor-pointer flex items-center justify-center',
+                props.color.text,
                 !(hovered || menuOpen) && 'opacity-0 focus-visible:opacity-100',
-                menuOpen ? 'bg-black/[0.06]' : 'hover:bg-black/[0.05]',
+                menuOpen ? 'bg-black/15' : 'hover:bg-black/10',
             ]"
             @mousedown.stop
             @click.stop="toggleMenu"
