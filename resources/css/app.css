@@ -1,7 +1,21 @@
 @import "tailwindcss";
+@import "@fontsource-variable/roboto/wght.css";
+@import "@fontsource-variable/roboto/wght-italic.css";
+@import "@fontsource/fira-code/400.css";
+@import "@fontsource/fira-code/700.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/700.css";
 @config "../../tailwind.config.js";
 
 @theme {
+    --font-sans: "Roboto Variable", Roboto, system-ui, -apple-system, "Segoe UI", sans-serif;
+    /*
+     * Dank Mono (commercial) and Monaco (macOS system font) are never shipped and
+     * apply only when installed; the bundled Fira Code keeps the stack free-font backed.
+     * The editor and terminal font is user-configurable (editor/fonts.ts); this is UI chrome only.
+     */
+    --font-mono: "Dank Mono", "Fira Code", Monaco, ui-monospace, SFMono-Regular, Menlo, monospace;
+
     --color-canvas:  #f6f8fa;
     --color-surface: #ffffff;
     --color-modal:   #eaecef;
@@ -10,6 +24,56 @@
     --color-success: #1a7f37;
     --color-danger:  #cf222e;
     --color-overlay: rgba(0,0,0,0.5);
+
+    --text-xs: calc(0.75rem * var(--ui-scale));
+    --text-sm: calc(0.875rem * var(--ui-scale));
+    --text-base: calc(1rem * var(--ui-scale));
+    --text-lg: calc(1.125rem * var(--ui-scale));
+}
+
+/*
+ * The Appearance "UI font size" (stores/appearanceSettingsStore.ts) sets
+ * --ui-scale and --ui-font-size on <html>. Only text scales, never spacing, so the
+ * Monaco editor and xterm, which size their text in px from their own settings,
+ * stay as they are. The sidebar opts into scaled spacing with `sidebar-spacing`.
+ */
+:root {
+    --ui-scale: 1;
+    --ui-font-size: 13;
+}
+
+body {
+    font-size: calc(1rem * var(--ui-scale));
+}
+
+@utility text-ui-* {
+    font-size: calc(--value(number) * 1px * var(--ui-scale));
+}
+
+/*
+ * The sidebar's spacing was tuned for the smallest (11px) font size, where the
+ * factor is exactly 1. Tailwind derives p-*, m-*, gap-*, h-*, w-* and leading-<n>
+ * from --spacing, so rebasing it here grows every row, gap and line-height in
+ * proportion to the text. Anything that must line up with unscaled chrome
+ * outside the sidebar (e.g. the header row) resets --spacing to 0.25rem.
+ */
+@utility sidebar-spacing {
+    --spacing: calc(0.25rem * var(--ui-font-size) / 11);
+}
+
+/*
+ * Terminal hosts pad the .xterm element rather than themselves: FitAddon sizes
+ * xterm to the host's full computed box and only subtracts padding set on
+ * .xterm, so padding on the host makes xterm larger than the visible area.
+ * Unlayered on purpose, so these beat xterm.css (which is unlayered too).
+ */
+.terminal-host > .xterm {
+    padding: --spacing(2);
+}
+
+/* xterm.css paints the viewport black and stretches it over the padding. */
+.terminal-host > .xterm .xterm-viewport {
+    background-color: transparent;
 }
 
 /* Scrollbar styling for light theme */

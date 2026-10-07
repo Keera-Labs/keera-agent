@@ -1,49 +1,86 @@
-import { useForm, useHttp, usePage } from "@inertiajs/react"
-import { useQuery } from "@tanstack/react-query"
+import { usePage } from "@inertiajs/vue3"
+import { useMutation, useQuery, useQueryCache } from "@pinia/colada"
+import { computed } from "vue"
 import type { Workspace } from "@/types/type"
 
-export const WORKSPACES_QUERY_KEY = ["workspaces"] as const
+export const WORKSPACES_QUERY_KEY = ["workspaces"]
+
+type WorkspaceFields = { name?: string; description?: string; claude_config_dir?: string | null }
+
+type WorkspaceResource = { id: string; attributes: Omit<Workspace, "id"> }
+export type WorkspacesDocument = { data: WorkspaceResource[] }
+
+export function fromWorkspacesDocument(doc: WorkspacesDocument): Workspace[] {
+    return doc.data.map(({ id, attributes }) => ({ id: Number(id), ...attributes }))
+}
+
+/** The first message from the app's 422 body: `{ errors: { field: [message] } }`. */
+export function validationMessage(body: unknown): string | null {
+    const errors = (body as { errors?: Record<string, unknown> } | null)?.errors
+    const messages = errors ? Object.values(errors)[0] : null
+    const msg = Array.isArray(messages) ? messages[0] : null
+    return typeof msg === "string" ? msg.replace(/^Value error, /, "") : null
+}
 
 async function fetchWorkspaces(): Promise<Workspace[]> {
     const res = await fetch("/api/workspaces")
     if (!res.ok) throw new Error("Failed to fetch workspaces")
-    return res.json()
+    return fromWorkspacesDocument(await res.json())
+}
+
+async function sendWorkspace(url: string, method: "POST" | "PATCH" | "DELETE", body?: WorkspaceFields) {
+    const res = await fetch(url, {
+        method,
+        headers: body ? { "Content-Type": "application/json" } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+    })
+    if (!res.ok) {
+        const message = res.status === 422 ? validationMessage(await res.json().catch(() => null)) : null
+        throw new Error(message ?? `Failed to ${method.toLowerCase()} workspace`)
+    }
 }
 
 export default function useWorkspaces() {
-    const props = usePage<{ workspaces?: Workspace[] }>().props
+    const page = usePage<{ workspaces?: WorkspacesDocument }>()
+    const queryCache = useQueryCache()
 
-    const query = useQuery<Workspace[]>({
-        queryKey: WORKSPACES_QUERY_KEY,
-        queryFn: fetchWorkspaces,
-        initialData: props.workspaces,
+    const query = useQuery({
+        key: WORKSPACES_QUERY_KEY,
+        query: fetchWorkspaces,
+        initialData: () => (page.props.workspaces ? fromWorkspacesDocument(page.props.workspaces) : undefined),
         staleTime: 1000 * 30,
     })
 
-    const createForm = useForm({ name: '', description: '' })
-    const updateHttp = useHttp({})
-    const destroyHttp = useHttp({})
+    const invalidate = () => queryCache.invalidateQueries({ key: WORKSPACES_QUERY_KEY })
 
-    const create = (data: { name: string; description?: string }, onSuccess?: () => void) => {
-        createForm.setData(data)
-        createForm.post('/api/workspaces', { onSuccess })
-    }
+    const createMutation = useMutation({
+        mutation: (data: { name: string; description?: string }) => sendWorkspace("/api/workspaces", "POST", data),
+        onSuccess: invalidate,
+    })
+    const updateMutation = useMutation({
+        mutation: ({ id, ...data }: { id: number } & WorkspaceFields) =>
+            sendWorkspace(`/api/workspaces/${id}`, "PATCH", data),
+        onSuccess: invalidate,
+    })
+    const destroyMutation = useMutation({
+        mutation: (id: number) => sendWorkspace(`/api/workspaces/${id}`, "DELETE"),
+        onSuccess: invalidate,
+    })
 
-    const update = ({ id, ...data }: { id: number; name?: string; description?: string }, onSuccess?: () => void) => {
-        updateHttp.setData(data)
-        updateHttp.patch(`/api/workspaces/${id}`, { onSuccess })
-    }
+    const create = (data: { name: string; description?: string }, onSuccess?: () => void) =>
+        createMutation.mutateAsync(data).then(onSuccess)
 
-    const destroy = (id: number, onSuccess?: () => void) => {
-        destroyHttp.delete(`/api/workspaces/${id}`, { onSuccess })
-    }
+    const update = (data: { id: number } & WorkspaceFields, onSuccess?: () => void) =>
+        updateMutation.mutateAsync(data).then(onSuccess)
+
+    const destroy = (id: number, onSuccess?: () => void) =>
+        destroyMutation.mutateAsync(id).then(onSuccess)
 
     return {
-        workspaces: query.data ?? [],
-        creating: createForm.processing,
-        createErrors: createForm.errors,
-        updating: updateHttp.processing,
-        destroying: destroyHttp.processing,
+        workspaces: computed(() => query.data.value ?? []),
+        creating: createMutation.isLoading,
+        updating: updateMutation.isLoading,
+        destroying: destroyMutation.isLoading,
         create,
         update,
         destroy,

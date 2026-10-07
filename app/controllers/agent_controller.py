@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import json as _json
 import os
@@ -74,39 +75,23 @@ async def update(body: AgentUpdateRequest, agent_id: int):
 
 
 async def destroy(request: Request, agent_id: int):
-    from fastapi_startkit.application import app
-
-    from app.controllers.agent_trigger_controller import _cleanup_stale_worktree
     from app.models.Project import Project
-    from app.terminal.connection_manager import ConnectionManager
-    from app.terminal.manager import TerminalManager
+    from app.services.worktree_cleanup import cleanup_agent_worktree
 
     agent = await Agent.find_or_fail(agent_id)
 
-    # Clean up WebSocket, PTY, and ConnectionManager entry before deleting the DB record
-    session_id = agent.session_id
-    if session_id:
-        try:
-            conn_manager: ConnectionManager = app().make("connections")
-            terminal_manager: TerminalManager = app().make("terminal")
-
-            bridge = conn_manager.get(session_id)
-            if bridge:
-                try:
-                    await bridge.websocket.close()
-                except Exception:
-                    pass
-
-            conn_manager.remove(session_id)
-            terminal_manager.close(session_id)
-        except Exception:
-            pass
-
-    project_id = agent.project_id
-    # Soft-delete: stamp deleted_at instead of removing the row
+    # Soft-delete before tearing the session down: every spawn path skips deleted
+    # agents, so a reconnecting terminal or an incoming relay message can't resume
+    # the agent (with --continue) in the window between teardown and the stamp.
     agent.deleted_at = datetime.datetime.utcnow()
     await agent.save()
 
+    # Re-read: a spawn already in flight may have registered a newer session.
+    current = await Agent.find(agent_id)
+    await stop_agent_session(current.session_id if current else agent.session_id)
+    await Agent.where("id", agent_id).update({"session_id": None})
+
+    project_id = agent.project_id
     # If this was the default, pick the next available (non-deleted) agent
     project = await Project.find(project_id)
     if project and getattr(project, "default_agent_id", None) == agent_id:
@@ -119,15 +104,36 @@ async def destroy(request: Request, agent_id: int):
         new_default = remaining[0].id if remaining else None
         await _set_project_default(project_id, new_default)
 
-    # Remove the agent's git worktree and branch so it doesn't accumulate
+    worktree_cleanup = []
     if project:
-        cwd = os.path.expanduser(project.path)
+        worktree_cleanup = await asyncio.to_thread(
+            cleanup_agent_worktree, os.path.expanduser(project.path), agent_id
+        )
+
+    return JSONResponse({"ok": True, "worktree_cleanup": worktree_cleanup})
+
+
+async def stop_agent_session(session_id: str | None) -> None:
+    """Disconnect an agent's terminal clients and kill every process its PTY started."""
+    if not session_id:
+        return
+
+    from fastapi_startkit.application import app
+
+    from app.terminal.readiness import claude_ready
+
+    conn_manager = app().make("connections")
+    bridge = conn_manager.get(session_id)
+    conn_manager.remove(session_id)
+    if bridge and bridge.websocket is not None:
         try:
-            _cleanup_stale_worktree(agent, cwd)
+            await bridge.websocket.close()
         except Exception:
             pass
 
-    return JSONResponse({"ok": True})
+    claude_ready.pop(session_id, None)
+    # Terminal.aclose kills the PTY's process groups off the event loop.
+    await app().make("terminal").close(session_id)
 
 
 async def output(request: Request, agent_id: int):

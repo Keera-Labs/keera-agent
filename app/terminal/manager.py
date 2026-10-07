@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 
 from fastapi_startkit.logging import Logger
@@ -40,13 +41,13 @@ class TerminalManager:
     def resize(self, session_id: str, cols: int, rows: int):
         self._sessions[session_id].resize(cols, rows)
 
-    def close(self, session_id: str):
+    async def close(self, session_id: str):
         pty = self._sessions.pop(session_id, None)
         if pty:
-            pty.stop()
+            await pty.aclose()
 
-    def shutdown(self):
+    async def shutdown(self):
         Logger.info("Shutting down terminal manager")
-        for pty in self._sessions.values():
-            pty.stop()
+        ptys = list(self._sessions.values())
         self._sessions.clear()
+        await asyncio.gather(*(pty.aclose() for pty in ptys))

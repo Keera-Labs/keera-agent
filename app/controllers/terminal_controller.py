@@ -8,10 +8,13 @@ from fastapi import Query, WebSocket
 from fastapi_startkit.application import app
 
 from app.actions.agent_startup import wait_for_agent_cli
+from app.actions.claude_hook_action import agent_env
 from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.models.Agent import Agent
 from app.models.Project import Project
+from app.services.claude_config_dir import agent_config_dir
 from app.terminal.claude_monitor import make_claude_session_monitor
+from app.terminal.cli_supervisor import restart_cli, supervise_cli
 from app.terminal.connection_manager import ConnectionManager
 from app.terminal.manager import TerminalManager
 from app.terminal.readiness import claude_ready, mark_booting
@@ -108,7 +111,12 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
     existing_key = agent_record.session_id
     existing_terminal = terminal_manager.find(existing_key) if existing_key else None
     if existing_terminal and existing_terminal.is_alive():
-        reattach_bridge = WebsocketTerminal(websocket, existing_terminal)
+        reattach_bridge = WebsocketTerminal(
+            websocket,
+            existing_terminal,
+            on_restart=lambda: restart_cli(existing_key),
+            replay_history=True,
+        )
         conn_manager.set(existing_key, reattach_bridge, cwd=cwd)
         try:
             await reattach_bridge.run(stop_on_disconnect=False)
@@ -129,7 +137,10 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
         await websocket.close(code=1011, reason="worktree creation failed")
         return
 
-    terminal_manager.create(cwd=agent_cwd, session_id=session_id)
+    config_dir = await agent_config_dir(agent_record, project_record)
+    terminal_manager.create(
+        cwd=agent_cwd, session_id=session_id, env=agent_env(agent_record.id, config_dir)
+    )
     terminal = terminal_manager.get(session_id)
 
     ready_event = mark_booting(session_id)
@@ -151,15 +162,18 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
         build_cmd=build_cmd,
     )
 
-    bridge = WebsocketTerminal(websocket, terminal, on_output=monitor)
+    bridge = WebsocketTerminal(
+        websocket, terminal, on_output=monitor, on_restart=lambda: restart_cli(session_id)
+    )
     conn_manager.set(session_id, bridge, cwd=cwd)
+    supervisor = supervise_cli(agent_record.id, terminal, session_id, build_cmd)
 
     try:
-        await bridge.run(auto_send=claude_cmd.encode() + b"\n")
+        await bridge.run(auto_send=supervisor.launch_line(claude_cmd).encode() + b"\n")
     finally:
         conn_manager.remove(session_id)
         claude_ready.pop(session_id, None)
-        terminal_manager.close(session_id)
+        await terminal_manager.close(session_id)
         await Agent.where("id", agent_record.id).update({"session_id": None})
 
 

@@ -3,6 +3,7 @@ import json as _json
 
 from fastapi_startkit.support import Str
 
+from app.actions.agent_status_action import utc_now
 from app.models.Agent import Agent
 from app.requests.agent_requests import AgentStoreRequest
 
@@ -72,7 +73,10 @@ class AgentCreateAction:
 
         perms_allow, perms_deny = _default_permissions()
 
-        now = datetime.datetime.now().isoformat(sep=" ", timespec="seconds")
+        # Every other writer of updated_at (agent_pause_controller,
+        # agent_hook_event_controller, claude_hook_controller) stamps it in UTC via
+        # utc_now(); match that here instead of the server's local time.
+        now = utc_now()
 
         record = {
             "project_id": self.project_id,

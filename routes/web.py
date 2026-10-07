@@ -5,21 +5,39 @@ from app.controllers import (
     agent_controller,
     agent_default_controller,
     agent_dispatch_controller,
+    agent_hook_event_controller,
     agent_message_controller,
+    agent_pause_controller,
     agent_permission_controller,
     agent_relay_controller,
+    agent_summary_controller,
     agent_template_controller,
     agent_trigger_controller,
+    agent_usage_report_controller,
+    appearance_settings_controller,
     broadcasting_controller,
     claude_hook_controller,
     command_controller,
     configurations_page_controller,
     dashboard_controller,
     default_permission_controller,
+    editor_settings_controller,
+    git_branch_changes_controller,
+    git_commit_controller,
+    git_diff_controller,
+    git_pull_request_controller,
+    git_push_controller,
+    git_stage_controller,
+    git_status_controller,
+    git_worktree_controller,
     global_settings_controller,
     heartbeat_controller,
     home_controller,
     plugin_controller,
+    project_file_content_controller,
+    project_file_controller,
+    project_usage_controller,
+    remote_control_setting_controller,
     settings_controller,
     task_controller,
     tasks_page_controller,
@@ -38,6 +56,27 @@ router.post("/api/projects/{project_id}/tasks", task_controller.store)
 router.patch("/api/tasks/{task_id}", task_controller.update)
 router.delete("/api/tasks/{task_id}", task_controller.destroy)
 
+router.get("/api/projects/{project_id}/usage", project_usage_controller.show)
+router.post("/api/agent-usage-reports", agent_usage_report_controller.store)
+
+router.get("/api/projects/{project_id}/files", project_file_controller.index)
+router.get("/api/projects/{project_id}/files/content", project_file_content_controller.show)
+router.put("/api/projects/{project_id}/files/content", project_file_content_controller.update)
+
+# Source Control panel — git operations on the project's repository; every endpoint
+# takes an optional ?worktree=<path from /git/worktrees>.
+router.get("/api/projects/{project_id}/git/worktrees", git_worktree_controller.index)
+router.get("/api/projects/{project_id}/git/branch-changes", git_branch_changes_controller.show)
+router.get("/api/projects/{project_id}/git/diff", git_diff_controller.show)
+router.get("/api/projects/{project_id}/git/status", git_status_controller.show)
+router.post("/api/projects/{project_id}/git/stage", git_stage_controller.store)
+router.post("/api/projects/{project_id}/git/unstage", git_stage_controller.destroy)
+router.get("/api/projects/{project_id}/git/commits", git_commit_controller.index)
+router.post("/api/projects/{project_id}/git/commits", git_commit_controller.store)
+router.post("/api/projects/{project_id}/git/push", git_push_controller.store)
+router.get("/api/projects/{project_id}/git/pull-request", git_pull_request_controller.show)
+router.post("/api/projects/{project_id}/git/pull-request", git_pull_request_controller.store)
+
 router.get("/api/projects/{project_id}/commands", command_controller.index)
 router.post("/api/projects/{project_id}/commands", command_controller.store)
 router.post("/api/commands/{command_id}/run", command_controller.run)
@@ -49,13 +88,16 @@ router.delete("/api/commands/{command_id}", command_controller.destroy)
 
 router.post("/api/claude-started", claude_hook_controller.claude_started)
 router.post("/api/claude-stopped", claude_hook_controller.claude_stopped)
+router.post("/api/agent-hook-events", agent_hook_event_controller.store)
 
 router.get("/api/projects/{project_id}/messages", agent_message_controller.index)
 router.patch("/api/messages/{message_id}/read", agent_message_controller.mark_read)
 
+router.get("/api/agent-summaries", agent_summary_controller.index)
 router.get("/api/projects/{project_id}/agents", agent_controller.index)
 router.post("/api/projects/{project_id}/agents", agent_controller.store)
 router.post("/api/projects/{project_id}/agents/spawn", agent_dispatch_controller.spawn)
+router.post("/api/projects/{project_id}/agents/pause", agent_pause_controller.store)
 router.get("/api/projects/{project_id}/default-agent", agent_default_controller.show)
 router.post("/api/projects/{project_id}/default-agent", agent_default_controller.store)
 router.patch("/api/agents/{agent_id}", agent_controller.update)
@@ -104,6 +146,12 @@ router.patch("/api/default-permissions", default_permission_controller.update)
 # Global app settings
 router.get("/api/global-settings", global_settings_controller.get_global_settings)
 router.patch("/api/global-settings", global_settings_controller.update_global_settings)
+router.get("/api/settings/editor", editor_settings_controller.show)
+router.patch("/api/settings/editor", editor_settings_controller.update)
+router.get("/api/settings/appearance", appearance_settings_controller.show)
+router.patch("/api/settings/appearance", appearance_settings_controller.update)
+router.get("/api/settings/remote-control", remote_control_setting_controller.show)
+router.patch("/api/settings/remote-control", remote_control_setting_controller.update)
 
 # Plugin system — list discovered plugins and toggle activation (before wildcard)
 router.get("/api/plugins", plugin_controller.index)

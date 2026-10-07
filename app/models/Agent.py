@@ -2,6 +2,7 @@ import json
 
 from fastapi_startkit.masoniteorm import Model
 
+from app.actions.statusline_settings_write_action import statusline_settings_file
 from app.ai import ProviderCommand, providers
 
 
@@ -56,5 +57,6 @@ class Agent(Model):
             permission_mode="plan" if self.plan_mode else None,
             verbose=bool(flags.get("verbose")),
             max_turns=max_turns,
+            settings_file=statusline_settings_file(),
         )
         return providers.get(getattr(self, "provider", None) or "codex").build_command(command)

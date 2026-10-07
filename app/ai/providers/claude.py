@@ -29,6 +29,8 @@ class ClaudeProvider(Provider):
             parts.append("--dangerously-skip-permissions")
         if command.verbose:
             parts.append("--verbose")
+        if command.settings_file:
+            parts.extend(("--settings", shlex.quote(command.settings_file)))
         if command.max_turns is not None:
             parts.extend(("--max-turns", str(command.max_turns)))
         return " ".join(parts)

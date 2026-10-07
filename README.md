@@ -1,6 +1,6 @@
 # keera-agent
 
-A local-first AI agent manager built with FastAPI (Python) and React (TypeScript).
+A local-first AI agent manager built with FastAPI (Python) and Vue 3 (TypeScript).
 
 ![keera-agent dashboard — the persistent AppLayout showing the workspace/projects sidebar, the agents panel, and a live agent terminal](docs/images/image.png)
 
@@ -9,7 +9,7 @@ A local-first AI agent manager built with FastAPI (Python) and React (TypeScript
 ## Stack
 
 - **Backend:** Python 3.13+, FastAPI via `fastapi-startkit`, Masonite ORM (async), SQLite
-- **Frontend:** React 19 + TypeScript, Inertia.js, Vite, Tailwind CSS v4
+- **Frontend:** Vue 3 + TypeScript, Inertia.js, Pinia + Pinia Colada, Vite, Tailwind CSS v4
 - **Terminal:** xterm.js (frontend) + Python `pty` module over WebSocket
 
 ## Quick Start

@@ -1,4 +1,7 @@
-import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryCache } from '@pinia/colada'
+import { computed, toValue, type MaybeRefOrGetter } from 'vue'
+import { useRefetchInterval } from '@/composables/useRefetchInterval'
+import { AGENT_SUMMARIES_QUERY_KEY } from '@/queries/agentSummariesQuery'
 
 export interface AgentFlags {
     dangerously_skip_permissions?: boolean
@@ -6,6 +9,10 @@ export interface AgentFlags {
     verbose?: boolean
     max_turns?: number | null
 }
+
+/** `needs_input`: blocked on a question or permission prompt (Claude agents only). */
+export type AgentStatus = 'idle' | 'running' | 'waiting' | 'needs_input'
+export type AttentionKind = 'question' | 'permission'
 
 export interface ProjectAgent {
     id: number
@@ -17,11 +24,15 @@ export interface ProjectAgent {
     model: string
     system_prompt: string | null
     agent_type: string
-    status: 'idle' | 'running'
+    status: AgentStatus
+    attention_kind: AttentionKind | null
+    attention_prompt: string | null
     flags: AgentFlags
     dangerously_skip_permissions: boolean
     plan_mode: boolean
     task_id?: number | null
+    /** The agent that spawned this one (typically a PM). */
+    orchestrator_id?: number | null
     created_at: string | null
 }
 
@@ -61,11 +72,14 @@ export function normalizeAgent(resource: AgentResource): ProjectAgent {
         model: attr.model as string,
         system_prompt: (attr.system_prompt as string | null) ?? null,
         agent_type: attr.agent_type as string,
-        status: attr.status as ProjectAgent['status'],
+        status: attr.status as AgentStatus,
+        attention_kind: (attr.attention_kind as AttentionKind | null) ?? null,
+        attention_prompt: (attr.attention_prompt as string | null) ?? null,
         flags,
         dangerously_skip_permissions: Boolean(attr.dangerously_skip_permissions),
         plan_mode: Boolean(attr.plan_mode),
         task_id: (attr.task_id as number | null) ?? null,
+        orchestrator_id: attr.orchestrator_id == null ? null : Number(attr.orchestrator_id),
         created_at: (attr.created_at as string | null) ?? null,
     }
 }
@@ -77,30 +91,34 @@ async function fetchAgents(projectId: number): Promise<ProjectAgent[]> {
     return ((json.data ?? []) as AgentResource[]).map(normalizeAgent)
 }
 
-export function useAgents(projectId: number | null) {
-    const queryClient = useQueryClient()
-    const key = ['agents', projectId]
+export function useAgents(projectIdSource: MaybeRefOrGetter<number | null>) {
+    const queryCache = useQueryCache()
+    const projectId = () => toValue(projectIdSource)
+    const key = () => ['agents', projectId()]
+    const enabled = () => projectId() !== null
 
-    const query = useQuery<ProjectAgent[]>({
-        queryKey: key,
-        queryFn: () => fetchAgents(projectId!),
-        enabled: projectId !== null,
+    const query = useQuery({
+        key,
+        query: () => fetchAgents(projectId()!),
+        enabled,
         staleTime: 1000 * 10,
-        refetchInterval: 1000 * 10,
     })
+    useRefetchInterval(query.refetch, 1000 * 10, enabled)
 
-    const invalidate = () => queryClient.invalidateQueries({ queryKey: key })
-
-    const addAgent = (agent: ProjectAgent) => {
-        queryClient.setQueryData<ProjectAgent[]>(key, prev => {
-            if ((prev ?? []).some(a => a.id === agent.id)) return prev ?? []
-            return [...(prev ?? []), agent]
-        })
+    // The sidebar lists every project's agents from its own query, so each local change refreshes it too.
+    const setAgents = (updater: (prev: ProjectAgent[]) => ProjectAgent[]) => {
+        queryCache.setQueryData<ProjectAgent[]>(key(), prev => updater(prev ?? []))
+        queryCache.invalidateQueries({ key: AGENT_SUMMARIES_QUERY_KEY })
     }
 
+    const invalidate = () => queryCache.invalidateQueries({ key: key(), exact: true })
+
+    const addAgent = (agent: ProjectAgent) =>
+        setAgents(prev => (prev.some(a => a.id === agent.id) ? prev : [...prev, agent]))
+
     const create = useMutation({
-        mutationFn: async (data: Partial<ProjectAgent> & { name: string }) => {
-            const res = await fetch(`/api/projects/${projectId}/agents`, {
+        mutation: async (data: Partial<ProjectAgent> & { name: string }) => {
+            const res = await fetch(`/api/projects/${projectId()}/agents`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data),
@@ -113,20 +131,16 @@ export function useAgents(projectId: number | null) {
     })
 
     const remove = useMutation({
-        mutationFn: async (agentId: number) => {
+        mutation: async (agentId: number) => {
             const res = await fetch(`/api/agents/${agentId}`, { method: 'DELETE' })
             if (!res.ok) throw new Error('Failed to delete agent')
             return agentId
         },
-        onSuccess: (agentId) => {
-            queryClient.setQueryData<ProjectAgent[]>(key, prev =>
-                (prev ?? []).filter(a => a.id !== agentId)
-            )
-        },
+        onSuccess: agentId => setAgents(prev => prev.filter(a => a.id !== agentId)),
     })
 
     const update = useMutation({
-        mutationFn: async ({
+        mutation: async ({
             agentId,
             ...fields
         }: { agentId: number } & Partial<Pick<ProjectAgent, 'name' | 'description' | 'agent_type' | 'provider' | 'model' | 'system_prompt'> & { flags: AgentFlags }>) => {
@@ -139,15 +153,11 @@ export function useAgents(projectId: number | null) {
             const json = await res.json()
             return normalizeAgent(json.data as AgentResource)
         },
-        onSuccess: (updated) => {
-            queryClient.setQueryData<ProjectAgent[]>(key, prev =>
-                (prev ?? []).map(a => a.id === updated.id ? { ...a, ...updated } : a)
-            )
-        },
+        onSuccess: updated => setAgents(prev => prev.map(a => (a.id === updated.id ? { ...a, ...updated } : a))),
     })
 
     const adoptWork = useMutation({
-        mutationFn: async (agentId: number) => {
+        mutation: async (agentId: number) => {
             const res = await fetch(`/api/agents/${agentId}/adopt-work`, { method: 'POST' })
             const json = await res.json().catch(() => ({}))
             if (!res.ok) {
@@ -158,7 +168,7 @@ export function useAgents(projectId: number | null) {
     })
 
     const setDefault = async (agentId: number): Promise<boolean> => {
-        const res = await fetch(`/api/projects/${projectId}/default-agent`, {
+        const res = await fetch(`/api/projects/${projectId()}/default-agent`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ agent_id: agentId }),
@@ -203,8 +213,10 @@ export function useAgents(projectId: number | null) {
     }
 
     return {
-        agents: query.data ?? [],
+        agents: computed(() => query.data.value ?? []),
         isLoading: query.isLoading,
+        // True only until the first load resolves; isLoading also covers background refetches.
+        isPending: computed(() => query.status.value === 'pending'),
         invalidate,
         addAgent,
         create,
@@ -214,4 +226,10 @@ export function useAgents(projectId: number | null) {
         setDefault,
         spawnViaMCP,
     }
+}
+
+/** How many of `agents` a PM spawned; 0 for any other agent type. */
+export function orchestratedCount(agents: ProjectAgent[], agent: ProjectAgent): number {
+    if (agent.agent_type !== 'pm') return 0
+    return agents.filter(a => a.orchestrator_id === agent.id).length
 }

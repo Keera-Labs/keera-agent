@@ -1,12 +1,18 @@
 import asyncio
 import codecs
+import contextlib
 import fcntl
 import os
 import pty as _pty
 import re
+import signal
 import struct
 import subprocess
 import termios
+import threading
+import time
+
+from app.terminal.terminal_queries import PARTIAL_SEQUENCE, strip_queries
 
 
 def _with_color_env(env: dict) -> dict:
@@ -44,6 +50,25 @@ _ESCAPES = re.compile(rb"\x1b\[[0-9;?<>=]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|
 _PARTIAL_ESCAPE = re.compile(rb"\x1b(?:\[[0-9;?<>=]*[ -/]*|\][^\x07\x1b]*)?\Z")
 # Plain text kept from previous chunks so a dialog split across reads still matches.
 _TAIL_CHARS = _DIALOG_SPAN + 100
+# An unterminated sequence longer than this is not a query; stop holding it back.
+_MAX_PENDING = 4096
+_UTF8_CONTINUATION = re.compile(rb"[\x80-\xbf]*")
+
+
+def _safe_start(data: bytes) -> int:
+    """Where a trimmed output buffer can start without splitting an escape or UTF-8 char.
+
+    Neither an escape sequence nor a multi-byte char contains a newline, so the
+    byte after one is always clean; an ESC byte starts a fresh sequence. Output
+    with neither just skips any orphaned UTF-8 continuation bytes.
+    """
+    newline = data.find(b"\n")
+    if newline != -1:
+        return newline + 1
+    escape = data.find(b"\x1b")
+    if escape != -1:
+        return escape
+    return _UTF8_CONTINUATION.match(data).end()
 
 
 def _visible_len(text: str) -> int:
@@ -80,13 +105,109 @@ class _PlainText:
         return re.sub(r"\s+", " ", text)
 
 
+def _descendant_process_groups(root_pid: int) -> set[int]:
+    try:
+        ps = subprocess.run(
+            ["ps", "-A", "-o", "pid=,ppid=,pgid="],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return set()
+
+    children: dict[int, list[tuple[int, int]]] = {}
+    for line in ps.stdout.splitlines():
+        fields = line.split()
+        if len(fields) == 3 and all(f.isdigit() for f in fields):
+            pid, ppid, pgid = map(int, fields)
+            children.setdefault(ppid, []).append((pid, pgid))
+
+    groups: set[int] = set()
+    pending = [root_pid]
+    while pending:
+        for pid, pgid in children.get(pending.pop(), []):
+            groups.add(pgid)
+            pending.append(pid)
+    return groups
+
+
+def _signal_groups(groups: set[int], sig: signal.Signals) -> None:
+    for pgid in groups:
+        try:
+            os.killpg(pgid, sig)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+
+def _wait_for_groups(groups: set[int], timeout: float) -> set[int]:
+    """Wait up to `timeout` for the groups to empty; return the ones still alive."""
+    deadline = time.monotonic() + timeout
+    alive = set(groups)
+    while True:
+        for pgid in list(alive):
+            try:
+                os.killpg(pgid, 0)
+            except (ProcessLookupError, PermissionError):
+                alive.discard(pgid)
+        if not alive or time.monotonic() >= deadline:
+            return alive
+        time.sleep(0.02)
+
+
+def _process_groups(shell_pid: int, master_fd: int | None) -> set[int]:
+    """Every process group started from a terminal's shell.
+
+    The shell runs in its own session (setsid), but with job control each
+    command it launches (the claude/codex CLI, background jobs) gets its own
+    process group, so killing only the shell's group would orphan them.
+    """
+    groups = {shell_pid} | _descendant_process_groups(shell_pid)
+    if master_fd is not None:
+        try:
+            groups.add(os.tcgetpgrp(master_fd))
+        except OSError:
+            pass
+    return groups - {0, 1, os.getpgrp()}
+
+
+def _shutdown(proc: subprocess.Popen | None, master_fd: int | None, grace: float) -> None:
+    """Kill everything a terminal started and release its PTY. Blocks for up to seconds."""
+    groups = _process_groups(proc.pid, master_fd) if proc else set()
+    _signal_groups(groups, signal.SIGTERM)
+    # Close the master before reaping the shell: a session leader's exit waits for
+    # unread tty output to drain, and nothing reads the master once we're stopping.
+    if master_fd is not None:
+        try:
+            os.close(master_fd)
+        except OSError:
+            pass
+    if proc:
+        # Interactive shells ignore SIGTERM, and the shell holds no state worth a
+        # graceful exit; reaping it also stops its zombie keeping its group "alive".
+        try:
+            proc.kill()
+            proc.wait(timeout=5)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        _signal_groups(_wait_for_groups(groups, grace), signal.SIGKILL)
+
+
 class Terminal:
     # send() waits at most echo_timeout for the CLI to echo a paste, and treats
     # echo_settle seconds of silence as the echo having finished rendering.
     echo_timeout = 3.0
     echo_settle = 0.3
+    # How long stop() lets the CLI exit on SIGTERM before SIGKILLing it.
+    stop_grace = 1.0
     # How long wait_for_cli_ready() holds for an unanswered startup dialog.
     dialog_timeout = 120.0
+    # How long force_redraw() holds the nudged size, long enough for the CLI to
+    # read it before the real size returns, so it sees two actual changes.
+    redraw_nudge = 0.2
+    # Raw output kept for replay into a client that attaches to a running PTY.
+    history_limit = 256 * 1024
 
     def __init__(
         self,
@@ -103,6 +224,7 @@ class Terminal:
         self._env = _with_color_env(env or os.environ.copy())
         self._proc: subprocess.Popen | None = None
         self.master_fd: int | None = None
+        self._stop_lock = threading.Lock()
         self._write_lock = asyncio.Lock()
         self._send_lock = asyncio.Lock()
         self._output_seq = 0
@@ -115,6 +237,56 @@ class Terminal:
         self.startup_prompt: str | None = None
         self._chars_since_dialog = 0
         self._plain = _PlainText()
+        self._history = bytearray()
+        self._history_pending = b""
+        # asyncio keeps one reader callback per fd, so the terminal owns the only
+        # reader and fans each chunk out; a bridge registering its own would take
+        # the output from every other bridge, and unregistering it would starve them.
+        self._subscribers: list[asyncio.Queue[bytes]] = []
+        self._reader: tuple[asyncio.AbstractEventLoop, int] | None = None
+        # (cols, rows) of each client currently showing this terminal on screen.
+        self._client_sizes: dict[object, tuple[int, int]] = {}
+
+    @property
+    def size(self) -> tuple[int, int]:
+        return self._cols, self._rows
+
+    def subscribe(self) -> "asyncio.Queue[bytes]":
+        """A queue that receives every output chunk until it is unsubscribed."""
+        queue: asyncio.Queue[bytes] = asyncio.Queue()
+        self._subscribers.append(queue)
+        if self._reader is None and self.master_fd is not None:
+            loop = asyncio.get_running_loop()
+            loop.add_reader(self.master_fd, self._on_readable)
+            self._reader = (loop, self.master_fd)
+        return queue
+
+    def unsubscribe(self, queue: "asyncio.Queue[bytes]") -> None:
+        if queue in self._subscribers:
+            self._subscribers.remove(queue)
+        if not self._subscribers:
+            self._stop_reading()
+
+    def _on_readable(self) -> None:
+        if self._reader is None:
+            return
+        try:
+            data = os.read(self._reader[1], 4096)
+        except OSError:
+            return
+        if not data:
+            return
+        self.mark_output(data)
+        self.record_history(data)
+        for queue in self._subscribers:
+            queue.put_nowait(data)
+
+    def _stop_reading(self) -> None:
+        reader, self._reader = self._reader, None
+        if reader is not None:
+            loop, fd = reader
+            with contextlib.suppress(Exception):
+                loop.remove_reader(fd)
 
     def start(self) -> None:
         master_fd, slave_fd = _pty.openpty()
@@ -135,27 +307,34 @@ class Terminal:
         self._proc = proc
         self.master_fd = master_fd
 
+    def _detach(self) -> tuple[subprocess.Popen | None, int | None]:
+        # Taking ownership under a lock makes stop()/aclose() idempotent and safe to
+        # race: only the first caller gets the process and fd to tear down.
+        with self._stop_lock:
+            proc, self._proc = self._proc, None
+            master_fd, self.master_fd = self.master_fd, None
+        return proc, master_fd
+
     def stop(self) -> None:
-        if self._proc:
-            try:
-                self._proc.kill()
-                self._proc.wait()
-            except OSError:
-                pass
-            self._proc = None
-        if self.master_fd is not None:
-            try:
-                os.close(self.master_fd)
-            except OSError:
-                pass
-            self.master_fd = None
+        """Blocking teardown (can take seconds); on the event loop use aclose()."""
+        self._stop_reading()
+        _shutdown(*self._detach(), self.stop_grace)
+
+    async def aclose(self) -> None:
+        # Detach on the loop thread so writers and readers see a stopped terminal at
+        # once, then do the slow signalling and reaping off the loop. The reader goes
+        # first so the fd is never closed while still registered with the loop.
+        self._stop_reading()
+        proc, master_fd = self._detach()
+        if proc is not None or master_fd is not None:
+            await asyncio.to_thread(_shutdown, proc, master_fd, self.stop_grace)
 
     async def write(self, data: bytes) -> None:
         if self.master_fd is None or not data:
             return
 
-        # The master fd is non-blocking (registered with loop.add_reader by the
-        # websocket bridge), so a single os.write() can (a) write fewer bytes
+        # The master fd is non-blocking (registered with loop.add_reader by
+        # subscribe()), so a single os.write() can (a) write fewer bytes
         # than requested — silently dropping the tail — or (b) raise EAGAIN when
         # the PTY buffer is full. Drain the whole payload, waiting for the fd to
         # become writable between chunks. The lock serializes concurrent writers
@@ -183,8 +362,50 @@ class Terminal:
                 # fd closed or child gone — nothing more we can deliver.
                 return
 
+    def history(self) -> bytes:
+        """Recent output with its queries removed, for replay into a new client.
+
+        A held-back partial sequence is included so the live chunk completing
+        it still renders correctly after the replay.
+        """
+        return bytes(self._history) + self._history_pending
+
+    def record_history(self, data: bytes) -> None:
+        data = self._history_pending + data
+        partial = PARTIAL_SEQUENCE.search(data)
+        cut = (
+            partial.start()
+            if partial and len(data) - partial.start() <= _MAX_PENDING
+            else len(data)
+        )
+        data, self._history_pending = data[:cut], data[cut:]
+        self._history += strip_queries(data)
+        excess = len(self._history) - self.history_limit
+        if excess > 0:
+            del self._history[:excess]
+            del self._history[: _safe_start(self._history)]
+
+    async def force_redraw(self) -> None:
+        """Make the foreground program repaint by changing its size and restoring it.
+
+        A bare SIGWINCH at an unchanged size does nothing for Node CLIs such as
+        Claude Code: they only emit 'resize' when the size they read differs.
+        """
+        if self.master_fd is None:
+            return
+        cols, rows = self.size
+        with contextlib.suppress(OSError):
+            self._set_size(self.master_fd, rows - 1 if rows > 1 else rows + 1, cols)
+        try:
+            await asyncio.sleep(self.redraw_nudge)
+        finally:
+            # Reads the size again, so a client resize that landed meanwhile wins.
+            if self.master_fd is not None:
+                with contextlib.suppress(OSError):
+                    self._set_size(self.master_fd, self._rows, self._cols)
+
     def mark_output(self, data: bytes) -> None:
-        """Record PTY output; the reader bridge calls this per chunk."""
+        """Record PTY output; the terminal's reader calls this per chunk."""
         self._output_seq += 1
         if not self._booting:
             return
@@ -294,6 +515,30 @@ class Terminal:
         self._rows = rows
         if self.master_fd is not None:
             self._set_size(self.master_fd, rows, cols)
+
+    def set_client_size(self, client: object, cols: int, rows: int, visible: bool = True) -> None:
+        """Record what one attached client shows; hidden clients don't constrain the size."""
+        if visible:
+            self._client_sizes[client] = (cols, rows)
+        else:
+            self._client_sizes.pop(client, None)
+        self._fit_clients()
+
+    def remove_client(self, client: object) -> None:
+        if self._client_sizes.pop(client, None) is not None:
+            self._fit_clients()
+
+    def _fit_clients(self) -> None:
+        # Like tmux, size the PTY to the smallest visible client: a TUI drawn wider
+        # or taller than a client's view wraps early there and its cursor-addressed
+        # redraws land in the wrong cells, while a larger view just shows a margin.
+        # With nobody looking, the last size is kept so nothing redraws needlessly.
+        if not self._client_sizes:
+            return
+        cols = min(c for c, _ in self._client_sizes.values())
+        rows = min(r for _, r in self._client_sizes.values())
+        if (cols, rows) != self.size:
+            self.resize(cols, rows)
 
     def wait(self) -> None:
         if self._proc is not None:

@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse, Response
 
 from app.models.Command import Command
 from app.models.Project import Project
+from app.services.claude_config_dir import claude_env, project_config_dir
 
 # In-process registry: command_id → Popen
 _processes: dict[int, subprocess.Popen] = {}
@@ -157,6 +158,7 @@ async def run(request: Request, command_id: int):
             stderr=subprocess.STDOUT,
             text=True,
             cwd=cwd,
+            env=await command_env(project),
             preexec_fn=os.setsid,  # own process group so we can kill the whole tree
         )
     except Exception as exc:
@@ -224,6 +226,11 @@ async def destroy(request: Request, command_id: int):
     return Response(status_code=204)
 
 
+async def command_env(project) -> dict:
+    """Commands in a configured workspace run on its Claude account, so a hand-run `claude` matches its agents."""
+    return {**os.environ, **claude_env(await project_config_dir(project))}
+
+
 def _pty_set_size(master_fd: int, rows: int, cols: int) -> None:
     size = struct.pack("HHHH", rows, cols, 0, 0)
     fcntl.ioctl(master_fd, termios.TIOCSWINSZ, size)
@@ -251,7 +258,7 @@ async def command_ws(websocket: WebSocket, project: str, command_id: int):
         stderr=slave_fd,
         close_fds=True,
         cwd=cwd,
-        env=os.environ.copy(),
+        env=await command_env(project_record),
         preexec_fn=os.setsid,
     )
     os.close(slave_fd)

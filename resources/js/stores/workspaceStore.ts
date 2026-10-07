@@ -1,30 +1,44 @@
-import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { defineStore } from 'pinia'
+import { ref, shallowRef, watch } from 'vue'
 import type { Workspace } from '@/types/type'
 
-interface WorkspaceState {
-    // Sidebar workspace filter, shared across the sidebar and dashboard. A store
-    // (not per-component useLocalStorage) so both read one reactive source and
-    // stay in sync within a tab. null = "All Projects".
-    currentWorkspaceId: number | null
-    setCurrentWorkspaceId: (id: number | null) => void
-    // Workspace pending delete confirmation, shared between the sidebar (sets it)
-    // and ModalLayer (renders the confirm modal for it).
-    deletingWorkspace: Workspace | null
-    setDeletingWorkspace: (w: Workspace | null) => void
+// Same key and `{ state, version }` shape the previous zustand `persist` store
+// wrote, so users keep their selected workspace across the migration.
+const STORAGE_KEY = 'keera:currentWorkspaceId'
+
+function readPersistedWorkspaceId(): number | null {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY)
+        const id = raw ? JSON.parse(raw)?.state?.currentWorkspaceId : null
+        return typeof id === 'number' ? id : null
+    } catch {
+        return null
+    }
 }
 
-export const useWorkspaceStore = create<WorkspaceState>()(
-    persist(
-        set => ({
-            currentWorkspaceId: null,
-            setCurrentWorkspaceId: id => set({ currentWorkspaceId: id }),
-            deletingWorkspace: null,
-            setDeletingWorkspace: w => set({ deletingWorkspace: w }),
-        }),
-        {
-            name: 'keera:currentWorkspaceId',
-            partialize: state => ({ currentWorkspaceId: state.currentWorkspaceId }),
-        },
-    ),
-)
+export const useWorkspaceStore = defineStore('workspace', () => {
+    // Sidebar workspace filter, shared across the sidebar and dashboard.
+    // null = "All Projects".
+    const currentWorkspaceId = ref<number | null>(readPersistedWorkspaceId())
+    // Workspace pending delete confirmation, shared between the sidebar (sets
+    // it) and the modal layer (renders the confirm modal for it).
+    const deletingWorkspace = shallowRef<Workspace | null>(null)
+
+    watch(currentWorkspaceId, id => {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ state: { currentWorkspaceId: id }, version: 0 }))
+        } catch {
+            // Storage unavailable (e.g. private mode): the selection just won't persist.
+        }
+    })
+
+    function setCurrentWorkspaceId(id: number | null) {
+        currentWorkspaceId.value = id
+    }
+
+    function setDeletingWorkspace(workspace: Workspace | null) {
+        deletingWorkspace.value = workspace
+    }
+
+    return { currentWorkspaceId, setCurrentWorkspaceId, deletingWorkspace, setDeletingWorkspace }
+})

@@ -1,15 +1,15 @@
-import { create } from 'zustand'
+import { defineStore } from 'pinia'
+import { shallowRef } from 'vue'
 import type { Project } from '@/types/type'
 
-interface ProjectState {
-    // The active project, derived once in AppLayoutContext from the URL slug
-    // and the projects list. A store (not context) so any component can read
-    // it without subscribing to the rest of AppLayoutContext's re-renders.
-    activeProject: Project | null
-    setActiveProject: (project: Project | null) => void
-}
+export const useProjectStore = defineStore('project', () => {
+    // Resolved once from the URL slug and the projects list by the project
+    // layout. A store (not provide/inject) so any component can read it.
+    const activeProject = shallowRef<Project | null>(null)
 
-export const useProjectStore = create<ProjectState>()(set => ({
-    activeProject: null,
-    setActiveProject: project => set({ activeProject: project }),
-}))
+    function setActiveProject(project: Project | null) {
+        activeProject.value = project
+    }
+
+    return { activeProject, setActiveProject }
+})

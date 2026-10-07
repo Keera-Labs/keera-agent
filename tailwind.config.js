@@ -1,16 +1,12 @@
 /** @type {import('tailwindcss').Config} */
 export default {
     content: [
-        './resources/js/**/*.{ts,tsx}',
+        './resources/js/**/*.{ts,vue}',
         './resources/views/**/*.html',
     ],
 
     theme: {
         extend: {
-            fontFamily: {
-                mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
-            },
-
             borderRadius: {
                 'sm': '4px',
                 DEFAULT: '6px',

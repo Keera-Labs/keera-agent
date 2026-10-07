@@ -11,11 +11,16 @@ from fastapi.responses import JSONResponse
 from fastapi_startkit.application import app
 
 from app.actions.agent_startup import wait_for_agent_cli
+from app.actions.agent_status_action import CLEARED_ATTENTION, notify_agent_status
+from app.actions.claude_hook_action import agent_env
 from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.actions.terminal_write_action import TerminalWriteAction
 from app.models.Agent import Agent
 from app.models.Project import Project
+from app.services.claude_config_dir import agent_config_dir
+from app.services.worktree_cleanup import cleanup_agent_worktree
 from app.terminal.claude_monitor import make_claude_session_monitor
+from app.terminal.cli_supervisor import supervise_cli
 from app.terminal.connection_manager import ConnectionManager
 from app.terminal.manager import TerminalManager
 from app.terminal.readiness import claude_ready, mark_booting
@@ -34,17 +39,22 @@ def _activity_summary(message: str) -> str:
     return "Working…"
 
 
-async def _mark_agent_working(agent_id: int, message: str) -> None:
+async def _mark_agent_working(agent: Agent, message: str) -> None:
     """Record that an agent just started actively working — powers the dashboard's
     running state, current-activity text, and elapsed timer."""
     now = datetime.datetime.now().isoformat(sep=" ", timespec="seconds")
-    await Agent.where("id", agent_id).update(
+    await Agent.where("id", agent.id).update(
         {
             "status": "running",
             "started_at": now,
             "current_activity": _activity_summary(message),
+            **CLEARED_ATTENTION,
         }
     )
+    # Triggering a running or booting agent bypasses the hook-event path entirely, so
+    # without this push the frontend's per-agent question dedupe never clears and a
+    # question the agent asks after being re-triggered stays silent.
+    await notify_agent_status(agent, "running")
 
 
 async def _inject_when_ready(session_id: str, message: str, timeout: float = 30.0) -> None:
@@ -78,63 +88,13 @@ async def trigger(request: Request, agent_id: int):
     terminal_manager: TerminalManager = app().make("terminal")
     if session_id and terminal_manager.find(session_id):
         asyncio.create_task(_inject_when_ready(session_id, message))
-        await _mark_agent_working(agent_id, message)
+        await _mark_agent_working(agent, message)
         return JSONResponse({"status": "injected", "message": "Message queued for running agent"})
 
     # No PTY running — spawn a headless terminal and run claude interactively
     cwd = os.path.expanduser(project.path)
     asyncio.create_task(_spawn_headless_agent(agent, project, cwd, message))
     return JSONResponse({"status": "starting", "message": "Agent is starting up..."})
-
-
-def _cleanup_stale_worktree(agent, cwd: str) -> None:
-    """Remove a stale git worktree (and its branch) left over from a prior agent session.
-
-    Claude creates worktrees under .claude/worktrees/<name> with a matching branch
-    worktree-<name>. Task worktrees an agent creates for itself land under
-    .worktrees/<name> instead (see app/prompts/software_engineer.html). If a previous
-    session exited without cleaning up, the next spawn attempt fails with "branch
-    already checked out". This function detects and removes the worktree directory —
-    checking both locations — and the stale branch before Claude runs.
-    """
-    if not getattr(agent, "use_worktree", True):
-        return
-
-    worktree_name = f"agent-{agent.id}"
-    branch_name = f"worktree-{worktree_name}"
-    candidate_paths = [
-        os.path.join(cwd, ".claude", "worktrees", worktree_name),
-        os.path.join(cwd, ".worktrees", worktree_name),
-    ]
-
-    # Check if either worktree path is registered with git
-    wt_list = subprocess.run(
-        ["git", "worktree", "list", "--porcelain"],
-        capture_output=True,
-        text=True,
-        cwd=cwd,
-    )
-    for worktree_path in candidate_paths:
-        if worktree_path in wt_list.stdout:
-            subprocess.run(
-                ["git", "worktree", "remove", "--force", worktree_path],
-                capture_output=True,
-                cwd=cwd,
-            )
-
-    # Delete the stale branch so Claude can recreate it fresh
-    branch_list = subprocess.run(
-        ["git", "branch", "--list", branch_name],
-        capture_output=True,
-        text=True,
-        cwd=cwd,
-    )
-    if branch_list.stdout.strip():
-        subprocess.run(
-            ["git", "branch", "-D", branch_name],
-            capture_output=True,
-            cwd=cwd,
-        )
 
 
 def ensure_codex_worktree(agent, cwd: str) -> str:
@@ -169,8 +129,7 @@ def ensure_codex_worktree(agent, cwd: str) -> str:
 def discover_worktree_path(cwd: str, branch_name: str) -> str | None:
     """Return the real filesystem path of the worktree checked out on ``branch_name``.
 
-    Parses ``git worktree list --porcelain`` (the same primitive
-    _cleanup_stale_worktree relies on) instead of reconstructing the path from a
+    Parses ``git worktree list --porcelain`` instead of reconstructing the path from a
     convention, so an agent worktree registered at a non-default location is
     still found. Returns None when no worktree has that branch checked out.
     """
@@ -227,30 +186,6 @@ def discover_agent_worktree(cwd: str, agent_id: int) -> tuple[str, str] | None:
     return None
 
 
-async def _prune_all_orphaned_worktrees() -> None:
-    """One-off startup prune: remove git worktrees for all soft-deleted agents.
-
-    Iterates every soft-deleted Agent row, looks up its project path, and calls
-    _cleanup_stale_worktree() to remove the worktree directory and branch that
-    were left behind when the agent was deleted without cleanup.
-    """
-    from app.models.Agent import Agent as _Agent
-    from app.models.Project import Project as _Project
-
-    deleted_agents = await _Agent.where_not_null("deleted_at").get()
-    for agent in deleted_agents:
-        try:
-            project = await _Project.find(agent.project_id)
-            if not project:
-                continue
-            cwd = os.path.expanduser(project.path)
-            if not os.path.isdir(cwd):
-                continue
-            _cleanup_stale_worktree(agent, cwd)
-        except Exception:
-            pass
-
-
 def _build_relay_instructions(agent, cwd: str, base_url: str, siblings) -> str:
     """Build the relay-instructions system-prompt suffix for an agent."""
     if siblings:
@@ -288,18 +223,28 @@ def _make_after_restart(terminal, message: str):
     return _after_restart
 
 
+async def _is_deleted(agent_id: int) -> bool:
+    return not await Agent.where("id", agent_id).where_null("deleted_at").first()
+
+
 async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) -> None:
     """Spawn a Terminal for the agent without a WebSocket — triggered from the backend.
 
     Parts 1 & 3 are handled by make_claude_session_monitor via WebsocketTerminal(ws=None).
     Part 2 – Reset has_session=False if the process exits in < _MIN_SESSION_LIFETIME seconds.
     """
+    if await _is_deleted(agent.id):
+        return
+
     base_url = app().make("config").get("fastapi.app_url")
 
     if getattr(agent, "provider", None) == "codex":
         agent_cwd = ensure_codex_worktree(agent, cwd)
     else:
-        _cleanup_stale_worktree(agent, cwd)
+        if getattr(agent, "use_worktree", True):
+            # A leftover worktree/branch blocks `claude --worktree`; one holding
+            # unsaved work is kept, and the CLI reuses it.
+            await asyncio.to_thread(cleanup_agent_worktree, cwd, agent.id, 0)
         agent_cwd = cwd
 
     session_id = str(uuid.uuid4())
@@ -307,10 +252,13 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     # relay message sent meanwhile is queued instead of typed into the shell.
     ready_event = mark_booting(session_id)
     await Agent.where("id", agent.id).update({"session_id": session_id})
-    await _mark_agent_working(agent.id, initial_message)
+    await _mark_agent_working(agent, initial_message)
 
     terminal_manager: TerminalManager = app().make("terminal")
-    terminal_manager.create(cwd=agent_cwd, session_id=session_id)
+    config_dir = await agent_config_dir(agent, project)
+    terminal_manager.create(
+        cwd=agent_cwd, session_id=session_id, env=agent_env(agent.id, config_dir)
+    )
     terminal = terminal_manager.get(session_id)
 
     # Give the shell time to start, then launch claude
@@ -332,6 +280,12 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
 
     # Re-fetch agent so to_command() uses the current has_session value from DB
     fresh_agent = await Agent.find(agent.id)
+    # Deleted while booting: the delete may have looked up session_id before this
+    # spawn stored it, so the terminal is ours to tear down.
+    if not fresh_agent or getattr(fresh_agent, "deleted_at", None):
+        claude_ready.pop(session_id, None)
+        await terminal_manager.close(session_id)
+        return
 
     def _build_cmd_with_identity(a):
         """Build claude command with agent identity injected into system prompt."""
@@ -352,9 +306,10 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
         after_restart=_make_after_restart(terminal, message),
     )
     bridge = WebsocketTerminal(None, terminal, on_output=monitor)
+    supervisor = supervise_cli(agent.id, terminal, session_id, _build_cmd_with_identity)
     asyncio.create_task(
         bridge.run(
-            auto_send=_build_cmd_with_identity(fresh_agent).encode(),
+            auto_send=supervisor.launch_line(_build_cmd_with_identity(fresh_agent)).encode(),
             stop_on_disconnect=False,
         )
     )
@@ -394,7 +349,7 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
 
     elapsed = time.monotonic() - start_time
 
-    terminal_manager.close(session_id)
+    await terminal_manager.close(session_id)
     claude_ready.pop(session_id, None)
 
     # Part 2: Reset has_session if process exited too quickly — it never established a real session

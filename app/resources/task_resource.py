@@ -2,7 +2,7 @@ import json
 
 from fastapi_startkit.jsonapi import JsonResource
 
-from app.models.Task import Task
+from app.models.Task import REVIEW_FIELDS, Task
 
 _JSON_FIELDS = ("assignees", "acceptance_criteria", "testing_methods", "validation_steps")
 
@@ -29,4 +29,6 @@ class TaskResource(JsonResource[Task]):
         data = self.model.serialize()
         for field in _JSON_FIELDS:
             data[field] = _as_list(data.get(field))
+        for field in (*REVIEW_FIELDS, "completed_at"):
+            data.setdefault(field, None)
         return data
