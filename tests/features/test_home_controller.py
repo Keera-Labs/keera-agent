@@ -10,18 +10,18 @@ _INERTIA = {"X-Inertia": "true", "X-Inertia-Version": ""}
 
 
 class TestHomeController(TestCase, DatabaseTransaction):
-    async def test_visiting_agent_page_bumps_updated_at(self):
-        project = await ProjectFactory.new().create(updated_at="2020-01-01 00:00:00")
+    async def test_visiting_agent_page_bumps_last_opened_at(self):
+        project = await ProjectFactory.new().create(last_opened_at="2020-01-01 00:00:00")
 
         response = await self.get(f"/{project.slug}/agents/1", headers=_INERTIA)
         response.assert_ok()
 
         refreshed = await Project.where("slug", project.slug).first()
-        self.assertGreater(refreshed.updated_at, "2020-01-01 00:00:00")
+        self.assertGreater(refreshed.last_opened_at, "2020-01-01 00:00:00")
 
-    async def test_shared_props_orders_projects_by_updated_at_desc(self):
-        oldest = await ProjectFactory.new().create(updated_at="2099-01-01 00:00:00")
-        newest = await ProjectFactory.new().create(updated_at="2099-01-03 00:00:00")
+    async def test_shared_props_orders_projects_by_last_opened_at_desc(self):
+        oldest = await ProjectFactory.new().create(last_opened_at="2099-01-01 00:00:00")
+        newest = await ProjectFactory.new().create(last_opened_at="2099-01-03 00:00:00")
 
         response = await self.get(f"/{oldest.slug}", headers=_INERTIA)
         response.assert_ok()
@@ -37,7 +37,7 @@ class TestHomeController(TestCase, DatabaseTransaction):
         the props list is still capped. Would have FAILED before the cap was
         added, since the old query returned every row unconditionally."""
         projects = [
-            await ProjectFactory.new().create(updated_at=f"2099-02-0{i + 1} 00:00:00")
+            await ProjectFactory.new().create(last_opened_at=f"2099-02-0{i + 1} 00:00:00")
             for i in range(3)
         ]
 

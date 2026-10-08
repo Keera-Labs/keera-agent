@@ -5,6 +5,7 @@ import Icon from '@/components/ui/Icon.vue'
 import ProjectDeleteModal from '@/pages/project/ProjectDeleteModal.vue'
 import ProjectEditModal from '@/pages/project/ProjectEditModal.vue'
 import ProjectMoveModal from '@/pages/project/ProjectMoveModal.vue'
+import useProjects from '@/queries/projectsQuery'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import type { Project } from '@/types/type'
 import { placeMenu } from './menuPlacement'
@@ -61,6 +62,13 @@ function visit() {
 function onModalOpenChange(open: boolean) {
     modalOpen.value = open
     if (!open) menuOpen.value = false
+}
+
+const { handleProjectHidden } = useProjects()
+
+function hide() {
+    menuOpen.value = false
+    handleProjectHidden(props.project).catch(() => {})
 }
 
 function openDirectory() {
@@ -188,6 +196,10 @@ onBeforeUnmount(stopListening)
             <button type="button" :class="menuItemClass()" @click.stop="openDirectory">
                 <Icon name="folder" :size="13" class="shrink-0" />
                 Open in directory
+            </button>
+            <button type="button" :class="menuItemClass()" @click.stop="hide">
+                <Icon name="eye-off" :size="13" class="shrink-0" />
+                Hide project
             </button>
             <div class="h-px bg-stroke my-1 -mx-1" />
             <ProjectDeleteModal :project="props.project" @open-change="onModalOpenChange">

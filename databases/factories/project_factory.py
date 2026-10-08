@@ -13,4 +13,5 @@ class ProjectFactory(Factory):
             "slug": slug,
             "path": f"~/code/{slug}",
             "language": "Python",
+            "last_opened_at": Project.now(),
         }
