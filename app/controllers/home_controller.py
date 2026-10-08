@@ -1,5 +1,3 @@
-import datetime
-
 from fastapi import Request
 from fastapi.responses import RedirectResponse
 from fastapi_startkit.inertia.inertia import Inertia
@@ -18,15 +16,8 @@ SIDEBAR_PROJECTS_LIMIT = 10
 
 
 async def _stamp_opened(slug: str) -> None:
-    """Record that a user just navigated into this project.
-
-    The ORM only auto-stamps ``updated_at`` on the ``creating`` event, not on
-    targeted query-builder updates, so it's set explicitly here. Stored in
-    the same UTC ``%Y-%m-%d %H:%M:%S`` format the ORM uses elsewhere so the
-    sidebar's ``ORDER BY updated_at DESC`` sort compares consistently.
-    """
-    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-    await Project.where("slug", slug).update({"updated_at": now})
+    """Record that a user just opened this project, which also un-hides it."""
+    await Project.where("slug", slug).update({"last_opened_at": Project.now()})
 
 
 async def _shared_props(**extra) -> dict:
@@ -38,9 +29,7 @@ async def _shared_props(**extra) -> dict:
     # Build flat projects list (same shape as project_controller.index),
     # most-recently-opened first and capped the same way, so the sidebar's
     # first paint already matches what the /api/projects refetch returns.
-    all_projects = (
-        await Project.order_by_raw("updated_at DESC, id DESC").limit(SIDEBAR_PROJECTS_LIMIT).get()
-    )
+    all_projects = await Project.in_sidebar().limit(SIDEBAR_PROJECTS_LIMIT).get()
     projects = [
         {
             "id": p.id,
@@ -90,6 +79,7 @@ async def project_home(request: Request, project: str):
         return RedirectResponse(url=f"/{project}/agents/{agent.id}", status_code=302)
 
     # No agents yet — render the normal home page
+    await _stamp_opened(project)
     return Inertia.render("Home", await _shared_props(project=project))
 
 

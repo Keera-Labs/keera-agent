@@ -36,6 +36,7 @@ const projects = [project(10, 'alpha-api', 1), project(11, 'alpha-web', 1), proj
 
 type Call = { url: string; method: string }
 let calls: Call[]
+let hiddenIds: Set<number>
 
 function summary(id: number, projectId: number, status: string, extra: Record<string, unknown> = {}) {
     return {
@@ -53,6 +54,13 @@ function fakeFetch(url: string, init?: RequestInit) {
     calls.push({ url, method: init?.method ?? 'GET' })
     const { pathname, searchParams } = new URL(url, 'http://test')
     let body: unknown = []
+    const visibility = pathname.match(/^\/api\/projects\/(\d+)\/visibility$/)
+    if (visibility && init?.method === 'PATCH') {
+        const id = Number(visibility[1])
+        if (JSON.parse(String(init.body)).hidden) hiddenIds.add(id)
+        else hiddenIds.delete(id)
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: { id: String(id) } }) })
+    }
     if (pathname === '/api/workspaces') body = { data: workspaces.map(({ id, ...attributes }) => ({ type: 'workspaces', id: String(id), attributes })) }
     if (pathname === '/api/agent-summaries') {
         const ids = searchParams.getAll('project_ids').map(Number)
@@ -66,7 +74,8 @@ function fakeFetch(url: string, init?: RequestInit) {
     }
     if (pathname === '/api/projects') {
         const ws = searchParams.get('workspace_id')
-        body = ws === null ? projects : projects.filter(p => p.workspace_id === Number(ws))
+        const listed = searchParams.has('include_hidden') ? projects : projects.filter(p => !hiddenIds.has(p.id))
+        body = ws === null ? listed : listed.filter(p => p.workspace_id === Number(ws))
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve(body) })
 }
@@ -89,6 +98,7 @@ const agentNames = (el: { findAll: VueWrapper['findAll'] }) =>
 
 beforeEach(() => {
     calls = []
+    hiddenIds = new Set()
     summaries = []
     page.component = 'Home'
     page.props = {}
@@ -417,6 +427,52 @@ describe('Sidebar', () => {
         await w.get('[data-testid="toggle-panel-left"]').trigger('click')
         expect(layout.sidebarOpen).toBe(false)
         expect(localStorage.getItem('keera.layout.sidebarOpen')).toBe('false')
+    })
+
+    describe('hiding a project', () => {
+        async function hideFromMenu(w: VueWrapper, name: string) {
+            const row = w.findAll('[data-testid="project-item"]').find(el => el.text().includes(name))!
+            await row.element.parentElement!.querySelector<HTMLElement>('[aria-label="Project actions"]')!.click()
+            await flushPromises()
+            const item = w.findAll('[data-testid="project-menu"] button').find(b => b.text() === 'Hide project')!
+            await item.trigger('click')
+            await flushPromises()
+        }
+
+        it('removes the project from the sidebar without deleting it', async () => {
+            const w = await mountSidebar()
+
+            await hideFromMenu(w, 'alpha-web')
+
+            const patch = vi.mocked(fetch).mock.calls.find(([url]) => url === '/api/projects/11/visibility')!
+            expect(patch[1]).toMatchObject({ method: 'PATCH' })
+            expect(JSON.parse(patch[1]!.body as string)).toEqual({ hidden: true })
+            expect(calls.some(c => c.method === 'DELETE')).toBe(false)
+            expect(projectNames(w).some(n => n.includes('alpha-web'))).toBe(false)
+            expect(w.find('[data-testid="project-menu"]').exists()).toBe(false)
+            expect(router.visit).not.toHaveBeenCalled()
+        })
+
+        it('leaves the page when hiding the project that is open', async () => {
+            page.props = { project: 'p-11' }
+            const w = await mountSidebar()
+
+            await hideFromMenu(w, 'alpha-web')
+
+            expect(router.visit).toHaveBeenCalledWith('/')
+        })
+
+        it('still finds a hidden project in search', async () => {
+            hiddenIds.add(11)
+            const w = await mountSidebar()
+            expect(projectNames(w).some(n => n.includes('alpha-web'))).toBe(false)
+
+            useAppLayoutStore().showProjectSearch = true
+            await flushPromises()
+
+            const results = [...document.querySelectorAll('[data-testid="search-result"]')].map(r => r.textContent)
+            expect(results.some(text => text?.includes('alpha-web'))).toBe(true)
+        })
     })
 
     it('opens the project search palette from the store', async () => {
