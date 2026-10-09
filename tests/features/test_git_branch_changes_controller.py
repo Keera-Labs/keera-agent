@@ -159,6 +159,40 @@ class TestGitBranchChangesController(TestCase, DatabaseTransaction):
         body = await self.comparison(base="task/feature")
         assert body["ahead"] == 0 and body["files"] == []
 
+    async def test_detached_head_compares_against_selected_base(self):
+        self.repo.git("checkout", "-qb", "release", "main")
+        self.repo.write("release.txt", "release only\n")
+        self.repo.commit_all()
+        self.repo.git("checkout", "-q", "--detach", "task/feature")
+        self.repo.write("notes.txt", "detached\n")
+        self.repo.commit_all()
+
+        body = await self.comparison(base="release")
+
+        assert body["base"] == "release" and body["ahead"] == 1
+        assert [f["path"] for f in body["files"]] == ["notes.txt"]
+        diff = (await self.diff("notes.txt", base="release")).json()
+        assert diff["original"] == "base\n" and diff["modified"] == "detached\n"
+
+    async def test_local_branch_shadows_same_named_remote(self):
+        self.repo.add_bare_remote()
+        self.repo.git("push", "-q", "origin", "dev")
+        self.repo.git("checkout", "-q", "dev")
+        self.repo.write("dev-local.txt", "local only\n")
+        self.repo.commit_all()
+        self.repo.git("checkout", "-q", "task/feature")
+        self.repo.git("merge", "-q", "dev")
+        self.repo.write("notes.txt", "feature\n")
+        self.repo.commit_all()
+
+        local = await self.comparison(base="dev")
+        assert local["base"] == "dev" and local["ahead"] == 1
+        assert [f["path"] for f in local["files"]] == ["notes.txt"]
+
+        remote = await self.comparison(base="origin/dev")
+        assert remote["base"] == "origin/dev" and remote["ahead"] == 2
+        assert sorted(f["path"] for f in remote["files"]) == ["dev-local.txt", "notes.txt"]
+
     async def test_unknown_or_malformed_base_is_rejected(self):
         response = await self.get(
             f"/api/projects/{self.project.id}/git/branch-changes", params={"base": "nope"}

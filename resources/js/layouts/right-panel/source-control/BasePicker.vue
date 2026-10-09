@@ -22,7 +22,7 @@ function choose(branch: string, close: () => void) {
 </script>
 
 <template>
-    <PanelMenu v-model:open="open" label="Compare with branch" full-width menu-class="max-h-72 flex flex-col">
+    <PanelMenu v-model:open="open" label="Compare with branch" full-width menu-class="max-h-72 flex flex-col text-left">
         <template #trigger="{ toggle }">
             <button
                 type="button"

@@ -7,13 +7,15 @@ import { useGitBase } from '@/composables/useGitBase'
 import { useGitWorktree, worktreeLabel } from '@/composables/useGitWorktree'
 import { useRefetchOnWindowFocus } from '@/composables/useRefetchOnWindowFocus'
 import {
-    gitKeys, isOpenPullRequest, useGitActions, useGitBranchChanges, useGitCommits, useGitPullRequest, useGitStatus, type GitFileChange, type GitPaths, type GitWorktree,
+    gitKeys, isOpenPullRequest, useGitActions, useGitBranchChanges, useGitCommits, useGitPullRequest, useGitStatus, useGitWorktreeChanges,
+    type GitFileChange, type GitPaths, type GitWorktree,
 } from '@/queries/gitQuery'
 import { useDiffStore } from '@/stores/diffStore'
 import { useEditorStore } from '@/stores/editorStore'
 import type { Project } from '@/types/type'
 import BasePicker from './BasePicker.vue'
 import ChangeList from './ChangeList.vue'
+import DirtyWorktrees from './DirtyWorktrees.vue'
 import PanelMenu from './PanelMenu.vue'
 import { menuItemClass, useCommitDraft } from './sourceControl'
 import WorktreePicker from './WorktreePicker.vue'
@@ -36,6 +38,11 @@ const aheadCount = computed(() => {
     return `${count} ${count === 1 ? 'commit' : 'commits'} ahead of`
 })
 const hasComparison = computed(() => !!branchQuery.data.value?.merge_base)
+const showCommitted = computed(() =>
+    hasCommits.value && !!branchQuery.data.value && (branchQuery.data.value.ahead > 0 || committed.value.length > 0),
+)
+const worktreeChangesQuery = useGitWorktreeChanges(projectId, isRepo)
+const worktreeChanges = computed(() => worktreeChangesQuery.data.value ?? {})
 const pullRequestQuery = useGitPullRequest(target, isRepo)
 const actions = useGitActions(target)
 const editor = useEditorStore()
@@ -79,8 +86,14 @@ const workingTreeClean = computed(() => !staged.value.length && !changes.value.l
 const cleanTree = computed(() => workingTreeClean.value
     && hasComparison.value && !branchQuery.data.value?.ahead
     && !committed.value.length && !branchQuery.error.value)
-const checkoutLabel = computed(() => (selectedWorktree.value ? worktreeLabel(selectedWorktree.value) : 'this checkout'))
-const otherWorktreesHint = computed(() => selectedWorktree.value?.is_main === true && worktrees.value.length > 1)
+const checkoutName = computed(() => {
+    const worktree = selectedWorktree.value
+    if (!worktree) return 'this checkout'
+    return worktree.is_main ? 'the main checkout' : worktreeLabel(worktree)
+})
+const dirtyWorktrees = computed(() =>
+    worktrees.value.filter(w => w.path !== selectedWorktree.value?.path && (worktreeChanges.value[w.path] ?? 0) > 0),
+)
 const pullRequestInfo = computed(() => pullRequestQuery.data.value)
 const openPullRequest = computed(() => (isOpenPullRequest(pullRequestInfo.value) ? pullRequestInfo.value!.pull_request : null))
 const onBranch = computed(() => !!status.value?.branch && !status.value.detached)
@@ -174,6 +187,7 @@ const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded
                 :selected="selectedWorktree"
                 :branch-label="branchLabel"
                 :title="branchTitle"
+                :changes="worktreeChanges"
                 @select="selectWorktree"
             />
             <span
@@ -355,18 +369,31 @@ const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded
                 >
                     <CircleCheck :size="20" />
                     <p class="text-ui-13 text-zinc-600">No changes</p>
-                    <p>{{ checkoutLabel }} has no uncommitted changes and nothing ahead of {{ comparedBase }}.</p>
-                    <p v-if="otherWorktreesHint" data-testid="worktree-hint">
-                        Agents work in their own worktrees: pick one from the branch menu above to see their changes.
-                    </p>
+                    <p>Nothing to commit in {{ checkoutName }}.</p>
+                    <div class="relative w-full flex items-center justify-center gap-1">
+                        <span class="shrink-0">Nothing ahead of</span>
+                        <BasePicker
+                            class="min-w-0"
+                            :branches="comparisonBase.branches.value"
+                            :current="comparedBase"
+                            :default-base="comparisonBase.defaultBase.value"
+                            @select="comparisonBase.select"
+                        />
+                    </div>
                 </div>
                 <p
                     v-else-if="workingTreeClean && !isLoading"
                     data-testid="no-uncommitted"
                     class="px-3 pb-2 text-zinc-400"
                 >
-                    No uncommitted changes in {{ checkoutLabel }}.
+                    No uncommitted changes in {{ checkoutName }}.
                 </p>
+                <DirtyWorktrees
+                    v-if="workingTreeClean && dirtyWorktrees.length"
+                    :worktrees="dirtyWorktrees"
+                    :changes="worktreeChanges"
+                    @select="selectWorktree"
+                />
                 <ChangeList
                     v-if="staged.length"
                     title="Staged changes"
@@ -391,7 +418,7 @@ const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded
                     @open-file="openFile"
                 />
                 <ChangeList
-                    v-if="hasCommits && branchQuery.data.value"
+                    v-if="showCommitted"
                     title="Committed on this branch"
                     :files="committed"
                     :staged="false"

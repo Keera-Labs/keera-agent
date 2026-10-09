@@ -119,6 +119,34 @@ class TestGitWorktreeController(TestCase, DatabaseTransaction):
         response = await self.get(self.url("status"), params={"worktree": str(path)})
         assert response.status_code == 422
 
+    async def test_change_counts_cover_every_live_worktree(self):
+        self.repo.write("README.md", "edited\n")
+        self.repo.write("staged.txt", "new\n")
+        self.repo.git("add", "staged.txt")
+        self.repo.write("staged.txt", "new and edited\n")
+        agent_path = self.repo.add_worktree("../agent-9", "agent-work")
+        (agent_path / "a.txt").write_text("a\n")
+        (agent_path / "nested").mkdir()
+        (agent_path / "nested" / "b.txt").write_text("b\n")
+        clean_path = self.repo.add_worktree("../clean", "clean")
+        gone_path = self.repo.add_worktree("../gone", "gone")
+        shutil.rmtree(gone_path)
+
+        response = await self.get(self.url("worktrees/changes"))
+
+        response.assert_ok()
+        assert response.json() == {
+            "changes": {str(self.repo.root): 2, str(agent_path): 2, str(clean_path): 0}
+        }
+
+    async def test_change_counts_on_non_git_project_are_empty(self):
+        project = await ProjectFactory.new().create(path=str(self.repo.base))
+
+        response = await self.get(f"/api/projects/{project.id}/git/worktrees/changes")
+
+        response.assert_ok()
+        assert response.json() == {"changes": {}}
+
     async def test_worktree_on_non_git_project_is_rejected(self):
         project = await ProjectFactory.new().create(path=str(self.repo.base))
 

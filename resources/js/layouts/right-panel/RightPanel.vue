@@ -47,7 +47,6 @@ async function refreshGit() {
     refreshing.value = true
     try {
         await queryCache.invalidateQueries({ key: gitKeys.project(projectId()) })
-    } catch {
     } finally {
         refreshing.value = false
     }

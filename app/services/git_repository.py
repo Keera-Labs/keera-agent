@@ -12,6 +12,7 @@ READ_TIMEOUT = 30
 # Commit/push run user hooks and network I/O; bounded so a hanging hook can't pin a request.
 WRITE_TIMEOUT = 120
 UNTRACKED_COUNT_LIMIT = 2 * 1024 * 1024
+WORKTREE_STATUS_CONCURRENCY = 8
 
 # Porcelain v2 status letters mapped onto the panel's vocabulary. "U" is shared by
 # untracked (untracked=True) and unmerged entries (DD/AU/UD/UA/DU/AA/UU); "C" is a copy.
@@ -103,13 +104,16 @@ class RepositoryStatus:
     staged: list[FileChange] = field(default_factory=list)
     changes: list[FileChange] = field(default_factory=list)
 
+    @property
+    def count(self) -> int:
+        return len({c.path for c in self.staged} | {c.path for c in self.changes})
+
     def to_dict(self) -> dict:
-        paths = {c.path for c in self.staged} | {c.path for c in self.changes}
         return {
             **{k: v for k, v in asdict(self).items() if k not in ("staged", "changes")},
             "staged": [c.to_dict() for c in self.staged],
             "changes": [c.to_dict() for c in self.changes],
-            "count": len(paths),
+            "count": self.count,
         }
 
 
@@ -242,6 +246,20 @@ class GitRepository:
     async def worktrees(self) -> list[Worktree]:
         result = await self.git_ok("worktree", "list", "--porcelain", "-z")
         return _parse_worktrees(result.stdout)
+
+    async def worktree_change_counts(self) -> dict[str, int]:
+        limit = asyncio.Semaphore(WORKTREE_STATUS_CONCURRENCY)
+
+        async def count(path: str) -> tuple[str, int | None]:
+            async with limit:
+                try:
+                    return path, (await GitRepository(Path(path)).changed_files()).count
+                except CommandError:
+                    return path, None
+
+        paths = [w.path for w in await self.worktrees() if not (w.bare or w.prunable)]
+        counts = await asyncio.gather(*map(count, paths))
+        return {path: n for path, n in counts if n is not None}
 
     async def select_worktree(self, path: str) -> "GitRepository":
         """Switch to one of this repo's worktrees; only paths git itself lists are accepted."""
@@ -379,6 +397,10 @@ class GitRepository:
             if not _is_remote_head(ref):
                 names.append(short_ref(ref))
         return names
+
+    async def default_base_name(self) -> str | None:
+        base = await self.branch_base()
+        return short_ref(base) if base else None
 
     async def resolve_base(self, name: str) -> str:
         for ref in (f"refs/heads/{name}", f"refs/remotes/{name}"):

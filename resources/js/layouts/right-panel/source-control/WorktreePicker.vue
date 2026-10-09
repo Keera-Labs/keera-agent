@@ -5,8 +5,13 @@ import type { GitWorktree } from '@/queries/gitQuery'
 import PanelMenu from './PanelMenu.vue'
 import { menuItemClass } from './sourceControl'
 
-defineProps<{ worktrees: GitWorktree[]; selected: GitWorktree | null; branchLabel: string; title?: string }>()
+withDefaults(
+    defineProps<{ worktrees: GitWorktree[]; selected: GitWorktree | null; branchLabel: string; title?: string; changes?: Record<string, number> }>(),
+    { title: undefined, changes: () => ({}) },
+)
 const emit = defineEmits<{ select: [path: string] }>()
+
+const changedFiles = (count: number) => `${count} uncommitted ${count === 1 ? 'file' : 'files'}`
 
 const branchOf = (worktree: GitWorktree) =>
     worktree.branch ?? (worktree.head ? `detached @ ${worktree.head.slice(0, 7)}` : 'no commits')
@@ -50,6 +55,14 @@ const branchOf = (worktree: GitWorktree) =>
                     <span class="block truncate text-ui-11 text-zinc-400">
                         {{ worktreeLabel(worktree) }}<template v-if="worktree.locked"> · locked</template>
                     </span>
+                </span>
+                <span
+                    v-if="changes[worktree.path]"
+                    data-testid="worktree-changes"
+                    class="shrink-0 mt-0.5 px-1.5 rounded-full bg-zinc-200/70 font-mono text-ui-11 text-zinc-600"
+                    :title="changedFiles(changes[worktree.path]!)"
+                >
+                    {{ changes[worktree.path] }}
                 </span>
             </button>
         </template>

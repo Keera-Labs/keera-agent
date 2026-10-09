@@ -65,6 +65,8 @@ export type GitWorktree = {
     agent_name: string | null
 }
 
+export type GitWorktreeChanges = Record<string, number>
+
 export type GitDiff = {
     path: string
     original_path: string | null
@@ -102,6 +104,7 @@ const treeKey = (target: GitTarget | null) => ['git', target?.projectId ?? null,
 export const gitKeys = {
     project: (projectId: number | null) => ['git', projectId],
     worktrees: (projectId: number | null) => ['git', projectId, 'worktrees'],
+    worktreeChanges: (projectId: number | null) => ['git', projectId, 'worktree-changes'],
     status: (target: GitTarget | null) => [...treeKey(target), 'status'],
     pullRequest: (target: GitTarget | null) => [...treeKey(target), 'pull-request'],
     branches: (target: GitTarget | null) => [...treeKey(target), 'branches'],
@@ -135,6 +138,18 @@ export function useGitWorktrees(projectIdSource: MaybeRefOrGetter<number | null>
         query: async () =>
             (await request<{ worktrees: GitWorktree[] }>(`/api/projects/${projectId()!}/git/worktrees`)).worktrees,
         enabled: () => projectId() !== null,
+        staleTime: 30_000,
+        refetchOnWindowFocus: true,
+    })
+}
+
+export function useGitWorktreeChanges(projectIdSource: MaybeRefOrGetter<number | null>, enabled: MaybeRefOrGetter<boolean> = true) {
+    const projectId = () => toValue(projectIdSource)
+    return useQuery({
+        key: () => gitKeys.worktreeChanges(projectId()),
+        query: async () =>
+            (await request<{ changes: GitWorktreeChanges }>(`/api/projects/${projectId()!}/git/worktrees/changes`)).changes,
+        enabled: () => projectId() !== null && toValue(enabled),
         staleTime: 30_000,
         refetchOnWindowFocus: true,
     })
@@ -233,16 +248,20 @@ export function useGitActions(targetSource: MaybeRefOrGetter<GitTarget | null>) 
     const refreshStatus = () => queryCache.invalidateQueries({ key: gitKeys.status(target()), exact: true })
     const refreshBranch = () => queryCache.invalidateQueries({ key: gitKeys.allBranchChanges(target()) })
     const refreshCommits = () => queryCache.invalidateQueries({ key: gitKeys.commits(target()), exact: true })
+    const refreshWorktreeChanges = () =>
+        queryCache.invalidateQueries({ key: gitKeys.worktreeChanges(target().projectId), exact: true })
     const refreshAfterFailure = () => {
         queryCache.invalidateQueries({ key: gitKeys.diffs(target()) })
         refreshStatus()
         refreshBranch()
         refreshCommits()
+        refreshWorktreeChanges()
     }
     const setCommittedStatus = (status: GitStatus) => {
         setStatus(status)
         refreshBranch()
         refreshCommits()
+        refreshWorktreeChanges()
     }
 
     const stage = useMutation({
