@@ -6,7 +6,7 @@ import { storeToRefs } from 'pinia'
 import { computed, ref, type Component } from 'vue'
 import { useAgentWorktreeDefault, useGitWorktree } from '@/composables/useGitWorktree'
 import { useRefetchInterval } from '@/composables/useRefetchInterval'
-import { useGitStatus } from '@/queries/gitQuery'
+import { gitKeys, useGitStatus } from '@/queries/gitQuery'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import { useProjectStore } from '@/stores/projectStore'
 import FileExplorer from './FileExplorer.vue'
@@ -42,7 +42,16 @@ useRefetchInterval(refetch, 30_000, () => rightPanelOpen.value && projectId() !=
 const badge = computed(() => (changedCount.value > 99 ? '99+' : String(changedCount.value)))
 
 const queryCache = useQueryCache()
-const refreshGit = () => queryCache.invalidateQueries({ key: ['git', projectId()] })
+const refreshing = ref(false)
+async function refreshGit() {
+    refreshing.value = true
+    try {
+        await queryCache.invalidateQueries({ key: gitKeys.project(projectId()) })
+    } catch {
+    } finally {
+        refreshing.value = false
+    }
+}
 
 const iconButtonClass = 'h-6 min-w-6 px-1 flex items-center justify-center gap-1 rounded-md transition-colors'
 const toolButtonClass = 'text-zinc-500 cursor-pointer hover:bg-black/[0.05] hover:text-zinc-800'
@@ -80,10 +89,12 @@ const toolButtonClass = 'text-zinc-500 cursor-pointer hover:bg-black/[0.05] hove
                 data-testid="refresh-source-control"
                 aria-label="Refresh source control"
                 title="Refresh"
+                :aria-busy="refreshing"
+                :disabled="refreshing"
                 :class="[iconButtonClass, toolButtonClass]"
                 @click="refreshGit"
             >
-                <RefreshCw :size="14" />
+                <RefreshCw :size="14" :class="refreshing && 'animate-spin'" />
             </button>
             <button
                 type="button"

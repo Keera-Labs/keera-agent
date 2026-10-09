@@ -20,6 +20,7 @@ const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
     if (url.includes('/files?')) body = { path: '', entries: [], truncated: false }
     else if (url.startsWith('/api/projects/3/git/status')) body = status
     else if (url.endsWith('/git/branch-changes')) body = branchChanges
+    else if (url.endsWith('/git/branches')) body = { branches: ['dev', 'main'], default_base: 'dev' }
     else if (url.endsWith('/git/pull-request')) body = { available: true, error: null, pull_request: null }
     else if (url.endsWith('/git/worktrees')) body = { worktrees }
     else if (url.endsWith('/api/projects/3/agents')) body = { data: [{ id: 7, attributes: { name: 'Diff Frontend', project_id: 3 } }] }
@@ -136,10 +137,17 @@ describe('RightPanel', () => {
         expect(w.get('button[title="Source control"]').attributes('aria-pressed')).toBe('true')
 
         const before = statusCalls()
+        const branchListCalls = () => fetchMock.mock.calls.filter(([url]) => url.endsWith('/git/branches')).length
+        const branchListsBefore = branchListCalls()
         branchChanges = { ...branchChanges, ahead: 1, files: [gitFile('src/committed.ts')] }
-        await w.get('[data-testid="refresh-source-control"]').trigger('click')
+        const refresh = w.get('[data-testid="refresh-source-control"]')
+        await refresh.trigger('click')
+        expect(refresh.attributes('aria-busy')).toBe('true')
+        expect(refresh.get('svg').classes()).toContain('animate-spin')
         await flushPromises()
+        expect(refresh.attributes('aria-busy')).toBe('false')
         expect(statusCalls()).toBe(before + 1)
+        expect(branchListCalls()).toBe(branchListsBefore + 1)
         expect(fetchMock.mock.calls.filter(([url]) => url.endsWith('/git/branch-changes'))).toHaveLength(2)
         expect(w.get('[data-testid="committed-changes"]').text()).toContain('committed.ts')
         expect(fetchMock).toHaveBeenCalledWith('/api/projects/3/git/pull-request', { headers: { Accept: 'application/json' } })

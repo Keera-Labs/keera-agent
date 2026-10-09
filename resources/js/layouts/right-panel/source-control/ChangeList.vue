@@ -53,7 +53,9 @@ const iconButton = 'p-0.5 rounded text-zinc-500 hover:text-zinc-800 hover:bg-zin
             </span>
         </div>
 
-        <p v-if="description" class="px-5 pb-1 text-ui-11 text-zinc-500 break-words">{{ description }}</p>
+        <div v-if="description || $slots.description" class="relative px-5 pb-1 text-ui-11 text-zinc-500 break-words">
+            <slot name="description">{{ description }}</slot>
+        </div>
 
         <ul v-show="expanded" :id="sectionId" class="font-mono text-ui-12">
             <li

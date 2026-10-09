@@ -37,6 +37,11 @@ class ChangeNotFound(CommandError):
     pass
 
 
+class InvalidBase(CommandError):
+    def __init__(self, name: str):
+        super().__init__(f"Unknown base branch: {name}")
+
+
 @dataclass
 class Worktree:
     path: str
@@ -137,6 +142,14 @@ def _parse_status(raw: bytes) -> RepositoryStatus:
         elif entry.startswith("? "):
             status.changes.append(FileChange(entry[2:], "U", untracked=True))
     return status
+
+
+def _is_remote_head(ref: str) -> bool:
+    return ref.startswith("refs/remotes/") and ref.endswith("/HEAD")
+
+
+def short_ref(ref: str) -> str:
+    return ref.removeprefix("refs/heads/").removeprefix("refs/remotes/")
 
 
 def _renamed(letter: str, original: str | None) -> str | None:
@@ -357,6 +370,22 @@ class GitRepository:
                 )
         return commits
 
+    async def branches(self) -> list[str]:
+        result = await self.git_ok(
+            "for-each-ref", "--format=%(refname)", "refs/heads", "refs/remotes"
+        )
+        names = []
+        for ref in result.text.split():
+            if not _is_remote_head(ref):
+                names.append(short_ref(ref))
+        return names
+
+    async def resolve_base(self, name: str) -> str:
+        for ref in (f"refs/heads/{name}", f"refs/remotes/{name}"):
+            if await self.has_ref(ref):
+                return ref
+        raise InvalidBase(name)
+
     async def branch_base(self) -> str | None:
         """Prefer dev, then the remote default, main/master, and finally upstream.
 
@@ -386,16 +415,13 @@ class GitRepository:
                 return ref
         return None
 
-    async def branch_changes(self) -> dict:
+    async def branch_changes(self, base_name: str | None = None) -> dict:
         result = {"base": None, "merge_base": None, "head": None, "ahead": 0, "files": []}
         if not await self.has_commits():
             return result
-        base = await self.branch_base()
+        base = await self.resolve_base(base_name) if base_name else await self.branch_base()
         head = (await self.git_ok("rev-parse", "HEAD")).text.strip()
-        result.update(
-            base=base.removeprefix("refs/heads/").removeprefix("refs/remotes/") if base else None,
-            head=head,
-        )
+        result.update(base=short_ref(base) if base else None, head=head)
         if base is None:
             return result
         merge = await self.git("merge-base", base, head)

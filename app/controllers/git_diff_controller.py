@@ -12,6 +12,7 @@ from app.utils.git_responses import git_error_response
 async def show(project_id: int, query: Annotated[GitDiffQuery, Query()]):
     try:
         repo = await GitRepository.for_project(project_id, query.worktree)
-        return (await file_diff(repo, query.path, query.staged, query.committed)).to_dict()
+        diff = await file_diff(repo, query.path, query.staged, query.committed, query.base)
+        return diff.to_dict()
     except CommandError as e:
         return git_error_response(e)

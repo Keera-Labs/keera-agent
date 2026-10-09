@@ -3,6 +3,7 @@ import {
     ArrowDown, ArrowUp, Check, ChevronDown, CircleAlert, CircleCheck, Ellipsis, GitBranch, GitPullRequest, History, Plus, X,
 } from '@lucide/vue'
 import { computed, ref } from 'vue'
+import { useGitBase } from '@/composables/useGitBase'
 import { useGitWorktree, worktreeLabel } from '@/composables/useGitWorktree'
 import { useRefetchOnWindowFocus } from '@/composables/useRefetchOnWindowFocus'
 import {
@@ -11,6 +12,7 @@ import {
 import { useDiffStore } from '@/stores/diffStore'
 import { useEditorStore } from '@/stores/editorStore'
 import type { Project } from '@/types/type'
+import BasePicker from './BasePicker.vue'
 import ChangeList from './ChangeList.vue'
 import PanelMenu from './PanelMenu.vue'
 import { menuItemClass, useCommitDraft } from './sourceControl'
@@ -24,13 +26,16 @@ const { worktrees, selected: selectedWorktree, target, select: selectWorktree } 
 useRefetchOnWindowFocus(() => gitKeys.project(projectId()))
 const { status, error: statusError, isLoading, refetch } = useGitStatus(target)
 const isRepo = computed(() => status.value?.is_repo === true)
-const branchQuery = useGitBranchChanges(target, isRepo)
+const hasCommits = computed(() => isRepo.value && status.value?.has_commits === true)
+const comparisonBase = useGitBase(projectId, target, hasCommits)
+const branchQuery = useGitBranchChanges(target, comparisonBase.base, () => isRepo.value && comparisonBase.ready.value)
 const committed = computed(() => branchQuery.data.value?.files ?? [])
-const branchSummary = computed(() => {
-    const comparison = branchQuery.data.value
-    const count = comparison?.ahead ?? 0
-    return `${count} ${count === 1 ? 'commit' : 'commits'} ahead of ${comparison?.base ?? 'base'}`
+const comparedBase = computed(() => branchQuery.data.value?.base ?? null)
+const aheadCount = computed(() => {
+    const count = branchQuery.data.value?.ahead ?? 0
+    return `${count} ${count === 1 ? 'commit' : 'commits'} ahead of`
 })
+const hasComparison = computed(() => !!branchQuery.data.value?.merge_base)
 const pullRequestQuery = useGitPullRequest(target, isRepo)
 const actions = useGitActions(target)
 const editor = useEditorStore()
@@ -70,9 +75,12 @@ const nestedWorktreeLabels = computed(() =>
 
 const staged = computed(() => status.value?.staged ?? [])
 const changes = computed(() => status.value?.changes ?? [])
-const cleanTree = computed(() => !staged.value.length && !changes.value.length
-    && !!branchQuery.data.value?.merge_base && !branchQuery.data.value.ahead
+const workingTreeClean = computed(() => !staged.value.length && !changes.value.length)
+const cleanTree = computed(() => workingTreeClean.value
+    && hasComparison.value && !branchQuery.data.value?.ahead
     && !committed.value.length && !branchQuery.error.value)
+const checkoutLabel = computed(() => (selectedWorktree.value ? worktreeLabel(selectedWorktree.value) : 'this checkout'))
+const otherWorktreesHint = computed(() => selectedWorktree.value?.is_main === true && worktrees.value.length > 1)
 const pullRequestInfo = computed(() => pullRequestQuery.data.value)
 const openPullRequest = computed(() => (isOpenPullRequest(pullRequestInfo.value) ? pullRequestInfo.value!.pull_request : null))
 const onBranch = computed(() => !!status.value?.branch && !status.value.detached)
@@ -141,7 +149,7 @@ function openDiff(file: GitFileChange, staged: boolean, committed = false) {
         worktreeLabel: worktree && !worktree.is_current ? worktreeLabel(worktree) : null,
         untracked: file.untracked,
         committed,
-        base: committed ? branchQuery.data.value?.base : null,
+        base: committed ? comparedBase.value : null,
     })
 }
 
@@ -347,8 +355,18 @@ const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded
                 >
                     <CircleCheck :size="20" />
                     <p class="text-ui-13 text-zinc-600">No changes</p>
-                    <p>The working tree is clean.</p>
+                    <p>{{ checkoutLabel }} has no uncommitted changes and nothing ahead of {{ comparedBase }}.</p>
+                    <p v-if="otherWorktreesHint" data-testid="worktree-hint">
+                        Agents work in their own worktrees: pick one from the branch menu above to see their changes.
+                    </p>
                 </div>
+                <p
+                    v-else-if="workingTreeClean && !isLoading"
+                    data-testid="no-uncommitted"
+                    class="px-3 pb-2 text-zinc-400"
+                >
+                    No uncommitted changes in {{ checkoutLabel }}.
+                </p>
                 <ChangeList
                     v-if="staged.length"
                     title="Staged changes"
@@ -373,16 +391,28 @@ const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded
                     @open-file="openFile"
                 />
                 <ChangeList
-                    v-if="branchQuery.data.value?.ahead || committed.length"
+                    v-if="hasCommits && branchQuery.data.value"
                     title="Committed on this branch"
-                    :description="branchSummary"
                     :files="committed"
                     :staged="false"
                     committed
                     :disabled="false"
                     :can-open-file="false"
                     @open="file => openDiff(file, false, true)"
-                />
+                >
+                    <template #description>
+                        <span class="inline-flex max-w-full items-center gap-1">
+                            <span class="shrink-0">{{ aheadCount }}</span>
+                            <BasePicker
+                                class="min-w-0"
+                                :branches="comparisonBase.branches.value"
+                                :current="comparedBase"
+                                :default-base="comparisonBase.defaultBase.value"
+                                @select="comparisonBase.select"
+                            />
+                        </span>
+                    </template>
+                </ChangeList>
             </div>
         </template>
     </div>
