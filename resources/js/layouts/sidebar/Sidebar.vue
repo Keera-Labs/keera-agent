@@ -22,7 +22,7 @@ const PROJECT_NAV: { id: ProjectView; label: string; icon: IconName }[] = [
 
 const page = usePage()
 const layout = useAppLayoutStore()
-const { activeAgentId, claudeStatus, settingsSection, showProjectSearch, sidebarOpen, statusBarOpen, tasks } = storeToRefs(layout)
+const { activeAgentId, claudeStatus, settingsSection, showProjectSearch, sidebarOpen, statusBarOpen, taskTotal } = storeToRefs(layout)
 const { activeProject } = storeToRefs(useProjectStore())
 const { projects } = useProjects()
 const { currentWorkspaceId } = storeToRefs(useWorkspaceStore())
@@ -117,10 +117,10 @@ const iconButtonClass = 'shrink-0 flex items-center justify-center w-6 h-6 round
                     <Icon :name="item.icon" :size="14" class="shrink-0 text-zinc-500" />
                     <span class="flex-1">{{ item.label }}</span>
                     <span
-                        v-if="item.id === 'tasks' && tasks.length > 0"
+                        v-if="item.id === 'tasks' && taskTotal > 0"
                         class="text-ui-11 tabular-nums text-zinc-500"
                     >
-                        {{ tasks.length }}
+                        {{ taskTotal }}
                     </span>
                 </button>
             </nav>
