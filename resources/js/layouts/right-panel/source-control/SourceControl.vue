@@ -370,16 +370,6 @@ const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded
                     <CircleCheck :size="20" />
                     <p class="text-ui-13 text-zinc-600">No changes</p>
                     <p>Nothing to commit in {{ checkoutName }}.</p>
-                    <div class="relative w-full flex items-center justify-center gap-1">
-                        <span class="shrink-0">Nothing ahead of</span>
-                        <BasePicker
-                            class="min-w-0"
-                            :branches="comparisonBase.branches.value"
-                            :current="comparedBase"
-                            :default-base="comparisonBase.defaultBase.value"
-                            @select="comparisonBase.select"
-                        />
-                    </div>
                 </div>
                 <p
                     v-else-if="workingTreeClean && !isLoading"
@@ -440,6 +430,20 @@ const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded
                         </span>
                     </template>
                 </ChangeList>
+                <div
+                    v-else-if="hasCommits && branchQuery.data.value"
+                    data-testid="base-row"
+                    class="relative flex items-center gap-1 px-5 py-1.5 text-zinc-400"
+                >
+                    <span class="shrink-0">{{ hasComparison ? 'Nothing ahead of' : 'Compare with' }}</span>
+                    <BasePicker
+                        class="min-w-0"
+                        :branches="comparisonBase.branches.value"
+                        :current="comparedBase"
+                        :default-base="comparisonBase.defaultBase.value"
+                        @select="comparisonBase.select"
+                    />
+                </div>
             </div>
         </template>
     </div>

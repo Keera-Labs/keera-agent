@@ -345,8 +345,9 @@ describe('SourceControl', () => {
         const clean = w.get('[data-testid="clean-tree"]')
         expect(clean.text()).toContain('No changes')
         expect(clean.text()).toContain('Nothing to commit in the main checkout.')
-        expect(clean.text()).toContain('Nothing ahead of')
-        expect(clean.get('[data-testid="base-picker"]').text()).toBe('dev')
+        const baseRow = w.get('[data-testid="base-row"]')
+        expect(baseRow.text()).toContain('Nothing ahead of')
+        expect(baseRow.get('[data-testid="base-picker"]').text()).toBe('dev')
         expect(w.find('[data-testid="committed-changes"]').exists()).toBe(false)
         expect(w.find('[data-testid="dirty-worktrees"]').exists()).toBe(false)
     })
@@ -403,10 +404,36 @@ describe('SourceControl', () => {
         expect(w.get('[data-testid="no-uncommitted"]').text()).toBe('No uncommitted changes in the main checkout.')
     })
 
-    it('hides the committed section when the branch has nothing ahead of its base', async () => {
+    it('hides the committed section but keeps the base picker when the branch has nothing ahead of its base', async () => {
         const w = await mountPanel()
         expect(w.find('[data-testid="changes"]').exists()).toBe(true)
         expect(w.find('[data-testid="committed-changes"]').exists()).toBe(false)
+        expect(w.find('[data-testid="clean-tree"]').exists()).toBe(false)
+        const baseRow = w.get('[data-testid="base-row"]')
+        expect(baseRow.text()).toContain('Nothing ahead of')
+
+        await baseRow.get('[data-testid="base-picker"]').trigger('click')
+        await w.findAll('[data-testid="base-option"]').find(option => option.text() === 'main')!.trigger('click')
+        await flushPromises()
+
+        expect(fetchMock).toHaveBeenCalledWith('/api/projects/9/git/branch-changes?base=main', expect.anything())
+        expect(w.get('[data-testid="base-picker"]').text()).toBe('main')
+    })
+
+    it('keeps the base picker reachable when the picked base shares no history', async () => {
+        localStorage.setItem('keera.git.base', JSON.stringify({ 9: 'main' }))
+        branchChanges.merge_base = null
+        const w = await mountPanel()
+        expect(w.text()).toContain('No shared base branch found')
+        const baseRow = w.get('[data-testid="base-row"]')
+        expect(baseRow.text()).toContain('Compare with')
+        expect(baseRow.get('[data-testid="base-picker"]').text()).toBe('main')
+    })
+
+    it('has no base picker before the first commit', async () => {
+        status = gitStatus({ has_commits: false })
+        const w = await mountPanel()
+        expect(w.find('[data-testid="base-picker"]').exists()).toBe(false)
     })
 
     describe('base branch', () => {
