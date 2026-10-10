@@ -2,7 +2,7 @@ import { useQueryCache } from '@pinia/colada'
 import { defineStore } from 'pinia'
 import { computed, reactive, ref } from 'vue'
 import { FitAddon } from '@xterm/addon-fit'
-import type { Command } from '@/components/commands/types'
+import type { Command, CommandRun } from '@/components/commands/types'
 import {
     attachTerminal,
     makeTerminal,
@@ -10,7 +10,7 @@ import {
     socketMessageHandler,
     type Session,
 } from '@/composables/useTerminalSessions'
-import { COMMAND_RUNS_QUERY_KEY, startCommandRun, stopCommandRun } from '@/queries/commandQuery'
+import { COMMAND_RUNS_QUERY_KEY, startAdhocRun, startCommandRun, stopCommandRun, stopRunById } from '@/queries/commandQuery'
 
 type CommandRef = Pick<Command, 'id' | 'label'>
 
@@ -20,20 +20,27 @@ export interface DockTab {
     key: string
     projectId: number
     projectSlug: string
-    commandId: number
+    commandId: number | null
+    runId: string | null
     label: string
+    command: string | null
     worktree: string | null
     place: string
     attached: boolean
 }
 
 export const dockTabKey = (commandId: number, worktree: string | null) => `${commandId}@${worktree ?? ''}`
+const runTabKey = (runId: string) => `run:${runId}`
+
+export const tabKeyOfRun = (run: Pick<CommandRun, 'id' | 'command_id' | 'worktree'>) =>
+    run.command_id !== null ? dockTabKey(run.command_id, run.worktree) : run.id ? runTabKey(run.id) : null
 
 const sessions = new Map<string, Session>()
 const hosts = new Map<string, HTMLElement>()
 
 function socketUrl(tab: DockTab) {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
+    if (tab.commandId === null) return `${protocol}//${location.host}/${tab.projectSlug}/command-run-ws/${tab.runId}`
     const query = tab.worktree ? `?${new URLSearchParams({ worktree: tab.worktree })}` : ''
     return `${protocol}//${location.host}/${tab.projectSlug}/command-ws/${tab.commandId}${query}`
 }
@@ -75,16 +82,15 @@ export const useCommandRunStore = defineStore('commandRuns', () => {
 
     const refreshRuns = () => queryCache.invalidateQueries({ key: COMMAND_RUNS_QUERY_KEY })
 
-    function ensureTab(command: CommandRef, target: CommandTarget): DockTab {
-        const key = dockTabKey(command.id, target.worktree)
-        let tab = tabs.value.find(t => t.key === key)
+    type TabSource = Pick<DockTab, 'key' | 'commandId' | 'runId' | 'label' | 'command'>
+
+    function ensureTab(source: TabSource, target: CommandTarget): DockTab {
+        let tab = tabs.value.find(t => t.key === source.key)
         if (!tab) {
             tabs.value.push({
-                key,
+                ...source,
                 projectId: target.projectId,
                 projectSlug: target.projectSlug,
-                commandId: command.id,
-                label: command.label,
                 worktree: target.worktree,
                 place: target.place,
                 attached: false,
@@ -93,6 +99,22 @@ export const useCommandRunStore = defineStore('commandRuns', () => {
         }
         return tab
     }
+
+    const savedSource = (command: CommandRef, target: CommandTarget): TabSource => ({
+        key: dockTabKey(command.id, target.worktree),
+        commandId: command.id,
+        runId: null,
+        label: command.label,
+        command: null,
+    })
+
+    const adhocSource = (run: CommandRun & { id: string }, text: string): TabSource => ({
+        key: runTabKey(run.id),
+        commandId: null,
+        runId: run.id,
+        label: run.label ?? text,
+        command: run.command ?? text,
+    })
 
     function mountSession(key: string, session: Session) {
         const host = hosts.get(key)
@@ -130,27 +152,50 @@ export const useCommandRunStore = defineStore('commandRuns', () => {
         tab.attached = true
     }
 
-    function focus(tab: DockTab) {
+    function focus(tab: DockTab, reveal = true) {
         activeKey.value = tab.key
-        dockOpen.value = true
+        if (reveal) dockOpen.value = true
     }
 
-    function show(command: CommandRef, target: CommandTarget) {
-        const tab = ensureTab(command, target)
+    function showTab(source: TabSource, target: CommandTarget) {
+        const tab = ensureTab(source, target)
         focus(tab)
         if (!tab.attached) connect(tab)
     }
 
-    async function run(command: CommandRef, target: CommandTarget) {
+    function show(command: CommandRef, target: CommandTarget) {
+        showTab(savedSource(command, target), target)
+    }
+
+    function showAdhoc(run: CommandRun, target: CommandTarget) {
+        if (run.id) showTab(adhocSource({ ...run, id: run.id }, run.command ?? run.label ?? ''), target)
+    }
+
+    async function run(command: CommandRef, target: CommandTarget, reveal = true) {
         await startCommandRun(command.id, target.worktree)
         refreshRuns()
-        const tab = ensureTab(command, target)
-        focus(tab)
+        const tab = ensureTab(savedSource(command, target), target)
+        focus(tab, reveal)
+        connect(tab)
+    }
+
+    async function runAdhoc(text: string, target: CommandTarget, reveal = true) {
+        const started = await startAdhocRun(target.projectId, text, target.worktree)
+        refreshRuns()
+        if (!started.id) return
+        const tab = ensureTab(adhocSource({ ...started, id: started.id }, text), target)
+        focus(tab, reveal)
         connect(tab)
     }
 
     async function stop(commandId: number, worktree: string | null) {
         await stopCommandRun(commandId, worktree)
+        refreshRuns()
+    }
+
+    async function stopRun(projectId: number, run: CommandRun) {
+        if (run.command_id !== null) await stopCommandRun(run.command_id, run.worktree)
+        else if (run.id) await stopRunById(projectId, run.id)
         refreshRuns()
     }
 
@@ -196,8 +241,11 @@ export const useCommandRunStore = defineStore('commandRuns', () => {
         dockOpen,
         selectedWorktrees,
         show,
+        showAdhoc,
         run,
+        runAdhoc,
         stop,
+        stopRun,
         clear,
         closeTab,
         forgetCommand,

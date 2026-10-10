@@ -20,6 +20,8 @@ export function parseCommand(resource: CommandResourceObject): Command {
     return { ...resource.attributes, id: Number(resource.id) }
 }
 
+const parseRun = (resource: CommandRunResourceObject): CommandRun => ({ id: resource.id, ...resource.attributes })
+
 async function request<T>(url: string, init: { method?: string; body?: object } = {}): Promise<T | null> {
     const headers: Record<string, string> = { ...JSON_API_HEADERS }
     if (init.body) headers['Content-Type'] = 'application/json'
@@ -30,7 +32,8 @@ async function request<T>(url: string, init: { method?: string; body?: object } 
     })
     if (!res.ok) {
         const body = await res.json().catch(() => null)
-        throw new CommandRequestError(res.status, typeof body?.detail === 'string' ? body.detail : `Request failed (${res.status})`)
+        const message = [body?.detail, body?.error].find(m => typeof m === 'string')
+        throw new CommandRequestError(res.status, message ?? `Request failed (${res.status})`)
     }
     return res.status === 204 ? null : res.json()
 }
@@ -44,7 +47,7 @@ export async function fetchCommands(projectId: number): Promise<Command[]> {
 
 export async function fetchCommandRuns(projectId: number): Promise<CommandRun[]> {
     const document = await request<{ data: CommandRunResourceObject[] }>(`/api/projects/${projectId}/command-runs`)
-    return document!.data.map(resource => resource.attributes)
+    return document!.data.map(parseRun)
 }
 
 export type CommandFields = Pick<Command, 'label' | 'command'>
@@ -68,7 +71,19 @@ export async function startCommandRun(commandId: number, worktree: string | null
         method: 'POST',
         body: worktree ? { worktree } : {},
     })
-    return document!.data.attributes
+    return parseRun(document!.data)
+}
+
+export async function startAdhocRun(projectId: number, command: string, worktree: string | null): Promise<CommandRun> {
+    const document = await request<{ data: CommandRunResourceObject }>(`/api/projects/${projectId}/command-runs`, {
+        method: 'POST',
+        body: { command, worktree },
+    })
+    return parseRun(document!.data)
+}
+
+export async function stopRunById(projectId: number, runId: string): Promise<void> {
+    await request(`/api/projects/${projectId}/command-runs/${encodeURIComponent(runId)}`, { method: 'DELETE' })
 }
 
 export async function stopCommandRun(commandId: number, worktree: string | null): Promise<void> {

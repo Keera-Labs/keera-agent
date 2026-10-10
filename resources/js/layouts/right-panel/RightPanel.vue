@@ -1,36 +1,52 @@
 <script setup lang="ts">
 import { usePage } from '@inertiajs/vue3'
-import { Files, GitBranch, LayoutGrid, List, PanelRight, RefreshCw } from '@lucide/vue'
-import { useQueryCache } from '@pinia/colada'
+import { Diff, FolderClosed, PanelRight, SquareTerminal, Zap, type LucideIcon } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
-import { computed, ref, type Component } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useAgentWorktreeDefault, useGitWorktree } from '@/composables/useGitWorktree'
 import { useRefetchInterval } from '@/composables/useRefetchInterval'
-import { gitKeys, useGitStatus } from '@/queries/gitQuery'
+import { useCommandRuns } from '@/queries/commandQuery'
+import { useGitStatus } from '@/queries/gitQuery'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
+import { useCommandRunStore } from '@/stores/commandRunStore'
 import { useProjectStore } from '@/stores/projectStore'
+import CommandsView from './commands/CommandsView.vue'
 import FileExplorer from './FileExplorer.vue'
 import SourceControl from './source-control/SourceControl.vue'
+import TerminalView from './TerminalView.vue'
 
-type ViewId = 'files' | 'overview' | 'source-control' | 'outline'
+type ViewId = 'changes' | 'files' | 'terminal' | 'commands'
 
-// Overview and Outline mirror the reference layout and stay inert until theirs ship.
-const VIEWS: { id: ViewId; icon: Component; label: string; ready: boolean }[] = [
-    { id: 'files', icon: Files, label: 'Files', ready: true },
-    { id: 'overview', icon: LayoutGrid, label: 'Overview (coming soon)', ready: false },
-    { id: 'source-control', icon: GitBranch, label: 'Source control', ready: true },
-    { id: 'outline', icon: List, label: 'Outline (coming soon)', ready: false },
+const VIEWS: { id: ViewId; label: string; icon: LucideIcon }[] = [
+    { id: 'changes', label: 'Changes', icon: Diff },
+    { id: 'files', label: 'Files', icon: FolderClosed },
+    { id: 'terminal', label: 'Terminal', icon: SquareTerminal },
+    { id: 'commands', label: 'Commands', icon: Zap },
 ]
 
-const EMPTY_TEXT: Partial<Record<ViewId, string>> = {
+const EMPTY_TEXT: Record<ViewId, string> = {
+    changes: 'Select a project to see its changes',
     files: 'Select a project to browse files',
-    'source-control': 'Select a project to see its changes',
+    terminal: 'Select a project to see command output',
+    commands: 'Select a project to run its commands',
 }
 
 const { rightPanelOpen, activeAgentId } = storeToRefs(useAppLayoutStore())
 const { activeProject } = storeToRefs(useProjectStore())
-const activeView = ref<ViewId>('files')
+const { dockOpen } = storeToRefs(useCommandRunStore())
 const page = usePage()
+
+const otherView = ref<Exclude<ViewId, 'terminal'>>('changes')
+const activeView = computed<ViewId>({
+    get: () => (dockOpen.value ? 'terminal' : otherView.value),
+    set: view => {
+        dockOpen.value = view === 'terminal'
+        if (view !== 'terminal') otherView.value = view
+    },
+})
+watch(dockOpen, open => {
+    if (open) rightPanelOpen.value = true
+})
 
 const projectId = () => activeProject.value?.id ?? null
 useAgentWorktreeDefault(projectId, () => (page.component === 'agents/Detail' ? activeAgentId.value : null))
@@ -39,75 +55,69 @@ const { changedCount, refetch } = useGitStatus(target)
 // Agents edit files behind the panel's back, so the badge re-reads status while visible; focus and mutations cover the rest.
 useRefetchInterval(refetch, 30_000, () => rightPanelOpen.value && projectId() !== null)
 
+const { data: commandRuns } = useCommandRuns(projectId)
+const anyRunning = computed(() => (commandRuns.value ?? []).some(r => r.status === 'running'))
+
 const badge = computed(() => (changedCount.value > 99 ? '99+' : String(changedCount.value)))
 
-const queryCache = useQueryCache()
-const refreshing = ref(false)
-async function refreshGit() {
-    refreshing.value = true
-    try {
-        await queryCache.invalidateQueries({ key: gitKeys.project(projectId()) })
-    } finally {
-        refreshing.value = false
-    }
+function viewLabel(view: ViewId) {
+    if (view === 'changes' && changedCount.value) return `Changes, ${changedCount.value} changed files`
+    if (view === 'commands' && anyRunning.value) return 'Commands, running'
+    return VIEWS.find(v => v.id === view)!.label
 }
-
-const iconButtonClass = 'h-6 min-w-6 px-1 flex items-center justify-center gap-1 rounded-md transition-colors'
-const toolButtonClass = 'text-zinc-500 cursor-pointer hover:bg-black/[0.05] hover:text-zinc-800'
 </script>
 
 <template>
-    <div data-testid="right-panel-toolbar" class="shrink-0 flex items-center gap-0.5 h-10 px-2 border-b border-stroke">
-        <button
-            v-for="view in VIEWS"
-            :key="view.id"
-            type="button"
-            :title="view.label"
-            :aria-label="view.id === 'source-control' && changedCount ? `${view.label}, ${changedCount} changed files` : view.label"
-            :aria-pressed="activeView === view.id"
-            :disabled="!view.ready"
-            :class="[
-                iconButtonClass,
-                activeView === view.id
-                    ? 'text-zinc-800 bg-black/[0.06]'
-                    : view.ready ? toolButtonClass : 'text-zinc-400 cursor-default',
-            ]"
-            @click="activeView = view.id"
-        >
-            <component :is="view.icon" :size="14" />
-            <span
-                v-if="view.id === 'source-control' && changedCount > 0"
-                data-testid="source-control-badge"
-                class="min-w-4 h-4 px-1 flex items-center justify-center rounded-full bg-orange-400 text-white text-ui-10 font-semibold leading-none"
-            >{{ badge }}</span>
-        </button>
-        <div class="ml-auto flex items-center gap-0.5">
+    <div data-testid="right-panel-toolbar" class="shrink-0 flex items-center gap-2 h-14 px-3 border-b border-stroke">
+        <div role="tablist" aria-label="Right panel" class="@container flex-1 min-w-0 flex items-center gap-0.5 p-1 rounded-xl bg-zinc-100">
             <button
-                v-if="activeView === 'source-control' && activeProject"
+                v-for="view in VIEWS"
+                :key="view.id"
                 type="button"
-                data-testid="refresh-source-control"
-                aria-label="Refresh source control"
-                title="Refresh"
-                :aria-busy="refreshing"
-                :disabled="refreshing"
-                :class="[iconButtonClass, toolButtonClass]"
-                @click="refreshGit"
+                role="tab"
+                :data-view="view.id"
+                :aria-selected="activeView === view.id"
+                :aria-label="viewLabel(view.id)"
+                :title="view.label"
+                :class="[
+                    'min-w-0 flex-auto h-8 flex items-center justify-center gap-1.5 px-2 rounded-lg text-ui-13 cursor-pointer transition-colors',
+                    activeView === view.id
+                        ? 'bg-surface font-semibold text-zinc-900 shadow-sm ring-1 ring-black/[0.06]'
+                        : 'text-zinc-500 hover:text-zinc-800',
+                ]"
+                @click="activeView = view.id"
             >
-                <RefreshCw :size="14" :class="refreshing && 'animate-spin'" />
-            </button>
-            <button
-                type="button"
-                data-testid="toggle-panel-right"
-                aria-label="Hide right panel"
-                title="Hide right panel"
-                :class="[iconButtonClass, toolButtonClass]"
-                @click="rightPanelOpen = false"
-            >
-                <PanelRight :size="14" />
+                <component :is="view.icon" :size="14" class="shrink-0" />
+                <span :class="['min-w-0 truncate', activeView !== view.id && 'hidden @min-[26rem]:inline']">{{ view.label }}</span>
+                <span
+                    v-if="view.id === 'changes' && changedCount > 0"
+                    data-testid="source-control-badge"
+                    class="shrink-0 min-w-5 h-5 px-1.5 flex items-center justify-center rounded-full bg-orange-500 text-white text-ui-11 font-semibold leading-none"
+                >{{ badge }}</span>
+                <span
+                    v-if="view.id === 'commands' && anyRunning"
+                    data-testid="commands-running-dot"
+                    class="shrink-0 w-1.5 h-1.5 rounded-full bg-orange-500"
+                />
             </button>
         </div>
+        <button
+            type="button"
+            data-testid="toggle-panel-right"
+            aria-label="Hide right panel"
+            title="Hide right panel"
+            class="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 cursor-pointer hover:bg-black/[0.05] hover:text-zinc-800"
+            @click="rightPanelOpen = false"
+        >
+            <PanelRight :size="16" />
+        </button>
     </div>
 
+    <SourceControl
+        v-if="rightPanelOpen && activeProject && activeView === 'changes'"
+        :key="activeProject.id"
+        :project="activeProject"
+    />
     <!-- Mounted on first open, then kept alive per project so each tree keeps its expanded folders. -->
     <KeepAlive :max="8">
         <FileExplorer
@@ -116,11 +126,8 @@ const toolButtonClass = 'text-zinc-500 cursor-pointer hover:bg-black/[0.05] hove
             :project="activeProject"
         />
     </KeepAlive>
-    <SourceControl
-        v-if="rightPanelOpen && activeProject && activeView === 'source-control'"
-        :key="activeProject.id"
-        :project="activeProject"
-    />
+    <TerminalView :visible="!!activeProject && activeView === 'terminal'" />
+    <CommandsView v-if="activeProject" :visible="activeView === 'commands'" />
     <div
         v-if="!activeProject"
         data-testid="right-panel-empty"

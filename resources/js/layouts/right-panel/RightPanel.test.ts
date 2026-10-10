@@ -15,6 +15,8 @@ vi.mock('@inertiajs/vue3', () => ({ router: { on: vi.fn(() => () => {}) }, usePa
 let branchChanges: GitBranchChanges
 let status = gitStatus()
 let worktrees: GitWorktree[] = []
+let runs: unknown[] = []
+const commandRuns = (url: string) => (url.endsWith('/command-runs') ? runs : [])
 const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
     let body: unknown = []
     if (url.includes('/files?')) body = { path: '', entries: [], truncated: false }
@@ -23,6 +25,7 @@ const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
     else if (url.endsWith('/git/branches')) body = { branches: ['dev', 'main'], default_base: 'dev' }
     else if (url.endsWith('/git/pull-request')) body = { available: true, error: null, pull_request: null }
     else if (url.endsWith('/git/worktrees')) body = { worktrees }
+    else if (url.endsWith('/command-runs') || url.endsWith('/commands')) body = { data: commandRuns(url) }
     else if (url.endsWith('/api/projects/3/agents')) body = { data: [{ id: 7, attributes: { name: 'Diff Frontend', project_id: 3 } }] }
     return Promise.resolve({ ok: true, json: () => Promise.resolve(body) })
 })
@@ -32,6 +35,7 @@ beforeEach(() => {
     branchChanges = { base: 'dev', merge_base: 'base', head: 'head', ahead: 0, files: [] }
     status = gitStatus()
     worktrees = []
+    runs = []
     page.component = 'Dashboard'
     fetchMock.mockClear()
     vi.stubGlobal('fetch', fetchMock)
@@ -53,6 +57,8 @@ describe('RightPanel', () => {
     it('shows an empty state instead of a blank column when no project is active', async () => {
         const w = mountPanel()
         await flushPromises()
+        expect(w.get('[data-testid="right-panel-empty"]').text()).toBe('Select a project to see its changes')
+        await w.get('[role="tab"][data-view="files"]').trigger('click')
         expect(w.get('[data-testid="right-panel-empty"]').text()).toBe('Select a project to browse files')
     })
 
@@ -60,10 +66,9 @@ describe('RightPanel', () => {
         const w = mountPanel()
         await flushPromises()
 
-        const views = w.get('[data-testid="right-panel-toolbar"]').findAll('button[aria-pressed]')
-        expect(views.map(b => b.attributes('aria-label'))).toEqual([
-            'Files', 'Overview (coming soon)', 'Source control', 'Outline (coming soon)',
-        ])
+        const views = w.get('[data-testid="right-panel-toolbar"]').findAll('[role="tab"]')
+        expect(views.map(b => b.text())).toEqual(['Changes', 'Files', 'Terminal', 'Commands'])
+        expect(views[0]!.attributes('aria-selected')).toBe('true')
         await w.get('[data-testid="toggle-panel-right"]').trigger('click')
         expect(useAppLayoutStore().rightPanelOpen).toBe(false)
     })
@@ -73,10 +78,22 @@ describe('RightPanel', () => {
         useProjectStore().setActiveProject(project)
         await flushPromises()
         expect(w.find('[data-testid="right-panel-empty"]').exists()).toBe(false)
-        expect(w.text()).toContain('salut-ai')
+        await w.get('[role="tab"][data-view="files"]').trigger('click')
+        await flushPromises()
+        expect(w.find('input[aria-label="Go to file"]').exists()).toBe(true)
+        expect(w.find('[data-testid="source-control"]').exists()).toBe(false)
     })
 
-    it('badges the branch icon with the changed file count', async () => {
+    it('marks the Commands tab while a command runs', async () => {
+        runs = [{ id: 'r1', type: 'command_runs', attributes: { command_id: 1, label: 'Dev', command: 'npm run dev', worktree: null, status: 'running', exit_code: null, started_at: new Date().toISOString() } }]
+        const w = mountPanel()
+        useProjectStore().setActiveProject(project)
+        await flushPromises()
+        expect(w.find('[data-testid="commands-running-dot"]').exists()).toBe(true)
+        expect(w.get('[role="tab"][data-view="commands"]').attributes('aria-label')).toBe('Commands, running')
+    })
+
+    it('badges the Changes tab with the changed file count', async () => {
         status = gitStatus({ count: 5 })
         const w = mountPanel()
         useProjectStore().setActiveProject(project)
@@ -84,7 +101,7 @@ describe('RightPanel', () => {
 
         expect(fetchMock).toHaveBeenCalledWith('/api/projects/3/git/status', { headers: { Accept: 'application/json' } })
         expect(w.get('[data-testid="source-control-badge"]').text()).toBe('5')
-        expect(w.get('button[title="Source control"]').attributes('aria-label')).toBe('Source control, 5 changed files')
+        expect(w.get('[role="tab"][data-view="changes"]').attributes('aria-label')).toBe('Changes, 5 changed files')
     })
 
     it('switches git to the open agent\'s own worktree on its detail page', async () => {
@@ -125,16 +142,11 @@ describe('RightPanel', () => {
         expect(w.find('[data-testid="source-control-badge"]').exists()).toBe(false)
     })
 
-    it('opens source control from the branch icon and reloads it from the refresh icon', async () => {
+    it('opens on Changes and reloads it from the refresh icon', async () => {
         const w = mountPanel()
         useProjectStore().setActiveProject(project)
         await flushPromises()
-        expect(w.find('[data-testid="refresh-source-control"]').exists()).toBe(false)
-
-        await w.get('button[title="Source control"]').trigger('click')
-        await flushPromises()
         expect(w.find('[data-testid="source-control"]').exists()).toBe(true)
-        expect(w.get('button[title="Source control"]').attributes('aria-pressed')).toBe('true')
 
         const before = statusCalls()
         const branchListCalls = () => fetchMock.mock.calls.filter(([url]) => url.endsWith('/git/branches')).length

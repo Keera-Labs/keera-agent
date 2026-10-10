@@ -1,4 +1,4 @@
-import { relativeTime } from '@/layouts/sidebar/sidebarAgents'
+import { relativeTime } from '@/utils/relativeTime'
 import type { Task } from '@/types/type'
 
 export type TaskFilter = 'all' | 'running' | 'review' | 'done' | 'backlog'

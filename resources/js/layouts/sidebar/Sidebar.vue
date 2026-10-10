@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { router, usePage } from '@inertiajs/vue3'
+import { Activity } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, ref } from 'vue'
 import ProjectCreateModal from '@/components/project/ProjectCreateModal.vue'
-import Icon, { type IconName } from '@/components/ui/Icon.vue'
-import AgentAddModal from '@/pages/agents/AgentAddModal.vue'
+import Icon from '@/components/ui/Icon.vue'
 import { useAgentSummaries, type AgentSummary } from '@/queries/agentSummariesQuery'
 import useProjects from '@/queries/projectsQuery'
-import { useAppLayoutStore, type ProjectView } from '@/stores/appLayoutStore'
+import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import { useProjectStore } from '@/stores/projectStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { Project } from '@/types/type'
@@ -15,10 +15,6 @@ import ProjectCard from './ProjectCard.vue'
 import { loadCollapsedProjects, saveCollapsedProjects } from './sidebarAgents'
 import WorkspacePicker from './WorkspacePicker.vue'
 
-// Agents stay reachable from each project's card below; Commands only by its URL.
-const PROJECT_NAV: { id: ProjectView; label: string; icon: IconName }[] = [
-    { id: 'tasks', label: 'Tasks', icon: 'clipboard-check' },
-]
 
 const page = usePage()
 const layout = useAppLayoutStore()
@@ -29,6 +25,9 @@ const { currentWorkspaceId } = storeToRefs(useWorkspaceStore())
 const { agentsByProject } = useAgentSummaries(() => projects.value.map(p => p.id))
 
 const agentsOf = (project: Project) => agentsByProject.value.get(project.id) ?? []
+const runningCount = computed(() =>
+    [...agentsByProject.value.values()].flat().filter(agent => agent.status === 'running').length,
+)
 
 const collapsed = ref(loadCollapsedProjects())
 function toggleCollapsed(projectId: number) {
@@ -49,36 +48,40 @@ function selectAgent(project: Project, agent: AgentSummary) {
 }
 
 const isSettingsOpen = computed(() => settingsSection.value !== null)
-const activeView = computed<ProjectView | null>(() => (page.component === 'Tasks' ? 'tasks' : null))
+const isTasksPage = computed(() => page.component === 'Tasks')
+const isDashboard = computed(() => page.component === 'Dashboard')
 
-function changeView(view: ProjectView) {
+function openTasks() {
     const project = activeProject.value
-    if (project && view === 'tasks') router.visit(`/${project.slug}/tasks`)
+    if (project) router.visit(`/${project.slug}/tasks`)
 }
 
 const navClass = (active: boolean) => [
-    'flex items-center gap-2 h-7 px-2 w-full rounded-md text-ui-13 text-left cursor-pointer transition-colors duration-100',
-    active ? 'bg-black/[0.06] text-zinc-900 font-medium' : 'text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-900',
+    'flex items-center gap-2.5 h-8 px-2.5 w-full rounded-lg text-ui-13 text-left cursor-pointer transition-colors duration-100',
+    active ? 'bg-black/[0.06] text-zinc-900 font-medium' : 'text-zinc-700 hover:bg-black/[0.04] hover:text-zinc-900',
 ]
 const iconButtonClass = 'shrink-0 flex items-center justify-center w-6 h-6 rounded-md text-zinc-500 cursor-pointer hover:bg-black/[0.05] hover:text-zinc-800'
 </script>
 
 <template>
-    <aside class="sidebar-spacing shrink-0 bg-canvas border-r border-stroke flex flex-col overflow-hidden">
-        <!-- Same height as the header so their borders line up, so it keeps the header's unscaled spacing. -->
-        <div class="shrink-0 flex items-center h-10 pr-2 border-b border-stroke [--spacing:0.25rem]">
-            <!-- The logo doubles as the Dashboard (home) link. -->
+    <aside class="sidebar-spacing shrink-0 bg-sidebar border-r border-stroke flex flex-col overflow-hidden">
+        <div class="shrink-0 flex items-center h-14 pl-3 pr-2 border-b border-stroke">
             <button
                 type="button"
                 aria-label="Go to Dashboard"
                 title="Dashboard"
-                class="flex-1 min-w-0 flex items-center gap-2 h-full px-3.5 text-left cursor-pointer"
+                class="flex-1 min-w-0 flex items-center gap-2.5 h-full text-left cursor-pointer"
                 @click="router.visit('/')"
             >
-                <div class="w-6 h-6 rounded-md flex items-center justify-center shrink-0 bg-accent">
-                    <Icon name="info" :size="13" color="white" />
-                </div>
-                <span class="font-semibold text-ui-13 text-zinc-900 tracking-[-0.01em] whitespace-nowrap">Keera Agent</span>
+                <span
+                    data-testid="sidebar-logo"
+                    class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-zinc-900 text-amber-400 text-ui-16 font-black leading-none"
+                    aria-hidden="true"
+                >K</span>
+                <span class="min-w-0 flex flex-col">
+                    <span class="font-semibold text-ui-14 text-zinc-900 tracking-[-0.01em] truncate leading-tight">Keera</span>
+                    <span class="text-ui-11.5 text-zinc-500 truncate leading-tight">Agent workspace</span>
+                </span>
             </button>
             <button
                 type="button"
@@ -88,57 +91,64 @@ const iconButtonClass = 'shrink-0 flex items-center justify-center w-6 h-6 round
                 :class="iconButtonClass"
                 @click="sidebarOpen = false"
             >
-                <Icon name="panel-left" :size="14" />
+                <Icon name="panel-left" :size="15" />
             </button>
         </div>
 
-        <div class="px-2 pt-2.5 pb-2">
+        <div class="px-2.5 pt-3 pb-2">
             <button
                 type="button"
                 data-testid="sidebar-search"
-                class="flex items-center gap-2 w-full h-7 px-2.5 rounded-md bg-black/[0.04] text-zinc-500 text-ui-13 text-left cursor-pointer hover:bg-black/[0.06]"
+                class="flex items-center gap-2 w-full h-8 px-2.5 rounded-lg border border-stroke bg-surface text-zinc-500 text-ui-13 text-left cursor-pointer shadow-[0_1px_2px_rgba(0,0,0,0.03)] hover:border-zinc-300"
                 @click="showProjectSearch = true"
             >
-                <Icon name="search" :size="13" />
-                <span class="flex-1">Search</span>
-                <kbd class="font-sans text-ui-11 text-zinc-400">⌘P</kbd>
+                <Icon name="search" :size="13" class="shrink-0" />
+                <span class="flex-1 min-w-0 truncate">Search agents, tasks…</span>
+                <kbd class="shrink-0 font-sans text-ui-10.5 text-zinc-500 px-1 rounded border border-stroke">⌘P</kbd>
             </button>
 
             <nav class="mt-2 flex flex-col gap-px">
                 <button
-                    v-for="item in PROJECT_NAV"
-                    :key="item.id"
                     type="button"
-                    :data-tab="item.id"
-                    :aria-current="item.id === activeView ? 'page' : undefined"
-                    :class="navClass(item.id === activeView)"
-                    @click="changeView(item.id)"
+                    data-tab="tasks"
+                    :aria-current="isTasksPage ? 'page' : undefined"
+                    :class="navClass(isTasksPage)"
+                    @click="openTasks"
                 >
-                    <Icon :name="item.icon" :size="14" class="shrink-0 text-zinc-500" />
-                    <span class="flex-1">{{ item.label }}</span>
-                    <span
-                        v-if="item.id === 'tasks' && taskTotal > 0"
-                        class="text-ui-11 tabular-nums text-zinc-500"
-                    >
-                        {{ taskTotal }}
+                    <Icon name="list" :size="14" class="shrink-0 text-zinc-500" />
+                    <span class="flex-1">Tasks</span>
+                    <span v-if="taskTotal > 0" class="text-ui-12 tabular-nums text-zinc-500">{{ taskTotal }}</span>
+                </button>
+                <button
+                    type="button"
+                    data-tab="running"
+                    :aria-current="isDashboard ? 'page' : undefined"
+                    :class="navClass(isDashboard)"
+                    @click="router.visit('/')"
+                >
+                    <Activity :size="14" class="shrink-0 text-zinc-500" />
+                    <span class="flex-1">Running</span>
+                    <span data-testid="running-total" class="flex items-center gap-1.5 text-ui-12 tabular-nums text-zinc-500">
+                        <span v-if="runningCount > 0" class="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                        {{ runningCount }}
                     </span>
                 </button>
             </nav>
         </div>
 
-        <div class="flex-1 overflow-y-auto min-h-0 px-2 pb-2">
-            <div data-testid="section-projects" class="flex items-center h-7 pl-1.5 pr-0.5 mt-1">
-                <span class="flex-1 text-zinc-800 text-ui-12 font-semibold">Projects</span>
+        <div class="flex-1 overflow-y-auto min-h-0 px-2.5 pb-2">
+            <div data-testid="section-projects" class="flex items-center h-7 pl-1.5 mt-1 mb-1">
+                <span class="flex-1 text-zinc-500 text-ui-11 font-semibold uppercase tracking-[0.08em]">Projects</span>
                 <ProjectCreateModal :default-workspace-id="currentWorkspaceId">
                     <template #trigger>
                         <button type="button" title="Add project" :class="iconButtonClass">
-                            <Icon name="plus" :size="13" />
+                            <Icon name="plus" :size="14" />
                         </button>
                     </template>
                 </ProjectCreateModal>
             </div>
 
-            <ul class="list-none m-0 p-0 mb-1 flex flex-col gap-2">
+            <ul class="list-none m-0 p-0 mb-1 flex flex-col gap-1.5">
                 <li v-if="projects.length === 0" class="py-1 px-2 text-zinc-400 text-ui-12">No projects</li>
                 <li v-for="project in projects" :key="project.id">
                     <ProjectCard
@@ -160,9 +170,9 @@ const iconButtonClass = 'shrink-0 flex items-center justify-center w-6 h-6 round
                                 type="button"
                                 data-testid="add-project-group"
                                 aria-label="Add project"
-                                class="w-full h-8 flex items-center justify-center rounded-lg bg-black/[0.04] text-zinc-700 cursor-pointer transition-colors duration-100 hover:bg-black/[0.07] hover:text-zinc-900"
+                                class="w-full h-8 flex items-center justify-center rounded-xl border border-dashed border-stroke text-zinc-500 cursor-pointer transition-colors duration-100 hover:bg-black/[0.03] hover:text-zinc-900"
                             >
-                                <Icon name="plus" :size="15" />
+                                <Icon name="plus" :size="14" />
                             </button>
                         </template>
                     </ProjectCreateModal>
@@ -170,50 +180,29 @@ const iconButtonClass = 'shrink-0 flex items-center justify-center w-6 h-6 round
             </ul>
         </div>
 
-        <WorkspacePicker />
-
-        <!-- A query container in the label's font size, so the em breakpoint below scales with the UI font size. -->
-        <div class="@container flex items-center gap-1 px-2.5 pt-1 pb-2 text-ui-12">
-            <button
-                type="button"
-                title="Settings"
-                aria-label="Settings"
-                :aria-expanded="isSettingsOpen"
-                :class="[iconButtonClass, isSettingsOpen && 'bg-black/[0.06] text-zinc-900']"
-                @click="layout.openSettings()"
-            >
-                <Icon name="settings" :size="14" />
-            </button>
+        <div class="shrink-0 flex items-center gap-1 px-2.5 py-2.5 border-t border-stroke">
+            <WorkspacePicker class="flex-1 min-w-0" />
             <button
                 type="button"
                 data-testid="toggle-panel-bottom"
                 aria-label="Toggle status bar"
                 title="Toggle status bar"
                 :aria-pressed="statusBarOpen"
-                :class="[iconButtonClass, !statusBarOpen && 'text-zinc-400']"
+                :class="[iconButtonClass, 'w-8 h-8', !statusBarOpen && 'text-zinc-400']"
                 @click="statusBarOpen = !statusBarOpen"
             >
-                <Icon name="panel-bottom" :size="14" />
+                <Icon name="panel-bottom" :size="15" />
             </button>
-
-            <!-- Always shown; inert until a project is active (AgentAddModal then renders no modal). -->
-            <div class="ml-auto min-w-0">
-                <AgentAddModal>
-                    <template #trigger>
-                        <button
-                            type="button"
-                            :disabled="!activeProject"
-                            title="New Agent"
-                            aria-label="New Agent"
-                            class="flex items-center gap-1 max-w-full h-6 px-2 rounded-md font-medium whitespace-nowrap text-zinc-600 cursor-pointer hover:bg-black/[0.05] hover:text-zinc-900 disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent"
-                        >
-                            <Icon name="plus" :size="12" class="shrink-0" />
-                            <!-- Only the icon when the label would not fit, rather than a clipped letter. -->
-                            <span class="hidden @min-[13.75em]:inline truncate">New Agent</span>
-                        </button>
-                    </template>
-                </AgentAddModal>
-            </div>
+            <button
+                type="button"
+                title="Settings"
+                aria-label="Settings"
+                :aria-expanded="isSettingsOpen"
+                :class="[iconButtonClass, 'w-8 h-8', isSettingsOpen && 'bg-black/[0.06] text-zinc-900']"
+                @click="layout.openSettings()"
+            >
+                <Icon name="settings" :size="16" />
+            </button>
         </div>
     </aside>
 </template>

@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import { ChevronsUp, File, Folder, Funnel, RefreshCw, Search } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, ref, watch } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import { useEditorSettingsStore } from '@/stores/editorSettingsStore'
 import { useEditorStore } from '@/stores/editorStore'
 import type { Project } from '@/types/type'
-import { isIgnored, isMuted, useFileTree, type FileEntry } from './useFileTree'
+import { isIgnored, useFileTree, type FileEntry } from './useFileTree'
 
 const props = defineProps<{ project: Project }>()
 
@@ -38,56 +39,52 @@ function onEntryClick(entry: FileEntry) {
     else tree.toggle(entry)
 }
 
-const indent = (depth: number) => ({ paddingLeft: `${8 + depth * 12}px` })
+function openFirstMatch() {
+    const match = rows.value.find(row => row.kind === 'entry' && row.entry.type === 'file')
+    if (match?.kind === 'entry') onEntryClick(match.entry)
+}
 
-const iconButton = 'p-1 rounded text-zinc-400 hover:text-zinc-700 hover:bg-zinc-200/70 transition-colors'
+const indent = (depth: number) => ({ paddingLeft: `${8 + depth * 16}px` })
+
+const iconButton = 'shrink-0 w-7 h-7 flex items-center justify-center rounded-md text-zinc-500 cursor-pointer hover:text-zinc-800 hover:bg-black/[0.05] transition-colors'
 </script>
 
 <template>
-    <div class="flex-1 min-h-0 flex flex-col min-w-0 text-ui-12 text-zinc-700">
-        <div class="flex items-center gap-1 h-10 pl-3 pr-2 shrink-0">
-            <span class="flex-1 truncate text-ui-13 font-medium text-zinc-900" :title="project.path">{{ project.name }}</span>
+    <div class="flex-1 min-h-0 flex flex-col min-w-0 text-ui-13 text-zinc-800" :title="project.path">
+        <div class="flex items-center gap-1 px-3 pt-3 pb-2 shrink-0">
+            <label class="flex-1 min-w-0 flex items-center gap-2 h-8 px-2.5 rounded-lg border border-stroke bg-surface focus-within:border-zinc-400">
+                <Search :size="13" class="shrink-0 text-zinc-400" />
+                <input
+                    v-model="query"
+                    type="text"
+                    placeholder="Go to file…"
+                    aria-label="Go to file"
+                    class="flex-1 min-w-0 bg-transparent outline-none placeholder:text-zinc-400"
+                    @keydown.enter.prevent="openFirstMatch"
+                >
+            </label>
             <button
                 type="button"
-                :class="[iconButton, hidingFiles && 'text-accent! bg-zinc-200/70']"
+                :class="[iconButton, hidingFiles && 'text-accent! bg-black/[0.05]']"
                 :title="hidingFiles ? 'Show hidden and ignored files' : 'Hide hidden and ignored files'"
                 :aria-pressed="hidingFiles"
                 @click="toggleHiding"
             >
-                <Icon name="funnel" :size="13" />
+                <Funnel :size="14" />
             </button>
             <button type="button" :class="iconButton" title="Refresh" @click="tree.refresh">
-                <Icon name="refresh-cw" :size="13" />
+                <RefreshCw :size="14" />
             </button>
-            <button type="button" :class="iconButton" title="More actions" disabled class="disabled:cursor-default">
-                <Icon name="ellipsis" :size="13" />
+            <button type="button" data-testid="collapse-all" :class="iconButton" title="Collapse all" @click="tree.collapseAll">
+                <ChevronsUp :size="15" />
             </button>
-        </div>
-
-        <div class="px-2 pb-2 shrink-0 space-y-2">
-            <label class="flex items-center gap-1.5 h-7 px-2 rounded-md bg-zinc-200/50 border border-transparent focus-within:border-stroke focus-within:bg-white">
-                <Icon name="search" :size="12" class="text-zinc-400 shrink-0" />
-                <input
-                    v-model="query"
-                    type="text"
-                    placeholder="Find files"
-                    aria-label="Find files"
-                    class="flex-1 min-w-0 bg-transparent outline-none placeholder:text-zinc-400"
-                >
-            </label>
-            <div class="grid grid-cols-2 p-0.5 rounded-md bg-zinc-200/50" role="group" aria-label="Search mode">
-                <button type="button" class="h-6 rounded bg-white shadow-sm text-zinc-800" aria-pressed="true">Names</button>
-                <button type="button" class="h-6 rounded text-zinc-400 cursor-default" disabled title="Content search is coming soon">
-                    Contents
-                </button>
-            </div>
         </div>
 
         <div
             v-if="projectOpenError"
             role="alert"
             data-testid="file-open-error"
-            class="flex items-start gap-1.5 mx-2 mb-2 px-2 py-1.5 shrink-0 rounded-md bg-red-50 text-danger"
+            class="flex items-start gap-1.5 mx-3 mb-2 px-2 py-1.5 shrink-0 rounded-md bg-red-50 text-ui-12 text-danger"
         >
             <span class="flex-1 min-w-0 break-words">
                 Can't open {{ projectOpenError.path.split('/').pop() }}: {{ projectOpenError.message }}
@@ -97,20 +94,20 @@ const iconButton = 'p-1 rounded text-zinc-400 hover:text-zinc-700 hover:bg-zinc-
             </button>
         </div>
 
-        <div class="flex-1 overflow-y-auto overflow-x-hidden border-t border-stroke py-1 font-mono" role="tree" :aria-label="`${project.name} files`">
-            <p v-if="tree.isLoadingRoot()" class="px-3 py-2 font-sans text-zinc-400">Loading…</p>
-            <p v-else-if="rootError" class="px-3 py-2 font-sans text-danger">{{ rootError }}</p>
-            <p v-else-if="rows.length === 0" class="px-3 py-2 font-sans text-zinc-400">
+        <div class="flex-1 overflow-y-auto overflow-x-hidden px-1.5 pb-2" role="tree" :aria-label="`${project.name} files`">
+            <p v-if="tree.isLoadingRoot()" class="px-3 py-2 text-zinc-400">Loading…</p>
+            <p v-else-if="rootError" class="px-3 py-2 text-danger">{{ rootError }}</p>
+            <p v-else-if="rows.length === 0" class="px-3 py-2 text-zinc-400">
                 {{ query ? 'No matching files' : 'No files' }}
             </p>
             <template v-for="row in rows" :key="row.kind === 'entry' ? row.entry.path : row.key">
                 <p
                     v-if="row.kind === 'notice'"
                     :style="indent(row.depth)"
-                    class="h-[22px] flex items-center gap-1 pr-2 font-sans"
+                    class="h-7 flex items-center gap-1.5 pr-2 text-ui-12"
                     :class="row.tone === 'error' ? 'text-danger' : 'text-zinc-400 italic'"
                 >
-                    <span class="w-3 shrink-0" /><span class="truncate">{{ row.text }}</span>
+                    <span class="w-3.5 shrink-0" /><span class="truncate">{{ row.text }}</span>
                 </p>
                 <button
                     v-else
@@ -120,25 +117,25 @@ const iconButton = 'p-1 rounded text-zinc-400 hover:text-zinc-700 hover:bg-zinc-
                     :aria-selected="row.entry.path === selectedPath"
                     :title="row.entry.path"
                     :style="indent(row.depth)"
-                    class="flex items-center gap-1 w-full h-[22px] pr-2 text-left hover:bg-zinc-200/50"
+                    class="flex items-center gap-1.5 w-full h-7 pr-2 rounded-md text-left cursor-pointer hover:bg-black/[0.04]"
                     :class="[
-                        row.entry.path === selectedPath && 'bg-zinc-200! font-semibold text-zinc-900',
-                        isMuted(row.entry.name) && 'italic text-zinc-400',
+                        row.entry.path === selectedPath && 'bg-amber-100/80! font-semibold text-zinc-950',
+                        isIgnored(row.entry.name) && 'text-zinc-400',
                     ]"
                     @click="onEntryClick(row.entry)"
                 >
-                    <span class="w-3 shrink-0 flex justify-center text-zinc-400">
+                    <span class="w-3.5 shrink-0 flex justify-center text-zinc-500">
                         <Icon
                             v-if="row.entry.type === 'dir'"
                             name="chevron-right"
-                            :size="11"
+                            :size="12"
                             class="transition-transform"
                             :class="[row.expanded && 'rotate-90', row.loading && 'animate-pulse']"
                         />
                     </span>
-                    <Icon v-if="row.entry.type === 'dir'" name="folder" :size="13" fill="currentColor" class="shrink-0 text-zinc-500" />
-                    <Icon v-else name="file-text" :size="13" class="shrink-0 text-accent" />
-                    <span class="flex-1 truncate">{{ row.entry.name }}</span>
+                    <Folder v-if="row.entry.type === 'dir'" :size="14" class="shrink-0 fill-amber-300 text-amber-500" />
+                    <File v-else :size="14" class="shrink-0 text-zinc-500" />
+                    <span class="flex-1 min-w-0 truncate">{{ row.entry.name }}</span>
                     <span v-if="isIgnored(row.entry.name)" class="w-1.5 h-1.5 shrink-0 rounded-full bg-zinc-300" aria-label="ignored" />
                 </button>
             </template>

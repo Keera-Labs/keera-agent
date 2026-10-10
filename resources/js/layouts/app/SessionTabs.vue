@@ -52,7 +52,7 @@ function tabState(agent: ProjectAgent): TabState {
 }
 
 const DOT_CLASS: Record<TabState, string> = {
-    running: 'bg-amber-500 animate-pulse',
+    running: 'bg-orange-500 animate-pulse',
     live: 'bg-emerald-500',
     off: 'bg-zinc-300',
 }
@@ -86,9 +86,9 @@ const SAVE_DOT_CLASS: Record<SaveStatus, string> = {
 
 function tabClass(active: boolean) {
     return [
-        'group relative flex items-center gap-1.5 shrink-0 max-w-[200px] pl-3 pr-1.5 text-ui-12.5 border-x -mb-px cursor-pointer transition-colors',
+        'group relative self-center h-8 flex items-center gap-1.5 shrink-0 max-w-[200px] pl-3 pr-1.5 rounded-lg text-ui-13 border cursor-pointer transition-colors',
         active
-            ? 'bg-white text-zinc-900 border-stroke'
+            ? 'bg-surface text-zinc-900 font-medium border-stroke shadow-sm'
             : 'text-zinc-500 border-transparent hover:text-zinc-800 hover:bg-black/[0.03]',
     ]
 }
@@ -152,7 +152,7 @@ async function confirmDelete() {
 
 <template>
     <nav aria-label="Sessions" class="flex items-stretch min-w-0 flex-1">
-        <div role="tablist" class="flex items-stretch min-w-0 overflow-x-auto [scrollbar-width:none]">
+        <div role="tablist" class="flex items-stretch gap-1 min-w-0 px-2 overflow-x-auto [scrollbar-width:none]">
             <div
                 v-for="agent in tabs"
                 :key="agent.id"

@@ -269,10 +269,10 @@ describe('SessionTabs', () => {
 })
 
 describe('Header toolbar', () => {
-    it('opens the command palette from the Command button', async () => {
+    it('leaves search to the sidebar and commands to the right panel', async () => {
         const w = await mountHeader()
-        await w.get('[data-testid="command-button"]').trigger('click')
-        expect(store.showProjectSearch).toBe(true)
+        expect(w.find('[data-testid="command-button"]').exists()).toBe(false)
+        expect(w.find('[data-testid="run-menu-button"]').exists()).toBe(false)
     })
 
     it('offers a way back only for hidden panels and persists reopening them', async () => {
@@ -296,11 +296,17 @@ describe('Header toolbar', () => {
     it('restores persisted toggles on load', async () => {
         localStorage.setItem('keera.layout.sidebarOpen', 'false')
         localStorage.setItem('keera.layout.rightPanelOpen', 'true')
+        localStorage.setItem('keera.layout.statusBarOpen', 'true')
         await mountHeader()
 
         expect(store.sidebarOpen).toBe(false)
         expect(store.rightPanelOpen).toBe(true)
         expect(store.statusBarOpen).toBe(true)
+    })
+
+    it('hides the status bar until it is turned on', async () => {
+        await mountHeader()
+        expect(store.statusBarOpen).toBe(false)
     })
 })
 
