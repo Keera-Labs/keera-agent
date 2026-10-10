@@ -236,6 +236,13 @@ describe('TasksView', () => {
             expect(w.get('[data-testid="task-row"]').text()).not.toContain('criteria')
         })
 
+        it('shows the PR number as plain text when it has no URL', () => {
+            const w = mountView([makeTask({ id: 4, project_id: 99, pr_number: 1842 })])
+
+            expect(w.find('a[data-testid="task-pr"]').exists()).toBe(false)
+            expect(metaParts(w)).toEqual(['TASK-4', '·', 'PR #1842'])
+        })
+
         it('leaves out a missing project and agent without stray separators', () => {
             const w = mountView([makeTask({ id: 3, project_id: 99 })])
 

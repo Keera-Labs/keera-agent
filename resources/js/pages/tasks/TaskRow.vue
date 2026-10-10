@@ -57,9 +57,10 @@ function onStatusChange(e: Event) {
                             <span aria-hidden="true" class="text-zinc-300">·</span>
                         </template>
                         <span data-testid="task-ref" class="shrink-0 font-mono">TASK-{{ task.id }}</span>
-                        <template v-if="task.pr_url && task.pr_number !== null">
+                        <template v-if="task.pr_number !== null">
                             <span aria-hidden="true" class="text-zinc-300">·</span>
                             <a
+                                v-if="task.pr_url"
                                 data-testid="task-pr"
                                 :href="task.pr_url"
                                 target="_blank"
@@ -68,6 +69,7 @@ function onStatusChange(e: Event) {
                                 @click.stop
                                 @keydown.enter.stop
                             >PR #{{ task.pr_number }}</a>
+                            <span v-else data-testid="task-pr" class="shrink-0 font-mono">PR #{{ task.pr_number }}</span>
                         </template>
                         <template v-if="agents">
                             <span aria-hidden="true" class="text-zinc-300">·</span>
