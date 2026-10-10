@@ -119,6 +119,31 @@ class TestTaskController(TestCase, DatabaseTransaction):
         # JSON columns come back parsed even when read from the DB.
         self.assertEqual(rows["one"]["assignees"], ["alice"])
 
+    async def test_index_meta_total_counts_every_task_beyond_the_first_page(self):
+        stale = (datetime.datetime.now() - datetime.timedelta(days=14)).isoformat()
+        for i in range(40):
+            await TaskFactory.new().create(project_id=self.project.id, title=f"open-{i}")
+        await TaskFactory.new().create(
+            project_id=self.project.id,
+            title="stale-done",
+            status="completed",
+            completed_at=stale,
+        )
+
+        response = await self.get(self.tasks_url)
+        response.assert_ok()
+        body = response.json()
+        self.assertEqual(len(body["data"]), 15)
+        self.assertEqual(body["meta"]["total"], 40)
+
+    async def test_index_meta_total_matches_task_count_at_the_page_boundary(self):
+        for i in range(16):
+            await TaskFactory.new().create(project_id=self.project.id, title=f"boundary-{i}")
+
+        body = (await self.get(self.tasks_url)).json()
+        self.assertEqual(len(body["data"]), 15)
+        self.assertEqual(body["meta"]["total"], 16)
+
     async def test_index_scoped_to_project(self):
         await TaskFactory.new().create(project_id=self.project.id, title="mine")
         other = await ProjectFactory.new().create()
