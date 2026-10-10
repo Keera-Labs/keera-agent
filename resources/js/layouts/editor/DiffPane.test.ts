@@ -14,19 +14,55 @@ vi.mock('@inertiajs/vue3', () => ({ router: { on: vi.fn(() => () => {}) } }))
 
 const monaco = vi.hoisted(() => {
     const models: { value: string; language: string | undefined; uri: string; disposed: boolean }[] = []
-    const editor = { setModel: vi.fn(), updateOptions: vi.fn(), dispose: vi.fn() }
+    type MouseHandler = (e: unknown) => void
+    const sideEditor = () => {
+        const mouseDown: MouseHandler[] = []
+        const noop = () => ({ dispose: () => {} })
+        return {
+            mouseDown,
+            onMouseDown: (fn: MouseHandler) => { mouseDown.push(fn); return { dispose: () => {} } },
+            onDidScrollChange: noop,
+            onDidLayoutChange: noop,
+            createDecorationsCollection: () => ({ clear: () => {} }),
+            getDomNode: () => document.createElement('div'),
+            getOption: () => 18,
+            getScrollTop: () => 0,
+            getTopForLineNumber: (line: number) => (line - 1) * 18,
+            getLayoutInfo: () => ({ contentLeft: 60 }),
+            setPosition: () => {},
+            getTargetAtClientPoint: () => null,
+        }
+    }
+    const sides = { original: sideEditor(), modified: sideEditor() }
+    const editor = {
+        setModel: vi.fn(),
+        updateOptions: vi.fn(),
+        dispose: vi.fn(),
+        getModel: vi.fn(),
+        getLineChanges: vi.fn(),
+        getOriginalEditor: () => sides.original,
+        getModifiedEditor: () => sides.modified,
+    }
     const createDiffEditor = vi.fn((_host: HTMLElement, _options: Record<string, unknown>) => editor)
-    return { models, editor, createDiffEditor }
+    return { models, editor, sides, createDiffEditor }
 })
 
 vi.mock('@/editor/monaco', () => ({
     EDITOR_THEME: 'github-light',
     loadMonaco: () => Promise.resolve({
+        Range: class { constructor(public startLineNumber: number) {} },
         Uri: { from: ({ scheme, path }: { scheme: string; path: string }) => `${scheme}:${path}` },
         editor: {
+            MouseTargetType: { GUTTER_LINE_NUMBERS: 3, GUTTER_LINE_DECORATIONS: 4 },
+            EditorOption: { lineHeight: 0 },
             createDiffEditor: monaco.createDiffEditor,
             createModel: (value: string, language: string | undefined, uri: string) => {
-                const model = { value, language, uri, disposed: false, getValue: () => value, dispose: () => { model.disposed = true } }
+                const model = {
+                    value, language, uri, disposed: false,
+                    getValue: () => value,
+                    getLinesContent: () => value.split('\n'),
+                    dispose: () => { model.disposed = true },
+                }
                 monaco.models.push(model)
                 return model
             },
@@ -55,18 +91,28 @@ const diffBody = (overrides: Partial<GitDiff> = {}): GitDiff => ({
     ...overrides,
 })
 
+const PM = { data: { type: 'agents', id: '9', attributes: { name: 'Project Manager' } } }
+
 let reply: () => { status: number; body: unknown }
-const fetchMock = vi.fn((_url: string, _init?: RequestInit) => {
-    const { status, body } = reply()
+let triggerReply: () => { status: number; body: unknown }
+const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
+    const { status, body } = url.endsWith('/default-agent')
+        ? { status: 200, body: PM }
+        : url.endsWith('/worktrees')
+            ? { status: 200, body: { worktrees: [] } }
+            : url.endsWith('/trigger') ? triggerReply() : reply()
     return Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) })
 })
 
 beforeEach(() => {
     monaco.models.length = 0
     monaco.createDiffEditor.mockClear()
-    Object.values(monaco.editor).forEach(fn => fn.mockClear())
+    Object.values(monaco.editor).forEach(fn => vi.isMockFunction(fn) && fn.mockReset())
+    monaco.sides.original.mouseDown.length = 0
+    monaco.sides.modified.mouseDown.length = 0
     fetchMock.mockClear()
     reply = () => ({ status: 200, body: diffBody() })
+    triggerReply = () => ({ status: 200, body: { data: { type: 'agents', id: '9' } } })
     vi.stubGlobal('fetch', fetchMock)
 })
 
@@ -234,6 +280,70 @@ describe('DiffPane', () => {
             expect(w.find('[data-testid="markdown-preview"]').text()).toBe('New')
             expect(w.find('[data-testid="diff-side-by-side"]').exists()).toBe(false)
             expect(window.localStorage.getItem('keera.markdownView.changes')).toBe('preview')
+        })
+    })
+
+    describe('asking the agent about selected lines', () => {
+        async function selectLine(line: number, shiftKey = false) {
+            const [original, modified] = monaco.models.slice(-2)
+            monaco.editor.getModel.mockReturnValue({ original, modified })
+            monaco.sides.modified.mouseDown.forEach(fn => fn({ target: { type: 3, position: { lineNumber: line } }, event: { shiftKey } }))
+            await flushPromises()
+        }
+
+        const triggerCalls = () => fetchMock.mock.calls.filter(([url]) => url.endsWith('/trigger'))
+
+        beforeEach(() => {
+            reply = () => ({ status: 200, body: diffBody({ original: 'a\nb\nc', modified: 'a\nB\nc' }) })
+            monaco.editor.getLineChanges.mockReturnValue([
+                { originalStartLineNumber: 2, originalEndLineNumber: 2, modifiedStartLineNumber: 2, modifiedEndLineNumber: 2 },
+            ] as never)
+        })
+
+        it('opens a popover for a clicked line range addressed to the owning agent', async () => {
+            const w = await mountPane()
+            await selectLine(1)
+            await selectLine(2, true)
+
+            expect(w.get('[data-testid="ask-lines-label"]').text()).toBe('Lines 1–2')
+            expect(w.get('[data-testid="ask-lines-question"]').attributes('placeholder')).toBe('Ask Project Manager about these lines…')
+            expect(w.get('[data-testid="ask-lines-send"]').attributes('disabled')).toBeDefined()
+        })
+
+        it('sends the file, the diffed lines and the question to the agent', async () => {
+            const w = await mountPane()
+            await selectLine(2)
+            await w.get('[data-testid="ask-lines-question"]').setValue('Why upper case?')
+            await w.get('[data-testid="ask-lines-send"]').trigger('click')
+            await flushPromises()
+
+            const [url, init] = triggerCalls()[0]
+            expect(url).toBe('/api/agents/9/trigger')
+            expect(init?.headers).toMatchObject({ 'Content-Type': 'application/json' })
+            const { message } = JSON.parse(String(init?.body))
+            expect(message).toContain('File: src/promo.ts')
+            expect(message).toContain('```diff\n-b\n+B\n```')
+            expect(message).toContain('Why upper case?')
+            expect(w.get('[data-testid="ask-lines-sent"]').text()).toContain('Sent to Project Manager')
+        })
+
+        it('reports a failed send', async () => {
+            triggerReply = () => ({ status: 400, body: { error: 'Agent is not running' } })
+            const w = await mountPane()
+            await selectLine(2)
+            await w.get('[data-testid="ask-lines-question"]').setValue('Why?')
+            await w.get('[data-testid="ask-lines-send"]').trigger('click')
+            await flushPromises()
+
+            expect(w.get('[data-testid="ask-lines-error"]').text()).toBe('Agent is not running')
+        })
+
+        it('closes the popover on Escape', async () => {
+            const w = await mountPane()
+            await selectLine(2)
+            await w.get('[data-testid="ask-lines-question"]').trigger('keydown', { key: 'Escape' })
+
+            expect(w.find('[data-testid="ask-lines-popover"]').exists()).toBe(false)
         })
     })
 })

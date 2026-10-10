@@ -233,3 +233,29 @@ export function orchestratedCount(agents: ProjectAgent[], agent: ProjectAgent): 
     if (agent.agent_type !== 'pm') return 0
     return agents.filter(a => a.orchestrator_id === agent.id).length
 }
+
+export function useDefaultAgent(projectIdSource: MaybeRefOrGetter<number | null>) {
+    const projectId = () => toValue(projectIdSource)
+    return useQuery({
+        key: () => ['agents', projectId(), 'default'],
+        query: async () => {
+            const res = await fetch(`/api/projects/${projectId()}/default-agent`, { headers: { Accept: 'application/json' } })
+            if (!res.ok) throw new Error('Failed to fetch the default agent')
+            const json = (await res.json()) as { data?: AgentResource } | null
+            return json?.data ? normalizeAgent(json.data) : null
+        },
+        enabled: () => projectId() !== null,
+        staleTime: 1000 * 30,
+    })
+}
+
+export async function messageAgent(agentId: number, message: string): Promise<void> {
+    const res = await fetch(`/api/agents/${agentId}/trigger`, {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+    })
+    if (res.ok) return
+    const body = (await res.json().catch(() => null)) as { error?: string; detail?: string } | null
+    throw new Error(body?.error ?? body?.detail ?? `Failed to message the agent (${res.status})`)
+}
