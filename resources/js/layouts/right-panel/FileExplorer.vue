@@ -11,7 +11,7 @@ import { isIgnored, useFileTree, type FileEntry } from './useFileTree'
 const props = defineProps<{ project: Project }>()
 
 const editor = useEditorStore()
-const { openError } = storeToRefs(editor)
+const { openError, activeTab } = storeToRefs(editor)
 const tree = useFileTree(() => props.project.id)
 const { rootError } = tree
 const query = ref('')
@@ -32,6 +32,27 @@ function toggleHiding() {
 }
 
 onMounted(tree.refresh)
+
+const treeList = ref<HTMLElement | null>(null)
+
+function revealSelectedRow() {
+    const list = treeList.value
+    const row = [...list?.querySelectorAll<HTMLElement>('[role="treeitem"]') ?? []].find(el => el.dataset.path === selectedPath.value)
+    if (!list || !row) return
+    const bounds = list.getBoundingClientRect()
+    const box = row.getBoundingClientRect()
+    if (box.top < bounds.top || box.bottom > bounds.bottom) row.scrollIntoView({ block: 'start' })
+}
+
+watch(
+    () => activeTab.value?.projectId === props.project.id ? activeTab.value.path : null,
+    path => {
+        if (path === null) return
+        selectedPath.value = path
+        revealSelectedRow()
+    },
+    { immediate: true, flush: 'post' },
+)
 
 function onEntryClick(entry: FileEntry) {
     selectedPath.value = entry.path
@@ -94,7 +115,7 @@ const iconButton = 'shrink-0 w-7 h-7 flex items-center justify-center rounded-md
             </button>
         </div>
 
-        <div class="flex-1 overflow-y-auto overflow-x-hidden px-1.5 pb-2" role="tree" :aria-label="`${project.name} files`">
+        <div ref="treeList" class="flex-1 overflow-y-auto overflow-x-hidden px-1.5 pb-2" role="tree" :aria-label="`${project.name} files`">
             <p v-if="tree.isLoadingRoot()" class="px-3 py-2 text-zinc-400">Loading…</p>
             <p v-else-if="rootError" class="px-3 py-2 text-danger">{{ rootError }}</p>
             <p v-else-if="rows.length === 0" class="px-3 py-2 text-zinc-400">
@@ -115,6 +136,7 @@ const iconButton = 'shrink-0 w-7 h-7 flex items-center justify-center rounded-md
                     role="treeitem"
                     :aria-expanded="row.entry.type === 'dir' ? row.expanded : undefined"
                     :aria-selected="row.entry.path === selectedPath"
+                    :data-path="row.entry.path"
                     :title="row.entry.path"
                     :style="indent(row.depth)"
                     class="flex items-center gap-1.5 w-full h-7 pr-2 rounded-md text-left cursor-pointer hover:bg-black/[0.04]"

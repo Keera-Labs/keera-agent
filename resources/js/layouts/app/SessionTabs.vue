@@ -2,7 +2,7 @@
 import { router, usePage } from '@inertiajs/vue3'
 import { FileDiff } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import ConfirmDeleteAgentModal from '@/components/modals/ConfirmDeleteAgentModal.vue'
 import Icon from '@/components/ui/Icon.vue'
 import AgentAddModal from '@/pages/agents/AgentAddModal.vue'
@@ -77,12 +77,22 @@ function diffDescription(tab: DiffTab) {
 const diffTitle = (tab: DiffTab) => [tab.path, diffDescription(tab), tab.worktreeLabel].filter(Boolean).join(' · ')
 
 const SAVE_DOT_CLASS: Record<SaveStatus, string> = {
-    saving: 'bg-zinc-500 animate-pulse',
-    conflict: 'bg-amber-500',
+    saving: 'bg-amber-500 animate-pulse',
+    conflict: 'bg-red-500',
     error: 'bg-red-500',
-    unsaved: 'bg-zinc-500',
-    saved: '',
+    unsaved: 'bg-amber-500',
+    saved: 'bg-sky-500',
 }
+
+const tablist = ref<HTMLElement | null>(null)
+
+function scrollActiveTabIntoView() {
+    tablist.value
+        ?.querySelector('[role="tab"][aria-selected="true"]')
+        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+}
+
+watch([activeFileTab, activeDiffTab, activeAgentId, () => page.component], scrollActiveTabIntoView, { flush: 'post' })
 
 function tabClass(active: boolean) {
     return [
@@ -152,7 +162,7 @@ async function confirmDelete() {
 
 <template>
     <nav aria-label="Sessions" class="flex items-stretch min-w-0 flex-1">
-        <div role="tablist" class="flex items-stretch gap-1 min-w-0 px-2 overflow-x-auto [scrollbar-width:none]">
+        <div ref="tablist" role="tablist" class="flex items-stretch gap-1 min-w-0 px-2 overflow-x-auto [scrollbar-width:none]">
             <div
                 v-for="agent in tabs"
                 :key="agent.id"
@@ -196,7 +206,11 @@ async function confirmDelete() {
                 :title="tab.path"
                 @click="editor.activate(tab.projectId, tab.path)"
             >
-                <Icon name="file-text" :size="12" class="shrink-0 text-accent" />
+                <span
+                    data-testid="editor-tab-dot"
+                    :title="SAVE_STATUS_LABEL[saveStatus(tab)]"
+                    :class="['w-[7px] h-[7px] rounded-full shrink-0', SAVE_DOT_CLASS[saveStatus(tab)]]"
+                />
                 <button
                     type="button"
                     role="tab"
@@ -209,13 +223,11 @@ async function confirmDelete() {
                     type="button"
                     data-testid="editor-tab-close"
                     :aria-label="`Close ${tab.name}`"
-                    :title="tab.dirty ? SAVE_STATUS_LABEL[saveStatus(tab)] : 'Close file'"
-                    :class="[closeButtonClass, isFileActive(tab) || tab.dirty ? 'visible' : 'invisible group-hover:visible']"
+                    title="Close file"
+                    :class="[closeButtonClass, isFileActive(tab) ? 'visible' : 'invisible group-hover:visible']"
                     @click.stop="editor.close(tab.projectId, tab.path)"
                 >
-                    <!-- The unsaved dot turns into the close cross on hover, as in most editors. -->
-                    <span v-if="tab.dirty" :class="['w-2 h-2 rounded-full group-hover:hidden', SAVE_DOT_CLASS[saveStatus(tab)]]" />
-                    <Icon name="x" :size="11" :class="tab.dirty && 'hidden group-hover:block'" />
+                    <Icon name="x" :size="11" />
                 </button>
             </div>
 

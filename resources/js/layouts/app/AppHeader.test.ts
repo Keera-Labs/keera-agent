@@ -238,6 +238,10 @@ describe('SessionTabs', () => {
         expect(fileTabs.map(t => t.text())).toEqual(['app.ts', 'README.md'])
         expect(fileTabs.map(t => t.attributes('data-dirty'))).toEqual(['true', 'false'])
         expect(fileTabs.map(t => t.attributes('data-save-status'))).toEqual(['unsaved', 'saved'])
+        expect(fileTabs.map(t => t.get('[data-testid="editor-tab-dot"]').classes())).toEqual([
+            expect.arrayContaining(['rounded-full', 'bg-amber-500']),
+            expect.arrayContaining(['rounded-full', 'bg-sky-500']),
+        ])
         const selected = w.findAll('[role="tab"][aria-selected="true"]')
         expect(selected.map(t => t.text())).toEqual(['app.ts'])
 
@@ -247,6 +251,25 @@ describe('SessionTabs', () => {
         const close = vi.spyOn(editor, 'close').mockResolvedValue(true)
         await fileTabs[0].get('[data-testid="editor-tab-close"]').trigger('click')
         expect(close).toHaveBeenCalledWith(project.id, 'src/app.ts')
+    })
+
+    it('scrolls the active file tab into view when a file becomes active', async () => {
+        const scrolled: string[] = []
+        const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(function (this: Element) {
+            scrolled.push(this.textContent?.trim() ?? '')
+        })
+        await mountHeader()
+        const editor = useEditorStore()
+        editor.tabsByProject[project.id] = [
+            { projectId: project.id, path: 'a.ts', name: 'a.ts', etag: 'e1', dirty: false, saving: false, conflict: false, error: null },
+            { projectId: project.id, path: 'b.ts', name: 'b.ts', etag: 'e2', dirty: false, saving: false, conflict: false, error: null },
+        ]
+        editor.activate(project.id, 'b.ts')
+        await flushPromises()
+
+        expect(scrolled.at(-1)).toBe('b.ts')
+        expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'nearest', inline: 'nearest' })
+        scrollIntoView.mockRestore()
     })
 
     it('labels committed diff tabs apart from index and working tree diffs of the same file', async () => {

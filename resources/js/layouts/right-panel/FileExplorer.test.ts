@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { installPinia } from '@/pages/agents/testing'
 import { useEditorStore } from '@/stores/editorStore'
+import { useProjectStore } from '@/stores/projectStore'
 import type { Project } from '@/types/type'
 import FileExplorer from './FileExplorer.vue'
 
@@ -73,6 +74,34 @@ describe('FileExplorer', () => {
         expect(w.get('[role="treeitem"][aria-selected="true"]').classes()).toEqual(
             expect.arrayContaining(['bg-amber-100/80!', 'font-semibold']),
         )
+    })
+
+    it('selects the active file and scrolls it to the top only when it is out of view', async () => {
+        const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {})
+        const w = await mountExplorer()
+        useProjectStore().setActiveProject(project)
+        const editor = useEditorStore()
+        const list = w.get('[role="tree"]').element
+        vi.spyOn(list, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 100))
+        const readme = w.findAll('[role="treeitem"]')[2].element
+        const rowAt = (top: number) => vi.spyOn(readme, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, top, 200, 28))
+        const tab = { projectId: project.id, name: 'README.md', etag: 'e', dirty: false, saving: false, conflict: false, error: null }
+        editor.tabsByProject[project.id] = [{ ...tab, path: 'README.md' }, { ...tab, path: 'app/tasks.py', name: 'tasks.py' }]
+
+        rowAt(20)
+        editor.activate(project.id, 'README.md')
+        await flushPromises()
+        expect(w.get('[role="treeitem"][aria-selected="true"]').text()).toBe('README.md')
+        expect(scrollIntoView).not.toHaveBeenCalled()
+
+        editor.activate(project.id, 'app/tasks.py')
+        await flushPromises()
+        rowAt(400)
+        editor.activate(project.id, 'README.md')
+        await flushPromises()
+        expect(scrollIntoView).toHaveBeenCalledTimes(1)
+        expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start' })
+        scrollIntoView.mockRestore()
     })
 
     it('collapses every open folder at once', async () => {
