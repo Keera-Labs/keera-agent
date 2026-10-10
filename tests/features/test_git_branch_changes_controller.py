@@ -193,6 +193,19 @@ class TestGitBranchChangesController(TestCase, DatabaseTransaction):
         assert remote["base"] == "origin/dev" and remote["ahead"] == 2
         assert sorted(f["path"] for f in remote["files"]) == ["dev-local.txt", "notes.txt"]
 
+    async def test_local_branch_named_like_a_remote_branch_wins_and_is_listed_once(self):
+        self.repo.add_bare_remote()
+        self.repo.git("push", "-q", "origin", "dev")
+        self.repo.write("notes.txt", "feature\n")
+        self.repo.commit_all()
+        self.repo.git("branch", "origin/dev")
+
+        body = await self.comparison(base="origin/dev")
+        assert body["base"] == "origin/dev" and body["ahead"] == 0
+
+        branches = (await self.get(f"/api/projects/{self.project.id}/git/branches")).json()
+        assert branches["branches"].count("origin/dev") == 1
+
     async def test_unknown_or_malformed_base_is_rejected(self):
         response = await self.get(
             f"/api/projects/{self.project.id}/git/branch-changes", params={"base": "nope"}

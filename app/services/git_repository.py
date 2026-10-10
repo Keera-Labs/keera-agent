@@ -394,8 +394,9 @@ class GitRepository:
         )
         names = []
         for ref in result.text.split():
-            if not _is_remote_head(ref):
-                names.append(short_ref(ref))
+            name = short_ref(ref)
+            if not _is_remote_head(ref) and name not in names:
+                names.append(name)
         return names
 
     async def default_base_name(self) -> str | None:
