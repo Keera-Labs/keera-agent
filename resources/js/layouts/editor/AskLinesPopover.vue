@@ -2,7 +2,7 @@
 import { ArrowRight, Check, Code, X } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
 
-export type AskStatus = 'idle' | 'sending' | 'sent' | 'failed'
+export type AskStatus = 'idle' | 'sending' | 'sent' | 'started' | 'failed'
 
 const props = defineProps<{
     label: string
@@ -35,7 +35,7 @@ function onKeydown(e: KeyboardEvent) {
 }
 
 watch(() => props.status, status => {
-    if (status === 'sent') question.value = ''
+    if (status === 'sent' || status === 'started') question.value = ''
 })
 
 function focus() {
@@ -82,6 +82,9 @@ defineExpose({ focus })
             </p>
             <p v-else-if="status === 'sent'" class="flex items-center gap-1 text-ui-12 text-emerald-700" data-testid="ask-lines-sent">
                 <Check :size="13" /> Sent to {{ agentName }}
+            </p>
+            <p v-else-if="status === 'started'" class="flex items-center gap-1 text-ui-12 text-amber-700" data-testid="ask-lines-started">
+                <Check :size="13" /> Starting {{ agentName }} with your question
             </p>
             <p v-else-if="agentName === null" class="text-ui-12 text-zinc-500">No agent owns this worktree.</p>
             <kbd class="ml-auto shrink-0 font-sans text-ui-12 text-zinc-500">⌘↵</kbd>

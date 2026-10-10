@@ -15,7 +15,7 @@ export function useAskAgent(targetSource: MaybeRefOrGetter<GitTarget | null>, se
     const owner = computed(() => {
         const worktree = toValue(targetSource)?.worktree
         const row = worktree ? worktrees.data.value?.find(w => w.path === worktree) : undefined
-        if (row?.agent_id) return { id: row.agent_id, name: row.agent_name ?? `Agent ${row.agent_id}` }
+        if (row?.agent_id && row.agent_name) return { id: row.agent_id, name: row.agent_name }
         const fallback = defaultAgent.data.value
         return fallback ? { id: fallback.id, name: fallback.name } : null
     })
@@ -31,8 +31,7 @@ export function useAskAgent(targetSource: MaybeRefOrGetter<GitTarget | null>, se
         status.value = 'sending'
         error.value = null
         try {
-            await messageAgent(agent.id, message)
-            status.value = 'sent'
+            status.value = (await messageAgent(agent.id, message)) === 'starting' ? 'started' : 'sent'
         } catch (e) {
             status.value = 'failed'
             error.value = e instanceof Error ? e.message : null

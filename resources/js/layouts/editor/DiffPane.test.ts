@@ -94,12 +94,13 @@ const diffBody = (overrides: Partial<GitDiff> = {}): GitDiff => ({
 const PM = { data: { type: 'agents', id: '9', attributes: { name: 'Project Manager' } } }
 
 let reply: () => { status: number; body: unknown }
+let worktrees: unknown[] = []
 let triggerReply: () => { status: number; body: unknown }
 const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
     const { status, body } = url.endsWith('/default-agent')
         ? { status: 200, body: PM }
         : url.endsWith('/worktrees')
-            ? { status: 200, body: { worktrees: [] } }
+            ? { status: 200, body: { worktrees } }
             : url.endsWith('/trigger') ? triggerReply() : reply()
     return Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) })
 })
@@ -112,16 +113,17 @@ beforeEach(() => {
     monaco.sides.modified.mouseDown.length = 0
     fetchMock.mockClear()
     reply = () => ({ status: 200, body: diffBody() })
+    worktrees = []
     triggerReply = () => ({ status: 200, body: { data: { type: 'agents', id: '9' } } })
     vi.stubGlobal('fetch', fetchMock)
 })
 
 afterEach(() => vi.unstubAllGlobals())
 
-async function mountPane(path = 'src/promo.ts', staged = false, options: DiffTabOptions = {}) {
+async function mountPane(path = 'src/promo.ts', staged = false, options: DiffTabOptions = {}, target: typeof MAIN | { projectId: number; worktree: string } = MAIN) {
     const wrapper = mount(DiffPane, { global: { plugins: [...installPinia()] }, attachTo: document.body })
     useProjectStore().setActiveProject(PROJECT)
-    useDiffStore().open(MAIN, path, staged, options)
+    useDiffStore().open(target, path, staged, options)
     await flushPromises()
     return wrapper
 }
@@ -325,6 +327,39 @@ describe('DiffPane', () => {
             expect(message).toContain('```diff\n-b\n+B\n```')
             expect(message).toContain('Why upper case?')
             expect(w.get('[data-testid="ask-lines-sent"]').text()).toContain('Sent to Project Manager')
+        })
+
+        it('says the agent is starting when it had no live session', async () => {
+            triggerReply = () => ({ status: 200, body: { status: 'starting', message: 'Agent is starting up...' } })
+            const w = await mountPane()
+            await selectLine(2)
+            await w.get('[data-testid="ask-lines-question"]').setValue('Why?')
+            await w.get('[data-testid="ask-lines-send"]').trigger('click')
+            await flushPromises()
+
+            expect(w.find('[data-testid="ask-lines-sent"]').exists()).toBe(false)
+            expect(w.get('[data-testid="ask-lines-started"]').text()).toBe('Starting Project Manager with your question')
+        })
+
+        it('addresses the agent that owns the viewed worktree', async () => {
+            const tree = '/repo/.claude/worktrees/agent-7'
+            worktrees = [{ path: tree, agent_id: 7, agent_name: 'UI Polish Engineer' }]
+            const w = await mountPane('src/promo.ts', false, {}, { projectId: 1, worktree: tree })
+            await selectLine(2)
+
+            expect(w.get('[data-testid="ask-lines-question"]').attributes('placeholder')).toBe('Ask UI Polish Engineer about these lines…')
+        })
+
+        it('falls back to the default agent when the worktree names no agent of this project', async () => {
+            const tree = '/repo/.claude/worktrees/agent-404'
+            worktrees = [{ path: tree, agent_id: 404, agent_name: null }]
+            const w = await mountPane('src/promo.ts', false, {}, { projectId: 1, worktree: tree })
+            await selectLine(2)
+            await w.get('[data-testid="ask-lines-question"]').setValue('Why?')
+            await w.get('[data-testid="ask-lines-send"]').trigger('click')
+            await flushPromises()
+
+            expect(fetchMock.mock.calls.filter(([url]) => url.endsWith('/trigger')).map(([url]) => url)).toEqual(['/api/agents/9/trigger'])
         })
 
         it('reports a failed send', async () => {

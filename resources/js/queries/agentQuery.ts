@@ -249,13 +249,15 @@ export function useDefaultAgent(projectIdSource: MaybeRefOrGetter<number | null>
     })
 }
 
-export async function messageAgent(agentId: number, message: string): Promise<void> {
+export type AgentDelivery = 'injected' | 'starting'
+
+export async function messageAgent(agentId: number, message: string): Promise<AgentDelivery> {
     const res = await fetch(`/api/agents/${agentId}/trigger`, {
         method: 'POST',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
         body: JSON.stringify({ message }),
     })
-    if (res.ok) return
-    const body = (await res.json().catch(() => null)) as { error?: string; detail?: string } | null
+    const body = (await res.json().catch(() => null)) as { status?: string; error?: string; detail?: string } | null
+    if (res.ok) return body?.status === 'starting' ? 'starting' : 'injected'
     throw new Error(body?.error ?? body?.detail ?? `Failed to message the agent (${res.status})`)
 }
