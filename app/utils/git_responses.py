@@ -5,13 +5,14 @@ from app.services.git_repository import (
     InvalidBase,
     InvalidRepoPath,
     InvalidWorktree,
+    MainWorktreeRemoval,
 )
 from app.services.github_cli import GhUnavailable
 from app.services.process import CommandError
 
 
 def git_error_status(error: CommandError) -> int:
-    if isinstance(error, (InvalidBase, InvalidRepoPath, InvalidWorktree)):
+    if isinstance(error, (InvalidBase, InvalidRepoPath, InvalidWorktree, MainWorktreeRemoval)):
         return 422
     if isinstance(error, ChangeNotFound):
         return 404

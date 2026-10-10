@@ -388,42 +388,14 @@ describe('SourceControl', () => {
         expect(w.get('[data-testid="ahead-of-base"]').text()).toBe('0 ahead of dev')
         expect(w.get('[data-testid="base-picker"]').text()).toBe('dev')
         expect(w.find('[data-testid="committed-changes"]').exists()).toBe(false)
-        expect(w.find('[data-testid="dirty-worktrees"]').exists()).toBe(false)
     })
 
-    it('lists other worktrees with uncommitted changes and switches to one on click', async () => {
+    it('leaves other worktrees with uncommitted changes to the Worktrees tab', async () => {
         status = gitStatus()
-        worktreeChanges = { '/code/shop': 0, [AGENT_TREE]: 3, '/tmp/gone': 4 }
+        worktreeChanges = { '/code/shop': 0, [AGENT_TREE]: 3 }
         const w = await mountPanel()
-
-        const rows = w.findAll('[data-testid="dirty-worktree"]')
-        expect(rows).toHaveLength(1)
-        expect(rows[0]!.text()).toContain('Diff Frontend')
-        expect(rows[0]!.text()).toContain('task/2034-diff')
-        expect(rows[0]!.text()).toContain('3 files')
-
-        await rows[0]!.trigger('click')
-        await flushPromises()
-
-        expect(fetchMock).toHaveBeenCalledWith(`/api/projects/9/git/status?worktree=${encodeURIComponent(AGENT_TREE)}`, expect.anything())
-        expect(w.get('[data-testid="worktree-label"]').text()).toBe('Diff Frontend')
-        expect(w.find('[data-testid="dirty-worktrees"]').exists()).toBe(false)
-    })
-
-    it('caps the dirty worktree list and points at the menu for the rest', async () => {
-        status = gitStatus()
-        worktrees = [worktrees[0]!, ...Array.from({ length: 7 }, (_, i) => gitWorktree(`/code/shop/.claude/worktrees/agent-${i + 20}`))]
-        worktreeChanges = Object.fromEntries(worktrees.map(w => [w.path, 1]))
-        const w = await mountPanel()
-
-        expect(w.findAll('[data-testid="dirty-worktree"]')).toHaveLength(5)
-        expect(w.get('[data-testid="dirty-worktrees-more"]').text()).toBe('2 more in the worktree menu above.')
-    })
-
-    it('hides other worktrees while the viewed checkout has its own changes', async () => {
-        worktreeChanges = { '/code/shop': 5, [AGENT_TREE]: 3 }
-        const w = await mountPanel()
-        expect(w.find('[data-testid="dirty-worktrees"]').exists()).toBe(false)
+        expect(w.find('[data-testid="clean-tree"]').exists()).toBe(true)
+        expect(w.text()).not.toContain('Uncommitted in other worktrees')
     })
 
     it('shows each worktree\'s uncommitted file count in the worktree menu', async () => {

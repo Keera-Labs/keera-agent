@@ -71,6 +71,7 @@ router.put("/api/projects/{project_id}/files/content", project_file_content_cont
 # Source Control panel — git operations on the project's repository; every endpoint
 # takes an optional ?worktree=<path from /git/worktrees>.
 router.get("/api/projects/{project_id}/git/worktrees", git_worktree_controller.index)
+router.delete("/api/projects/{project_id}/git/worktrees", git_worktree_controller.destroy)
 router.get("/api/projects/{project_id}/git/worktrees/changes", git_worktree_change_controller.index)
 router.get("/api/projects/{project_id}/git/branches", git_branch_controller.index)
 router.get("/api/projects/{project_id}/git/branch-changes", git_branch_changes_controller.show)

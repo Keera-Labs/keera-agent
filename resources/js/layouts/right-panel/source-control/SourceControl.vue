@@ -16,7 +16,6 @@ import { useEditorStore } from '@/stores/editorStore'
 import type { Project } from '@/types/type'
 import BasePicker from './BasePicker.vue'
 import ChangeList from './ChangeList.vue'
-import DirtyWorktrees from './DirtyWorktrees.vue'
 import PanelMenu from './PanelMenu.vue'
 import { menuItemClass, useCommitDraft, type ChangeRow } from './sourceControl'
 import WorktreePicker from './WorktreePicker.vue'
@@ -102,9 +101,6 @@ const checkoutName = computed(() => {
     if (!worktree) return 'this checkout'
     return worktree.is_main ? 'the main checkout' : worktreeLabel(worktree)
 })
-const dirtyWorktrees = computed(() =>
-    worktrees.value.filter(w => w.path !== selectedWorktree.value?.path && (worktreeChanges.value[w.path] ?? 0) > 0),
-)
 const pullRequestInfo = computed(() => pullRequestQuery.data.value)
 const openPullRequest = computed(() => (isOpenPullRequest(pullRequestInfo.value) ? pullRequestInfo.value!.pull_request : null))
 const onBranch = computed(() => !!status.value?.branch && !status.value.detached)
@@ -325,12 +321,6 @@ const outlineButton = 'shrink-0 h-10 flex items-center justify-center gap-1.5 px
                 >
                     No uncommitted changes in {{ checkoutName }}.
                 </p>
-                <DirtyWorktrees
-                    v-if="workingTreeClean && dirtyWorktrees.length"
-                    :worktrees="dirtyWorktrees"
-                    :changes="worktreeChanges"
-                    @select="selectWorktree"
-                />
                 <ChangeList
                     v-if="rows.length"
                     title="Changes"

@@ -25,6 +25,11 @@ class GitWorktreeQuery(BaseModel):
     worktree: Optional[str] = None
 
 
+class GitWorktreeDestroyQuery(BaseModel):
+    worktree: str = Field(min_length=1)
+    force: bool = False
+
+
 BRANCH_NAME = r"^[A-Za-z0-9][A-Za-z0-9._/-]*$"
 
 

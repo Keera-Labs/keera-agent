@@ -66,6 +66,21 @@ class TestShellController(TestCase, DatabaseTransaction):
 
         await self._output_of(ws, 'echo "cwd=$(pwd -P)"', f"cwd={worktree}\r")
 
+    async def test_removing_a_worktree_closes_the_shells_open_in_it(self):
+        worktree = self.repo.add_worktree("../doomed", "doomed-work")
+        _, doomed = self._attach(str(worktree))
+        _, kept = self._attach()
+        self.assertTrue(await _until(lambda: len(self._shell_sessions()) == 2, 10))
+
+        response = await self.delete(
+            f"/api/projects/{self.project.id}/git/worktrees", params={"worktree": str(worktree)}
+        )
+
+        response.assert_no_content()
+        self.assertTrue(await _until(doomed.done, 10))
+        self.assertEqual(len(self._shell_sessions()), 1)
+        self.assertFalse(kept.done())
+
     async def test_runs_the_user_shell_as_a_login_shell(self):
         ws, _ = self._attach()
 

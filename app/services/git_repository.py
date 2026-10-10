@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from app.services.process import CommandError, CommandResult, run_command
+from app.services.worktree_cleanup import lock_pid, pid_alive
 from app.utils.project_paths import InvalidPath, project_root, resolve_project_path
 
 READ_TIMEOUT = 30
@@ -38,6 +39,22 @@ class ChangeNotFound(CommandError):
     pass
 
 
+class MainWorktreeRemoval(CommandError):
+    def __init__(self):
+        super().__init__("The main worktree cannot be removed")
+
+
+class WorktreeLocked(CommandError):
+    def __init__(self):
+        super().__init__("The worktree is locked by a running session")
+
+
+class WorktreeHasChanges(CommandError):
+    def __init__(self, count: int):
+        noun = "file" if count == 1 else "files"
+        super().__init__(f"The worktree has {count} uncommitted {noun} that would be lost")
+
+
 class InvalidBase(CommandError):
     def __init__(self, name: str):
         super().__init__(f"Unknown base branch: {name}")
@@ -51,7 +68,15 @@ class Worktree:
     detached: bool = False
     bare: bool = False
     locked: bool = False
+    lock_reason: str | None = None
     prunable: bool = False
+
+
+def _worktree_path(path: str) -> Path:
+    try:
+        return Path(path).resolve()
+    except (OSError, ValueError, RuntimeError) as e:
+        raise InvalidWorktree(path) from e
 
 
 def _parse_worktrees(raw: bytes) -> list[Worktree]:
@@ -69,6 +94,8 @@ def _parse_worktrees(raw: bytes) -> list[Worktree]:
             worktrees[-1].branch = value.removeprefix("refs/heads/")
         elif key in ("detached", "bare", "locked", "prunable"):
             setattr(worktrees[-1], key, True)
+            if key == "locked":
+                worktrees[-1].lock_reason = value or None
     return worktrees
 
 
@@ -263,14 +290,37 @@ class GitRepository:
 
     async def select_worktree(self, path: str) -> "GitRepository":
         """Switch to one of this repo's worktrees; only paths git itself lists are accepted."""
-        try:
-            wanted = Path(path).resolve()
-        except (OSError, ValueError, RuntimeError) as e:
-            raise InvalidWorktree(path) from e
+        wanted = _worktree_path(path)
         for worktree in await self.worktrees():
             if Path(worktree.path) == wanted and not (worktree.bare or worktree.prunable):
                 return GitRepository(wanted)
         raise InvalidWorktree(path)
+
+    async def removable_worktree(self, path: str) -> Worktree:
+        wanted = _worktree_path(path)
+        worktrees = await self.worktrees()
+        position = next((i for i, w in enumerate(worktrees) if Path(w.path) == wanted), None)
+        if position is None:
+            raise InvalidWorktree(path)
+        if position == 0 or wanted == self.root:
+            raise MainWorktreeRemoval()
+        return worktrees[position]
+
+    async def remove_worktree(self, worktree: Worktree, force: bool = False) -> None:
+        if worktree.locked:
+            await self._release_stale_lock(worktree)
+        if not force and not worktree.prunable:
+            count = (await GitRepository(Path(worktree.path)).changed_files()).count
+            if count:
+                raise WorktreeHasChanges(count)
+        options = ["--force"] if force else []
+        await self.git_ok("worktree", "remove", *options, worktree.path, timeout=WRITE_TIMEOUT)
+
+    async def _release_stale_lock(self, worktree: Worktree) -> None:
+        pid = lock_pid(worktree.lock_reason)
+        if pid is None or pid_alive(pid):
+            raise WorktreeLocked()
+        await self.git_ok("worktree", "unlock", worktree.path)
 
     async def git(self, *args: str, timeout: float = READ_TIMEOUT, stdin: bytes | None = None):
         return await run_command(

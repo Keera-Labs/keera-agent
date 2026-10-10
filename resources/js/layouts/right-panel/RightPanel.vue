@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { usePage } from '@inertiajs/vue3'
-import { Diff, FolderClosed, PanelRight, SquareTerminal, Zap, type LucideIcon } from '@lucide/vue'
+import { Diff, FolderClosed, FolderGit2, PanelRight, SquareTerminal, Zap, type LucideIcon } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { useAgentWorktreeDefault, useGitWorktree } from '@/composables/useGitWorktree'
@@ -15,14 +15,16 @@ import CommandsView from './commands/CommandsView.vue'
 import FileExplorer from './FileExplorer.vue'
 import SourceControl from './source-control/SourceControl.vue'
 import TerminalView from './TerminalView.vue'
+import WorktreesView from './worktrees/WorktreesView.vue'
 
-type ViewId = 'changes' | 'files' | 'terminal' | 'commands'
+type ViewId = 'changes' | 'files' | 'terminal' | 'commands' | 'worktrees'
 
 const VIEWS: { id: ViewId; label: string; icon: LucideIcon }[] = [
     { id: 'changes', label: 'Changes', icon: Diff },
     { id: 'files', label: 'Files', icon: FolderClosed },
     { id: 'terminal', label: 'Terminal', icon: SquareTerminal },
     { id: 'commands', label: 'Commands', icon: Zap },
+    { id: 'worktrees', label: 'Worktrees', icon: FolderGit2 },
 ]
 
 const EMPTY_TEXT: Record<ViewId, string> = {
@@ -30,6 +32,7 @@ const EMPTY_TEXT: Record<ViewId, string> = {
     files: 'Select a project to browse files',
     terminal: 'Select a project to open a terminal',
     commands: 'Select a project to run its commands',
+    worktrees: 'Select a project to see its worktrees',
 }
 
 const { rightPanelOpen, activeAgentId } = storeToRefs(useAppLayoutStore())
@@ -122,6 +125,12 @@ function viewLabel(view: ViewId) {
             :project="activeProject"
         />
     </KeepAlive>
+    <WorktreesView
+        v-if="rightPanelOpen && activeProject && activeView === 'worktrees'"
+        :key="activeProject.id"
+        :project="activeProject"
+        @open="activeView = 'changes'"
+    />
     <TerminalView v-if="activeProject" :visible="activeView === 'terminal'" />
     <CommandsView v-if="activeProject" :visible="activeView === 'commands' && !outputOpen" />
     <CommandOutput v-if="activeProject" :visible="activeView === 'commands' && outputOpen" />

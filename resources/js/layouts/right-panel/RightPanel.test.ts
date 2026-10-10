@@ -25,6 +25,7 @@ const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
     else if (url.endsWith('/git/branches')) body = { branches: ['dev', 'main'], default_base: 'dev' }
     else if (url.endsWith('/git/pull-request')) body = { available: true, error: null, pull_request: null }
     else if (url.endsWith('/git/worktrees')) body = { worktrees }
+    else if (url.endsWith('/git/worktrees/changes')) body = { changes: {} }
     else if (url.endsWith('/command-runs') || url.endsWith('/commands')) body = { data: commandRuns(url) }
     else if (url.endsWith('/api/projects/3/agents')) body = { data: [{ id: 7, attributes: { name: 'Diff Frontend', project_id: 3 } }] }
     return Promise.resolve({ ok: true, json: () => Promise.resolve(body) })
@@ -67,10 +68,28 @@ describe('RightPanel', () => {
         await flushPromises()
 
         const views = w.get('[data-testid="right-panel-toolbar"]').findAll('[role="tab"]')
-        expect(views.map(b => b.text())).toEqual(['Changes', 'Files', 'Terminal', 'Commands'])
+        expect(views.map(b => b.text())).toEqual(['Changes', 'Files', 'Terminal', 'Commands', 'Worktrees'])
         expect(views[0]!.attributes('aria-selected')).toBe('true')
         await w.get('[data-testid="toggle-panel-right"]').trigger('click')
         expect(useAppLayoutStore().rightPanelOpen).toBe(false)
+    })
+
+    it('opens a worktree from the Worktrees tab in the Changes tab', async () => {
+        worktrees = [
+            gitWorktree('/code/salut-ai', { is_main: true, is_current: true }),
+            gitWorktree(AGENT_TREE, { branch: 'task/2034-diff', agent_id: 7, agent_name: 'Diff Frontend' }),
+        ]
+        const w = mountPanel()
+        useProjectStore().setActiveProject(project)
+        await flushPromises()
+
+        await w.get('[role="tab"][data-view="worktrees"]').trigger('click')
+        await flushPromises()
+        await w.get('[data-testid="open-worktree"]').trigger('click')
+        await flushPromises()
+
+        expect(w.get('[role="tab"][data-view="changes"]').attributes('aria-selected')).toBe('true')
+        expect(w.get('[data-testid="worktree-label"]').text()).toBe('Diff Frontend')
     })
 
     it('shows the active project files in place of the empty state', async () => {

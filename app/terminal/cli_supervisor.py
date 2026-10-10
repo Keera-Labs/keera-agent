@@ -239,6 +239,10 @@ def supervise_cli(
     return supervisor
 
 
+def running_agent_ids() -> set[int]:
+    return {s.agent_id for s in _supervisors.values() if s.terminal.is_alive()}
+
+
 async def launch_cli(terminal: Terminal, session_id: str, command: str) -> None:
     """Type the CLI launch line into the session's shell, keeping it supervised."""
     supervisor = _supervisors.get(session_id)
