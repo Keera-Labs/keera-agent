@@ -128,7 +128,7 @@ describe('useAppLayoutStore', () => {
         store.sessions.delete(4)
     })
 
-    it('exposes the active project tasks parsed from the JSON:API envelope', async () => {
+    it('exposes the active project task total from the envelope', async () => {
         vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve({
             ok: true,
             json: () => Promise.resolve(url === '/api/projects/7/tasks'
@@ -146,7 +146,7 @@ describe('useAppLayoutStore', () => {
 
         await flushPromises()
 
-        expect(store.tasks).toEqual([expect.objectContaining({ id: 4, title: 'Ship it' })])
+        expect(store.taskTotal).toBe(1)
     })
 
     it('toggles project search on Cmd+P', () => {

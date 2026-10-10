@@ -48,6 +48,7 @@ function summary(id: number, projectId: number, status: string, extra: Record<st
         },
     }
 }
+let projectTasks = { rows: 0, total: 0 }
 let summaries: ReturnType<typeof summary>[]
 
 function fakeFetch(url: string, init?: RequestInit) {
@@ -71,6 +72,12 @@ function fakeFetch(url: string, init?: RequestInit) {
     }
     if (pathname === '/api/projects' && init?.method === 'POST') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(project(99, 'fresh', 1)) })
+    }
+    if (pathname === '/api/projects/10/tasks') {
+        const data = Array.from({ length: projectTasks.rows }, (_, i) => ({
+            type: 'tasks', id: String(i + 1), attributes: { id: i + 1, project_id: 10, title: `t${i + 1}`, status: 'pending' },
+        }))
+        body = { data, meta: { total: projectTasks.total, count: data.length, per_page: 15, current_page: 1, last_page: 3, next_page: 2, previous_page: null } }
     }
     if (pathname === '/api/projects') {
         const ws = searchParams.get('workspace_id')
@@ -100,6 +107,7 @@ beforeEach(() => {
     calls = []
     hiddenIds = new Set()
     summaries = []
+    projectTasks = { rows: 0, total: 0 }
     page.component = 'Home'
     page.props = {}
     vi.stubGlobal('fetch', vi.fn(fakeFetch))
@@ -382,6 +390,15 @@ describe('Sidebar', () => {
         window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
         await flushPromises()
         expect(dialog().exists()).toBe(false)
+    })
+
+    it('shows the server task total in the Tasks tab, not the length of the first page', async () => {
+        projectTasks = { rows: 15, total: 40 }
+        const w = await mountSidebar()
+        useProjectStore().setActiveProject(projects[0])
+        await flushPromises()
+
+        expect(w.get('[data-tab="tasks"]').text()).toContain('40')
     })
 
     it('offers only Tasks in the nav, marked current on the Tasks page', async () => {
