@@ -64,6 +64,17 @@ class TestGitWorktreeController(TestCase, DatabaseTransaction):
         row = next(r for r in rows if r["path"] == str(path))
         assert row["agent_name"] is None
 
+    async def test_deleted_agent_is_not_named(self):
+        agent = await AgentFactory.new().create(
+            project_id=self.project.id, name="Retired", deleted_at="2026-01-01 00:00:00"
+        )
+        path = self.repo.add_worktree(f".claude/worktrees/agent-{agent.id}", "retired")
+
+        rows = (await self.get(self.url("worktrees"))).json()["worktrees"]
+
+        row = next(r for r in rows if r["path"] == str(path))
+        assert row["agent_name"] is None
+
     async def test_unknown_agent_id_keeps_id_without_name(self):
         path = self.repo.add_worktree(".claude/worktrees/agent-999999", "ghost")
 
