@@ -3,6 +3,7 @@ import json
 from collections.abc import Awaitable, Callable
 
 from fastapi import WebSocket, WebSocketDisconnect
+from starlette.websockets import WebSocketState
 
 from app.terminal.terminal import Terminal
 from app.terminal.terminal_queries import is_terminal_response
@@ -19,8 +20,10 @@ class WebsocketTerminal:
         on_output: Callable[[bytes], Awaitable[None]] | None = None,
         on_restart: Callable[[], Awaitable[object]] | None = None,
         replay_history: bool = False,
+        close_on_exit: bool = False,
     ):
         self._ws = websocket
+        self._close_on_exit = close_on_exit
         self._terminal = terminal
         self._on_output = on_output
         self._on_restart = on_restart
@@ -91,8 +94,19 @@ class WebsocketTerminal:
                         await self._on_output(data)
                 except asyncio.TimeoutError:
                     continue
+            await self._send_pending(queue)
+            if self._close_on_exit and not self._terminal.is_alive():
+                await self._close_websocket()
         finally:
             self._terminal.unsubscribe(queue)
+
+    async def _send_pending(self, queue: "asyncio.Queue[bytes]") -> None:
+        while self._ws is not None and not queue.empty():
+            await self._ws.send_bytes(queue.get_nowait())
+
+    async def _close_websocket(self) -> None:
+        if self._ws is not None and self._ws.client_state == WebSocketState.CONNECTED:
+            await self._ws.close(code=1000, reason="Process exited")
 
     async def _ws_to_pty(self) -> None:
         while not self._stopped.is_set():

@@ -95,20 +95,3 @@ class AppProvider(Provider):
                 pass
 
         self.app.fastapi.add_event_handler("startup", on_startup)
-
-        async def on_shutdown():
-            import os
-            import signal
-
-            from app.controllers.command_controller import _processes
-
-            for proc in list(_processes.values()):
-                try:
-                    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-                except Exception:
-                    try:
-                        proc.kill()
-                    except Exception:
-                        pass
-
-        self.app.fastapi.add_event_handler("shutdown", on_shutdown)

@@ -216,8 +216,10 @@ class Terminal:
         cols: int = 80,
         rows: int = 24,
         env: dict | None = None,
+        args: list[str] | None = None,
     ):
         self._shell = shell or os.environ.get("SHELL", "/bin/bash")
+        self._args = args or []
         self._cwd = cwd or os.path.expanduser("~")
         self._cols = cols
         self._rows = rows
@@ -293,7 +295,7 @@ class Terminal:
         self._set_size(master_fd, self._rows, self._cols)
 
         proc = subprocess.Popen(
-            [self._shell],
+            [self._shell, *self._args],
             stdin=slave_fd,
             stdout=slave_fd,
             stderr=slave_fd,
@@ -546,6 +548,10 @@ class Terminal:
 
     def is_alive(self) -> bool:
         return self._proc is not None and self._proc.poll() is None
+
+    @property
+    def returncode(self) -> int | None:
+        return self._proc.poll() if self._proc is not None else None
 
     @property
     def pid(self) -> int:
