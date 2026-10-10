@@ -190,7 +190,9 @@ class TestTerminalSend(unittest.IsolatedAsyncioTestCase):
     async def test_send_drops_control_characters_but_keeps_newlines_and_tabs(self):
         expected = PASTE_START + b"line one\n\tline two\nline three" + PASTE_END + b"\r"
 
-        received = await self._sent("line\x00 one\r\n\tline\x07 two\n\x9bline\x7f three", len(expected))
+        received = await self._sent(
+            "line\x00 one\r\n\tline\x07 two\n\x9bline\x7f three", len(expected)
+        )
 
         self.assertEqual(received, expected)
 

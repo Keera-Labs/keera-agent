@@ -44,6 +44,7 @@ def _without_paste_markers(message: str) -> str:
 def paste_safe(message: str) -> str:
     return _UNPASTEABLE.sub("", _LINE_BREAK.sub("\n", _without_paste_markers(message)))
 
+
 # CLI startup dialogs that wait for a choice. Enter picks the highlighted
 # option (codex's update prompt defaults to running a global npm install), so
 # nothing is submitted while one is on screen. A dialog counts only when it is
