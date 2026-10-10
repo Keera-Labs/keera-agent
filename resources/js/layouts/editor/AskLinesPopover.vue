@@ -107,6 +107,12 @@ defineExpose({ focus })
     background-color: #fce9a8;
 }
 
+.monaco-editor .ask-lines-row ~ .char-insert,
+.monaco-editor .ask-lines-row ~ .char-delete {
+    background-color: transparent;
+    border-color: transparent;
+}
+
 .ask-lines-margin {
     background-color: #f0c02f;
 }

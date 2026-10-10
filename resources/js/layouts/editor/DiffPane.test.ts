@@ -23,7 +23,7 @@ const monaco = vi.hoisted(() => {
             onMouseDown: (fn: MouseHandler) => { mouseDown.push(fn); return { dispose: () => {} } },
             onDidScrollChange: noop,
             onDidLayoutChange: noop,
-            createDecorationsCollection: () => ({ clear: () => {} }),
+            createDecorationsCollection: vi.fn((_decorations: unknown[]) => ({ clear: () => {} })),
             getDomNode: () => document.createElement('div'),
             getOption: () => 18,
             getScrollTop: () => 0,
@@ -310,6 +310,15 @@ describe('DiffPane', () => {
             expect(w.get('[data-testid="ask-lines-label"]').text()).toBe('Lines 1–2')
             expect(w.get('[data-testid="ask-lines-question"]').attributes('placeholder')).toBe('Ask Project Manager about these lines…')
             expect(w.get('[data-testid="ask-lines-send"]').attributes('disabled')).toBeDefined()
+        })
+
+        it('paints the selected rows above the diff\'s own line backgrounds', async () => {
+            await mountPane()
+            await selectLine(2)
+
+            const [[decoration]] = monaco.sides.modified.createDecorationsCollection.mock.lastCall as [[{ options: Record<string, unknown> }]]
+            expect(decoration.options).toMatchObject({ isWholeLine: true, className: 'ask-lines-row', marginClassName: 'ask-lines-margin' })
+            expect(decoration.options.zIndex).toBeGreaterThan(0)
         })
 
         it('sends the file, the diffed lines and the question to the agent', async () => {

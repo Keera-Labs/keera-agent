@@ -14,6 +14,7 @@ export interface PopoverAnchor {
 const POPOVER_HEIGHT = 168
 const POPOVER_MAX_WIDTH = 640
 const GAP = 4
+const SELECTION_STACK_ORDER = 10
 
 export function useLineSelection(container: Ref<HTMLElement | null>) {
     const selection = ref<LineSelection | null>(null)
@@ -77,6 +78,7 @@ export function useLineSelection(container: Ref<HTMLElement | null>) {
             range: new monaco.Range(current.start, 1, current.end, 1),
             options: {
                 isWholeLine: true,
+                zIndex: SELECTION_STACK_ORDER,
                 className: 'ask-lines-row',
                 marginClassName: 'ask-lines-margin',
                 lineNumberClassName: 'ask-lines-number',
