@@ -2,10 +2,13 @@
 
 import os
 import shutil
+from types import SimpleNamespace
+from unittest import mock
 
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
 from app.models.Agent import Agent
+from app.terminal import cli_supervisor
 from databases.factories.agent_factory import AgentFactory
 from databases.factories.project_factory import ProjectFactory
 from tests.features.git_test_repo import GitTestRepo
@@ -113,7 +116,11 @@ class TestGitWorktreeController(TestCase, DatabaseTransaction):
 
     def worktree_paths(self) -> list[str]:
         listing = self.repo.git("worktree", "list", "--porcelain")
-        return [line.removeprefix("worktree ") for line in listing.splitlines() if line.startswith("worktree ")]
+        return [
+            line.removeprefix("worktree ")
+            for line in listing.splitlines()
+            if line.startswith("worktree ")
+        ]
 
     async def destroy(self, path, **params):
         return await self.delete(self.url("worktrees"), params={"worktree": str(path), **params})
@@ -161,7 +168,9 @@ class TestGitWorktreeController(TestCase, DatabaseTransaction):
 
     async def test_destroy_refuses_a_worktree_locked_by_a_running_session(self):
         path = self.repo.add_worktree("../locked", "locked-work")
-        self.repo.git("worktree", "lock", "--reason", f"claude session (pid {os.getpid()} start)", str(path))
+        self.repo.git(
+            "worktree", "lock", "--reason", f"claude session (pid {os.getpid()} start)", str(path)
+        )
 
         response = await self.destroy(path, force=True)
 
@@ -170,7 +179,9 @@ class TestGitWorktreeController(TestCase, DatabaseTransaction):
 
     async def test_destroy_releases_a_lock_left_by_an_exited_session(self):
         path = self.repo.add_worktree("../stale", "stale-work")
-        self.repo.git("worktree", "lock", "--reason", "claude session (pid 999999999 start)", str(path))
+        self.repo.git(
+            "worktree", "lock", "--reason", "claude session (pid 999999999 start)", str(path)
+        )
 
         (await self.destroy(path)).assert_no_content()
 
@@ -184,6 +195,39 @@ class TestGitWorktreeController(TestCase, DatabaseTransaction):
 
         assert await Agent.find(agent.id) is not None
         assert str(path) not in self.worktree_paths()
+
+    def run_agent(self, agent_id: int, alive: bool = True):
+        terminal = SimpleNamespace(is_alive=lambda: alive)
+        supervisor = SimpleNamespace(agent_id=agent_id, terminal=terminal)
+        patcher = mock.patch.dict(cli_supervisor._supervisors, {f"agent-{agent_id}": supervisor})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    async def test_destroy_refuses_the_unlocked_worktree_of_a_running_agent(self):
+        agent = await AgentFactory.new().create(project_id=self.project.id, provider="codex")
+        path = self.repo.add_worktree(f".claude/worktrees/agent-{agent.id}", "codex-work")
+        self.run_agent(agent.id)
+
+        response = await self.destroy(path, force=True)
+
+        response.assert_status(409)
+        assert response.json()["error"] == "The worktree belongs to a running agent"
+        assert path.exists()
+
+    async def test_destroy_removes_the_worktree_of_an_agent_whose_session_ended(self):
+        agent = await AgentFactory.new().create(project_id=self.project.id)
+        path = self.repo.add_worktree(f".claude/worktrees/agent-{agent.id}", "ended-work")
+        self.run_agent(agent.id, alive=False)
+
+        (await self.destroy(path)).assert_no_content()
+
+        assert not path.exists()
+
+    async def test_destroy_rejects_paths_that_cannot_be_resolved(self):
+        response = await self.destroy("\x00")
+
+        response.assert_status(422)
+        assert "error" in response.json()
 
     async def test_rejects_prunable_worktree(self):
         path = self.repo.add_worktree(".claude/worktrees/agent-3", "gone")

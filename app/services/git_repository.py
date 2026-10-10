@@ -72,6 +72,13 @@ class Worktree:
     prunable: bool = False
 
 
+def _worktree_path(path: str) -> Path:
+    try:
+        return Path(path).resolve()
+    except (OSError, ValueError, RuntimeError) as e:
+        raise InvalidWorktree(path) from e
+
+
 def _parse_worktrees(raw: bytes) -> list[Worktree]:
     """Parse `worktree list --porcelain -z`: NUL-separated attributes, records end in NUL NUL."""
     worktrees: list[Worktree] = []
@@ -283,28 +290,27 @@ class GitRepository:
 
     async def select_worktree(self, path: str) -> "GitRepository":
         """Switch to one of this repo's worktrees; only paths git itself lists are accepted."""
-        try:
-            wanted = Path(path).resolve()
-        except (OSError, ValueError, RuntimeError) as e:
-            raise InvalidWorktree(path) from e
+        wanted = _worktree_path(path)
         for worktree in await self.worktrees():
             if Path(worktree.path) == wanted and not (worktree.bare or worktree.prunable):
                 return GitRepository(wanted)
         raise InvalidWorktree(path)
 
-    async def remove_worktree(self, path: str, force: bool = False) -> None:
-        wanted = Path(path).resolve()
+    async def removable_worktree(self, path: str) -> Worktree:
+        wanted = _worktree_path(path)
         worktrees = await self.worktrees()
         position = next((i for i, w in enumerate(worktrees) if Path(w.path) == wanted), None)
         if position is None:
             raise InvalidWorktree(path)
         if position == 0 or wanted == self.root:
             raise MainWorktreeRemoval()
-        worktree = worktrees[position]
+        return worktrees[position]
+
+    async def remove_worktree(self, worktree: Worktree, force: bool = False) -> None:
         if worktree.locked:
             await self._release_stale_lock(worktree)
         if not force and not worktree.prunable:
-            count = (await GitRepository(wanted).changed_files()).count
+            count = (await GitRepository(Path(worktree.path)).changed_files()).count
             if count:
                 raise WorktreeHasChanges(count)
         options = ["--force"] if force else []

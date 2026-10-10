@@ -551,6 +551,10 @@ class Terminal:
         if self._proc is not None:
             self._proc.wait()
 
+    @property
+    def cwd(self) -> str:
+        return self._cwd
+
     def is_alive(self) -> bool:
         return self._proc is not None and self._proc.poll() is None
 

@@ -6,7 +6,7 @@ from fastapi_startkit.application import app
 from app.models.Project import Project
 from app.services.command_workspace import CommandWorkspace
 from app.services.process import CommandError
-from app.terminal.manager import TerminalManager
+from app.terminal.manager import SHELL_SESSION_PREFIX, TerminalManager
 from app.terminal.websocket_terminal import WebsocketTerminal
 from app.utils.process_env import user_env
 
@@ -38,7 +38,7 @@ async def attach(websocket: WebSocket, project: str, worktree: str | None = None
         cwd=str(workspace.cwd),
         env=env,
         args=[LOGIN_FLAG],
-        session_id=f"shell:{uuid.uuid4()}",
+        session_id=f"{SHELL_SESSION_PREFIX}{uuid.uuid4()}",
     )
     bridge = WebsocketTerminal(websocket, terminals.get(session_id), close_on_exit=True)
     try:

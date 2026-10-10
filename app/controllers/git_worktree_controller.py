@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import Query
 from fastapi.responses import JSONResponse, Response
 
+from app.actions.worktree_remove_action import remove_worktree
 from app.models.Agent import Agent
 from app.requests.git_request import GitWorktreeDestroyQuery
 from app.services.git_repository import GitRepository
@@ -15,8 +16,7 @@ from app.utils.project_paths import project_root
 
 async def destroy(project_id: int, query: Annotated[GitWorktreeDestroyQuery, Query()]):
     try:
-        repo = await GitRepository.for_project(project_id)
-        await repo.remove_worktree(query.worktree, force=query.force)
+        await remove_worktree(project_id, query.worktree, force=query.force)
     except CommandError as e:
         return JSONResponse({"error": e.message}, status_code=git_error_status(e))
     return Response(status_code=204)
