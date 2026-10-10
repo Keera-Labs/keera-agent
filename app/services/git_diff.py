@@ -23,7 +23,7 @@ _LANGUAGES = {
     ".jsx": "javascript",
     ".mjs": "javascript",
     ".cjs": "javascript",
-    ".vue": "html",
+    ".vue": "vue",
     ".html": "html",
     ".htm": "html",
     ".css": "css",

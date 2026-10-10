@@ -20,7 +20,14 @@ async def index(project_id: int):
     agent_ids = [
         i for i in map(agent_id_for_worktree, (w.path for w in worktrees)) if i is not None
     ]
-    agents = await Agent.where_in("id", agent_ids).get() if agent_ids else []
+    agents = (
+        await Agent.where("project_id", project_id)
+        .where_in("id", agent_ids)
+        .where_null("deleted_at")
+        .get()
+        if agent_ids
+        else []
+    )
     names = {agent.id: agent.name for agent in agents}
 
     rows = []

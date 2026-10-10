@@ -16,7 +16,7 @@ import unittest
 from fastapi_startkit.application import app
 
 from app.actions.terminal_write_action import TerminalWriteAction
-from app.terminal.terminal import PASTE_END, PASTE_START, Terminal
+from app.terminal.terminal import PASTE_END, PASTE_START, Terminal, paste_safe
 from tests.test_case import TestCase
 
 
@@ -165,6 +165,48 @@ class TestTerminalSend(unittest.IsolatedAsyncioTestCase):
             os.close(master_fd)
 
         self.assertEqual(received, expected)
+
+    async def _sent(self, message: str, expected_length: int) -> bytes:
+        master_fd, slave_fd = pty.openpty()
+        tty.setraw(slave_fd)
+        term = Terminal()
+        term.master_fd = master_fd
+        term.echo_timeout = 0.1
+        try:
+            await term.send(message)
+            return _read_until(slave_fd, expected_length)
+        finally:
+            os.close(slave_fd)
+            os.close(master_fd)
+
+    async def test_send_cannot_be_ended_early_by_a_nested_paste_end_marker(self):
+        expected = PASTE_START + b"a\necho pwned" + PASTE_END + b"\r"
+
+        received = await self._sent("a\x1b[20\x1b[201~1~\recho pwned\r", len(expected))
+
+        self.assertEqual(received, expected)
+        self.assertEqual(received.count(PASTE_END), 1)
+
+    async def test_send_drops_control_characters_but_keeps_newlines_and_tabs(self):
+        expected = PASTE_START + b"line one\n\tline two\nline three" + PASTE_END + b"\r"
+
+        received = await self._sent(
+            "line\x00 one\r\n\tline\x07 two\n\x9bline\x7f three", len(expected)
+        )
+
+        self.assertEqual(received, expected)
+
+
+class TestPasteSafe(unittest.TestCase):
+    def test_paste_end_marker_cannot_survive_any_nesting(self):
+        for payload in ["\x1b[201~", "\x1b[20\x1b[201~1~", "\x1b[2\x1b[20\x1b[201~1~01~"]:
+            self.assertNotIn("\x1b", paste_safe(payload))
+
+    def test_line_breaks_become_newlines(self):
+        self.assertEqual(paste_safe("a\r\nb\rc\nd"), "a\nb\nc\nd")
+
+    def test_unicode_text_is_kept(self):
+        self.assertEqual(paste_safe("Lines 1–2 — naïve ✓"), "Lines 1–2 — naïve ✓")
 
 
 if __name__ == "__main__":
