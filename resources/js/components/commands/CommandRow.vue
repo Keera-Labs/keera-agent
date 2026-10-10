@@ -1,19 +1,16 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { cancelBtnClass, inputClass, submitBtnClass } from '@/components/ui/styles'
 import Icon from './Icon.vue'
 import type { Command } from './types'
 import { vFocus } from './vFocus'
 
-// Owns only its inline-edit state; process and persistence actions go to the parent panel.
+// Owns only its inline-edit state; persistence goes to the parent panel.
 const props = defineProps<{
     command: Command
-    isSelected: boolean
     onUpdate: (label: string, cmd: string) => Promise<boolean>
 }>()
-const emit = defineEmits<{ select: []; run: []; stop: []; delete: [] }>()
-
-const isRunning = computed(() => props.command.status === 'running')
+const emit = defineEmits<{ delete: [] }>()
 const editing = ref(false)
 const editLabel = ref('')
 const editCmd = ref('')
@@ -62,36 +59,14 @@ async function handleSave() {
 
     <div
         v-else
-        :class="[
-            'flex items-center gap-2.5 py-2.5 px-3.5 cursor-pointer border-l-2 border-b border-b-stroke transition-colors duration-100 hover:bg-surface',
-            isSelected ? 'bg-surface border-l-accent' : 'bg-transparent border-l-transparent',
-        ]"
-        @click="emit('select')"
+        class="flex items-center gap-2.5 py-2.5 px-3.5 border-l-2 border-l-transparent border-b border-b-stroke transition-colors duration-100 hover:bg-surface"
     >
-        <button
-            :title="isRunning ? 'Stop' : 'Run'"
-            :class="[
-                'w-[30px] h-[30px] rounded-full shrink-0 border flex items-center justify-center cursor-pointer transition-all duration-150',
-                isRunning
-                    ? 'bg-[rgba(63,185,80,0.1)] border-[rgba(63,185,80,0.4)] text-success hover:border-danger hover:text-danger hover:bg-red-50'
-                    : 'bg-canvas border-stroke text-zinc-500 hover:border-success hover:text-success hover:bg-[rgba(63,185,80,0.1)]',
-            ]"
-            @click.stop="isRunning ? emit('stop') : emit('run')"
-        >
-            <Icon :name="isRunning ? 'square' : 'play'" :size="9" filled />
-        </button>
-
         <div class="flex-1 min-w-0">
             <div class="text-ui-12 font-semibold text-zinc-900 font-mono truncate">/{{ command.label }}</div>
             <div class="text-ui-10 text-zinc-400 font-mono truncate mt-0.5">{{ command.command }}</div>
         </div>
 
-        <span
-            v-if="isRunning"
-            class="text-ui-10 py-px px-1.5 rounded-md bg-[rgba(63,185,80,0.08)] border border-[rgba(63,185,80,0.25)] text-success font-mono shrink-0 [animation:cmd-pulse_2s_infinite]"
-        >
-            {{ command.pid ? `pid ${command.pid}` : 'running' }}
-        </span>
+        <span v-if="command.kind === 'setup'" class="text-ui-10 py-px px-1.5 rounded-md border border-stroke text-zinc-500 shrink-0">setup</span>
 
         <button
             title="Edit"

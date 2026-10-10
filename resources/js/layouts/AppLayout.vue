@@ -5,6 +5,7 @@ import { defineAsyncComponent, ref, watch } from 'vue'
 import ResizeHandle from '@/components/ui/ResizeHandle.vue'
 import { useResizablePanel } from '@/composables/useResizablePanel'
 import AppHeader from '@/layouts/app/AppHeader.vue'
+import CommandDock from '@/layouts/app/CommandDock.vue'
 import StatusBar from '@/layouts/app/StatusBar.vue'
 import ModalLayer from '@/layouts/ModalLayer.vue'
 import RightPanel from '@/layouts/right-panel/RightPanel.vue'
@@ -60,6 +61,8 @@ function setHolder(el: unknown) {
                     <EditorPane v-if="editorMounted" v-show="activeEditorTab" />
                     <DiffPane v-if="diffMounted" v-show="activeDiffTab" />
                 </main>
+
+                <CommandDock />
             </div>
 
             <ResizeHandle v-show="rightPanelOpen" :panel="rightPanel" label="Resize right panel" />

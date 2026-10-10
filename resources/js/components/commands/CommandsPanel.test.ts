@@ -1,45 +1,14 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { PiniaColada } from '@pinia/colada'
+import { createPinia } from 'pinia'
+import { useCommandRunStore } from '@/stores/commandRunStore'
 import CommandsPanel from './CommandsPanel.vue'
 import type { Command } from './types'
 
-const term = {
-    element: undefined as HTMLElement | undefined,
-    cols: 80,
-    rows: 24,
-    loadAddon: vi.fn(),
-    open: vi.fn(),
-    focus: vi.fn(),
-    write: vi.fn(),
-    dispose: vi.fn(),
-    onData: vi.fn(),
-    onResize: vi.fn(),
-}
-
-vi.mock('@/composables/useTerminalSessions', () => ({
-    makeTerminal: () => term,
-    attachTerminal: vi.fn(),
-}))
-vi.mock('@xterm/addon-fit', () => ({ FitAddon: class { fit() {} } }))
-
-class FakeWebSocket {
-    static OPEN = 1
-    static instances: FakeWebSocket[] = []
-    readyState = 1
-    binaryType = ''
-    onopen: (() => void) | null = null
-    onclose: (() => void) | null = null
-    onmessage: ((e: MessageEvent) => void) | null = null
-    constructor(public url: string) { FakeWebSocket.instances.push(this) }
-    send = vi.fn()
-    close = vi.fn(() => this.onclose?.())
-}
-
-class FakeResizeObserver {
-    observe() {}
-    disconnect() {}
-}
+vi.mock('@/composables/useTerminalSessions', () => ({}))
+vi.mock('@xterm/addon-fit', () => ({ FitAddon: class {} }))
 
 const command = (overrides: Partial<Command> = {}): Command => ({
     id: 1,
@@ -47,34 +16,47 @@ const command = (overrides: Partial<Command> = {}): Command => ({
     label: 'dev',
     command: 'npm run dev',
     description: '',
-    category: '',
+    category: 'General',
     shortcut: '',
-    status: 'stopped',
-    pid: null,
+    kind: 'run',
+    run: null,
     ...overrides,
 })
 
-const jsonResponse = (body: unknown, ok = true) => ({ ok, json: async () => body }) as Response
+const resource = ({ id, ...attributes }: Command) => ({ type: 'commands', id: String(id), attributes })
+
+const jsonResponse = (body: unknown, status = 200) =>
+    ({ ok: status < 400, status, json: async () => body }) as Response
 
 let fetchMock: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
     fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
-    vi.stubGlobal('WebSocket', FakeWebSocket)
-    vi.stubGlobal('ResizeObserver', FakeResizeObserver)
-    FakeWebSocket.instances = []
 })
 
 afterEach(() => vi.unstubAllGlobals())
 
-function mountPanel(initialCommands: Command[] = []) {
-    return mount(CommandsPanel, { props: { projectId: 7, projectSlug: 'acme', initialCommands } })
+async function mountPanel(commands: Command[] = []) {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ data: commands.map(resource) }))
+    const pinia = createPinia()
+    const w = mount(CommandsPanel, { props: { projectId: 7 }, global: { plugins: [pinia, PiniaColada] } })
+    await flushPromises()
+    return { w, runs: useCommandRunStore(pinia) }
 }
 
 describe('CommandsPanel', () => {
+    it('loads the project commands and offers no run controls', async () => {
+        const { w } = await mountPanel([command()])
+
+        expect(fetchMock).toHaveBeenCalledWith('/api/projects/7/commands', expect.objectContaining({ method: 'GET' }))
+        expect(w.text()).toContain('/dev')
+        expect(w.find('button[title="Run"]').exists()).toBe(false)
+        expect(w.find('button[title="Stop"]').exists()).toBe(false)
+    })
+
     it('shows the empty state and opens the form from it', async () => {
-        const w = mountPanel()
+        const { w } = await mountPanel()
         expect(w.text()).toContain('No commands yet')
 
         await w.get('button.border-dashed').trigger('click')
@@ -82,8 +64,8 @@ describe('CommandsPanel', () => {
     })
 
     it('creates a command and closes the form', async () => {
-        fetchMock.mockResolvedValue(jsonResponse(command({ id: 5, label: 'build', command: 'npm run build' })))
-        const w = mountPanel()
+        const { w } = await mountPanel()
+        fetchMock.mockResolvedValueOnce(jsonResponse({ data: resource(command({ id: 5, label: 'build', command: 'npm run build' })) }))
 
         await w.get('button.border-dashed').trigger('click')
         const [label, cmd] = w.findAll('form input')
@@ -92,7 +74,7 @@ describe('CommandsPanel', () => {
         await w.get('form').trigger('submit')
         await flushPromises()
 
-        expect(fetchMock).toHaveBeenCalledWith('/api/projects/7/commands', expect.objectContaining({
+        expect(fetchMock).toHaveBeenLastCalledWith('/api/projects/7/commands', expect.objectContaining({
             method: 'POST',
             body: JSON.stringify({ label: 'build', command: 'npm run build' }),
         }))
@@ -101,8 +83,8 @@ describe('CommandsPanel', () => {
     })
 
     it('shows the server error when creation fails', async () => {
-        fetchMock.mockResolvedValue(jsonResponse({ error: 'Label taken' }, false))
-        const w = mountPanel()
+        const { w } = await mountPanel()
+        fetchMock.mockResolvedValueOnce(jsonResponse({ detail: 'Label taken' }, 422))
 
         await w.get('button.border-dashed').trigger('click')
         const [label, cmd] = w.findAll('form input')
@@ -116,8 +98,8 @@ describe('CommandsPanel', () => {
     })
 
     it('edits a command inline', async () => {
-        fetchMock.mockResolvedValue(jsonResponse({ label: 'serve', command: 'npm start' }))
-        const w = mountPanel([command()])
+        const { w } = await mountPanel([command()])
+        fetchMock.mockResolvedValueOnce(jsonResponse({ data: resource(command({ label: 'serve', command: 'npm start' })) }))
 
         await w.get('button[title="Edit"]').trigger('click')
         const [label, cmd] = w.findAll('form input')
@@ -126,55 +108,21 @@ describe('CommandsPanel', () => {
         await w.get('form').trigger('submit')
         await flushPromises()
 
-        expect(fetchMock).toHaveBeenCalledWith('/api/commands/1', expect.objectContaining({ method: 'PATCH' }))
+        expect(fetchMock).toHaveBeenLastCalledWith('/api/commands/1', expect.objectContaining({ method: 'PATCH' }))
         expect(w.find('form').exists()).toBe(false)
         expect(w.text()).toContain('/serve')
     })
 
-    it('deletes a command and closes its output panel', async () => {
-        fetchMock.mockResolvedValue(jsonResponse({}))
-        const w = mountPanel([command()])
-
-        await w.get('div.cursor-pointer').trigger('click')
-        expect(w.find('h2').text()).toBe('/dev')
+    it('deletes a command and forgets its dock tabs', async () => {
+        const { w, runs } = await mountPanel([command()])
+        const forget = vi.spyOn(runs, 'forgetCommand')
+        fetchMock.mockResolvedValue(jsonResponse(null, 204))
 
         await w.get('button[title="Delete"]').trigger('click')
         await flushPromises()
 
-        expect(fetchMock).toHaveBeenCalledWith('/api/commands/1', { method: 'DELETE' })
-        expect(w.find('h2').exists()).toBe(false)
+        expect(fetchMock).toHaveBeenCalledWith('/api/commands/1', expect.objectContaining({ method: 'DELETE' }))
+        expect(forget).toHaveBeenCalledWith(1)
         expect(w.text()).toContain('No commands yet')
-    })
-
-    it('runs a command over its WebSocket and marks it stopped when stopped', async () => {
-        fetchMock.mockResolvedValue(jsonResponse({}))
-        const w = mountPanel([command()])
-
-        await w.get('button[title="Run"]').trigger('click')
-        await flushPromises()
-
-        const ws = FakeWebSocket.instances[0]
-        expect(ws.url).toMatch(/\/acme\/command-ws\/1$/)
-        expect(term.open).toHaveBeenCalled()
-
-        ws.onopen?.()
-        await flushPromises()
-        expect(w.text()).toContain('1 running')
-
-        await w.get('button[title="Stop"]').trigger('click')
-        await flushPromises()
-
-        expect(ws.close).toHaveBeenCalled()
-        expect(fetchMock).toHaveBeenCalledWith('/api/commands/1/stop', { method: 'POST' })
-        expect(w.text()).not.toContain('running')
-        expect(w.text()).toContain('exited')
-    })
-
-    it('reseeds its list when the server props change', async () => {
-        const w = mountPanel([command()])
-        await w.setProps({ initialCommands: [command({ id: 2, label: 'lint' })] })
-
-        expect(w.text()).toContain('/lint')
-        expect(w.text()).not.toContain('/dev')
     })
 })
