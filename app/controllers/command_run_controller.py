@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import Query, WebSocket
 from fastapi.responses import Response
 from fastapi_startkit.application import app
+from fastapi_startkit.jsonapi import ResourceCollection
 
 from app.models.Command import Command
 from app.models.Project import Project
@@ -25,8 +26,12 @@ async def _workspace_for(command: Command, worktree: str | None) -> CommandWorks
 
 
 async def index(project_id: int):
+    root = (await CommandWorkspace.resolve(await Project.find_or_fail(project_id), None)).key
     command_ids = [command.id for command in await Command.where("project_id", project_id).get()]
-    return CommandRunResource.collection(_runs().for_commands(command_ids))
+    return ResourceCollection(
+        [CommandRunResource(run, root) for run in _runs().for_commands(command_ids)],
+        primary_type=CommandRunResource.type,
+    )
 
 
 async def store(body: CommandRunStoreRequest, command_id: int):
@@ -37,7 +42,7 @@ async def store(body: CommandRunStoreRequest, command_id: int):
         return git_error_response(e)
 
     run = await _runs().start(command.id, command.command, workspace.key, await workspace.env())
-    return CommandRunResource(run)
+    return CommandRunResource(run, str(workspace.root))
 
 
 async def destroy(command_id: int, query: Annotated[GitWorktreeQuery, Query()]):

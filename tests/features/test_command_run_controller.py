@@ -83,7 +83,7 @@ class TestCommandRunController(TestCase, DatabaseTransaction):
 
         response.assert_ok()
         attributes = response.json()["data"]["attributes"]
-        self.assertEqual(attributes["worktree"], str(self.repo.root))
+        self.assertIsNone(attributes["worktree"])
         run = self._run(command, self.repo.root)
         self.assertIn(str(self.repo.root), await self._finished_output(run))
         self.assertEqual(run.exit_code, 0)
@@ -105,8 +105,9 @@ class TestCommandRunController(TestCase, DatabaseTransaction):
             'pwd; echo "root=$KEERA_PROJECT_ROOT wt=$KEERA_WORKTREE agent=$KEERA_AGENT_ID"'
         )
 
-        (await self._start(command, str(worktree))).assert_ok()
+        response = await self._start(command, str(worktree))
 
+        self.assertEqual(response.json()["data"]["attributes"]["worktree"], str(worktree))
         output = await self._finished_output(self._run(command, worktree))
         self.assertIn(str(worktree), output.splitlines()[0])
         self.assertIn(f"root={self.repo.root} wt={worktree} agent=7", output)
@@ -141,7 +142,7 @@ class TestCommandRunController(TestCase, DatabaseTransaction):
         runs = {
             item["attributes"]["worktree"]: item["attributes"] for item in response.json()["data"]
         }
-        self.assertEqual(set(runs), {str(self.repo.root), str(worktree)})
+        self.assertEqual(set(runs), {None, str(worktree)})
         self.assertTrue(all(run["status"] == "running" for run in runs.values()))
 
     async def test_index_reports_the_run_of_the_viewed_worktree(self):

@@ -8,9 +8,10 @@ from app.terminal.command_runs import CommandRun
 class CommandResource(JsonResource[Command]):
     type = "commands"
 
-    def __init__(self, model: Command, run: CommandRun | None = None) -> None:
+    def __init__(self, model: Command, run: CommandRun | None = None, root: str = "") -> None:
         super().__init__(model)
         self.run = run
+        self.root = root
 
     def to_attributes(self) -> dict:
         return {
@@ -21,5 +22,5 @@ class CommandResource(JsonResource[Command]):
             "category": self.model.category or "General",
             "shortcut": self.model.shortcut or "",
             "kind": self.model.kind or "run",
-            "run": CommandRunResource(self.run).to_attributes() if self.run else None,
+            "run": CommandRunResource(self.run, self.root).to_attributes() if self.run else None,
         }

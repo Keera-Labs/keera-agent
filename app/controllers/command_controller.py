@@ -29,7 +29,10 @@ async def index(project_id: int, query: Annotated[GitWorktreeQuery, Query()]):
 
     commands = await Command.where("project_id", project_id).order_by("id").get()
     return ResourceCollection(
-        [CommandResource(command, _runs().find(command.id, workspace.key)) for command in commands],
+        [
+            CommandResource(command, _runs().find(command.id, workspace.key), str(workspace.root))
+            for command in commands
+        ],
         primary_type=CommandResource.type,
     )
 
