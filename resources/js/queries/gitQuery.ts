@@ -33,6 +33,8 @@ export type GitStatus = {
 
 export type GitBranchChanges = { base: string | null; merge_base: string | null; head: string | null; ahead: number; files: GitFileChange[] }
 
+export type GitBranches = { branches: string[]; default_base: string | null }
+
 export type GitCommit = { sha: string; short_sha: string; subject: string; author: string; date: string }
 
 export type GitPullRequest = {
@@ -63,6 +65,8 @@ export type GitWorktree = {
     agent_name: string | null
 }
 
+export type GitWorktreeChanges = Record<string, number>
+
 export type GitDiff = {
     path: string
     original_path: string | null
@@ -78,7 +82,7 @@ export type GitDiff = {
 /** The checkout git calls run against; a null worktree is the project's own checkout. */
 export type GitTarget = { projectId: number; worktree: string | null }
 
-export type GitDiffRequest = { target: GitTarget; path: string; staged: boolean; committed?: boolean }
+export type GitDiffRequest = { target: GitTarget; path: string; staged: boolean; committed?: boolean; base?: string | null }
 
 export class GitRequestError extends Error {
     constructor(readonly status: number, message: string) {
@@ -100,13 +104,16 @@ const treeKey = (target: GitTarget | null) => ['git', target?.projectId ?? null,
 export const gitKeys = {
     project: (projectId: number | null) => ['git', projectId],
     worktrees: (projectId: number | null) => ['git', projectId, 'worktrees'],
+    worktreeChanges: (projectId: number | null) => ['git', projectId, 'worktree-changes'],
     status: (target: GitTarget | null) => [...treeKey(target), 'status'],
     pullRequest: (target: GitTarget | null) => [...treeKey(target), 'pull-request'],
-    branchChanges: (target: GitTarget | null) => [...treeKey(target), 'branch-changes'],
+    branches: (target: GitTarget | null) => [...treeKey(target), 'branches'],
+    allBranchChanges: (target: GitTarget | null) => [...treeKey(target), 'branch-changes'],
+    branchChanges: (target: GitTarget | null, base: string | null = null) => [...gitKeys.allBranchChanges(target), base ?? ''],
     commits: (target: GitTarget | null) => [...treeKey(target), 'commits'],
     diffs: (target: GitTarget | null) => [...treeKey(target), 'diff'],
     diff: (diff: GitDiffRequest | null) =>
-        [...gitKeys.diffs(diff?.target ?? null), diff?.path ?? '', diff?.committed ? 'committed' : diff?.staged ? 'staged' : 'unstaged'],
+        [...gitKeys.diffs(diff?.target ?? null), diff?.path ?? '', diff?.committed ? `committed:${diff.base ?? ''}` : diff?.staged ? 'staged' : 'unstaged'],
 }
 
 async function request<T>(url: string, init?: { method: 'POST'; body: object }): Promise<T> {
@@ -136,6 +143,18 @@ export function useGitWorktrees(projectIdSource: MaybeRefOrGetter<number | null>
     })
 }
 
+export function useGitWorktreeChanges(projectIdSource: MaybeRefOrGetter<number | null>, enabled: MaybeRefOrGetter<boolean> = true) {
+    const projectId = () => toValue(projectIdSource)
+    return useQuery({
+        key: () => gitKeys.worktreeChanges(projectId()),
+        query: async () =>
+            (await request<{ changes: GitWorktreeChanges }>(`/api/projects/${projectId()!}/git/worktrees/changes`)).changes,
+        enabled: () => projectId() !== null && toValue(enabled),
+        staleTime: 30_000,
+        refetchOnWindowFocus: true,
+    })
+}
+
 export function useGitStatus(targetSource: MaybeRefOrGetter<GitTarget | null>) {
     const target = () => toValue(targetSource)
     const query = useQuery({
@@ -154,11 +173,26 @@ export function useGitStatus(targetSource: MaybeRefOrGetter<GitTarget | null>) {
     }
 }
 
-export function useGitBranchChanges(targetSource: MaybeRefOrGetter<GitTarget | null>, enabled: MaybeRefOrGetter<boolean> = true) {
+export function useGitBranches(targetSource: MaybeRefOrGetter<GitTarget | null>, enabled: MaybeRefOrGetter<boolean> = true) {
     const target = () => toValue(targetSource)
     return useQuery({
-        key: () => gitKeys.branchChanges(target()),
-        query: () => request<GitBranchChanges>(gitUrl(target()!, 'branch-changes')),
+        key: () => gitKeys.branches(target()),
+        query: () => request<GitBranches>(gitUrl(target()!, 'branches')),
+        enabled: () => target() !== null && toValue(enabled),
+        staleTime: 30_000,
+    })
+}
+
+export function useGitBranchChanges(
+    targetSource: MaybeRefOrGetter<GitTarget | null>,
+    baseSource: MaybeRefOrGetter<string | null> = null,
+    enabled: MaybeRefOrGetter<boolean> = true,
+) {
+    const target = () => toValue(targetSource)
+    const base = () => toValue(baseSource)
+    return useQuery({
+        key: () => gitKeys.branchChanges(target(), base()),
+        query: () => request<GitBranchChanges>(gitUrl(target()!, 'branch-changes', base() ? { base: base()! } : {})),
         enabled: () => target() !== null && toValue(enabled),
         staleTime: 5000,
         refetchOnWindowFocus: true,
@@ -190,8 +224,9 @@ export function useGitDiff(diffSource: MaybeRefOrGetter<GitDiffRequest | null>) 
     return useQuery({
         key: () => gitKeys.diff(diff()),
         query: () => {
-            const { target, path, staged, committed } = diff()!
-            return request<GitDiff>(gitUrl(target, 'diff', { path, staged: String(staged), ...(committed ? { committed: 'true' } : {}) }))
+            const { target, path, staged, committed, base } = diff()!
+            const comparison = committed ? { committed: 'true', ...(base ? { base } : {}) } : {}
+            return request<GitDiff>(gitUrl(target, 'diff', { path, staged: String(staged), ...comparison }))
         },
         enabled: () => diff() !== null,
         staleTime: 5000,
@@ -211,18 +246,22 @@ export function useGitActions(targetSource: MaybeRefOrGetter<GitTarget | null>) 
     }
     // A failed push or a rejected commit hook can still have changed the tree, so failures re-read it.
     const refreshStatus = () => queryCache.invalidateQueries({ key: gitKeys.status(target()), exact: true })
-    const refreshBranch = () => queryCache.invalidateQueries({ key: gitKeys.branchChanges(target()), exact: true })
+    const refreshBranch = () => queryCache.invalidateQueries({ key: gitKeys.allBranchChanges(target()) })
     const refreshCommits = () => queryCache.invalidateQueries({ key: gitKeys.commits(target()), exact: true })
+    const refreshWorktreeChanges = () =>
+        queryCache.invalidateQueries({ key: gitKeys.worktreeChanges(target().projectId), exact: true })
     const refreshAfterFailure = () => {
         queryCache.invalidateQueries({ key: gitKeys.diffs(target()) })
         refreshStatus()
         refreshBranch()
         refreshCommits()
+        refreshWorktreeChanges()
     }
     const setCommittedStatus = (status: GitStatus) => {
         setStatus(status)
         refreshBranch()
         refreshCommits()
+        refreshWorktreeChanges()
     }
 
     const stage = useMutation({

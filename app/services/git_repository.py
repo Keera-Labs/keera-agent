@@ -12,6 +12,7 @@ READ_TIMEOUT = 30
 # Commit/push run user hooks and network I/O; bounded so a hanging hook can't pin a request.
 WRITE_TIMEOUT = 120
 UNTRACKED_COUNT_LIMIT = 2 * 1024 * 1024
+WORKTREE_STATUS_CONCURRENCY = 8
 
 # Porcelain v2 status letters mapped onto the panel's vocabulary. "U" is shared by
 # untracked (untracked=True) and unmerged entries (DD/AU/UD/UA/DU/AA/UU); "C" is a copy.
@@ -35,6 +36,11 @@ class InvalidWorktree(CommandError):
 
 class ChangeNotFound(CommandError):
     pass
+
+
+class InvalidBase(CommandError):
+    def __init__(self, name: str):
+        super().__init__(f"Unknown base branch: {name}")
 
 
 @dataclass
@@ -98,13 +104,16 @@ class RepositoryStatus:
     staged: list[FileChange] = field(default_factory=list)
     changes: list[FileChange] = field(default_factory=list)
 
+    @property
+    def count(self) -> int:
+        return len({c.path for c in self.staged} | {c.path for c in self.changes})
+
     def to_dict(self) -> dict:
-        paths = {c.path for c in self.staged} | {c.path for c in self.changes}
         return {
             **{k: v for k, v in asdict(self).items() if k not in ("staged", "changes")},
             "staged": [c.to_dict() for c in self.staged],
             "changes": [c.to_dict() for c in self.changes],
-            "count": len(paths),
+            "count": self.count,
         }
 
 
@@ -137,6 +146,14 @@ def _parse_status(raw: bytes) -> RepositoryStatus:
         elif entry.startswith("? "):
             status.changes.append(FileChange(entry[2:], "U", untracked=True))
     return status
+
+
+def _is_remote_head(ref: str) -> bool:
+    return ref.startswith("refs/remotes/") and ref.endswith("/HEAD")
+
+
+def short_ref(ref: str) -> str:
+    return ref.removeprefix("refs/heads/").removeprefix("refs/remotes/")
 
 
 def _renamed(letter: str, original: str | None) -> str | None:
@@ -229,6 +246,20 @@ class GitRepository:
     async def worktrees(self) -> list[Worktree]:
         result = await self.git_ok("worktree", "list", "--porcelain", "-z")
         return _parse_worktrees(result.stdout)
+
+    async def worktree_change_counts(self) -> dict[str, int]:
+        limit = asyncio.Semaphore(WORKTREE_STATUS_CONCURRENCY)
+
+        async def count(path: str) -> tuple[str, int | None]:
+            async with limit:
+                try:
+                    return path, (await GitRepository(Path(path)).changed_files()).count
+                except CommandError:
+                    return path, None
+
+        paths = [w.path for w in await self.worktrees() if not (w.bare or w.prunable)]
+        counts = await asyncio.gather(*map(count, paths))
+        return {path: n for path, n in counts if n is not None}
 
     async def select_worktree(self, path: str) -> "GitRepository":
         """Switch to one of this repo's worktrees; only paths git itself lists are accepted."""
@@ -357,6 +388,27 @@ class GitRepository:
                 )
         return commits
 
+    async def branches(self) -> list[str]:
+        result = await self.git_ok(
+            "for-each-ref", "--format=%(refname)", "refs/heads", "refs/remotes"
+        )
+        names = []
+        for ref in result.text.split():
+            name = short_ref(ref)
+            if not _is_remote_head(ref) and name not in names:
+                names.append(name)
+        return names
+
+    async def default_base_name(self) -> str | None:
+        base = await self.branch_base()
+        return short_ref(base) if base else None
+
+    async def resolve_base(self, name: str) -> str:
+        for ref in (f"refs/heads/{name}", f"refs/remotes/{name}"):
+            if await self.has_ref(ref):
+                return ref
+        raise InvalidBase(name)
+
     async def branch_base(self) -> str | None:
         """Prefer dev, then the remote default, main/master, and finally upstream.
 
@@ -386,16 +438,13 @@ class GitRepository:
                 return ref
         return None
 
-    async def branch_changes(self) -> dict:
+    async def branch_changes(self, base_name: str | None = None) -> dict:
         result = {"base": None, "merge_base": None, "head": None, "ahead": 0, "files": []}
         if not await self.has_commits():
             return result
-        base = await self.branch_base()
+        base = await self.resolve_base(base_name) if base_name else await self.branch_base()
         head = (await self.git_ok("rev-parse", "HEAD")).text.strip()
-        result.update(
-            base=base.removeprefix("refs/heads/").removeprefix("refs/remotes/") if base else None,
-            head=head,
-        )
+        result.update(base=short_ref(base) if base else None, head=head)
         if base is None:
             return result
         merge = await self.git("merge-base", base, head)

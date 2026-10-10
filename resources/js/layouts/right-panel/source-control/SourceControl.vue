@@ -3,15 +3,19 @@ import {
     ArrowDown, ArrowUp, Check, ChevronDown, CircleAlert, CircleCheck, Ellipsis, GitBranch, GitPullRequest, History, Plus, X,
 } from '@lucide/vue'
 import { computed, ref } from 'vue'
+import { useGitBase } from '@/composables/useGitBase'
 import { useGitWorktree, worktreeLabel } from '@/composables/useGitWorktree'
 import { useRefetchOnWindowFocus } from '@/composables/useRefetchOnWindowFocus'
 import {
-    gitKeys, isOpenPullRequest, useGitActions, useGitBranchChanges, useGitCommits, useGitPullRequest, useGitStatus, type GitFileChange, type GitPaths, type GitWorktree,
+    gitKeys, isOpenPullRequest, useGitActions, useGitBranchChanges, useGitCommits, useGitPullRequest, useGitStatus, useGitWorktreeChanges,
+    type GitFileChange, type GitPaths, type GitWorktree,
 } from '@/queries/gitQuery'
 import { useDiffStore } from '@/stores/diffStore'
 import { useEditorStore } from '@/stores/editorStore'
 import type { Project } from '@/types/type'
+import BasePicker from './BasePicker.vue'
 import ChangeList from './ChangeList.vue'
+import DirtyWorktrees from './DirtyWorktrees.vue'
 import PanelMenu from './PanelMenu.vue'
 import { menuItemClass, useCommitDraft } from './sourceControl'
 import WorktreePicker from './WorktreePicker.vue'
@@ -24,13 +28,21 @@ const { worktrees, selected: selectedWorktree, target, select: selectWorktree } 
 useRefetchOnWindowFocus(() => gitKeys.project(projectId()))
 const { status, error: statusError, isLoading, refetch } = useGitStatus(target)
 const isRepo = computed(() => status.value?.is_repo === true)
-const branchQuery = useGitBranchChanges(target, isRepo)
+const hasCommits = computed(() => isRepo.value && status.value?.has_commits === true)
+const comparisonBase = useGitBase(projectId, target, hasCommits)
+const branchQuery = useGitBranchChanges(target, comparisonBase.base, () => isRepo.value && comparisonBase.ready.value)
 const committed = computed(() => branchQuery.data.value?.files ?? [])
-const branchSummary = computed(() => {
-    const comparison = branchQuery.data.value
-    const count = comparison?.ahead ?? 0
-    return `${count} ${count === 1 ? 'commit' : 'commits'} ahead of ${comparison?.base ?? 'base'}`
+const comparedBase = computed(() => branchQuery.data.value?.base ?? null)
+const aheadCount = computed(() => {
+    const count = branchQuery.data.value?.ahead ?? 0
+    return `${count} ${count === 1 ? 'commit' : 'commits'} ahead of`
 })
+const hasComparison = computed(() => !!branchQuery.data.value?.merge_base)
+const showCommitted = computed(() =>
+    hasCommits.value && !!branchQuery.data.value && (branchQuery.data.value.ahead > 0 || committed.value.length > 0),
+)
+const worktreeChangesQuery = useGitWorktreeChanges(projectId, isRepo)
+const worktreeChanges = computed(() => worktreeChangesQuery.data.value ?? {})
 const pullRequestQuery = useGitPullRequest(target, isRepo)
 const actions = useGitActions(target)
 const editor = useEditorStore()
@@ -70,9 +82,18 @@ const nestedWorktreeLabels = computed(() =>
 
 const staged = computed(() => status.value?.staged ?? [])
 const changes = computed(() => status.value?.changes ?? [])
-const cleanTree = computed(() => !staged.value.length && !changes.value.length
-    && !!branchQuery.data.value?.merge_base && !branchQuery.data.value.ahead
+const workingTreeClean = computed(() => !staged.value.length && !changes.value.length)
+const cleanTree = computed(() => workingTreeClean.value
+    && hasComparison.value && !branchQuery.data.value?.ahead
     && !committed.value.length && !branchQuery.error.value)
+const checkoutName = computed(() => {
+    const worktree = selectedWorktree.value
+    if (!worktree) return 'this checkout'
+    return worktree.is_main ? 'the main checkout' : worktreeLabel(worktree)
+})
+const dirtyWorktrees = computed(() =>
+    worktrees.value.filter(w => w.path !== selectedWorktree.value?.path && (worktreeChanges.value[w.path] ?? 0) > 0),
+)
 const pullRequestInfo = computed(() => pullRequestQuery.data.value)
 const openPullRequest = computed(() => (isOpenPullRequest(pullRequestInfo.value) ? pullRequestInfo.value!.pull_request : null))
 const onBranch = computed(() => !!status.value?.branch && !status.value.detached)
@@ -141,7 +162,7 @@ function openDiff(file: GitFileChange, staged: boolean, committed = false) {
         worktreeLabel: worktree && !worktree.is_current ? worktreeLabel(worktree) : null,
         untracked: file.untracked,
         committed,
-        base: committed ? branchQuery.data.value?.base : null,
+        base: committed ? comparedBase.value : null,
     })
 }
 
@@ -166,6 +187,7 @@ const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded
                 :selected="selectedWorktree"
                 :branch-label="branchLabel"
                 :title="branchTitle"
+                :changes="worktreeChanges"
                 @select="selectWorktree"
             />
             <span
@@ -347,8 +369,21 @@ const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded
                 >
                     <CircleCheck :size="20" />
                     <p class="text-ui-13 text-zinc-600">No changes</p>
-                    <p>The working tree is clean.</p>
+                    <p>Nothing to commit in {{ checkoutName }}.</p>
                 </div>
+                <p
+                    v-else-if="workingTreeClean && !isLoading"
+                    data-testid="no-uncommitted"
+                    class="px-3 pb-2 text-zinc-400"
+                >
+                    No uncommitted changes in {{ checkoutName }}.
+                </p>
+                <DirtyWorktrees
+                    v-if="workingTreeClean && dirtyWorktrees.length"
+                    :worktrees="dirtyWorktrees"
+                    :changes="worktreeChanges"
+                    @select="selectWorktree"
+                />
                 <ChangeList
                     v-if="staged.length"
                     title="Staged changes"
@@ -373,16 +408,42 @@ const blockButton = 'w-full h-8 flex items-center justify-center gap-1.5 rounded
                     @open-file="openFile"
                 />
                 <ChangeList
-                    v-if="branchQuery.data.value?.ahead || committed.length"
+                    v-if="showCommitted"
                     title="Committed on this branch"
-                    :description="branchSummary"
                     :files="committed"
                     :staged="false"
                     committed
                     :disabled="false"
                     :can-open-file="false"
                     @open="file => openDiff(file, false, true)"
-                />
+                >
+                    <template #description>
+                        <span class="inline-flex max-w-full items-center gap-1">
+                            <span class="shrink-0">{{ aheadCount }}</span>
+                            <BasePicker
+                                class="min-w-0"
+                                :branches="comparisonBase.branches.value"
+                                :current="comparedBase"
+                                :default-base="comparisonBase.defaultBase.value"
+                                @select="comparisonBase.select"
+                            />
+                        </span>
+                    </template>
+                </ChangeList>
+                <div
+                    v-else-if="hasCommits && branchQuery.data.value"
+                    data-testid="base-row"
+                    class="relative flex items-center gap-1 px-5 py-1.5 text-zinc-400"
+                >
+                    <span class="shrink-0">{{ hasComparison ? 'Nothing ahead of' : 'Compare with' }}</span>
+                    <BasePicker
+                        class="min-w-0"
+                        :branches="comparisonBase.branches.value"
+                        :current="comparedBase"
+                        :default-base="comparisonBase.defaultBase.value"
+                        @select="comparisonBase.select"
+                    />
+                </div>
             </div>
         </template>
     </div>

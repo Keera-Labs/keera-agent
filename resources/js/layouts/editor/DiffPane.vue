@@ -16,7 +16,7 @@ const queryCache = useQueryCache()
 
 const diffRequest = computed(() => {
     const tab = activeTab.value
-    return tab ? { target: tab.target, path: tab.path, staged: tab.staged, committed: tab.committed } : null
+    return tab ? { target: tab.target, path: tab.path, staged: tab.staged, committed: tab.committed, base: tab.base } : null
 })
 const query = useGitDiff(diffRequest)
 const diff = query.data

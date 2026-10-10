@@ -135,6 +135,114 @@ class TestGitBranchChangesController(TestCase, DatabaseTransaction):
         body = await self.comparison()
         assert body["base"] == "dev" and body["merge_base"] is None
 
+    async def test_selected_base_compares_against_its_merge_base(self):
+        self.repo.write("notes.txt", "feature\n")
+        self.repo.commit_all()
+        self.repo.git("checkout", "-qb", "release", "main")
+        self.repo.write("release.txt", "release only\n")
+        self.repo.commit_all()
+        self.repo.git("checkout", "-q", "task/feature")
+        self.repo.add_bare_remote()
+        self.repo.git("push", "-q", "origin", "release")
+        self.repo.git("branch", "-D", "release")
+
+        assert (await self.comparison())["base"] == "dev"
+        body = await self.comparison(base="origin/release")
+        assert body["base"] == "origin/release" and body["ahead"] == 1
+        assert [f["path"] for f in body["files"]] == ["notes.txt"]
+        diff = (await self.diff("notes.txt", base="origin/release")).json()
+        assert diff["original"] == "base\n" and diff["modified"] == "feature\n"
+
+    async def test_current_branch_as_base_has_no_changes(self):
+        self.repo.write("notes.txt", "feature\n")
+        self.repo.commit_all()
+        body = await self.comparison(base="task/feature")
+        assert body["ahead"] == 0 and body["files"] == []
+
+    async def test_detached_head_compares_against_selected_base(self):
+        self.repo.git("checkout", "-qb", "release", "main")
+        self.repo.write("release.txt", "release only\n")
+        self.repo.commit_all()
+        self.repo.git("checkout", "-q", "--detach", "task/feature")
+        self.repo.write("notes.txt", "detached\n")
+        self.repo.commit_all()
+
+        body = await self.comparison(base="release")
+
+        assert body["base"] == "release" and body["ahead"] == 1
+        assert [f["path"] for f in body["files"]] == ["notes.txt"]
+        diff = (await self.diff("notes.txt", base="release")).json()
+        assert diff["original"] == "base\n" and diff["modified"] == "detached\n"
+
+    async def test_local_branch_shadows_same_named_remote(self):
+        self.repo.add_bare_remote()
+        self.repo.git("push", "-q", "origin", "dev")
+        self.repo.git("checkout", "-q", "dev")
+        self.repo.write("dev-local.txt", "local only\n")
+        self.repo.commit_all()
+        self.repo.git("checkout", "-q", "task/feature")
+        self.repo.git("merge", "-q", "dev")
+        self.repo.write("notes.txt", "feature\n")
+        self.repo.commit_all()
+
+        local = await self.comparison(base="dev")
+        assert local["base"] == "dev" and local["ahead"] == 1
+        assert [f["path"] for f in local["files"]] == ["notes.txt"]
+
+        remote = await self.comparison(base="origin/dev")
+        assert remote["base"] == "origin/dev" and remote["ahead"] == 2
+        assert sorted(f["path"] for f in remote["files"]) == ["dev-local.txt", "notes.txt"]
+
+    async def test_local_branch_named_like_a_remote_branch_wins_and_is_listed_once(self):
+        self.repo.add_bare_remote()
+        self.repo.git("push", "-q", "origin", "dev")
+        self.repo.write("notes.txt", "feature\n")
+        self.repo.commit_all()
+        self.repo.git("branch", "origin/dev")
+
+        body = await self.comparison(base="origin/dev")
+        assert body["base"] == "origin/dev" and body["ahead"] == 0
+
+        branches = (await self.get(f"/api/projects/{self.project.id}/git/branches")).json()
+        assert branches["branches"].count("origin/dev") == 1
+
+    async def test_unknown_or_malformed_base_is_rejected(self):
+        response = await self.get(
+            f"/api/projects/{self.project.id}/git/branch-changes", params={"base": "nope"}
+        )
+        response.assert_status(422)
+        assert response.json()["detail"] == "Unknown base branch: nope"
+        for bad in ("--output=x", "../dev", "dev/../main"):
+            response = await self.get(
+                f"/api/projects/{self.project.id}/git/branch-changes",
+                params={"base": bad},
+                headers={"Accept": "application/json"},
+            )
+            response.assert_status(422)
+        (await self.diff("notes.txt", base="nope")).assert_status(422)
+
+    async def test_branches_lists_local_and_remote_branches_with_default(self):
+        self.repo.add_bare_remote()
+        self.repo.git("push", "-q", "origin", "main")
+        self.repo.git("remote", "set-head", "origin", "main")
+        response = await self.get(f"/api/projects/{self.project.id}/git/branches")
+        response.assert_ok()
+        body = response.json()
+        assert body["branches"] == ["dev", "main", "task/feature", "origin/main"]
+        assert body["default_base"] == "dev"
+
+    async def test_branches_in_agent_worktree_and_without_base(self):
+        path = self.repo.add_worktree(".claude/worktrees/agent-7", "agent-feature")
+        self.repo.git("branch", "-D", "dev", "main")
+        response = await self.get(
+            f"/api/projects/{self.project.id}/git/branches", params={"worktree": str(path)}
+        )
+        response.assert_ok()
+        assert response.json() == {
+            "branches": ["agent-feature", "task/feature"],
+            "default_base": None,
+        }
+
     async def test_committed_diff_validates_path_and_membership(self):
         (await self.diff("../outside.txt")).assert_status(422)
         (await self.diff("notes.txt")).assert_status(404)

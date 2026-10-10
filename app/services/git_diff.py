@@ -180,10 +180,14 @@ async def _committed_sides(
 
 
 async def file_diff(
-    repo: GitRepository, path: str, staged: bool, committed: bool = False
+    repo: GitRepository,
+    path: str,
+    staged: bool,
+    committed: bool = False,
+    base: str | None = None,
 ) -> FileDiff:
     rel = _relative_path(path)
-    comparison = await repo.branch_changes() if committed else None
+    comparison = await repo.branch_changes(base) if committed else None
     if comparison is not None:
         entry = next((file for file in comparison["files"] if file["path"] == rel), None)
         if entry is None:
