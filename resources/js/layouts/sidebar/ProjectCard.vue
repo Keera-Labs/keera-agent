@@ -57,7 +57,7 @@ const expanded = computed(() => props.agents.length > 0 && !props.collapsed)
         <ul
             v-if="expanded"
             data-testid="project-agents"
-            class="list-none m-0 mt-0.5 p-0 flex flex-col gap-0.5"
+            class="list-none m-0 mt-0.5 pl-4 pb-0.5 flex flex-col gap-0.5"
         >
             <li v-for="agent in props.agents" :key="agent.id">
                 <AgentRow

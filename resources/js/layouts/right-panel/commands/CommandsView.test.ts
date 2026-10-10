@@ -9,7 +9,7 @@ import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import { useCommandRunStore } from '@/stores/commandRunStore'
 import { useProjectStore } from '@/stores/projectStore'
 import type { Project } from '@/types/type'
-import TerminalView from '../TerminalView.vue'
+import CommandOutput from './CommandOutput.vue'
 import CommandsView from './CommandsView.vue'
 
 const page = reactive({ component: 'Home', props: {} })
@@ -120,7 +120,7 @@ async function mountViews(setup: (pinia: Pinia) => void = () => {}) {
     runStore = useCommandRunStore(pinia)
     const options = { attachTo: document.body, global: { plugins: [pinia, PiniaColada] } }
     const commands = mount(CommandsView, { ...options, props: { visible: true } })
-    const terminal = mount(TerminalView, { ...options, props: { visible: true } })
+    const terminal = mount(CommandOutput, { ...options, props: { visible: true } })
     wrappers.push(commands, terminal)
     await flushPromises()
     return { commands, terminal, pinia }
@@ -155,19 +155,18 @@ describe('CommandsView', () => {
         const { commands } = await mountViews()
 
         expect(commands.get('[data-testid="commands-place"]').text()).toContain('Runs in root')
-        expect(commands.find('[data-testid="running-command"]').exists()).toBe(false)
         expect(commands.get('[data-testid="saved-run"]').attributes('data-running')).toBe('false')
+        expect(commands.find('[data-testid="saved-stop"]').exists()).toBe(false)
     })
 
-    it('shows a running card with live elapsed time, the command and its timeout', async () => {
-        runs = [run({ started_at: new Date(Date.now() - 65_000).toISOString(), timeout_seconds: 600 })]
+    it('offers Stop and Restart on a running saved command without a running card', async () => {
+        runs = [run()]
         const { commands } = await mountViews()
 
-        const card = commands.get('[data-testid="running-command"]')
-        expect(card.text()).toContain('dev')
-        expect(card.text()).toContain('npm run dev')
-        expect(card.get('[data-testid="running-elapsed"]').text()).toMatch(/^1:0[56] \/ 10:00$/)
+        expect(commands.text()).not.toMatch(/running/i)
         expect(commands.get('[data-testid="saved-run"]').attributes('data-running')).toBe('true')
+        expect(commands.get('[data-testid="saved-run"]').attributes('aria-label')).toBe('Restart dev')
+        expect(commands.get('[data-testid="saved-stop"]').attributes('aria-label')).toBe('Stop dev')
     })
 
     it('runs in the project root from a non-agent page without leaving the Commands tab', async () => {
@@ -178,7 +177,7 @@ describe('CommandsView', () => {
 
         expect(postedBodies()).toEqual([{}])
         expect(FakeWebSocket.instances[0].url).toMatch(/\/acme\/command-ws\/1$/)
-        expect(runStore!.dockOpen).toBe(false)
+        expect(runStore!.outputOpen).toBe(false)
     })
 
     it('runs in the agent worktree on the agent detail page', async () => {
@@ -241,34 +240,54 @@ describe('CommandsView', () => {
         runs = [run()]
         const { commands } = await mountViews()
 
-        await commands.get('[data-testid="running-stop"]').trigger('click')
+        await commands.get('[data-testid="saved-stop"]').trigger('click')
         await flushPromises()
 
         expect(calls('/api/commands/1/runs', 'DELETE')).toHaveLength(1)
     })
 
-    it('stops an ad-hoc run by its id', async () => {
-        runs = [run({ id: 'r1', command_id: null, label: 'ls', command: 'ls -la' })]
-        const { commands } = await mountViews()
+    it('stops an ad-hoc run by its id from its output', async () => {
+        const { commands, terminal } = await mountViews()
 
-        expect(commands.get('[data-testid="running-command"]').text()).toContain('ls -la')
-        await commands.get('[data-testid="running-stop"]').trigger('click')
+        await commands.get('[data-testid="commands-search"]').setValue('ls -la')
+        await commands.get('form').trigger('submit')
+        await flushPromises()
+        await terminal.get('[data-testid="command-dock-stop"]').trigger('click')
         await flushPromises()
 
-        expect(calls('/api/projects/7/command-runs/r1', 'DELETE')).toHaveLength(1)
+        expect(calls('/api/projects/7/command-runs/r9', 'DELETE')).toHaveLength(1)
     })
 
-    it('opens a running command in the Terminal tab', async () => {
+    it('opens a saved command\'s output from its row in the Commands tab', async () => {
         runs = [run()]
         const { commands, terminal } = await mountViews()
 
-        await commands.get('[data-testid="running-open"]').trigger('click')
+        await commands.get('[data-testid="saved-output"]').trigger('click')
         await flushPromises()
 
-        expect(runStore!.dockOpen).toBe(true)
+        expect(runStore!.outputOpen).toBe(true)
         expect(runStore!.activeKey).toBe('1@')
         expect(terminal.get('[data-testid="command-dock-tab"]').text()).toContain('dev')
         expect(postedBodies()).toEqual([])
+    })
+
+    it('has no output to open for a command that never ran here', async () => {
+        const { commands } = await mountViews()
+
+        expect(commands.get('[data-testid="saved-output"]').attributes('disabled')).toBeDefined()
+        expect(commands.find('[data-testid="commands-show-output"]').exists()).toBe(false)
+    })
+
+    it('returns to the list and back to the open output', async () => {
+        const { commands, terminal } = await mountViews()
+        await commands.get('[data-testid="saved-run"]').trigger('click')
+        await flushPromises()
+
+        await commands.get('[data-testid="commands-show-output"]').trigger('click')
+        expect(runStore!.outputOpen).toBe(true)
+        await terminal.get('[data-testid="command-output-back"]').trigger('click')
+        expect(runStore!.outputOpen).toBe(false)
+        expect(commands.get('[data-testid="commands-show-output"]').text()).toContain('1')
     })
 
     it('filters saved commands by label or command text', async () => {
@@ -308,7 +327,7 @@ describe('CommandsView', () => {
         const [[, init]] = calls('/api/projects/7/command-runs', 'POST')
         expect(JSON.parse(init.body)).toEqual({ command: 'ls -la', worktree: null })
         expect(FakeWebSocket.instances[0].url).toMatch(/\/acme\/command-run-ws\/r9$/)
-        expect(commands.get('[data-testid="running-command"]').text()).toContain('ls -la')
+        expect(runStore!.outputOpen).toBe(true)
     })
 
     it('shows the server error when a run is refused', async () => {
@@ -370,7 +389,7 @@ describe('CommandsView', () => {
     })
 })
 
-describe('TerminalView', () => {
+describe('CommandOutput', () => {
     it('reruns an exited command on a fresh socket', async () => {
         const { commands, terminal } = await mountViews()
         await commands.get('[data-testid="saved-run"]').trigger('click')
@@ -418,9 +437,9 @@ describe('TerminalView', () => {
         expect(terminal.text()).toContain('in agent-3')
     })
 
-    it('shows an empty state before anything has run', async () => {
+    it('says so when the project has no command output', async () => {
         const { terminal } = await mountViews()
-        expect(terminal.get('[data-testid="terminal-empty"]').text()).toContain('Run one from Commands')
+        expect(terminal.get('[data-testid="command-output-empty"]').text()).toContain('No command output')
     })
 
     it('never stops a run when the views unmount', async () => {

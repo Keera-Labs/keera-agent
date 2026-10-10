@@ -43,6 +43,7 @@ from app.controllers import (
     project_usage_controller,
     remote_control_setting_controller,
     settings_controller,
+    shell_controller,
     task_controller,
     tasks_page_controller,
     terminal_controller,
@@ -194,3 +195,4 @@ router.router.add_api_websocket_route(
 router.router.add_api_websocket_route(
     "/{project}/command-run-ws/{run_id}", project_command_run_controller.attach
 )
+router.router.add_api_websocket_route("/{project}/shell-ws", shell_controller.attach)

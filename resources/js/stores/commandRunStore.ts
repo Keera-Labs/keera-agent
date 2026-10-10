@@ -1,15 +1,9 @@
 import { useQueryCache } from '@pinia/colada'
 import { defineStore } from 'pinia'
 import { computed, reactive, ref } from 'vue'
-import { FitAddon } from '@xterm/addon-fit'
 import type { Command, CommandRun } from '@/components/commands/types'
-import {
-    attachTerminal,
-    makeTerminal,
-    reportSize,
-    socketMessageHandler,
-    type Session,
-} from '@/composables/useTerminalSessions'
+import { createPanelSession, mountPanelSession } from '@/composables/panelTerminal'
+import { reportSize, socketMessageHandler, type Session } from '@/composables/useTerminalSessions'
 import { COMMAND_RUNS_QUERY_KEY, startAdhocRun, startCommandRun, stopCommandRun, stopRunById } from '@/queries/commandQuery'
 
 type CommandRef = Pick<Command, 'id' | 'label'>
@@ -45,26 +39,6 @@ function socketUrl(tab: DockTab) {
     return `${protocol}//${location.host}/${tab.projectSlug}/command-ws/${tab.commandId}${query}`
 }
 
-function createSession(): Session {
-    const term = makeTerminal()
-    const fitAddon = new FitAddon()
-    term.loadAddon(fitAddon)
-    const session: Session = {
-        term,
-        fitAddon,
-        ws: null as unknown as WebSocket,
-        observer: new ResizeObserver(() => {
-            fitAddon.fit()
-            reportSize(session)
-        }),
-    }
-    term.onData(data => {
-        if (session.ws?.readyState === WebSocket.OPEN) session.ws.send(data)
-    })
-    term.onResize(() => reportSize(session))
-    return session
-}
-
 function detach(session: Session) {
     if (!session.ws) return
     session.ws.onclose = null
@@ -75,7 +49,7 @@ export const useCommandRunStore = defineStore('commandRuns', () => {
     const queryCache = useQueryCache()
     const tabs = ref<DockTab[]>([])
     const activeKey = ref<string | null>(null)
-    const dockOpen = ref(false)
+    const outputOpen = ref(false)
     const selectedWorktrees = reactive<Record<number, string | null>>({})
 
     const activeTab = computed(() => tabs.value.find(t => t.key === activeKey.value) ?? null)
@@ -118,12 +92,7 @@ export const useCommandRunStore = defineStore('commandRuns', () => {
 
     function mountSession(key: string, session: Session) {
         const host = hosts.get(key)
-        if (!host) return
-        attachTerminal(session.term, host)
-        session.observer.disconnect()
-        session.observer.observe(host)
-        session.fitAddon.fit()
-        reportSize(session)
+        if (host) mountPanelSession(session, host)
     }
 
     function connect(tab: DockTab) {
@@ -133,7 +102,7 @@ export const useCommandRunStore = defineStore('commandRuns', () => {
             session.term.reset()
             session.reportedSize = undefined
         } else {
-            session = createSession()
+            session = createPanelSession()
             sessions.set(tab.key, session)
             mountSession(tab.key, session)
         }
@@ -154,7 +123,7 @@ export const useCommandRunStore = defineStore('commandRuns', () => {
 
     function focus(tab: DockTab, reveal = true) {
         activeKey.value = tab.key
-        if (reveal) dockOpen.value = true
+        if (reveal) outputOpen.value = true
     }
 
     function showTab(source: TabSource, target: CommandTarget) {
@@ -213,7 +182,7 @@ export const useCommandRunStore = defineStore('commandRuns', () => {
         }
         tabs.value = tabs.value.filter(t => t.key !== key)
         if (activeKey.value === key) activeKey.value = tabs.value[tabs.value.length - 1]?.key ?? null
-        if (tabs.value.length === 0) dockOpen.value = false
+        if (tabs.value.length === 0) outputOpen.value = false
     }
 
     function forgetCommand(commandId: number) {
@@ -238,7 +207,7 @@ export const useCommandRunStore = defineStore('commandRuns', () => {
         tabs,
         activeKey,
         activeTab,
-        dockOpen,
+        outputOpen,
         selectedWorktrees,
         show,
         showAdhoc,

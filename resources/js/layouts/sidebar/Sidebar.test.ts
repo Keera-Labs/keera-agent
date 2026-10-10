@@ -156,7 +156,7 @@ describe('Sidebar', () => {
 
         expect(projectNames(w)).toEqual([])
         expect(w.text()).toContain('No projects')
-        expect(w.find('[data-testid="add-project-group"]').exists()).toBe(true)
+        expect(w.find('[data-testid="add-project"]').exists()).toBe(true)
     })
 
     it('highlights the active project and shows its Claude status', async () => {
@@ -356,12 +356,12 @@ describe('Sidebar', () => {
         expect(w.get('[data-tab="tasks"]').text()).toContain('40')
     })
 
-    it('offers Tasks and Running in the nav, Tasks marked current on the Tasks page', async () => {
+    it('offers only Tasks in the nav, marked current on the Tasks page', async () => {
         const w = await mountSidebar()
         useProjectStore().setActiveProject(projects[0])
         await flushPromises()
 
-        expect(w.findAll('[data-tab]').map(t => t.attributes('data-tab'))).toEqual(['tasks', 'running'])
+        expect(w.findAll('[data-tab]').map(t => t.attributes('data-tab'))).toEqual(['tasks'])
         expect(w.get('[data-tab="tasks"]').attributes('aria-current')).toBeUndefined()
 
         page.component = 'Tasks'
@@ -651,21 +651,11 @@ describe('Sidebar', () => {
             expect(w.get('[data-testid="project-collapse"]').attributes('aria-expanded')).toBe('false')
         })
 
-        it('counts running agents across projects in the Running nav item', async () => {
-            summaries = [summary(1, 10, 'running'), summary(2, 12, 'running'), summary(3, 10, 'idle')]
+        it('opens the new-project dialog from the "+" beside the Projects heading', async () => {
             const w = await mountSidebar()
 
-            expect(w.get('[data-testid="running-total"]').text()).toBe('2')
-            await w.get('[data-tab="running"]').trigger('click')
-            expect(router.visit).toHaveBeenCalledWith('/')
-        })
-
-        it('opens the new-project dialog from the "+" button below the groups', async () => {
-            const w = await mountSidebar()
-
-            const list = w.get('[data-testid="add-project-group"]').element.closest('ul')!
-            expect(list.lastElementChild!.contains(w.get('[data-testid="add-project-group"]').element)).toBe(true)
-            await w.get('[data-testid="add-project-group"]').trigger('click')
+            expect(w.get('[data-testid="section-projects"]').find('[data-testid="add-project"]').exists()).toBe(true)
+            await w.get('[data-testid="add-project"]').trigger('click')
             expect(document.querySelector('[role="dialog"]')!.textContent).toContain('New Project')
         })
     })
