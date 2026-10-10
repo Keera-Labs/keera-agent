@@ -1,5 +1,4 @@
 import '../css/app.css'
-// Pulled into the entry graph so Vite writes the icons to the build manifest that the favicon links resolve against.
 import '../icons/keera-icon-32.png'
 import '../icons/keera-icon-64.png'
 import '../icons/keera-apple-touch-icon-180.png'
