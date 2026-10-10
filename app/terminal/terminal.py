@@ -156,6 +156,11 @@ def _wait_for_groups(groups: set[int], timeout: float) -> set[int]:
         time.sleep(0.02)
 
 
+def _lead_a_session_on_the_stdin_terminal() -> None:
+    os.setsid()
+    fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+
+
 def _process_groups(shell_pid: int, master_fd: int | None) -> set[int]:
     """Every process group started from a terminal's shell.
 
@@ -300,7 +305,7 @@ class Terminal:
             stdout=slave_fd,
             stderr=slave_fd,
             close_fds=True,
-            preexec_fn=os.setsid,
+            preexec_fn=_lead_a_session_on_the_stdin_terminal,
             cwd=self._cwd,
             env=self._env,
         )

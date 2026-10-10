@@ -13,6 +13,7 @@ import time
 import unittest
 
 from app.terminal.terminal import Terminal, _process_groups
+from tests.test_terminal_shared_pty import _until
 
 
 def _descendants(root_pid: int) -> dict[int, str]:
@@ -146,8 +147,9 @@ class TestTerminalStop(unittest.IsolatedAsyncioTestCase):
         self.assert_all_gone(pids)
 
     async def test_teardown_after_shell_exited_is_safe(self):
+        self.terminal.subscribe()
         await self.terminal.write(b"exit\n")
-        self.assertTrue(_wait_until(lambda: not self.terminal.is_alive()))
+        self.assertTrue(await _until(lambda: not self.terminal.is_alive()))
 
         await self.terminal.aclose()
         await self.terminal.aclose()
