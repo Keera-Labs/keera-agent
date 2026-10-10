@@ -34,6 +34,11 @@ vi.mock('@/editor/monaco', () => ({
     }),
 }))
 
+vi.mock('@/editor/markdown', async importOriginal => ({
+    ...await importOriginal<typeof import('@/editor/markdown')>(),
+    renderMarkdown: (source: string) => `<h1>${source.replace(/^#\s*/, '').trim()}</h1>`,
+}))
+
 const PROJECT = { id: 1, name: 'shop', slug: 'shop' } as Project
 const MAIN = { projectId: 1, worktree: null }
 
@@ -207,5 +212,28 @@ describe('DiffPane', () => {
         w.unmount()
         expect(monaco.editor.dispose).toHaveBeenCalled()
         expect(monaco.models.every(m => m.disposed)).toBe(true)
+    })
+
+    describe('markdown preview', () => {
+        beforeEach(() => window.localStorage.clear())
+
+        it('offers no Code/Preview toggle for other files', async () => {
+            const w = await mountPane()
+            expect(w.find('[data-testid="markdown-view-toggle"]').exists()).toBe(false)
+        })
+
+        it('shows the diff first and previews the current contents on demand', async () => {
+            reply = () => ({ status: 200, body: diffBody({ path: 'README.md', original: '# Old\n', modified: '# New\n', language: 'markdown' }) })
+            const w = await mountPane('README.md')
+
+            expect(w.find('[data-testid="markdown-view-code"]').attributes('aria-pressed')).toBe('true')
+            expect(w.find('[data-testid="markdown-preview"]').exists()).toBe(false)
+
+            await w.find('[data-testid="markdown-view-preview"]').trigger('click')
+
+            expect(w.find('[data-testid="markdown-preview"]').text()).toBe('New')
+            expect(w.find('[data-testid="diff-side-by-side"]').exists()).toBe(false)
+            expect(window.localStorage.getItem('keera.markdownView.changes')).toBe('preview')
+        })
     })
 })

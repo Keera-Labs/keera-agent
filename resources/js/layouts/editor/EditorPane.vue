@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import type * as Monaco from 'monaco-editor'
 import { storeToRefs } from 'pinia'
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
+import { useMarkdownViewMode } from '@/composables/useMarkdownViewMode'
+import { isMarkdownPath } from '@/editor/markdown'
 import { EDITOR_THEME, loadMonaco, type MonacoApi, type TextModel } from '@/editor/monaco'
+import MarkdownPreview from '@/layouts/editor/MarkdownPreview.vue'
+import MarkdownViewToggle from '@/layouts/editor/MarkdownViewToggle.vue'
 import { SAVE_STATUS_LABEL, saveStatus, useEditorStore } from '@/stores/editorStore'
 import { useEditorSettingsStore } from '@/stores/editorSettingsStore'
 
@@ -53,6 +57,23 @@ onMounted(async () => {
 
 watch(activeTab, showActiveModel)
 
+const markdownMode = useMarkdownViewMode('files', 'preview')
+const isMarkdown = computed(() => !!activeTab.value && isMarkdownPath(activeTab.value.path))
+const showPreview = computed(() => isMarkdown.value && markdownMode.value === 'preview')
+const previewSource = ref('')
+
+watch([activeTab, showPreview], (_, __, onCleanup) => {
+    const model = showPreview.value && activeTab.value ? editorStore.modelFor(activeTab.value) : null
+    if (!model) return
+    previewSource.value = model.getValue()
+    const listener = model.onDidChangeContent(() => { previewSource.value = model.getValue() })
+    onCleanup(() => listener.dispose())
+}, { immediate: true })
+
+watch(showPreview, (preview, wasPreview) => {
+    if (wasPreview && !preview) editor?.focus()
+}, { flush: 'post' })
+
 // Monaco caches glyph widths; if the face arrives after they were taken, stale
 // measurements misplace the cursor and selections until they are re-taken.
 function remeasureWhenLoaded({ fontFamily, fontSize }: { fontFamily: string; fontSize: number }) {
@@ -91,6 +112,7 @@ const bannerButton = 'h-6 px-2 rounded border text-ui-12 cursor-pointer'
     <section class="absolute inset-0 z-10 flex flex-col bg-white" aria-label="Editor">
         <div v-if="activeTab" class="flex items-center gap-2 h-7 px-3 shrink-0 border-b border-stroke text-ui-12 text-zinc-500">
             <span class="truncate font-mono" data-testid="editor-path">{{ activeTab.path }}</span>
+            <MarkdownViewToggle v-if="isMarkdown" v-model="markdownMode" class="ml-2" />
             <span
                 data-testid="editor-save-status"
                 :data-status="saveStatus(activeTab)"
@@ -140,6 +162,7 @@ const bannerButton = 'h-6 px-2 rounded border text-ui-12 cursor-pointer'
             </button>
         </div>
 
-        <div ref="host" class="flex-1 min-h-0" />
+        <MarkdownPreview v-if="showPreview" :source="previewSource" />
+        <div v-show="!showPreview" ref="host" class="flex-1 min-h-0" />
     </section>
 </template>
