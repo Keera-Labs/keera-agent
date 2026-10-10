@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ChevronsUp, File, Folder, Funnel, RefreshCw, Search } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onActivated, onMounted, ref, watch } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import { useEditorSettingsStore } from '@/stores/editorSettingsStore'
 import { useEditorStore } from '@/stores/editorStore'
@@ -11,7 +11,7 @@ import { isIgnored, useFileTree, type FileEntry } from './useFileTree'
 const props = defineProps<{ project: Project }>()
 
 const editor = useEditorStore()
-const { openError } = storeToRefs(editor)
+const { openError, activeTab } = storeToRefs(editor)
 const tree = useFileTree(() => props.project.id)
 const { rootError } = tree
 const query = ref('')
@@ -31,7 +31,35 @@ function toggleHiding() {
     void settings.setFileFilters({ hide_hidden: hide, hide_ignored: hide })
 }
 
-onMounted(tree.refresh)
+const treeList = ref<HTMLElement | null>(null)
+
+function revealSelectedRow() {
+    const list = treeList.value
+    const row = [...list?.querySelectorAll<HTMLElement>('[role="treeitem"]') ?? []].find(el => el.dataset.path === selectedPath.value)
+    if (!list || !row) return
+    const bounds = list.getBoundingClientRect()
+    const box = row.getBoundingClientRect()
+    if (box.top < bounds.top || box.bottom > bounds.bottom) list.scrollTop += box.top - bounds.top
+}
+
+const activeFilePath = computed(() => activeTab.value?.projectId === props.project.id ? activeTab.value.path : null)
+
+async function followActiveFile(path: string | null) {
+    if (path === null) return
+    selectedPath.value = path
+    await tree.reveal(path)
+    await nextTick()
+    if (selectedPath.value === path) revealSelectedRow()
+}
+
+watch(activeFilePath, followActiveFile, { flush: 'post' })
+
+onMounted(async () => {
+    await tree.refresh()
+    await followActiveFile(activeFilePath.value)
+})
+
+onActivated(revealSelectedRow)
 
 function onEntryClick(entry: FileEntry) {
     selectedPath.value = entry.path
@@ -94,7 +122,7 @@ const iconButton = 'shrink-0 w-7 h-7 flex items-center justify-center rounded-md
             </button>
         </div>
 
-        <div class="flex-1 overflow-y-auto overflow-x-hidden px-1.5 pb-2" role="tree" :aria-label="`${project.name} files`">
+        <div ref="treeList" class="flex-1 overflow-y-auto overflow-x-hidden px-1.5 pb-2" role="tree" :aria-label="`${project.name} files`">
             <p v-if="tree.isLoadingRoot()" class="px-3 py-2 text-zinc-400">Loading…</p>
             <p v-else-if="rootError" class="px-3 py-2 text-danger">{{ rootError }}</p>
             <p v-else-if="rows.length === 0" class="px-3 py-2 text-zinc-400">
@@ -115,6 +143,7 @@ const iconButton = 'shrink-0 w-7 h-7 flex items-center justify-center rounded-md
                     role="treeitem"
                     :aria-expanded="row.entry.type === 'dir' ? row.expanded : undefined"
                     :aria-selected="row.entry.path === selectedPath"
+                    :data-path="row.entry.path"
                     :title="row.entry.path"
                     :style="indent(row.depth)"
                     class="flex items-center gap-1.5 w-full h-7 pr-2 rounded-md text-left cursor-pointer hover:bg-black/[0.04]"
