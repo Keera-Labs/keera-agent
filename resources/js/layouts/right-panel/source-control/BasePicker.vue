@@ -26,14 +26,14 @@ function choose(branch: string, close: () => void) {
         <template #trigger="{ toggle }">
             <button
                 type="button"
-                data-testid="base-picker"
-                class="min-w-0 inline-flex items-center gap-0.5 px-1 rounded bg-zinc-200/70 font-mono text-ui-11 text-zinc-700 hover:bg-zinc-200 cursor-pointer"
+                class="min-w-0 max-w-32 flex items-center gap-1 h-7 px-2 rounded-md border border-stroke bg-surface text-ui-12 text-zinc-600 hover:bg-zinc-50 cursor-pointer"
                 :title="`Compare with ${current ?? 'base'}`"
                 aria-label="Change base branch"
                 @click="toggle"
             >
-                <span class="min-w-0 truncate">{{ current ?? 'base' }}</span>
-                <ChevronDown :size="11" class="shrink-0 text-zinc-500" />
+                <span class="shrink-0">into</span>
+                <span data-testid="base-picker" class="min-w-0 truncate font-semibold text-zinc-900">{{ current ?? 'base' }}</span>
+                <ChevronDown :size="12" class="shrink-0 text-zinc-500" />
             </button>
         </template>
         <template #default="{ close }">

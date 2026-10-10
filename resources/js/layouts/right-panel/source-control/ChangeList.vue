@@ -1,119 +1,129 @@
 <script setup lang="ts">
-import { ChevronRight, CircleCheck, FileText, Minus, Plus } from '@lucide/vue'
-import { ref, useId } from 'vue'
+import { ChevronRight, FileText } from '@lucide/vue'
+import { computed, ref, useId } from 'vue'
 import type { GitFileChange } from '@/queries/gitQuery'
-import { statusBadge } from './sourceControl'
+import { statusBadge, type ChangeRow } from './sourceControl'
 
 const props = withDefaults(defineProps<{
-    description?: string
-    committed?: boolean
     title: string
-    files: GitFileChange[]
-    staged: boolean
+    rows: ChangeRow[]
+    /** Committed rows are read-only: no checkboxes, nothing to stage. */
+    committed?: boolean
     disabled: boolean
     canOpenFile: boolean
     /** Rows that are other worktrees nested in this checkout, by path, with the worktree's label. */
     worktreeLabels?: Record<string, string>
-}>(), { worktreeLabels: () => ({}) })
-const emit = defineEmits<{ toggle: [paths: string[] | 'all']; open: [file: GitFileChange]; openFile: [file: GitFileChange] }>()
+}>(), { committed: false, worktreeLabels: () => ({}) })
+const emit = defineEmits<{
+    toggle: [paths: string[] | 'all', stage: boolean]
+    open: [row: ChangeRow]
+    openFile: [file: GitFileChange]
+}>()
 
 const expanded = ref(true)
 const sectionId = useId()
-const actionLabel = props.staged ? 'Unstage' : 'Stage'
 
+const stagedCount = computed(() => props.rows.filter(row => row.state === 'staged').length)
+const allStaged = computed(() => props.rows.length > 0 && stagedCount.value === props.rows.length)
+const someStaged = computed(() => !allStaged.value && props.rows.some(row => row.state !== 'unstaged'))
+
+const stageLabel = (row: ChangeRow) => (row.state === 'staged' ? 'Unstage' : 'Stage')
+
+const checkbox = 'shrink-0 w-4 h-4 accent-zinc-900 cursor-pointer disabled:cursor-default'
 const iconButton = 'p-0.5 rounded text-zinc-500 hover:text-zinc-800 hover:bg-zinc-200 cursor-pointer disabled:cursor-default disabled:text-zinc-300'
 </script>
 
 <template>
-    <section class="pb-2" :data-testid="committed ? 'committed-changes' : staged ? 'staged-changes' : 'changes'">
-        <div class="group flex items-center gap-1 h-7 pl-2 pr-3">
+    <section class="pb-2" :data-testid="committed ? 'committed-changes' : 'changes'">
+        <div class="flex items-center gap-2.5 h-9 px-3">
+            <!-- Clicks only request the change; the box follows the refreshed git status. -->
+            <input
+                v-if="!committed"
+                type="checkbox"
+                :class="checkbox"
+                :checked="allStaged"
+                :indeterminate="someStaged"
+                :disabled="disabled"
+                :aria-label="allStaged ? 'Unstage all' : 'Stage all'"
+                :title="allStaged ? 'Unstage all' : 'Stage all'"
+                @click.prevent="emit('toggle', 'all', !allStaged)"
+            >
             <button
                 type="button"
                 :aria-expanded="expanded"
                 :aria-controls="sectionId"
-                class="flex-1 min-w-0 flex items-center gap-1 text-left text-ui-11 font-medium uppercase tracking-[0.06em] text-zinc-500 cursor-pointer"
+                class="flex-1 min-w-0 flex items-center gap-1 text-left text-ui-11 font-semibold uppercase tracking-[0.08em] text-zinc-600 cursor-pointer"
                 @click="expanded = !expanded"
             >
-                <ChevronRight :size="11" class="shrink-0 transition-transform" :class="expanded && 'rotate-90'" />
                 <span class="truncate">{{ title }}</span>
+                <ChevronRight :size="11" class="shrink-0 text-zinc-400 transition-transform" :class="expanded && 'rotate-90'" />
             </button>
-            <button
-                v-if="!committed"
-                type="button"
-                :class="[iconButton, 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100']"
-                :title="`${actionLabel} all`"
-                :aria-label="`${actionLabel} all`"
-                :disabled="disabled"
-                @click="emit('toggle', 'all')"
-            >
-                <component :is="staged ? Minus : Plus" :size="12" />
-            </button>
-            <span class="min-w-5 h-5 px-1.5 flex items-center justify-center rounded bg-zinc-200/80 text-ui-11 font-semibold text-zinc-600">
-                {{ files.length }}
+            <span v-if="!committed" data-testid="staged-count" class="shrink-0 text-ui-12 text-zinc-500">
+                {{ stagedCount }} of {{ rows.length }} staged
             </span>
+            <span v-else class="shrink-0 text-ui-12 text-zinc-500">{{ rows.length }}</span>
         </div>
 
-        <div v-if="description || $slots.description" class="relative px-5 pb-1 text-ui-11 text-zinc-500 break-words">
-            <slot name="description">{{ description }}</slot>
+        <div v-if="$slots.description" class="px-3 pb-1 text-ui-11 text-zinc-500 break-words">
+            <slot name="description" />
         </div>
 
-        <ul v-show="expanded" :id="sectionId" class="font-mono text-ui-12">
+        <ul v-show="expanded" :id="sectionId" class="text-ui-13">
             <li
-                v-for="file in files"
-                :key="file.path"
-                class="group flex items-center gap-2 h-[26px] pl-5 pr-3 hover:bg-zinc-200/50"
-                :title="file.original_path ? `${file.original_path} → ${file.path}` : file.path"
+                v-for="row in rows"
+                :key="row.file.path"
+                class="group flex items-center gap-2.5 h-8 px-3 min-w-0 hover:bg-zinc-100"
+                :data-state="row.state"
+                :title="row.file.original_path ? `${row.file.original_path} → ${row.file.path}` : row.file.path"
             >
-                <CircleCheck v-if="staged" :size="14" class="shrink-0 text-emerald-600" :aria-label="`Staged, ${statusBadge(file).label.toLowerCase()}`" />
+                <input
+                    v-if="!committed"
+                    type="checkbox"
+                    :class="checkbox"
+                    :checked="row.state === 'staged'"
+                    :indeterminate="row.state === 'partial'"
+                    :disabled="disabled"
+                    :aria-label="`${stageLabel(row)} ${row.file.path}`"
+                    :title="row.state === 'partial' ? 'Partly staged' : stageLabel(row)"
+                    @click.prevent="emit('toggle', [row.file.path], row.state !== 'staged')"
+                >
                 <span
-                    v-else
-                    class="w-3.5 shrink-0 text-center font-semibold"
-                    :class="statusBadge(file).tone"
-                    :aria-label="statusBadge(file).label"
-                >{{ statusBadge(file).letter }}</span>
+                    class="shrink-0 w-[18px] h-[18px] flex items-center justify-center rounded font-mono text-ui-11 font-semibold"
+                    :class="statusBadge(row.file).tone"
+                    :aria-label="statusBadge(row.file).label"
+                >{{ statusBadge(row.file).letter }}</span>
 
                 <button
                     type="button"
                     class="flex-1 min-w-0 flex items-baseline gap-1.5 text-left cursor-pointer"
-                    :title="worktreeLabels[file.path] ? `Switch to worktree ${worktreeLabels[file.path]}` : `Show changes in ${file.path}`"
-                    @click="emit('open', file)"
+                    :title="worktreeLabels[row.file.path] ? `Switch to worktree ${worktreeLabels[row.file.path]}` : `Show changes in ${row.file.path}`"
+                    @click="emit('open', row)"
                 >
                     <span
-                        class="shrink-0 max-w-full truncate text-zinc-900"
-                        :class="[staged && 'font-semibold', file.status === 'D' && 'line-through text-zinc-500']"
-                    >{{ worktreeLabels[file.path] ?? file.name }}</span>
-                    <span class="min-w-0 truncate text-zinc-400 text-ui-11">{{ file.dir }}</span>
+                        class="shrink-0 max-w-full truncate font-medium text-zinc-900"
+                        :class="row.file.status === 'D' && 'line-through text-zinc-500'"
+                    >{{ worktreeLabels[row.file.path] ?? row.file.name }}</span>
+                    <span class="min-w-0 truncate text-ui-12 text-zinc-400">{{ row.file.dir }}</span>
                 </button>
 
                 <button
-                    v-if="canOpenFile && file.status !== 'D' && !worktreeLabels[file.path]"
+                    v-if="canOpenFile && row.file.status !== 'D' && !worktreeLabels[row.file.path]"
                     type="button"
                     :class="[iconButton, 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100']"
                     title="Open file"
-                    :aria-label="`Open ${file.path}`"
-                    @click="emit('openFile', file)"
+                    :aria-label="`Open ${row.file.path}`"
+                    @click="emit('openFile', row.file)"
                 >
                     <FileText :size="12" />
                 </button>
-                <button
-                    v-if="!committed"
-                    type="button"
-                    :class="[iconButton, 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100']"
-                    :title="actionLabel"
-                    :aria-label="`${actionLabel} ${file.path}`"
-                    :disabled="disabled"
-                    @click="emit('toggle', [file.path])"
-                >
-                    <component :is="staged ? Minus : Plus" :size="12" />
-                </button>
 
-                <span class="shrink-0 text-ui-11 tabular-nums" data-testid="line-stats">
-                    <span v-if="worktreeLabels[file.path]" class="text-zinc-500">worktree</span>
-                    <span v-else-if="file.untracked" class="text-emerald-600">untracked</span>
-                    <span v-else-if="file.binary" class="text-zinc-400">binary</span>
+                <span class="shrink-0 font-mono text-ui-11 tabular-nums" data-testid="line-stats">
+                    <span v-if="worktreeLabels[row.file.path]" class="text-zinc-500">worktree</span>
+                    <span v-else-if="row.file.untracked && !row.file.additions" class="text-emerald-600">untracked</span>
+                    <span v-else-if="row.file.binary" class="text-zinc-400">binary</span>
                     <template v-else>
-                        <span class="text-emerald-600">+{{ file.additions ?? 0 }}</span>
-                        <span class="ml-1 text-red-500">-{{ file.deletions ?? 0 }}</span>
+                        <span v-if="row.file.additions" class="text-emerald-600">+{{ row.file.additions }}</span>
+                        <span v-if="row.file.deletions" class="ml-1.5 text-red-500">-{{ row.file.deletions }}</span>
                     </template>
                 </span>
             </li>

@@ -17,7 +17,7 @@ describe('projectColor', () => {
         }
     })
 
-    it('keeps every pill\'s text at WCAG AA contrast (4.5:1)', () => {
+    it('keeps every letter tile\'s text at WCAG AA contrast (4.5:1)', () => {
         // Tailwind v4's sRGB fallbacks for the classes in the palette; happy-dom resolves no styles.
         const HEX: Record<string, string> = {
             'bg-blue-600': '#155dfc', 'bg-amber-400': '#ffb900', 'bg-emerald-700': '#007a55',
@@ -30,14 +30,14 @@ describe('projectColor', () => {
             return 0.2126 * r + 0.7152 * g + 0.0722 * b
         }
         for (const color of PROJECT_COLORS) {
-            const [a, b] = [luminance(HEX[color.fill]), luminance(HEX[color.text])].sort((x, y) => y - x)
+            const [a, b] = [luminance(HEX[color.tile]), luminance(HEX[color.tileText])].sort((x, y) => y - x)
             expect((a + 0.05) / (b + 0.05), color.name).toBeGreaterThanOrEqual(4.5)
         }
     })
 
-    it('pairs every pill fill with a border of the same hue', () => {
+    it('pairs every tile with a tint of the same hue', () => {
         for (const color of PROJECT_COLORS) {
-            expect(color.border).toBe(color.fill.replace(/^bg-/, 'border-'))
+            expect(color.tint.split('-')[1]).toBe(color.tile.split('-')[1])
         }
     })
 })

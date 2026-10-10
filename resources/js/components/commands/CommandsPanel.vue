@@ -1,16 +1,7 @@
 <script setup lang="ts">
-import { useQueryCache } from '@pinia/colada'
 import { computed, ref } from 'vue'
-import {
-    COMMAND_RUNS_QUERY_KEY,
-    COMMANDS_QUERY_KEY,
-    CommandRequestError,
-    createCommand,
-    deleteCommand,
-    updateCommand,
-    useCommands,
-} from '@/queries/commandQuery'
-import { useCommandRunStore } from '@/stores/commandRunStore'
+import { useCommandCrud } from '@/composables/useCommandCrud'
+import { useCommands } from '@/queries/commandQuery'
 import CommandForm from './CommandForm.vue'
 import CommandRow from './CommandRow.vue'
 import Icon from './Icon.vue'
@@ -18,52 +9,22 @@ import type { Command } from './types'
 
 const props = defineProps<{ projectId: number }>()
 
-const queryCache = useQueryCache()
-const runs = useCommandRunStore()
+const crud = useCommandCrud(() => props.projectId)
 const query = useCommands(() => props.projectId)
 const commands = computed(() => query.data.value ?? [])
 const showForm = ref(false)
 const deleteError = ref('')
 
-const key = () => [...COMMANDS_QUERY_KEY, props.projectId]
-const setCommands = (updater: (prev: Command[]) => Command[]) =>
-    queryCache.setQueryData<Command[]>(key(), prev => updater(prev ?? []))
-
-const errorMessage = (e: unknown) => (e instanceof Error ? e.message : 'Network error')
-
 async function handleCreate(label: string, command: string): Promise<string | null> {
-    try {
-        const created = await createCommand(props.projectId, { label, command })
-        setCommands(prev => [...prev, created])
-        showForm.value = false
-        return null
-    } catch (e) {
-        return errorMessage(e)
-    }
+    const error = await crud.create(label, command)
+    if (!error) showForm.value = false
+    return error
 }
 
-async function handleUpdate(c: Command, label: string, command: string): Promise<boolean> {
-    try {
-        const updated = await updateCommand(c.id, { label, command })
-        setCommands(prev => prev.map(x => (x.id === c.id ? updated : x)))
-        return true
-    } catch {
-        return false
-    }
-}
+const handleUpdate = (c: Command, label: string, command: string) => crud.update(c, label, command)
 
 async function handleDelete(c: Command) {
-    deleteError.value = ''
-    try {
-        await deleteCommand(c.id)
-    } catch (e) {
-        if (!(e instanceof CommandRequestError)) throw e
-        deleteError.value = `Could not delete "${c.label}": ${e.message}`
-        return
-    }
-    setCommands(prev => prev.filter(x => x.id !== c.id))
-    runs.forgetCommand(c.id)
-    queryCache.invalidateQueries({ key: COMMAND_RUNS_QUERY_KEY })
+    deleteError.value = (await crud.remove(c)) ?? ''
 }
 </script>
 

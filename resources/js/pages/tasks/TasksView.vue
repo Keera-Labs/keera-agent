@@ -59,8 +59,8 @@ const emptyMessage = computed(() => {
 })
 
 function onKeyDown(e: KeyboardEvent) {
-    // An open dialog (e.g. Settings) owns its own ⌘K.
-    if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'k' || document.querySelector('[role="dialog"]')) return
+    // An open dialog (e.g. Settings) and the visible Commands tab own their own ⌘K.
+    if (e.defaultPrevented || !(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'k' || document.querySelector('[role="dialog"]')) return
     e.preventDefault()
     searchInput.value?.focus()
 }

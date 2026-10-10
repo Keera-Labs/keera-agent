@@ -1,25 +1,25 @@
 export interface ProjectColor {
     name: string
-    /** The group header pill's solid fill. */
-    fill: string
-    /** A foreground that stays readable on `fill`. */
-    text: string
-    /** The rule down the left of the group's agent rows. */
-    border: string
+    /** The pale wash behind the whole project card. */
+    tint: string
+    /** The letter tile's solid fill. */
+    tile: string
+    /** A foreground that stays readable on `tile`. */
+    tileText: string
 }
 
 // Full class strings, so Tailwind's scanner sees every one of them.
 export const PROJECT_COLORS: readonly ProjectColor[] = [
-    { name: 'blue', fill: 'bg-blue-600', text: 'text-white', border: 'border-blue-600' },
-    { name: 'amber', fill: 'bg-amber-400', text: 'text-amber-950', border: 'border-amber-400' },
-    { name: 'green', fill: 'bg-emerald-700', text: 'text-white', border: 'border-emerald-700' },
-    { name: 'purple', fill: 'bg-violet-600', text: 'text-white', border: 'border-violet-600' },
-    { name: 'pink', fill: 'bg-pink-600', text: 'text-white', border: 'border-pink-600' },
-    { name: 'teal', fill: 'bg-teal-700', text: 'text-white', border: 'border-teal-700' },
+    { name: 'blue', tint: 'bg-blue-50', tile: 'bg-blue-600', tileText: 'text-white' },
+    { name: 'amber', tint: 'bg-amber-100', tile: 'bg-amber-400', tileText: 'text-amber-950' },
+    { name: 'green', tint: 'bg-emerald-50', tile: 'bg-emerald-700', tileText: 'text-white' },
+    { name: 'purple', tint: 'bg-violet-50', tile: 'bg-violet-600', tileText: 'text-white' },
+    { name: 'pink', tint: 'bg-pink-50', tile: 'bg-pink-600', tileText: 'text-white' },
+    { name: 'teal', tint: 'bg-teal-50', tile: 'bg-teal-700', tileText: 'text-white' },
 ]
 
 /**
- * A project's group color, keyed by its id so it never changes across reloads
+ * A project's card color, keyed by its id so it never changes across reloads
  * or renames. Sequential ids walk the palette, so neighbours rarely share a color.
  */
 export function projectColor(projectId: number): ProjectColor {

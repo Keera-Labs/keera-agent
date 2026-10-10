@@ -5,7 +5,6 @@ import { defineAsyncComponent, ref, watch } from 'vue'
 import ResizeHandle from '@/components/ui/ResizeHandle.vue'
 import { useResizablePanel } from '@/composables/useResizablePanel'
 import AppHeader from '@/layouts/app/AppHeader.vue'
-import CommandDock from '@/layouts/app/CommandDock.vue'
 import StatusBar from '@/layouts/app/StatusBar.vue'
 import ModalLayer from '@/layouts/ModalLayer.vue'
 import RightPanel from '@/layouts/right-panel/RightPanel.vue'
@@ -20,8 +19,8 @@ const { activeTab: activeEditorTab } = storeToRefs(useEditorStore())
 const { activeTab: activeDiffTab } = storeToRefs(useDiffStore())
 
 // Terminals refit themselves: their ResizeObserver fires as the main area changes width.
-const sidebar = useResizablePanel({ storageKey: 'keera.layout.sidebarWidth', defaultWidth: 216, side: 'left' })
-const rightPanel = useResizablePanel({ storageKey: 'keera.layout.rightPanelWidth', defaultWidth: 272, side: 'right' })
+const sidebar = useResizablePanel({ storageKey: 'keera.layout.sidebarWidth', defaultWidth: 260, side: 'left' })
+const rightPanel = useResizablePanel({ storageKey: 'keera.layout.rightPanelWidth', defaultWidth: 380, minWidth: 320, side: 'right' })
 
 // Loaded with the first opened file or diff (Monaco is its own large chunk), then
 // kept mounted so switching back to a tab does not rebuild the editor.
@@ -42,7 +41,7 @@ function setHolder(el: unknown) {
     Persistent Inertia layout: it never unmounts across navigations, so the
     terminal sessions owned by the app layout store survive page changes.
     Regions: a full-height left sidebar and right panel (the active project's
-    file explorer), a center column with the header above the main area (page
+    changes, files, command output and commands), a center column with the header above the main area (page
     content, or the file editor above it while a file tab is active), and a
     bottom status bar.
 -->
@@ -61,8 +60,6 @@ function setHolder(el: unknown) {
                     <EditorPane v-if="editorMounted" v-show="activeEditorTab" />
                     <DiffPane v-if="diffMounted" v-show="activeDiffTab" />
                 </main>
-
-                <CommandDock />
             </div>
 
             <ResizeHandle v-show="rightPanelOpen" :panel="rightPanel" label="Resize right panel" />
@@ -70,7 +67,7 @@ function setHolder(el: unknown) {
                 v-show="rightPanelOpen"
                 id="app-right-panel"
                 :style="{ width: `${rightPanel.width.value}px` }"
-                class="shrink-0 bg-canvas border-l border-stroke flex flex-col overflow-hidden"
+                class="shrink-0 bg-white border-l border-stroke flex flex-col overflow-hidden"
             >
                 <RightPanel />
             </aside>

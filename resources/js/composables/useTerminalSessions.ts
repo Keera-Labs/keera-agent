@@ -18,7 +18,7 @@ export type ClaudeStatus = 'running' | 'done'
 
 // xterm.js requires raw hex values — CSS variables are not supported.
 const XTERM_THEME = {
-    background: '#f6f8fa', foreground: '#24292f', cursor: '#24292f', cursorAccent: '#f6f8fa',
+    background: '#ffffff', foreground: '#24292f', cursor: '#24292f', cursorAccent: '#ffffff',
     selectionBackground: '#0969da33',
     black: '#24292f', brightBlack: '#57606a',
     red: '#cf222e', brightRed: '#a40e26',

@@ -20,36 +20,44 @@ const props = defineProps<{
 defineEmits<{ toggle: []; selectAgent: [agent: AgentSummary] }>()
 
 const color = computed(() => projectColor(props.project.id))
+const expanded = computed(() => props.agents.length > 0 && !props.collapsed)
 </script>
 
 <template>
-    <div data-testid="project-card" :data-color="color.name">
+    <div
+        data-testid="project-card"
+        :data-color="color.name"
+        :class="['rounded-xl p-1', color.tint, props.active && 'ring-1 ring-inset ring-black/[0.08]']"
+    >
         <ProjectItem :project="props.project" :color="color" :active="props.active" :status="props.status">
-            <template v-if="props.agents.length > 0" #badge>
+            <template v-if="props.agents.length > 0" #toggle>
                 <button
                     type="button"
                     data-testid="project-collapse"
                     :aria-expanded="!props.collapsed"
                     :aria-label="props.collapsed ? 'Show agents' : 'Hide agents'"
-                    class="shrink-0 flex items-center gap-0.5 h-5 pl-1.5 pr-1 rounded-md text-ui-11 font-semibold tabular-nums cursor-pointer hover:bg-black/10"
+                    class="shrink-0 w-5 h-5 flex items-center justify-center rounded-md text-zinc-500 cursor-pointer hover:bg-black/[0.06] hover:text-zinc-800"
                     @click.stop="$emit('toggle')"
                     @keydown.enter.stop
                 >
-                    {{ props.agents.length }}
-                    <!-- Points up while open, like a tab group's header, and flips once collapsed. -->
                     <Icon
-                        name="chevron-down"
-                        :size="12"
-                        :class="['transition-transform duration-150', !props.collapsed && 'rotate-180']"
+                        name="chevron-right"
+                        :size="13"
+                        :class="['transition-transform duration-150', expanded && 'rotate-90']"
                     />
                 </button>
+            </template>
+            <template v-if="props.agents.length > 0" #badge>
+                <span data-testid="project-count" class="shrink-0 text-ui-12 tabular-nums text-zinc-500">
+                    {{ props.agents.length }}
+                </span>
             </template>
         </ProjectItem>
 
         <ul
-            v-if="props.agents.length > 0 && !props.collapsed"
+            v-if="expanded"
             data-testid="project-agents"
-            :class="['list-none m-0 mt-1 mb-0.5 ml-1 pl-1 border-l-2 flex flex-col gap-px', color.border]"
+            class="list-none m-0 mt-0.5 p-0 flex flex-col gap-0.5"
         >
             <li v-for="agent in props.agents" :key="agent.id">
                 <AgentRow

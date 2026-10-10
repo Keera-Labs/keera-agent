@@ -45,9 +45,9 @@ const menuItemClass = (danger = false) =>
     `flex items-center gap-2 h-7 px-2 rounded-md cursor-pointer text-ui-12.5 ${danger ? 'text-danger' : 'text-zinc-700'} bg-transparent border-0 w-full text-left whitespace-nowrap hover:bg-black/[0.04]`
 
 const STATUS_DOT: Record<'running' | 'done' | 'idle', string> = {
-    running: 'bg-amber-500 animate-pulse',
-    done: 'bg-success',
-    idle: 'bg-zinc-300',
+    running: 'bg-orange-500 animate-pulse',
+    done: 'bg-emerald-500',
+    idle: 'hidden',
 }
 
 const layout = useAppLayoutStore()
@@ -118,32 +118,33 @@ onBeforeUnmount(stopListening)
             tabindex="0"
             data-testid="project-item"
             :aria-current="props.active ? 'page' : undefined"
-            :class="[
-                'flex-1 min-w-0 flex items-center gap-2 py-1 pl-2.5 pr-7 rounded-lg cursor-pointer text-left transition-[filter,box-shadow] duration-100 hover:brightness-105',
-                props.color.fill,
-                props.color.text,
-                props.active && 'shadow-[0_1px_3px_rgba(0,0,0,0.18)] ring-2 ring-black/15 ring-inset',
-            ]"
+            :title="props.project.path"
+            class="flex-1 min-w-0 flex items-center gap-2 h-9 pl-1.5 pr-2.5 rounded-lg cursor-pointer text-left text-zinc-900 transition-colors duration-100 hover:bg-black/[0.03]"
             @click="visit"
             @keydown.enter="visit"
         >
-            <!-- The solid white ring keeps every status color legible whatever the pill's fill. -->
+            <slot name="toggle">
+                <span class="w-5 shrink-0" />
+            </slot>
+            <span
+                data-testid="project-tile"
+                :class="['w-5 h-5 rounded-md shrink-0 flex items-center justify-center text-ui-11 font-bold', props.color.tile, props.color.tileText]"
+                aria-hidden="true"
+            >
+                {{ props.project.name.charAt(0).toUpperCase() }}
+            </span>
+            <span
+                data-testid="project-name"
+                :class="['flex-1 min-w-0 truncate text-ui-13 leading-5', props.active ? 'font-semibold' : 'font-medium']"
+                :title="props.project.name"
+            >
+                {{ props.project.name }}
+            </span>
             <span
                 data-testid="project-status"
                 :data-status="props.status ?? 'idle'"
-                :class="['w-[7px] h-[7px] rounded-full shrink-0 ring-2 ring-white', STATUS_DOT[props.status ?? 'idle']]"
+                :class="['w-1.5 h-1.5 rounded-full shrink-0', STATUS_DOT[props.status ?? 'idle']]"
             />
-
-            <div class="flex-1 min-w-0">
-                <div class="text-ui-13 font-semibold truncate leading-5" :title="props.project.name">
-                    {{ props.project.name }}
-                </div>
-                <div v-if="props.active" class="text-ui-11 opacity-80 truncate leading-4" :title="props.project.path">
-                    {{ props.project.path }}
-                </div>
-            </div>
-
-            <!-- A sibling of the text column, so it stays centred on the pill when the path line shows. -->
             <slot name="badge" />
         </div>
 
@@ -154,10 +155,10 @@ onBeforeUnmount(stopListening)
             aria-label="Project actions"
             :aria-expanded="menuOpen"
             :class="[
-                'absolute right-1 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md cursor-pointer flex items-center justify-center',
-                props.color.text,
+                'absolute right-1 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md cursor-pointer flex items-center justify-center text-zinc-600',
+                props.color.tint,
                 !(hovered || menuOpen) && 'opacity-0 focus-visible:opacity-100',
-                menuOpen ? 'bg-black/15' : 'hover:bg-black/10',
+                menuOpen ? 'brightness-90' : 'hover:brightness-95',
             ]"
             @mousedown.stop
             @click.stop="toggleMenu"

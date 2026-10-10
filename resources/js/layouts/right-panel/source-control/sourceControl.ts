@@ -4,16 +4,16 @@ import type { GitFileChange, GitTarget } from '@/queries/gitQuery'
 export type StatusBadge = { letter: string; label: string; tone: string }
 
 const BADGES: Record<GitFileChange['status'], StatusBadge> = {
-    M: { letter: 'M', label: 'Modified', tone: 'text-orange-600' },
-    A: { letter: 'A', label: 'Added', tone: 'text-emerald-600' },
-    D: { letter: 'D', label: 'Deleted', tone: 'text-red-600' },
-    R: { letter: 'R', label: 'Renamed', tone: 'text-sky-600' },
-    C: { letter: 'C', label: 'Copied', tone: 'text-sky-600' },
+    M: { letter: 'M', label: 'Modified', tone: 'bg-orange-100 text-orange-700' },
+    A: { letter: 'A', label: 'Added', tone: 'bg-emerald-100 text-emerald-700' },
+    D: { letter: 'D', label: 'Deleted', tone: 'bg-red-100 text-red-700' },
+    R: { letter: 'R', label: 'Renamed', tone: 'bg-sky-100 text-sky-700' },
+    C: { letter: 'C', label: 'Copied', tone: 'bg-sky-100 text-sky-700' },
     // Without the untracked flag, git's U means an unmerged path.
-    U: { letter: '!', label: 'Merge conflict', tone: 'text-red-600' },
+    U: { letter: '!', label: 'Merge conflict', tone: 'bg-red-100 text-red-700' },
 }
 
-const UNTRACKED: StatusBadge = { letter: 'U', label: 'Untracked', tone: 'text-emerald-600' }
+const UNTRACKED: StatusBadge = { letter: 'U', label: 'Untracked', tone: 'bg-emerald-100 text-emerald-700' }
 
 export function statusBadge(file: GitFileChange): StatusBadge {
     return file.untracked ? UNTRACKED : BADGES[file.status]
@@ -39,3 +39,8 @@ export function useCommitDraft(target: MaybeRefOrGetter<GitTarget | null>) {
 
 export const menuItemClass =
     'flex items-center gap-2 w-full px-3 h-7 text-left text-ui-12 text-zinc-700 hover:bg-zinc-100 cursor-pointer disabled:text-zinc-300 disabled:cursor-default disabled:hover:bg-transparent'
+
+/** A file's place in the index: a partly staged file has changes on both sides. */
+export type StageState = 'staged' | 'unstaged' | 'partial'
+
+export type ChangeRow = { file: GitFileChange; state?: StageState }
