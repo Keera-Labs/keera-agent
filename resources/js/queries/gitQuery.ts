@@ -116,17 +116,18 @@ export const gitKeys = {
         [...gitKeys.diffs(diff?.target ?? null), diff?.path ?? '', diff?.committed ? `committed:${diff.base ?? ''}` : diff?.staged ? 'staged' : 'unstaged'],
 }
 
-async function request<T>(url: string, init?: { method: 'POST'; body: object }): Promise<T> {
+async function request<T>(url: string, init?: { method: 'POST'; body: object } | { method: 'DELETE' }): Promise<T> {
     // Without Accept: application/json the backend answers validation errors with a 303 redirect instead of a 422 body.
     const headers: Record<string, string> = { Accept: 'application/json' }
-    const res = await fetch(url, init
+    const res = await fetch(url, init && 'body' in init
         ? { method: init.method, headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(init.body) }
-        : { headers })
+        : { method: init?.method, headers })
     if (!res.ok) {
         const body = await res.json().catch(() => null)
-        throw new GitRequestError(res.status, typeof body?.detail === 'string' ? body.detail : `Request failed (${res.status})`)
+        const message = [body?.error, body?.detail].find(m => typeof m === 'string')
+        throw new GitRequestError(res.status, message ?? `Request failed (${res.status})`)
     }
-    return res.json()
+    return res.status === 204 ? (undefined as T) : res.json()
 }
 
 export const isOpenPullRequest = (info: GitPullRequestInfo | undefined) => info?.pull_request?.state === 'OPEN'
@@ -152,6 +153,23 @@ export function useGitWorktreeChanges(projectIdSource: MaybeRefOrGetter<number |
         enabled: () => projectId() !== null && toValue(enabled),
         staleTime: 30_000,
         refetchOnWindowFocus: true,
+    })
+}
+
+export type GitWorktreeRemoval = { path: string; force: boolean }
+
+export function useRemoveGitWorktree(projectIdSource: MaybeRefOrGetter<number | null>) {
+    const queryCache = useQueryCache()
+    const projectId = () => toValue(projectIdSource)!
+    return useMutation({
+        mutation: ({ path, force }: GitWorktreeRemoval) => {
+            const search = new URLSearchParams({ worktree: path, force: String(force) })
+            return request<void>(`/api/projects/${projectId()}/git/worktrees?${search}`, { method: 'DELETE' })
+        },
+        onSettled: () => {
+            queryCache.invalidateQueries({ key: gitKeys.worktrees(projectId()), exact: true })
+            queryCache.invalidateQueries({ key: gitKeys.worktreeChanges(projectId()), exact: true })
+        },
     })
 }
 

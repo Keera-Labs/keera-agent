@@ -95,8 +95,8 @@ def list_worktrees(repo: str) -> list[Worktree]:
     return worktrees
 
 
-def lock_pid(wt: Worktree) -> int | None:
-    match = _LOCK_PID.search(wt.lock_reason or "")
+def lock_pid(lock_reason: str | None) -> int | None:
+    match = _LOCK_PID.search(lock_reason or "")
     return int(match.group(1)) if match else None
 
 
@@ -112,7 +112,7 @@ def pid_alive(pid: int) -> bool:
 
 def wait_for_lock_holder(wt: Worktree, timeout: float) -> None:
     """Give the process holding the worktree lock up to `timeout` seconds to exit."""
-    pid = lock_pid(wt)
+    pid = lock_pid(wt.lock_reason)
     deadline = time.monotonic() + timeout
     while pid and pid_alive(pid) and time.monotonic() < deadline:
         time.sleep(0.1)
@@ -135,7 +135,7 @@ def assess(wt: Worktree) -> Assessment:
         reasons.append("directory missing")
         return assessment
     if wt.locked:
-        pid = lock_pid(wt)
+        pid = lock_pid(wt.lock_reason)
         if pid is None:
             reasons.append(f"locked: {wt.lock_reason or 'no reason given'}")
         elif pid_alive(pid):
