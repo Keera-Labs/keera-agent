@@ -84,7 +84,24 @@ export interface AgentQuestion {
     language?: string | null
 }
 
-export function agentQuestionMessage({ path, worktree, selection, snippet, question, diff = false, language = null }: AgentQuestion): string {
+const PASTE_MARKER = /\x1b\[20[01]~/g
+const LINE_BREAK = /\r\n?/g
+const UNPASTEABLE = /[\x00-\x08\x0b-\x1f\x7f-\x9f]/g
+
+function withoutPasteMarkers(text: string): string {
+    const stripped = text.replace(PASTE_MARKER, '')
+    return stripped === text ? text : withoutPasteMarkers(stripped)
+}
+
+export function pasteSafe(text: string): string {
+    return withoutPasteMarkers(text).replace(LINE_BREAK, '\n').replace(UNPASTEABLE, '')
+}
+
+export function agentQuestionMessage(request: AgentQuestion): string {
+    return pasteSafe(questionText(request))
+}
+
+function questionText({ path, worktree, selection, snippet, question, diff = false, language = null }: AgentQuestion): string {
     const label = linesLabel(selection)
     const side = selection.side === 'original' ? ' (before the change)' : ' (after the change)'
     return [

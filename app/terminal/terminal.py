@@ -28,6 +28,21 @@ def _with_color_env(env: dict) -> dict:
 
 PASTE_START = b"\x1b[200~"
 PASTE_END = b"\x1b[201~"
+_PASTE_MARKER = re.compile(r"\x1b\[20[01]~")
+_LINE_BREAK = re.compile(r"\r\n?")
+_UNPASTEABLE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
+
+
+def _without_paste_markers(message: str) -> str:
+    while True:
+        stripped = _PASTE_MARKER.sub("", message)
+        if stripped == message:
+            return message
+        message = stripped
+
+
+def paste_safe(message: str) -> str:
+    return _UNPASTEABLE.sub("", _LINE_BREAK.sub("\n", _without_paste_markers(message)))
 
 # CLI startup dialogs that wait for a choice. Enter picks the highlighted
 # option (codex's update prompt defaults to running a global npm install), so
@@ -443,7 +458,7 @@ class Terminal:
         same read the CR is swallowed as part of the paste — the message then
         sits unsubmitted in the input box until the next message's Enter.
         """
-        body = message.encode().rstrip(b"\r\n").replace(PASTE_END, b"")
+        body = paste_safe(message).rstrip("\n").encode()
         async with self._send_lock:
             if body:
                 seen = self._output_seq
