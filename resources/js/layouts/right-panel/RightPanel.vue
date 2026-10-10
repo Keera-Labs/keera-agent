@@ -10,6 +10,7 @@ import { useGitStatus } from '@/queries/gitQuery'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import { useCommandRunStore } from '@/stores/commandRunStore'
 import { useProjectStore } from '@/stores/projectStore'
+import CommandOutput from './commands/CommandOutput.vue'
 import CommandsView from './commands/CommandsView.vue'
 import FileExplorer from './FileExplorer.vue'
 import SourceControl from './source-control/SourceControl.vue'
@@ -27,25 +28,20 @@ const VIEWS: { id: ViewId; label: string; icon: LucideIcon }[] = [
 const EMPTY_TEXT: Record<ViewId, string> = {
     changes: 'Select a project to see its changes',
     files: 'Select a project to browse files',
-    terminal: 'Select a project to see command output',
+    terminal: 'Select a project to open a terminal',
     commands: 'Select a project to run its commands',
 }
 
 const { rightPanelOpen, activeAgentId } = storeToRefs(useAppLayoutStore())
 const { activeProject } = storeToRefs(useProjectStore())
-const { dockOpen } = storeToRefs(useCommandRunStore())
+const { outputOpen } = storeToRefs(useCommandRunStore())
 const page = usePage()
 
-const otherView = ref<Exclude<ViewId, 'terminal'>>('changes')
-const activeView = computed<ViewId>({
-    get: () => (dockOpen.value ? 'terminal' : otherView.value),
-    set: view => {
-        dockOpen.value = view === 'terminal'
-        if (view !== 'terminal') otherView.value = view
-    },
-})
-watch(dockOpen, open => {
-    if (open) rightPanelOpen.value = true
+const activeView = ref<ViewId>('changes')
+watch(outputOpen, open => {
+    if (!open) return
+    activeView.value = 'commands'
+    rightPanelOpen.value = true
 })
 
 const projectId = () => activeProject.value?.id ?? null
@@ -126,8 +122,9 @@ function viewLabel(view: ViewId) {
             :project="activeProject"
         />
     </KeepAlive>
-    <TerminalView :visible="!!activeProject && activeView === 'terminal'" />
-    <CommandsView v-if="activeProject" :visible="activeView === 'commands'" />
+    <TerminalView v-if="activeProject" :visible="activeView === 'terminal'" />
+    <CommandsView v-if="activeProject" :visible="activeView === 'commands' && !outputOpen" />
+    <CommandOutput v-if="activeProject" :visible="activeView === 'commands' && outputOpen" />
     <div
         v-if="!activeProject"
         data-testid="right-panel-empty"

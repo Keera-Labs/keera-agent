@@ -5,27 +5,20 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import CommandForm from '@/components/commands/CommandForm.vue'
 import type { Command, CommandRun } from '@/components/commands/types'
 import { useCommandCrud } from '@/composables/useCommandCrud'
-import { useViewedWorktree } from '@/composables/useViewedWorktree'
 import { relativeTime } from '@/utils/relativeTime'
 import { useCommandRuns, useCommands } from '@/queries/commandQuery'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import { useCommandRunStore, type CommandTarget } from '@/stores/commandRunStore'
-import { useProjectStore } from '@/stores/projectStore'
-import { clock, duration, elapsedMs, recentRuns, succeeded } from './commandRuns'
+import { usePanelWorktree } from '../usePanelWorktree'
+import { duration, recentRuns, succeeded } from './commandRuns'
 
 const props = defineProps<{ visible: boolean }>()
 
-const layout = useAppLayoutStore()
-const { activeAgentId, settingsSection } = storeToRefs(layout)
-const { activeProject } = storeToRefs(useProjectStore())
+const { settingsSection } = storeToRefs(useAppLayoutStore())
 const runs = useCommandRunStore()
+const { tabs, outputOpen } = storeToRefs(runs)
 
-const projectId = computed(() => activeProject.value?.id ?? null)
-const worktreeAgentId = computed(() => {
-    const agent = layout.agentHook.agents.value.find(a => a.id === activeAgentId.value)
-    return agent && agent.agent_type !== 'pm' ? agent.id : null
-})
-const { path: worktree, place, branch, status, ready } = useViewedWorktree(projectId, worktreeAgentId)
+const { activeProject, projectId, path: worktree, place, branch, status, ready } = usePanelWorktree()
 const { data: commands } = useCommands(projectId)
 const { data: commandRuns } = useCommandRuns(projectId)
 const crud = useCommandCrud(() => projectId.value ?? 0)
@@ -41,6 +34,8 @@ const runsHere = computed(() => (commandRuns.value ?? []).filter(r => r.worktree
 const live = computed(() => runsHere.value.filter(r => r.status === 'running'))
 const recent = computed(() => recentRuns(runsHere.value))
 const runningIds = computed(() => new Set(live.value.map(r => r.command_id)))
+const ranIds = computed(() => new Set(runsHere.value.map(r => r.command_id)))
+const outputCount = computed(() => tabs.value.filter(t => t.projectId === projectId.value).length)
 
 const needle = computed(() => query.value.trim().toLowerCase())
 const saved = computed(() => (commands.value ?? []).filter(c =>
@@ -51,6 +46,7 @@ const exactMatch = computed(() => (commands.value ?? []).find(c =>
 const savedOf = (run: CommandRun) => (run.command_id !== null ? commandById.value.get(run.command_id) : undefined)
 const runName = (run: CommandRun) => run.label ?? savedOf(run)?.label ?? run.command ?? 'Command'
 const runText = (run: CommandRun) => run.command ?? savedOf(run)?.command ?? ''
+const liveRunOf = (command: Command) => live.value.find(r => r.command_id === command.id)
 const ago = (iso: string) => {
     const rel = relativeTime(iso, now.value)
     return rel === 'now' ? 'just now' : `${rel} ago`
@@ -88,9 +84,14 @@ function submit() {
     if (!text || !t) return
     const command = exactMatch.value
     attempt(async () => {
-        await (command ? runs.run(command, t, false) : runs.runAdhoc(text, t, false))
+        await (command ? runs.run(command, t, false) : runs.runAdhoc(text, t))
         query.value = ''
     })
+}
+
+function showOutput(command: Command) {
+    const t = target()
+    if (t) runs.show(command, t)
 }
 
 function openOutput(run: CommandRun) {
@@ -101,8 +102,9 @@ function openOutput(run: CommandRun) {
     else runs.showAdhoc(run, t)
 }
 
-function stop(run: CommandRun) {
-    if (projectId.value !== null) attempt(() => runs.stopRun(projectId.value!, run))
+function stop(command: Command) {
+    const run = liveRunOf(command)
+    if (run && projectId.value !== null) attempt(() => runs.stopRun(projectId.value!, run))
 }
 
 async function create(label: string, command: string) {
@@ -127,7 +129,7 @@ function onKeydown(e: KeyboardEvent) {
 let clockTimer: ReturnType<typeof setInterval> | undefined
 onMounted(() => {
     window.addEventListener('keydown', onKeydown, { capture: true })
-    clockTimer = setInterval(() => { now.value = Date.now() }, 1000)
+    clockTimer = setInterval(() => { now.value = Date.now() }, 30_000)
 })
 onBeforeUnmount(() => {
     window.removeEventListener('keydown', onKeydown, { capture: true })
@@ -167,44 +169,6 @@ const iconButton = 'shrink-0 w-6 h-6 flex items-center justify-center rounded-md
         </p>
 
         <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 pb-3 flex flex-col gap-4">
-            <div v-if="live.length" class="flex flex-col gap-2">
-                <article
-                    v-for="run in live"
-                    :key="run.id ?? `${run.command_id}@${run.worktree}`"
-                    data-testid="running-command"
-                    class="min-w-0 rounded-xl border border-orange-200 bg-orange-50 p-3"
-                >
-                    <div class="flex items-center gap-2 min-w-0">
-                        <span class="shrink-0 w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-                        <span class="min-w-0 truncate text-ui-13 font-semibold text-zinc-900">{{ runName(run) }}</span>
-                        <span class="shrink-0 text-ui-12 text-orange-700">running</span>
-                        <span data-testid="running-elapsed" class="ml-auto shrink-0 font-mono text-ui-12 tabular-nums text-zinc-500">
-                            {{ clock(elapsedMs(run, now)) }}<template v-if="run.timeout_seconds"> / {{ clock(run.timeout_seconds * 1000) }}</template>
-                        </span>
-                    </div>
-                    <p class="mt-1.5 truncate font-mono text-ui-12 text-zinc-600" :title="runText(run)">{{ runText(run) }}</p>
-                    <div class="mt-2.5 flex items-center gap-2">
-                        <button
-                            type="button"
-                            data-testid="running-open"
-                            class="min-w-0 h-7 flex items-center gap-1.5 px-2.5 rounded-md border border-stroke bg-surface text-ui-12 text-zinc-700 cursor-pointer hover:border-zinc-300 hover:text-zinc-900"
-                            @click="openOutput(run)"
-                        >
-                            <SquareTerminal :size="13" class="shrink-0" />
-                            <span class="truncate">Open in terminal</span>
-                        </button>
-                        <button
-                            type="button"
-                            data-testid="running-stop"
-                            class="shrink-0 h-7 flex items-center gap-1.5 px-2.5 rounded-md border border-red-200 bg-surface text-ui-12 text-red-600 cursor-pointer hover:bg-red-50"
-                            @click="stop(run)"
-                        >
-                            <Square :size="10" fill="currentColor" /> Stop
-                        </button>
-                    </div>
-                </article>
-            </div>
-
             <div>
                 <div :class="sectionClass">
                     <span class="flex-1">Saved</span>
@@ -227,10 +191,17 @@ const iconButton = 'shrink-0 w-6 h-6 flex items-center justify-center rounded-md
                         data-testid="saved-command"
                         class="group min-w-0 flex items-center gap-2 h-12 px-1 rounded-md hover:bg-black/[0.03]"
                     >
-                        <div class="flex-1 min-w-0">
-                            <p class="truncate text-ui-13 font-semibold text-zinc-900">{{ command.label }}</p>
-                            <p class="truncate font-mono text-ui-11 text-zinc-400" :title="command.command">{{ command.command }}</p>
-                        </div>
+                        <button
+                            type="button"
+                            data-testid="saved-output"
+                            :disabled="!ranIds.has(command.id)"
+                            :title="ranIds.has(command.id) ? `Show output of ${command.label}` : command.command"
+                            class="flex-1 min-w-0 text-left cursor-pointer disabled:cursor-default"
+                            @click="showOutput(command)"
+                        >
+                            <span class="block truncate text-ui-13 font-semibold text-zinc-900">{{ command.label }}</span>
+                            <span class="block truncate font-mono text-ui-11 text-zinc-400">{{ command.command }}</span>
+                        </button>
                         <button
                             type="button"
                             title="Edit commands"
@@ -248,6 +219,17 @@ const iconButton = 'shrink-0 w-6 h-6 flex items-center justify-center rounded-md
                             @click="remove(command)"
                         >
                             <Trash2 :size="12" />
+                        </button>
+                        <button
+                            v-if="runningIds.has(command.id)"
+                            type="button"
+                            data-testid="saved-stop"
+                            title="Stop"
+                            :aria-label="`Stop ${command.label}`"
+                            class="shrink-0 w-7 h-7 flex items-center justify-center rounded-md border border-red-200 bg-surface text-red-600 cursor-pointer hover:bg-red-50"
+                            @click="stop(command)"
+                        >
+                            <Square :size="10" fill="currentColor" />
                         </button>
                         <button
                             type="button"
@@ -294,8 +276,19 @@ const iconButton = 'shrink-0 w-6 h-6 flex items-center justify-center rounded-md
                 </ul>
             </div>
         </div>
-        <p data-testid="commands-place" class="shrink-0 px-4 py-2 border-t border-stroke truncate text-ui-11 text-zinc-400" :title="branch ? `${place} · ${branch}` : place">
-            Runs in {{ place }}<template v-if="branch"> · <span class="font-mono">{{ branch }}</span></template>
-        </p>
+        <div class="shrink-0 flex items-center gap-2 pl-4 pr-3 py-1.5 border-t border-stroke">
+            <p data-testid="commands-place" class="flex-1 min-w-0 truncate text-ui-11 text-zinc-400" :title="branch ? `${place} · ${branch}` : place">
+                Runs in {{ place }}<template v-if="branch"> · <span class="font-mono">{{ branch }}</span></template>
+            </p>
+            <button
+                v-if="outputCount"
+                type="button"
+                data-testid="commands-show-output"
+                class="shrink-0 h-6 flex items-center gap-1 px-1.5 rounded-md text-ui-12 text-zinc-600 cursor-pointer hover:bg-black/[0.05] hover:text-zinc-900"
+                @click="outputOpen = true"
+            >
+                <SquareTerminal :size="12" /> Output <span class="tabular-nums text-zinc-400">{{ outputCount }}</span>
+            </button>
+        </div>
     </section>
 </template>
