@@ -30,7 +30,8 @@ const root = ref<HTMLElement | null>(null)
 const runsHere = computed(() => {
     const byCommand = new Map<number, CommandRun>()
     for (const run of commandRuns.value ?? []) {
-        if (run.worktree === worktree.value) byCommand.set(run.command_id, run)
+        if (run.command_id === null || run.worktree !== worktree.value || byCommand.has(run.command_id)) continue
+        byCommand.set(run.command_id, run)
     }
     return byCommand
 })

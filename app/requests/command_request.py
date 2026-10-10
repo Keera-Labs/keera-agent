@@ -29,3 +29,10 @@ class CommandUpdateRequest(BaseModel):
 
 class CommandRunStoreRequest(BaseModel):
     worktree: Optional[str] = None
+
+
+class ProjectCommandRunStoreRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    command: str = Field(min_length=1)
+    worktree: Optional[str] = None

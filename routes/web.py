@@ -37,6 +37,7 @@ from app.controllers import (
     heartbeat_controller,
     home_controller,
     plugin_controller,
+    project_command_run_controller,
     project_file_content_controller,
     project_file_controller,
     project_usage_controller,
@@ -86,7 +87,11 @@ router.get("/api/projects/{project_id}/commands", command_controller.index)
 router.post("/api/projects/{project_id}/commands", command_controller.store)
 router.patch("/api/commands/{command_id}", command_controller.update)
 router.delete("/api/commands/{command_id}", command_controller.destroy)
-router.get("/api/projects/{project_id}/command-runs", command_run_controller.index)
+router.get("/api/projects/{project_id}/command-runs", project_command_run_controller.index)
+router.post("/api/projects/{project_id}/command-runs", project_command_run_controller.store)
+router.delete(
+    "/api/projects/{project_id}/command-runs/{run_id}", project_command_run_controller.destroy
+)
 router.post("/api/commands/{command_id}/runs", command_run_controller.store)
 router.delete("/api/commands/{command_id}/runs", command_run_controller.destroy)
 
@@ -185,4 +190,7 @@ router.get("/{project}", home_controller.project_home)
 router.router.add_api_websocket_route("/{project}/ws", terminal_controller.terminal_ws)
 router.router.add_api_websocket_route(
     "/{project}/command-ws/{command_id}", command_run_controller.attach
+)
+router.router.add_api_websocket_route(
+    "/{project}/command-run-ws/{run_id}", project_command_run_controller.attach
 )
