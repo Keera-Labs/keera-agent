@@ -66,6 +66,13 @@ export function useFileTree(projectId: MaybeRefOrGetter<number>) {
         if (!listings.has(entry.path)) void load(entry.path)
     }
 
+    async function reveal(filePath: string) {
+        const segments = filePath.split('/').slice(0, -1)
+        const ancestors = segments.map((_, i) => segments.slice(0, i + 1).join('/'))
+        for (const dir of ancestors) expanded.add(dir)
+        await Promise.all(ancestors.filter(dir => !listings.has(dir) && !loading.has(dir)).map(load))
+    }
+
     /** Reload the root and every open folder, dropping cached listings of closed ones. */
     async function refresh() {
         for (const path of [...listings.keys(), ...errors.keys()]) {
@@ -127,6 +134,7 @@ export function useFileTree(projectId: MaybeRefOrGetter<number>) {
         collapseAll: () => expanded.clear(),
         isLoadingRoot: () => loading.has(ROOT) && !listings.has(ROOT),
         toggle,
+        reveal,
         refresh,
         visibleRows,
     }

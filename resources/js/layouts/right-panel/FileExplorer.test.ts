@@ -104,6 +104,27 @@ describe('FileExplorer', () => {
         scrollIntoView.mockRestore()
     })
 
+    it('expands the collapsed folders around the active file and scrolls it into view', async () => {
+        const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {})
+        const w = await mountExplorer()
+        useProjectStore().setActiveProject(project)
+        const editor = useEditorStore()
+        vi.spyOn(w.get('[role="tree"]').element, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 100))
+        vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 400, 200, 28))
+        editor.tabsByProject[project.id] = [
+            { projectId: project.id, path: 'app/tasks.py', name: 'tasks.py', etag: 'e', dirty: false, saving: false, conflict: false, error: null },
+        ]
+        expect(rowTexts(w)).toEqual(['.venv', 'app', 'README.md'])
+
+        editor.activate(project.id, 'app/tasks.py')
+        await flushPromises()
+
+        expect(rowTexts(w)).toEqual(['.venv', 'app', 'tasks.py', 'README.md'])
+        expect(w.get('[role="treeitem"][aria-selected="true"]').text()).toBe('tasks.py')
+        expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start' })
+        vi.restoreAllMocks()
+    })
+
     it('collapses every open folder at once', async () => {
         const w = await mountExplorer()
         await w.findAll('[role="treeitem"]')[1].trigger('click')

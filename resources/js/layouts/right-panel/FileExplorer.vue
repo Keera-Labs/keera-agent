@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ChevronsUp, File, Folder, Funnel, RefreshCw, Search } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import { useEditorSettingsStore } from '@/stores/editorSettingsStore'
 import { useEditorStore } from '@/stores/editorStore'
@@ -46,10 +46,12 @@ function revealSelectedRow() {
 
 watch(
     () => activeTab.value?.projectId === props.project.id ? activeTab.value.path : null,
-    path => {
+    async path => {
         if (path === null) return
         selectedPath.value = path
-        revealSelectedRow()
+        await tree.reveal(path)
+        await nextTick()
+        if (selectedPath.value === path) revealSelectedRow()
     },
     { immediate: true, flush: 'post' },
 )
