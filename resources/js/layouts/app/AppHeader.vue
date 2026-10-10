@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia'
 import Icon from '@/components/ui/Icon.vue'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
+import RunMenu from './RunMenu.vue'
 import SessionTabs from './SessionTabs.vue'
 
 const layout = useAppLayoutStore()
@@ -31,6 +32,8 @@ const reopenButtonClass = 'shrink-0 self-center w-[26px] h-[26px] flex items-cen
         <SessionTabs />
 
         <div class="shrink-0 flex items-center gap-1 pl-2 pr-2.5">
+            <RunMenu />
+
             <button
                 type="button"
                 data-testid="command-button"

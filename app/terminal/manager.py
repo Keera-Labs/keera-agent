@@ -18,8 +18,9 @@ class TerminalManager:
         rows: int = 24,
         env: dict | None = None,
         session_id: str | None = None,
+        args: list[str] | None = None,
     ) -> str:
-        pty = Terminal(shell=shell, cwd=cwd, cols=cols, rows=rows, env=env)
+        pty = Terminal(shell=shell, cwd=cwd, cols=cols, rows=rows, env=env, args=args)
         pty.start()
 
         sid = session_id if session_id is not None else str(uuid.uuid4())

@@ -188,29 +188,12 @@ class TestCommandEnv(TestCase, DatabaseTransaction):
         os.environ.pop(CONFIG_DIR_ENV, None)
 
     async def _command_ws_env(self, workspace_id: int | None) -> dict:
-        from app.controllers.command_controller import command_ws
-        from app.models.Command import Command
+        from app.services.command_workspace import CommandWorkspace
 
         project = await ProjectFactory.new().create(
             path=tempfile.mkdtemp(), workspace_id=workspace_id
         )
-        cmd = await Command.create(
-            {"project_id": project.id, "label": "claude", "command": "claude", "status": "stopped"}
-        )
-        master, slave = os.openpty()
-        self.addCleanup(os.close, master)
-        with (
-            mock.patch(
-                "app.controllers.command_controller.pty.openpty", return_value=(master, slave)
-            ),
-            mock.patch(
-                "app.controllers.command_controller.subprocess.Popen", side_effect=_Spawned
-            ) as popen,
-            self.assertRaises(_Spawned),
-        ):
-            await command_ws(mock.AsyncMock(), project.slug, cmd.id)
-        os.close(slave)
-        return popen.call_args.kwargs["env"]
+        return await (await CommandWorkspace.resolve(project, None)).env()
 
     async def test_command_pty_gets_the_workspace_config_dir(self):
         workspace = await WorkspaceFactory.new().create(claude_config_dir="~/.claude-work")

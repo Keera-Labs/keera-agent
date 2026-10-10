@@ -18,6 +18,7 @@ from app.controllers import (
     broadcasting_controller,
     claude_hook_controller,
     command_controller,
+    command_run_controller,
     configurations_page_controller,
     dashboard_controller,
     default_permission_controller,
@@ -83,12 +84,11 @@ router.post("/api/projects/{project_id}/git/pull-request", git_pull_request_cont
 
 router.get("/api/projects/{project_id}/commands", command_controller.index)
 router.post("/api/projects/{project_id}/commands", command_controller.store)
-router.post("/api/commands/{command_id}/run", command_controller.run)
-router.post("/api/commands/{command_id}/stop", command_controller.stop)
-router.get("/api/commands/{command_id}/output", command_controller.output)
-router.get("/api/commands/{command_id}/runs", command_controller.runs)
 router.patch("/api/commands/{command_id}", command_controller.update)
 router.delete("/api/commands/{command_id}", command_controller.destroy)
+router.get("/api/projects/{project_id}/command-runs", command_run_controller.index)
+router.post("/api/commands/{command_id}/runs", command_run_controller.store)
+router.delete("/api/commands/{command_id}/runs", command_run_controller.destroy)
 
 router.post("/api/claude-started", claude_hook_controller.claude_started)
 router.post("/api/claude-stopped", claude_hook_controller.claude_stopped)
@@ -184,5 +184,5 @@ router.get("/{project}", home_controller.project_home)
 
 router.router.add_api_websocket_route("/{project}/ws", terminal_controller.terminal_ws)
 router.router.add_api_websocket_route(
-    "/{project}/command-ws/{command_id}", command_controller.command_ws
+    "/{project}/command-ws/{command_id}", command_run_controller.attach
 )
