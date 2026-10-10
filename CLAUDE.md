@@ -107,7 +107,7 @@ bash bin/build.sh --no-build  # skip Vite, just sync files
 
 **Agent status hooks:** `ClaudeHookAction` also registers PreToolUse (`AskUserQuestion`), Notification (`permission_prompt|elicitation_dialog`), PostToolUse and UserPromptSubmit hooks pointing to `/api/agent-hook-events`, which move an agent between `running` and `needs_input` (with `attention_kind`/`attention_prompt`). Agent PTYs get `KEERA_AGENT_ID` in their env and the hooks echo it back as the `X-Keera-Agent-Id` header, so events (and Stop) are attributed to one agent (falling back to the `.claude/worktrees/agent-<id>` cwd). An unattributed Stop only marks the project idle and never touches agents; any attributed PostToolUse/UserPromptSubmit sets a non-running agent back to `running`, so a wrongly-stopped agent self-heals on its next tool call. Agent worktrees check out the committed `.claude/settings.json`, so a project that commits it must commit the synced hooks (`artisan claude:hook`) too.
 
-**Route ordering:** In `routes/web.py`, API routes must be registered before the `/{project}` wildcard page route. PATCH and DELETE routes use `router.router.add_api_route` directly — the `Router` wrapper only exposes GET and POST helpers.
+**Route ordering:** In `routes/web.py`, API routes must be registered before the `/{project}` wildcard page route. The `Router` wrapper exposes `get`, `post`, `put`, `patch` and `delete` helpers, so register every verb with `router.<method>(...)`.
 
 **Data model relationships:**
 - `Workspace` has many `Projects` (via `workspace_id` FK, nullable — projects can be unassigned)
