@@ -1,4 +1,7 @@
 import '../css/app.css'
+import '../icons/keera-icon-32.png'
+import '../icons/keera-icon-64.png'
+import '../icons/keera-apple-touch-icon-180.png'
 import { createInertiaApp } from '@inertiajs/vue3'
 import { PiniaColada } from '@pinia/colada'
 import { createPinia } from 'pinia'
