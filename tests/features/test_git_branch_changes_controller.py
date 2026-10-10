@@ -225,7 +225,10 @@ class TestGitBranchChangesController(TestCase, DatabaseTransaction):
             f"/api/projects/{self.project.id}/git/branches", params={"worktree": str(path)}
         )
         response.assert_ok()
-        assert response.json() == {"branches": ["agent-feature", "task/feature"], "default_base": None}
+        assert response.json() == {
+            "branches": ["agent-feature", "task/feature"],
+            "default_base": None,
+        }
 
     async def test_committed_diff_validates_path_and_membership(self):
         (await self.diff("../outside.txt")).assert_status(422)
