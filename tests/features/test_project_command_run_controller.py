@@ -132,6 +132,43 @@ class TestProjectCommandRunController(TestCase, DatabaseTransaction):
         self.assertEqual(run.status, "stopped")
         self.assertIsNotNone(run.duration_ms)
 
+    async def _caught_while_draining_final_output(self, run) -> None:
+        drained = run.terminal.wait_until_quiet
+
+        async def slow_drain(quiet: float, timeout: float) -> None:
+            await asyncio.sleep(0.3)
+            await drained(quiet, timeout)
+
+        run.terminal.wait_until_quiet = slow_drain
+        self.assertTrue(await _until(lambda: run.ended_at is not None))
+        self.assertIsNone(run.exit_code)
+
+    async def test_destroy_after_a_natural_exit_keeps_its_exit_code(self):
+        run_id = (await self._run_ad_hoc("sleep 0.2; exit 3")).json()["data"]["id"]
+        run = self.registry.get(run_id)
+        await self._caught_while_draining_final_output(run)
+
+        (await self.delete(self._url(f"/{run_id}"))).assert_no_content()
+
+        self.assertEqual(run.status, "exited")
+        self.assertEqual(run.exit_code, 3)
+
+    async def test_rerunning_a_saved_command_after_a_natural_exit_keeps_its_exit_code(self):
+        command = await Command.create(
+            {"project_id": self.project.id, "label": "Fail", "command": "sleep 0.2; exit 4"}
+        )
+        self.addAsyncCleanup(self.registry.forget_command, command.id)
+        first_id = (await self.post(f"/api/commands/{command.id}/runs", json={})).json()["data"][
+            "id"
+        ]
+        first = self.registry.get(first_id)
+        await self._caught_while_draining_final_output(first)
+
+        (await self.post(f"/api/commands/{command.id}/runs", json={})).assert_ok()
+
+        self.assertEqual(first.status, "exited")
+        self.assertEqual(first.exit_code, 4)
+
     async def test_destroy_of_an_unknown_run_is_not_found(self):
         response = await self.delete(self._url("/missing"))
 
@@ -161,6 +198,17 @@ class TestProjectCommandRunController(TestCase, DatabaseTransaction):
         ws = await self._attach(run_id)
 
         self.assertIn(b"ad-hoc-output", ws.received)
+
+    async def test_websocket_for_another_projects_run_is_refused(self):
+        other = await ProjectFactory.new().create(path=str(self.repo.root))
+        spec = CommandRunSpec(project_id=other.id, label="other", command="echo other-output")
+        other_run = await self.registry.start(spec, str(self.repo.root), dict(os.environ))
+        self.addAsyncCleanup(self.registry.stop_run, other_run)
+
+        ws = await self._attach(other_run.id)
+
+        self.assertEqual(ws.closed_with, 1008)
+        self.assertEqual(ws.received, b"")
 
     async def test_websocket_for_an_unknown_run_is_refused(self):
         ws = await self._attach("missing")

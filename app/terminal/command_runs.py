@@ -157,12 +157,13 @@ class CommandRunRegistry:
                 del self._runs[run.id]
 
     async def _kill(self, run: CommandRun) -> None:
-        if run.is_running:
+        watcher = self._watchers.pop(run.session_id, None)
+        if run.terminal.is_alive():
             run.stopped = True
             run.end()
-        watcher = self._watchers.pop(run.session_id, None)
+            if watcher is not None:
+                watcher.cancel()
         if watcher is not None:
-            watcher.cancel()
             await asyncio.gather(watcher, return_exceptions=True)
         await self._terminals.close(run.session_id)
 
