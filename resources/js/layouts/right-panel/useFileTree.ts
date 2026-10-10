@@ -45,7 +45,9 @@ export function useFileTree(projectId: MaybeRefOrGetter<number>) {
     const loading = shallowReactive(new Set<string>())
     const rootError = ref<string | null>(null)
 
-    async function load(path: string) {
+    const pending = new Map<string, Promise<void>>()
+
+    async function fetchInto(path: string) {
         loading.add(path)
         try {
             listings.set(path, await fetchDirectory(toValue(projectId), path))
@@ -59,18 +61,31 @@ export function useFileTree(projectId: MaybeRefOrGetter<number>) {
         rootError.value = errors.get(ROOT) ?? null
     }
 
+    function load(path: string): Promise<void> {
+        const request = fetchInto(path).finally(() => {
+            if (pending.get(path) === request) pending.delete(path)
+        })
+        pending.set(path, request)
+        return request
+    }
+
+    function ensureLoaded(path: string): Promise<void> {
+        if (listings.has(path)) return Promise.resolve()
+        return pending.get(path) ?? load(path)
+    }
+
     function toggle(entry: FileEntry) {
         if (entry.type !== 'dir') return
         if (expanded.delete(entry.path)) return
         expanded.add(entry.path)
-        if (!listings.has(entry.path)) void load(entry.path)
+        void ensureLoaded(entry.path)
     }
 
     async function reveal(filePath: string) {
         const segments = filePath.split('/').slice(0, -1)
         const ancestors = segments.map((_, i) => segments.slice(0, i + 1).join('/'))
         for (const dir of ancestors) expanded.add(dir)
-        await Promise.all(ancestors.filter(dir => !listings.has(dir) && !loading.has(dir)).map(load))
+        await Promise.all([ROOT, ...ancestors].map(ensureLoaded))
     }
 
     /** Reload the root and every open folder, dropping cached listings of closed ones. */

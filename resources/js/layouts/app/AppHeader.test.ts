@@ -73,6 +73,7 @@ afterEach(() => {
     wrapper?.unmount()
     wrapper = undefined
     vi.unstubAllGlobals()
+    vi.restoreAllMocks()
     vi.mocked(router.visit).mockClear()
 })
 
@@ -253,23 +254,28 @@ describe('SessionTabs', () => {
         expect(close).toHaveBeenCalledWith(project.id, 'src/app.ts')
     })
 
-    it('scrolls the active file tab into view when a file becomes active', async () => {
-        const scrolled: string[] = []
-        const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(function (this: Element) {
-            scrolled.push(this.textContent?.trim() ?? '')
+    it('scrolls the tab strip just enough to show the active file tab', async () => {
+        const tabLefts: Record<string, number> = { 'a.ts': 100, 'b.ts': 500 }
+        vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+            if (this.getAttribute('role') === 'tablist') return new DOMRect(0, 0, 300, 48)
+            const left = tabLefts[this.textContent?.trim() ?? ''] ?? 0
+            return new DOMRect(left - this.closest('[role="tablist"]')!.scrollLeft, 8, 100, 32)
         })
-        await mountHeader()
+        const w = await mountHeader()
+        const strip = w.get('[role="tablist"]').element
         const editor = useEditorStore()
         editor.tabsByProject[project.id] = [
             { projectId: project.id, path: 'a.ts', name: 'a.ts', etag: 'e1', dirty: false, saving: false, conflict: false, error: null },
             { projectId: project.id, path: 'b.ts', name: 'b.ts', etag: 'e2', dirty: false, saving: false, conflict: false, error: null },
         ]
+
         editor.activate(project.id, 'b.ts')
         await flushPromises()
+        expect(strip.scrollLeft).toBe(300)
 
-        expect(scrolled.at(-1)).toBe('b.ts')
-        expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'nearest', inline: 'nearest' })
-        scrollIntoView.mockRestore()
+        editor.activate(project.id, 'a.ts')
+        await flushPromises()
+        expect(strip.scrollLeft).toBe(100)
     })
 
     it('labels committed diff tabs apart from index and working tree diffs of the same file', async () => {

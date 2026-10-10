@@ -87,12 +87,16 @@ const SAVE_DOT_CLASS: Record<SaveStatus, string> = {
 const tablist = ref<HTMLElement | null>(null)
 
 function scrollActiveTabIntoView() {
-    tablist.value
-        ?.querySelector('[role="tab"][aria-selected="true"]')
-        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    const strip = tablist.value
+    const tab = strip?.querySelector('[role="tab"][aria-selected="true"]')?.parentElement
+    if (!strip || !tab) return
+    const bounds = strip.getBoundingClientRect()
+    const box = tab.getBoundingClientRect()
+    if (box.left < bounds.left) strip.scrollLeft += box.left - bounds.left
+    else if (box.right > bounds.right) strip.scrollLeft += box.right - bounds.right
 }
 
-watch([activeFileTab, activeDiffTab, activeAgentId, () => page.component], scrollActiveTabIntoView, { flush: 'post' })
+watch([activeFileTab, activeDiffTab, activeAgentId, () => page.component], scrollActiveTabIntoView, { flush: 'post', immediate: true })
 
 function tabClass(active: boolean) {
     return [

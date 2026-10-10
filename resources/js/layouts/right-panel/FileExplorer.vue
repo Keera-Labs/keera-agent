@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ChevronsUp, File, Folder, Funnel, RefreshCw, Search } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onActivated, onMounted, ref, watch } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import { useEditorSettingsStore } from '@/stores/editorSettingsStore'
 import { useEditorStore } from '@/stores/editorStore'
@@ -31,8 +31,6 @@ function toggleHiding() {
     void settings.setFileFilters({ hide_hidden: hide, hide_ignored: hide })
 }
 
-onMounted(tree.refresh)
-
 const treeList = ref<HTMLElement | null>(null)
 
 function revealSelectedRow() {
@@ -41,20 +39,27 @@ function revealSelectedRow() {
     if (!list || !row) return
     const bounds = list.getBoundingClientRect()
     const box = row.getBoundingClientRect()
-    if (box.top < bounds.top || box.bottom > bounds.bottom) row.scrollIntoView({ block: 'start' })
+    if (box.top < bounds.top || box.bottom > bounds.bottom) list.scrollTop += box.top - bounds.top
 }
 
-watch(
-    () => activeTab.value?.projectId === props.project.id ? activeTab.value.path : null,
-    async path => {
-        if (path === null) return
-        selectedPath.value = path
-        await tree.reveal(path)
-        await nextTick()
-        if (selectedPath.value === path) revealSelectedRow()
-    },
-    { immediate: true, flush: 'post' },
-)
+const activeFilePath = computed(() => activeTab.value?.projectId === props.project.id ? activeTab.value.path : null)
+
+async function followActiveFile(path: string | null) {
+    if (path === null) return
+    selectedPath.value = path
+    await tree.reveal(path)
+    await nextTick()
+    if (selectedPath.value === path) revealSelectedRow()
+}
+
+watch(activeFilePath, followActiveFile, { flush: 'post' })
+
+onMounted(async () => {
+    await tree.refresh()
+    await followActiveFile(activeFilePath.value)
+})
+
+onActivated(revealSelectedRow)
 
 function onEntryClick(entry: FileEntry) {
     selectedPath.value = entry.path
