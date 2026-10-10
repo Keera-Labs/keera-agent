@@ -22,5 +22,10 @@ class CommandResource(JsonResource[Command]):
             "category": self.model.category or "General",
             "shortcut": self.model.shortcut or "",
             "kind": self.model.kind or "run",
-            "run": CommandRunResource(self.run, self.root).to_attributes() if self.run else None,
+            "run": self._run_attributes(),
         }
+
+    def _run_attributes(self) -> dict | None:
+        if self.run is None:
+            return None
+        return {"id": self.run.id, **CommandRunResource(self.run, self.root).to_attributes()}

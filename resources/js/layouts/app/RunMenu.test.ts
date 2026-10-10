@@ -69,7 +69,7 @@ const worktree = (path: string, extra: Record<string, unknown> = {}) => ({
 })
 
 let worktreesResponse: () => Promise<Response>
-let runs: { command_id: number; worktree: string | null; status: string; exit_code: number | null }[]
+let runs: { command_id: number | null; worktree: string | null; status: string; exit_code: number | null }[]
 let fetchMock: ReturnType<typeof vi.fn>
 
 const json = (body: unknown, status = 200) => Promise.resolve({ ok: status < 400, status, json: async () => body } as Response)
@@ -153,6 +153,17 @@ describe('RunMenu', () => {
         expect(menu.get('[data-status]').attributes('data-status')).toBe('running')
         expect(menu.find('button[title="Stop"]').exists()).toBe(true)
         expect(menu.find('button[title="Rerun"]').exists()).toBe(true)
+    })
+
+    it('shows the newest run when /command-runs also lists history and ad-hoc runs', async () => {
+        runs = [
+            { command_id: null, worktree: null, status: 'running', exit_code: null },
+            { command_id: 1, worktree: null, status: 'exited', exit_code: 0 },
+            { command_id: 1, worktree: null, status: 'stopped', exit_code: null },
+        ]
+        const { menu } = await mountMenu()
+
+        expect(menu.get('[data-status]').attributes('data-status')).toBe('exited')
     })
 
     it('runs in the project root from a non-agent page', async () => {

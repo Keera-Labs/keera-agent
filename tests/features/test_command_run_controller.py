@@ -11,7 +11,12 @@ from starlette.websockets import WebSocketState
 
 from app.controllers import command_run_controller
 from app.models.Command import Command
-from app.terminal.command_runs import CommandRun, CommandRunRegistry, command_shell
+from app.terminal.command_runs import (
+    CommandRun,
+    CommandRunRegistry,
+    CommandRunSpec,
+    command_shell,
+)
 from databases.factories.project_factory import ProjectFactory
 from tests.features.git_test_repo import GitTestRepo
 from tests.test_case import TestCase
@@ -72,6 +77,21 @@ class TestCommandRunController(TestCase, DatabaseTransaction):
         self.assertIsNotNone(run)
         return run
 
+    def _runs_of(self, command: Command) -> list[CommandRun]:
+        return [
+            run
+            for run in self.registry.for_project(self.project.id)
+            if run.command_id == command.id
+        ]
+
+    def _spec(self, command: Command) -> CommandRunSpec:
+        return CommandRunSpec(
+            project_id=command.project_id,
+            label=command.label,
+            command=command.command,
+            command_id=command.id,
+        )
+
     async def _finished_output(self, run: CommandRun) -> str:
         self.assertTrue(await _until(lambda: run.exit_code is not None))
         return run.terminal.history().decode(errors="replace")
@@ -87,6 +107,32 @@ class TestCommandRunController(TestCase, DatabaseTransaction):
         run = self._run(command, self.repo.root)
         self.assertIn(str(self.repo.root), await self._finished_output(run))
         self.assertEqual(run.exit_code, 0)
+
+    async def test_a_finished_run_reports_its_command_and_timing(self):
+        command = await self._command("sleep 0.2")
+
+        (await self._start(command)).assert_ok()
+        await self._finished_output(self._run(command, self.repo.root))
+
+        response = await self.get(f"/api/projects/{self.project.id}/command-runs")
+        attributes = response.json()["data"][0]["attributes"]
+        self.assertEqual(attributes["command_id"], command.id)
+        self.assertEqual(attributes["label"], "cmd")
+        self.assertEqual(attributes["command"], "sleep 0.2")
+        self.assertEqual(attributes["status"], "exited")
+        self.assertIsNotNone(attributes["ended_at"])
+        self.assertGreaterEqual(attributes["duration_ms"], 200)
+        self.assertIsNone(attributes["timeout_seconds"])
+
+    async def test_a_running_run_has_no_end_yet(self):
+        command = await self._command("sleep 30")
+
+        response = await self._start(command)
+
+        attributes = response.json()["data"]["attributes"]
+        self.assertEqual(attributes["status"], "running")
+        self.assertIsNone(attributes["ended_at"])
+        self.assertIsNone(attributes["duration_ms"])
 
     async def test_expands_a_home_relative_project_path(self):
         home_dir = Path(tempfile.mkdtemp(dir=Path.home(), prefix=".keera-command-test-"))
@@ -128,7 +174,7 @@ class TestCommandRunController(TestCase, DatabaseTransaction):
             with self.subTest(worktree=worktree):
                 (await self._start(command, worktree)).assert_status(422)
 
-        self.assertEqual(self.registry.for_commands([command.id]), [])
+        self.assertEqual(self._runs_of(command), [])
 
     async def test_root_and_worktree_runs_coexist(self):
         worktree = self.repo.add_worktree(".claude/worktrees/agent-3", "agent-three")
@@ -178,7 +224,7 @@ class TestCommandRunController(TestCase, DatabaseTransaction):
         cwd = str(self.repo.root)
 
         async def restart() -> int:
-            run = await self.registry.start(command.id, command.command, cwd, env)
+            run = await self.registry.start(self._spec(command), cwd, env)
             return run.terminal.pid
 
         pids = await asyncio.gather(restart(), restart())
@@ -190,7 +236,7 @@ class TestCommandRunController(TestCase, DatabaseTransaction):
             await _until(lambda: [pid for pid in pids if _alive(pid)] == [current.terminal.pid])
         )
 
-    async def test_restarting_replaces_the_previous_exited_run(self):
+    async def test_restarting_keeps_the_previous_run_as_history(self):
         command = await self._command("exit 0")
         (await self._start(command)).assert_ok()
         first = self._run(command, self.repo.root)
@@ -198,8 +244,19 @@ class TestCommandRunController(TestCase, DatabaseTransaction):
 
         (await self._start(command)).assert_ok()
 
-        self.assertIsNot(self._run(command, self.repo.root), first)
-        self.assertEqual(len(self.registry.for_commands([command.id])), 1)
+        second = self._run(command, self.repo.root)
+        self.assertIsNot(second, first)
+        self.assertEqual(self._runs_of(command), [second, first])
+
+    async def test_restarting_a_running_command_records_the_old_run_as_stopped(self):
+        command = await self._command("sleep 30")
+        (await self._start(command)).assert_ok()
+        first = self._run(command, self.repo.root)
+
+        (await self._start(command)).assert_ok()
+
+        self.assertEqual(first.status, "stopped")
+        self.assertIsNotNone(first.ended_at)
 
     async def test_finished_runs_of_removed_worktrees_are_dropped(self):
         worktree = self.repo.add_worktree(".claude/worktrees/agent-5", "agent-five")
@@ -209,7 +266,7 @@ class TestCommandRunController(TestCase, DatabaseTransaction):
 
         shutil.rmtree(worktree)
 
-        self.assertEqual(self.registry.for_commands([command.id]), [])
+        self.assertEqual(self._runs_of(command), [])
 
     async def test_runs_through_a_posix_login_shell_only(self):
         self.assertEqual(command_shell("/bin/zsh"), "/bin/zsh")
@@ -222,7 +279,7 @@ class TestCommandRunController(TestCase, DatabaseTransaction):
         command = await self._command('echo "shell=$0"')
         env = {**os.environ, "SHELL": "/opt/homebrew/bin/fish"}
 
-        run = await self.registry.start(command.id, command.command, str(self.repo.root), env)
+        run = await self.registry.start(self._spec(command), str(self.repo.root), env)
 
         self.assertIn("shell=/bin/sh", await self._finished_output(run))
 
@@ -305,7 +362,7 @@ class TestCommandRunController(TestCase, DatabaseTransaction):
 
         self.assertEqual(ws.closed_with, 1000)
         self.assertEqual(ws.received, b"")
-        self.assertEqual(self.registry.for_commands([command.id]), [])
+        self.assertEqual(self._runs_of(command), [])
 
     async def test_websocket_for_an_unknown_worktree_is_refused(self):
         command = await self._command("sleep 30")

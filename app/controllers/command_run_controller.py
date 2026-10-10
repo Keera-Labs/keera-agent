@@ -3,7 +3,6 @@ from typing import Annotated
 from fastapi import Query, WebSocket
 from fastapi.responses import Response
 from fastapi_startkit.application import app
-from fastapi_startkit.jsonapi import ResourceCollection
 
 from app.models.Command import Command
 from app.models.Project import Project
@@ -12,7 +11,7 @@ from app.requests.git_request import GitWorktreeQuery
 from app.resources.command_run_resource import CommandRunResource
 from app.services.command_workspace import CommandWorkspace
 from app.services.process import CommandError
-from app.terminal.command_runs import CommandRunRegistry
+from app.terminal.command_runs import CommandRunRegistry, CommandRunSpec
 from app.terminal.websocket_terminal import WebsocketTerminal
 from app.utils.git_responses import git_error_response
 
@@ -25,15 +24,6 @@ async def _workspace_for(command: Command, worktree: str | None) -> CommandWorks
     return await CommandWorkspace.resolve(await Project.find_or_fail(command.project_id), worktree)
 
 
-async def index(project_id: int):
-    root = (await CommandWorkspace.resolve(await Project.find_or_fail(project_id), None)).key
-    command_ids = [command.id for command in await Command.where("project_id", project_id).get()]
-    return ResourceCollection(
-        [CommandRunResource(run, root) for run in _runs().for_commands(command_ids)],
-        primary_type=CommandRunResource.type,
-    )
-
-
 async def store(body: CommandRunStoreRequest, command_id: int):
     command = await Command.find_or_fail(command_id)
     try:
@@ -41,7 +31,13 @@ async def store(body: CommandRunStoreRequest, command_id: int):
     except CommandError as e:
         return git_error_response(e)
 
-    run = await _runs().start(command.id, command.command, workspace.key, await workspace.env())
+    spec = CommandRunSpec(
+        project_id=command.project_id,
+        label=command.label,
+        command=command.command,
+        command_id=command.id,
+    )
+    run = await _runs().start(spec, workspace.key, await workspace.env())
     return CommandRunResource(run, str(workspace.root))
 
 
