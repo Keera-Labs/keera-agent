@@ -1,10 +1,7 @@
 export interface ProjectColor {
     name: string
-    /** The pale wash behind the whole project card. */
     tint: string
-    /** The letter tile's solid fill. */
     tile: string
-    /** A foreground that stays readable on `tile`. */
     tileText: string
 }
 
@@ -18,10 +15,6 @@ export const PROJECT_COLORS: readonly ProjectColor[] = [
     { name: 'teal', tint: 'bg-teal-50', tile: 'bg-teal-700', tileText: 'text-white' },
 ]
 
-/**
- * A project's card color, keyed by its id so it never changes across reloads
- * or renames. Sequential ids walk the palette, so neighbours rarely share a color.
- */
 export function projectColor(projectId: number): ProjectColor {
     const length = PROJECT_COLORS.length
     return PROJECT_COLORS[((Math.trunc(projectId) % length) + length) % length]

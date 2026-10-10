@@ -5,6 +5,7 @@ import { computed, ref } from 'vue'
 import { useCommandRuns } from '@/queries/commandQuery'
 import { tabKeyOfRun, useCommandRunStore, type DockTab } from '@/stores/commandRunStore'
 import { useProjectStore } from '@/stores/projectStore'
+import { latestStarted } from './commands/commandRuns'
 
 defineProps<{ visible: boolean }>()
 
@@ -19,7 +20,7 @@ const projectTabs = computed(() => tabs.value.filter(t => t.projectId === projec
 const current = computed(() => projectTabs.value.find(t => t.key === activeKey.value) ?? projectTabs.value[0] ?? null)
 const error = ref('')
 
-const latestRun = (tab: DockTab) => commandRuns.value?.find(r => tabKeyOfRun(r) === tab.key) ?? null
+const latestRun = (tab: DockTab) => latestStarted((commandRuns.value ?? []).filter(r => tabKeyOfRun(r) === tab.key))
 const isRunning = (tab: DockTab) => latestRun(tab)?.status === 'running'
 
 async function attempt(action: () => Promise<void>) {

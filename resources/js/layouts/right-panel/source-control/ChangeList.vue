@@ -7,7 +7,6 @@ import { statusBadge, type ChangeRow } from './sourceControl'
 const props = withDefaults(defineProps<{
     title: string
     rows: ChangeRow[]
-    /** Committed rows are read-only: no checkboxes, nothing to stage. */
     committed?: boolean
     disabled: boolean
     canOpenFile: boolean
@@ -23,9 +22,9 @@ const emit = defineEmits<{
 const expanded = ref(true)
 const sectionId = useId()
 
-const stagedCount = computed(() => props.rows.filter(row => row.state === 'staged').length)
-const allStaged = computed(() => props.rows.length > 0 && stagedCount.value === props.rows.length)
-const someStaged = computed(() => !allStaged.value && props.rows.some(row => row.state !== 'unstaged'))
+const stagedCount = computed(() => props.rows.filter(row => row.state !== 'unstaged').length)
+const allStaged = computed(() => props.rows.length > 0 && props.rows.every(row => row.state === 'staged'))
+const someStaged = computed(() => !allStaged.value && stagedCount.value > 0)
 
 const stageLabel = (row: ChangeRow) => (row.state === 'staged' ? 'Unstage' : 'Stage')
 
@@ -36,7 +35,6 @@ const iconButton = 'p-0.5 rounded text-zinc-500 hover:text-zinc-800 hover:bg-zin
 <template>
     <section class="pb-2" :data-testid="committed ? 'committed-changes' : 'changes'">
         <div class="flex items-center gap-2.5 h-9 px-3">
-            <!-- Clicks only request the change; the box follows the refreshed git status. -->
             <input
                 v-if="!committed"
                 type="checkbox"

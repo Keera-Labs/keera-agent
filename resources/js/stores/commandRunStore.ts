@@ -20,7 +20,6 @@ export interface DockTab {
     key: string
     projectId: number
     projectSlug: string
-    /** Null for an ad-hoc run, whose output is attached by `runId` instead. */
     commandId: number | null
     runId: string | null
     label: string
@@ -33,7 +32,6 @@ export interface DockTab {
 export const dockTabKey = (commandId: number, worktree: string | null) => `${commandId}@${worktree ?? ''}`
 const runTabKey = (runId: string) => `run:${runId}`
 
-/** The dock tab a run's output lives in: saved commands share one per worktree, ad-hoc runs get their own. */
 export const tabKeyOfRun = (run: Pick<CommandRun, 'id' | 'command_id' | 'worktree'>) =>
     run.command_id !== null ? dockTabKey(run.command_id, run.worktree) : run.id ? runTabKey(run.id) : null
 
@@ -169,12 +167,10 @@ export const useCommandRunStore = defineStore('commandRuns', () => {
         showTab(savedSource(command, target), target)
     }
 
-    /** Open an ad-hoc run's output; saved runs go through `show` with their command. */
     function showAdhoc(run: CommandRun, target: CommandTarget) {
         if (run.id) showTab(adhocSource({ ...run, id: run.id }, run.command ?? run.label ?? ''), target)
     }
 
-    /** `reveal: false` starts the run without switching the panel to its output. */
     async function run(command: CommandRef, target: CommandTarget, reveal = true) {
         await startCommandRun(command.id, target.worktree)
         refreshRuns()

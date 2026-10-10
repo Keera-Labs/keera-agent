@@ -79,7 +79,6 @@ export function useFileTree(projectId: MaybeRefOrGetter<number>) {
 
     /**
      * Flatten the loaded tree into rows. With a query, only entries whose name
-     * (or whole path, once the query holds a `/`)
      * matches (or that contain a loaded match) are kept, and folders holding a
      * match are shown open. Unloaded folders cannot be searched.
      */

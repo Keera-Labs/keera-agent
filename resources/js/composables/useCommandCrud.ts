@@ -13,7 +13,6 @@ import { useCommandRunStore } from '@/stores/commandRunStore'
 
 const errorMessage = (e: unknown) => (e instanceof Error ? e.message : 'Network error')
 
-/** Create, edit and delete a project's saved commands, writing results straight into the commands query. */
 export function useCommandCrud(projectId: MaybeRefOrGetter<number>) {
     const queryCache = useQueryCache()
     const runs = useCommandRunStore()
@@ -21,7 +20,6 @@ export function useCommandCrud(projectId: MaybeRefOrGetter<number>) {
     const setCommands = (updater: (prev: Command[]) => Command[]) =>
         queryCache.setQueryData<Command[]>([...COMMANDS_QUERY_KEY, toValue(projectId)], prev => updater(prev ?? []))
 
-    /** Resolves to an error message, or null once created. */
     async function create(label: string, command: string): Promise<string | null> {
         try {
             const created = await createCommand(toValue(projectId), { label, command })
@@ -42,7 +40,6 @@ export function useCommandCrud(projectId: MaybeRefOrGetter<number>) {
         }
     }
 
-    /** Resolves to an error message, or null once deleted. */
     async function remove(target: Command): Promise<string | null> {
         try {
             await deleteCommand(target.id)

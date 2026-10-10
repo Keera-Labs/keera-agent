@@ -118,6 +118,8 @@ describe('SourceControl', () => {
         expect(rows).toHaveLength(1)
         expect((rows[0].get('input').element as HTMLInputElement).indeterminate).toBe(true)
         expect(rows[0].get('[data-testid="line-stats"]').text()).toBe('+4')
+        expect(w.get('[data-testid="staged-count"]').text()).toBe('1 of 1 staged')
+        expect(w.get('[data-testid="primary-action"]').text()).toBe('Commit 1 file')
         await rows[0].get('[aria-label="Stage app/tasks.py"]').trigger('click')
         await flushPromises()
         expect(postedTo('/stage')[0][1]?.body).toBe('{"paths":["app/tasks.py"]}')

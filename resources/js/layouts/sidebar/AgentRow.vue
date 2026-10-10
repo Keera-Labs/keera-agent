@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import AgentStatusIndicator from '@/components/ui/AgentStatusIndicator.vue'
 import Icon, { type IconName } from '@/components/ui/Icon.vue'
 import type { AgentSummary } from '@/queries/agentSummariesQuery'
-import { relativeTime } from './sidebarAgents'
+import { relativeTime } from '@/utils/relativeTime'
 
 const props = defineProps<{ agent: AgentSummary; active: boolean; now: number }>()
 defineEmits<{ select: [] }>()

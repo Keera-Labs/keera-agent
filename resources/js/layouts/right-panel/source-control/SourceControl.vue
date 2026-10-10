@@ -81,7 +81,6 @@ const nestedWorktreeLabels = computed(() =>
 
 const staged = computed(() => status.value?.staged ?? [])
 const changes = computed(() => status.value?.changes ?? [])
-// One row per path: a partly staged file is listed once, opening the unstaged side the agent is still editing.
 const rows = computed<ChangeRow[]>(() => {
     const unstaged = new Map(changes.value.map(file => [file.path, file]))
     const stagedPaths = new Set(staged.value.map(file => file.path))

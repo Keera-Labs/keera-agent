@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CommandRun } from '@/components/commands/types'
-import { clock, duration, recentRuns, succeeded } from './commandRuns'
+import { clock, duration, latestStarted, recentRuns, succeeded } from './commandRuns'
 
 const run = (overrides: Partial<CommandRun>): CommandRun => ({
     command_id: 1,
@@ -46,5 +46,17 @@ describe('recentRuns', () => {
         ]
         expect(recentRuns(runs).map(r => r.command_id)).toEqual([3, 1])
         expect(recentRuns(runs, 1)).toHaveLength(1)
+    })
+})
+
+describe('latestStarted', () => {
+    it('picks the most recently started run whatever the input order', () => {
+        const runs = [
+            run({ command_id: 1, started_at: '2026-10-09T10:01:00Z' }),
+            run({ command_id: 2, started_at: '2026-10-09T10:09:00Z' }),
+            run({ command_id: 3, started_at: '2026-10-09T10:05:00Z' }),
+        ]
+        expect(latestStarted(runs)?.command_id).toBe(2)
+        expect(latestStarted([])).toBeNull()
     })
 })

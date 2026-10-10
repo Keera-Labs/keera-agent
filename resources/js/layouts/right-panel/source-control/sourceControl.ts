@@ -40,7 +40,6 @@ export function useCommitDraft(target: MaybeRefOrGetter<GitTarget | null>) {
 export const menuItemClass =
     'flex items-center gap-2 w-full px-3 h-7 text-left text-ui-12 text-zinc-700 hover:bg-zinc-100 cursor-pointer disabled:text-zinc-300 disabled:cursor-default disabled:hover:bg-transparent'
 
-/** A file's place in the index: a partly staged file has changes on both sides. */
 export type StageState = 'staged' | 'unstaged' | 'partial'
 
 export type ChangeRow = { file: GitFileChange; state?: StageState }

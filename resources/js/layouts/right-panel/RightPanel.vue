@@ -36,7 +36,6 @@ const { activeProject } = storeToRefs(useProjectStore())
 const { dockOpen } = storeToRefs(useCommandRunStore())
 const page = usePage()
 
-// The run store asks for the output through `dockOpen` whenever a run is opened, so that flag is the Terminal tab.
 const otherView = ref<Exclude<ViewId, 'terminal'>>('changes')
 const activeView = computed<ViewId>({
     get: () => (dockOpen.value ? 'terminal' : otherView.value),
@@ -89,7 +88,6 @@ function viewLabel(view: ViewId) {
                 @click="activeView = view.id"
             >
                 <component :is="view.icon" :size="14" class="shrink-0" />
-                <!-- Four labelled tabs don't fit the default 380px panel, so inactive tabs fall back to icons until it is widened. -->
                 <span :class="['min-w-0 truncate', activeView !== view.id && 'hidden @min-[26rem]:inline']">{{ view.label }}</span>
                 <span
                     v-if="view.id === 'changes' && changedCount > 0"
@@ -128,7 +126,6 @@ function viewLabel(view: ViewId) {
             :project="activeProject"
         />
     </KeepAlive>
-    <!-- Always mounted: the run store parks each live xterm in a host element here. -->
     <TerminalView :visible="!!activeProject && activeView === 'terminal'" />
     <CommandsView v-if="activeProject" :visible="activeView === 'commands'" />
     <div
