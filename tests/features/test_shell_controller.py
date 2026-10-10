@@ -39,9 +39,7 @@ class TestShellController(TestCase, DatabaseTransaction):
 
     def _attach(self, worktree: str | None = None, slug: str | None = None):
         ws = ControllerWebSocket()
-        task = asyncio.create_task(
-            shell_controller.attach(ws, slug or self.project.slug, worktree)
-        )
+        task = asyncio.create_task(shell_controller.attach(ws, slug or self.project.slug, worktree))
         self.sockets.append((ws, task))
         return ws, task
 
