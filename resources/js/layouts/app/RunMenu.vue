@@ -15,7 +15,11 @@ const { activeProject } = storeToRefs(useProjectStore())
 const runs = useCommandRunStore()
 
 const projectId = computed(() => activeProject.value?.id ?? null)
-const { path: worktree, place, branch } = useViewedWorktree(projectId, activeAgentId)
+const worktreeAgentId = computed(() => {
+    const agent = layout.agentHook.agents.value.find(a => a.id === activeAgentId.value)
+    return agent && agent.agent_type !== 'pm' ? agent.id : null
+})
+const { path: worktree, place, branch, status, ready } = useViewedWorktree(projectId, worktreeAgentId)
 const { data: commands } = useCommands(projectId)
 const { data: commandRuns, refetch: refetchRuns } = useCommandRuns(projectId)
 
@@ -33,7 +37,7 @@ const runsHere = computed(() => {
 const runningCount = computed(() => [...runsHere.value.values()].filter(r => r.status === 'running').length)
 
 const target = (): CommandTarget | null =>
-    activeProject.value
+    activeProject.value && ready.value
         ? { projectId: activeProject.value.id, projectSlug: activeProject.value.slug, worktree: worktree.value, place: place.value }
         : null
 
@@ -101,7 +105,8 @@ watch(open, active => {
 })
 onBeforeUnmount(() => listen(false))
 
-const iconButtonClass = 'w-5 h-5 flex items-center justify-center rounded text-zinc-500 cursor-pointer hover:bg-black/[0.06] hover:text-zinc-900'
+const iconButtonClass =
+    'w-5 h-5 flex items-center justify-center rounded text-zinc-500 cursor-pointer hover:bg-black/[0.06] hover:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent'
 </script>
 
 <template>
@@ -130,6 +135,9 @@ const iconButtonClass = 'w-5 h-5 flex items-center justify-center rounded text-z
             <div class="px-3 py-1 text-ui-10 text-zinc-400 truncate">
                 in: {{ place }}<template v-if="branch"> · {{ branch }}</template>
             </div>
+            <div v-if="status === 'missing'" data-testid="run-menu-no-worktree" class="px-3 py-1.5 text-ui-12 text-zinc-500">
+                This agent has no worktree.
+            </div>
             <div
                 v-for="command in commands ?? []"
                 :key="command.id"
@@ -141,14 +149,14 @@ const iconButtonClass = 'w-5 h-5 flex items-center justify-center rounded text-z
                 <span :data-status="runsHere.get(command.id)?.status ?? 'idle'" :class="['w-2 h-2 rounded-full shrink-0', statusDotClass(command)]" />
                 <span class="flex-1 min-w-0 truncate text-ui-12 text-zinc-800 font-mono">{{ command.label }}</span>
                 <template v-if="isRunning(command)">
-                    <button type="button" title="Rerun" aria-label="Rerun" :class="iconButtonClass" @click.stop="start(command)">
+                    <button type="button" title="Rerun" aria-label="Rerun" :disabled="!ready" :class="iconButtonClass" @click.stop="start(command)">
                         <Icon name="rotate-cw" :size="11" />
                     </button>
                     <button type="button" title="Stop" aria-label="Stop" :class="iconButtonClass" @click.stop="stop(command)">
                         <Icon name="square" :size="10" />
                     </button>
                 </template>
-                <button v-else type="button" title="Run" aria-label="Run" :class="iconButtonClass" @click.stop="start(command)">
+                <button v-else type="button" title="Run" aria-label="Run" :disabled="!ready" :class="iconButtonClass" @click.stop="start(command)">
                     <Icon name="play" :size="11" />
                 </button>
             </div>

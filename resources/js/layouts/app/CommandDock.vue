@@ -13,7 +13,6 @@ const { activeProject } = storeToRefs(useProjectStore())
 const projectId = computed(() => activeProject.value?.id ?? null)
 const { data: commandRuns } = useCommandRuns(projectId)
 
-// Every tab keeps its terminal host mounted; only the active project's tabs are listed.
 const projectTabs = computed(() => tabs.value.filter(t => t.projectId === projectId.value))
 const current = computed(() => projectTabs.value.find(t => t.key === activeKey.value) ?? projectTabs.value[0] ?? null)
 const visible = computed(() => dockOpen.value && current.value !== null)

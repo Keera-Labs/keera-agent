@@ -4,7 +4,6 @@ export type CommandRunStatus = 'running' | 'stopped' | 'exited'
 
 export interface CommandRun {
     command_id: number
-    /** Absolute worktree path, or null for the project root. */
     worktree: string | null
     status: CommandRunStatus
     exit_code: number | null

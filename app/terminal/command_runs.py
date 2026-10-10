@@ -1,6 +1,8 @@
 import asyncio
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 
 from app.terminal.manager import TerminalManager
 from app.terminal.terminal import Terminal
@@ -8,6 +10,14 @@ from app.terminal.terminal import Terminal
 DRAIN_INTERVAL = 0.1
 FINAL_OUTPUT_QUIET = 0.05
 FINAL_OUTPUT_TIMEOUT = 0.5
+POSIX_SHELLS = {"bash", "zsh", "sh"}
+FALLBACK_SHELL = "/bin/sh"
+
+
+def command_shell(shell: str | None) -> str:
+    if shell and Path(shell).name in POSIX_SHELLS:
+        return shell
+    return FALLBACK_SHELL
 
 
 @dataclass
@@ -36,30 +46,50 @@ class CommandRunRegistry:
         self._terminals = terminals
         self._runs: dict[tuple[int, str], CommandRun] = {}
         self._watchers: dict[str, asyncio.Task] = {}
+        self._locks: defaultdict[tuple[int, str], asyncio.Lock] = defaultdict(asyncio.Lock)
 
     def find(self, command_id: int, cwd: str) -> CommandRun | None:
+        self._prune_removed_worktrees()
         return self._runs.get((command_id, cwd))
 
     def for_commands(self, command_ids: list[int]) -> list[CommandRun]:
+        self._prune_removed_worktrees()
         return [run for (command_id, _), run in self._runs.items() if command_id in command_ids]
 
     async def start(self, command_id: int, command: str, cwd: str, env: dict) -> CommandRun:
-        await self.stop(command_id, cwd)
-        session_id = self._terminals.create(cwd=cwd, env=env, args=["-lc", command])
-        run = CommandRun(command_id, cwd, session_id, self._terminals.get(session_id))
-        self._runs[(command_id, cwd)] = run
-        self._watchers[session_id] = asyncio.create_task(self._watch(run))
-        return run
+        key = (command_id, cwd)
+        async with self._locks[key]:
+            previous = self._runs.pop(key, None)
+            if previous is not None:
+                await self._kill(previous)
+            session_id = self._terminals.create(
+                shell=command_shell(env.get("SHELL")), cwd=cwd, env=env, args=["-lc", command]
+            )
+            run = CommandRun(command_id, cwd, session_id, self._terminals.get(session_id))
+            self._runs[key] = run
+            self._watchers[session_id] = asyncio.create_task(self._watch(run))
+            return run
 
     async def stop(self, command_id: int, cwd: str) -> CommandRun | None:
-        run = self._runs.get((command_id, cwd))
-        if run is not None:
-            await self._kill(run)
-        return run
+        async with self._locks[(command_id, cwd)]:
+            run = self._runs.get((command_id, cwd))
+            if run is not None:
+                await self._kill(run)
+            return run
 
     async def forget_command(self, command_id: int) -> None:
         for key in [key for key in self._runs if key[0] == command_id]:
-            await self._kill(self._runs.pop(key))
+            async with self._locks[key]:
+                run = self._runs.pop(key, None)
+                if run is not None:
+                    await self._kill(run)
+            if not self._locks[key].locked():
+                del self._locks[key]
+
+    def _prune_removed_worktrees(self) -> None:
+        for key, run in list(self._runs.items()):
+            if not run.terminal.is_alive() and not Path(run.cwd).is_dir():
+                del self._runs[key]
 
     async def _kill(self, run: CommandRun) -> None:
         if run.terminal.is_alive():

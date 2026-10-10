@@ -3,21 +3,29 @@ import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import { useGitWorktrees, type GitWorktree } from '@/queries/gitQuery'
 import { useCommandRunStore } from '@/stores/commandRunStore'
 
-/**
- * The checkout a page is looking at, or null for the project root: an agent's
- * own worktree on its detail page, the Commands page's selection there, and the
- * root everywhere else.
- */
+export type ViewedCheckout =
+    | { status: 'ready'; worktree: GitWorktree | null }
+    | { status: 'pending' }
+    | { status: 'missing' }
+
+const ROOT: ViewedCheckout = { status: 'ready', worktree: null }
+
 export function resolveViewedWorktree(
     component: string,
     agentId: number | null,
-    worktrees: GitWorktree[],
+    worktrees: GitWorktree[] | undefined,
     selectedPath: string | null,
-): GitWorktree | null {
-    const linked = worktrees.filter(w => !w.prunable && !w.is_current)
-    if (component === 'agents/Detail' && agentId !== null) return linked.find(w => w.agent_id === agentId) ?? null
-    if (component === 'Configurations' && selectedPath !== null) return linked.find(w => w.path === selectedPath) ?? null
-    return null
+): ViewedCheckout {
+    const linked = (worktrees ?? []).filter(w => !w.prunable && !w.is_current)
+    if (component === 'agents/Detail' && agentId !== null) {
+        if (worktrees === undefined) return { status: 'pending' }
+        const own = linked.find(w => w.agent_id === agentId)
+        return own ? { status: 'ready', worktree: own } : { status: 'missing' }
+    }
+    if (component === 'Configurations' && selectedPath !== null) {
+        return { status: 'ready', worktree: linked.find(w => w.path === selectedPath) ?? null }
+    }
+    return ROOT
 }
 
 export function placeLabel(worktree: GitWorktree | null): string {
@@ -25,25 +33,27 @@ export function placeLabel(worktree: GitWorktree | null): string {
     return worktree.path.split('/').filter(Boolean).pop() ?? worktree.path
 }
 
+const PLACE_LABELS = { pending: 'loading worktree…', missing: 'no agent worktree' }
+
 export function useViewedWorktree(projectIdSource: MaybeRefOrGetter<number | null>, agentIdSource: MaybeRefOrGetter<number | null>) {
     const page = usePage()
     const store = useCommandRunStore()
     const projectId = () => toValue(projectIdSource)
     const query = useGitWorktrees(projectId)
 
-    const worktrees = computed(() => (query.data.value ?? []).filter(w => !w.prunable))
-    const viewed = computed(() => {
+    const checkout = computed(() => {
         const id = projectId()
         const selected = id === null ? null : (store.selectedWorktrees[id] ?? null)
-        return resolveViewedWorktree(page.component, toValue(agentIdSource), worktrees.value, selected)
+        return resolveViewedWorktree(page.component, toValue(agentIdSource), query.data.value, selected)
     })
-    const root = computed(() => worktrees.value.find(w => w.is_current) ?? null)
+    const viewed = computed(() => (checkout.value.status === 'ready' ? checkout.value.worktree : null))
+    const root = computed(() => (query.data.value ?? []).find(w => w.is_current) ?? null)
 
     return {
-        worktrees,
-        viewed,
+        status: computed(() => checkout.value.status),
+        ready: computed(() => checkout.value.status === 'ready'),
         path: computed(() => viewed.value?.path ?? null),
-        place: computed(() => placeLabel(viewed.value)),
-        branch: computed(() => (viewed.value ?? root.value)?.branch ?? null),
+        place: computed(() => (checkout.value.status === 'ready' ? placeLabel(viewed.value) : PLACE_LABELS[checkout.value.status])),
+        branch: computed(() => (checkout.value.status === 'ready' ? ((viewed.value ?? root.value)?.branch ?? null) : null)),
     }
 }

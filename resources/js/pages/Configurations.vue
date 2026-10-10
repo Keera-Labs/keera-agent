@@ -11,7 +11,6 @@ const runs = useCommandRunStore()
 const worktreesQuery = useGitWorktrees(() => props.project_id)
 const linkedWorktrees = computed(() => (worktreesQuery.data.value ?? []).filter(w => !w.prunable && !w.is_current))
 
-// The Run menu runs commands in the checkout chosen here while this page is open.
 const selected = computed({
     get: () => (props.project_id === null ? '' : (runs.selectedWorktrees[props.project_id] ?? '')),
     set: (path: string) => {

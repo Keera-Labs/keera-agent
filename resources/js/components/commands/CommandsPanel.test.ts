@@ -125,4 +125,17 @@ describe('CommandsPanel', () => {
         expect(forget).toHaveBeenCalledWith(1)
         expect(w.text()).toContain('No commands yet')
     })
+
+    it('keeps the command and reports the server error when deletion fails', async () => {
+        const { w, runs } = await mountPanel([command()])
+        const forget = vi.spyOn(runs, 'forgetCommand')
+        fetchMock.mockResolvedValueOnce(jsonResponse({ detail: 'Command not found' }, 404))
+
+        await w.get('button[title="Delete"]').trigger('click')
+        await flushPromises()
+
+        expect(w.get('[data-testid="commands-delete-error"]').text()).toBe('Could not delete "dev": Command not found')
+        expect(w.text()).toContain('/dev')
+        expect(forget).not.toHaveBeenCalled()
+    })
 })

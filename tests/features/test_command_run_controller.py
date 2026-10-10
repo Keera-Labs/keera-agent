@@ -11,7 +11,7 @@ from starlette.websockets import WebSocketState
 
 from app.controllers import command_run_controller
 from app.models.Command import Command
-from app.terminal.command_runs import CommandRun, CommandRunRegistry
+from app.terminal.command_runs import CommandRun, CommandRunRegistry, command_shell
 from databases.factories.project_factory import ProjectFactory
 from tests.features.git_test_repo import GitTestRepo
 from tests.test_case import TestCase
@@ -169,6 +169,62 @@ class TestCommandRunController(TestCase, DatabaseTransaction):
         self.assertNotEqual(second.terminal.pid, first_pid)
         self.assertEqual(second.status, "running")
         self.assertTrue(await _until(lambda: not _alive(first_pid)))
+
+    async def test_concurrent_restarts_leave_exactly_one_live_process(self):
+        command = await self._command("sleep 30")
+        (await self._start(command)).assert_ok()
+        first_pid = self._run(command, self.repo.root).terminal.pid
+        env = dict(os.environ)
+        cwd = str(self.repo.root)
+
+        async def restart() -> int:
+            run = await self.registry.start(command.id, command.command, cwd, env)
+            return run.terminal.pid
+
+        pids = await asyncio.gather(restart(), restart())
+
+        current = self._run(command, self.repo.root)
+        self.assertIn(current.terminal.pid, pids)
+        self.assertTrue(await _until(lambda: not _alive(first_pid)))
+        self.assertTrue(
+            await _until(lambda: [pid for pid in pids if _alive(pid)] == [current.terminal.pid])
+        )
+
+    async def test_restarting_replaces_the_previous_exited_run(self):
+        command = await self._command("exit 0")
+        (await self._start(command)).assert_ok()
+        first = self._run(command, self.repo.root)
+        await self._finished_output(first)
+
+        (await self._start(command)).assert_ok()
+
+        self.assertIsNot(self._run(command, self.repo.root), first)
+        self.assertEqual(len(self.registry.for_commands([command.id])), 1)
+
+    async def test_finished_runs_of_removed_worktrees_are_dropped(self):
+        worktree = self.repo.add_worktree(".claude/worktrees/agent-5", "agent-five")
+        command = await self._command("exit 0")
+        (await self._start(command, str(worktree))).assert_ok()
+        await self._finished_output(self._run(command, worktree))
+
+        shutil.rmtree(worktree)
+
+        self.assertEqual(self.registry.for_commands([command.id]), [])
+
+    async def test_runs_through_a_posix_login_shell_only(self):
+        self.assertEqual(command_shell("/bin/zsh"), "/bin/zsh")
+        self.assertEqual(command_shell("/usr/local/bin/bash"), "/usr/local/bin/bash")
+        self.assertEqual(command_shell("/opt/homebrew/bin/fish"), "/bin/sh")
+        self.assertEqual(command_shell("/usr/bin/nu"), "/bin/sh")
+        self.assertEqual(command_shell(None), "/bin/sh")
+
+    async def test_a_non_posix_user_shell_falls_back_to_sh(self):
+        command = await self._command('echo "shell=$0"')
+        env = {**os.environ, "SHELL": "/opt/homebrew/bin/fish"}
+
+        run = await self.registry.start(command.id, command.command, str(self.repo.root), env)
+
+        self.assertIn("shell=/bin/sh", await self._finished_output(run))
 
     async def test_stop_kills_the_child_process_group(self):
         command = await self._command('sleep 30 & echo "child=$!"; wait')

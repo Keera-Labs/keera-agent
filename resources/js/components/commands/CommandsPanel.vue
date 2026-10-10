@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 import {
     COMMAND_RUNS_QUERY_KEY,
     COMMANDS_QUERY_KEY,
+    CommandRequestError,
     createCommand,
     deleteCommand,
     updateCommand,
@@ -15,7 +16,6 @@ import CommandRow from './CommandRow.vue'
 import Icon from './Icon.vue'
 import type { Command } from './types'
 
-// Create, edit and delete a project's commands. Running them belongs to the Run menu.
 const props = defineProps<{ projectId: number }>()
 
 const queryCache = useQueryCache()
@@ -23,6 +23,7 @@ const runs = useCommandRunStore()
 const query = useCommands(() => props.projectId)
 const commands = computed(() => query.data.value ?? [])
 const showForm = ref(false)
+const deleteError = ref('')
 
 const key = () => [...COMMANDS_QUERY_KEY, props.projectId]
 const setCommands = (updater: (prev: Command[]) => Command[]) =>
@@ -52,7 +53,14 @@ async function handleUpdate(c: Command, label: string, command: string): Promise
 }
 
 async function handleDelete(c: Command) {
-    await deleteCommand(c.id)
+    deleteError.value = ''
+    try {
+        await deleteCommand(c.id)
+    } catch (e) {
+        if (!(e instanceof CommandRequestError)) throw e
+        deleteError.value = `Could not delete "${c.label}": ${e.message}`
+        return
+    }
     setCommands(prev => prev.filter(x => x.id !== c.id))
     runs.forgetCommand(c.id)
     queryCache.invalidateQueries({ key: COMMAND_RUNS_QUERY_KEY })
@@ -81,6 +89,10 @@ async function handleDelete(c: Command) {
         </div>
 
         <CommandForm v-if="showForm" :on-create="handleCreate" @cancel="showForm = false" />
+
+        <div v-if="deleteError" role="alert" data-testid="commands-delete-error" class="py-1.5 px-5 text-ui-12 text-danger border-b border-stroke">
+            {{ deleteError }}
+        </div>
 
         <div v-if="query.error.value" data-testid="commands-error" class="flex-1 flex items-center justify-center">
             <span class="text-danger text-ui-13">Could not load commands.</span>

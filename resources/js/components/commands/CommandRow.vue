@@ -5,7 +5,6 @@ import Icon from './Icon.vue'
 import type { Command } from './types'
 import { vFocus } from './vFocus'
 
-// Owns only its inline-edit state; persistence goes to the parent panel.
 const props = defineProps<{
     command: Command
     onUpdate: (label: string, cmd: string) => Promise<boolean>

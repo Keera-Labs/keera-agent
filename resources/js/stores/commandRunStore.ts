@@ -29,8 +29,6 @@ export interface DockTab {
 
 export const dockTabKey = (commandId: number, worktree: string | null) => `${commandId}@${worktree ?? ''}`
 
-// xterm instances and sockets stay out of Vue state (proxying xterm breaks it) and in
-// module scope, so a run's output view outlives any component that shows it.
 const sessions = new Map<string, Session>()
 const hosts = new Map<string, HTMLElement>()
 
@@ -71,7 +69,6 @@ export const useCommandRunStore = defineStore('commandRuns', () => {
     const tabs = ref<DockTab[]>([])
     const activeKey = ref<string | null>(null)
     const dockOpen = ref(false)
-    // The Commands page's worktree choice per project; null is the project root.
     const selectedWorktrees = reactive<Record<number, string | null>>({})
 
     const activeTab = computed(() => tabs.value.find(t => t.key === activeKey.value) ?? null)
@@ -107,7 +104,6 @@ export const useCommandRunStore = defineStore('commandRuns', () => {
         reportSize(session)
     }
 
-    // A fresh socket replays the run's whole history, so the old screen is reset first.
     function connect(tab: DockTab) {
         let session = sessions.get(tab.key)
         if (session) {

@@ -17,11 +17,18 @@ vi.mock('@inertiajs/vue3', () => ({ usePage: () => page }))
 
 vi.mock('@/stores/appLayoutStore', async () => {
     const { defineStore } = await import('pinia')
-    const { ref } = await import('vue')
+    const { markRaw, ref } = await import('vue')
     return {
         useAppLayoutStore: defineStore('appLayout', () => ({
             activeAgentId: ref<number | null>(null),
             settingsSection: ref<string | null>(null),
+            agentHook: markRaw({
+                agents: ref([
+                    { id: 3, agent_type: 'dev' },
+                    { id: 4, agent_type: 'dev' },
+                    { id: 9, agent_type: 'pm' },
+                ]),
+            }),
         })),
     }
 })
@@ -61,6 +68,7 @@ const worktree = (path: string, extra: Record<string, unknown> = {}) => ({
     locked: false, prunable: false, agent_id: null, agent_name: null, ...extra,
 })
 
+let worktreesResponse: () => Promise<Response>
 let runs: { command_id: number; worktree: string | null; status: string; exit_code: number | null }[]
 let fetchMock: ReturnType<typeof vi.fn>
 
@@ -68,9 +76,7 @@ const json = (body: unknown, status = 200) => Promise.resolve({ ok: status < 400
 
 function fakeFetch(url: string, init?: RequestInit) {
     const method = init?.method ?? 'GET'
-    if (url === '/api/projects/7/git/worktrees') {
-        return json({ worktrees: [worktree(ROOT, { is_main: true, is_current: true }), worktree(AGENT_WORKTREE, { agent_id: 3, agent_name: 'Dev' })] })
-    }
+    if (url === '/api/projects/7/git/worktrees') return worktreesResponse()
     if (url === '/api/projects/7/commands') {
         return json({ data: [{ type: 'commands', id: '1', attributes: { project_id: 7, label: 'dev', command: 'npm run dev', kind: 'run', run: null } }] })
     }
@@ -88,7 +94,6 @@ function fakeFetch(url: string, init?: RequestInit) {
 
 const wrappers: VueWrapper[] = []
 
-// The real store derives activeAgentId; the mocked one above lets a test set it.
 const viewAgent = (id: number) => (pinia: Pinia) => {
     (useAppLayoutStore(pinia) as unknown as { activeAgentId: number | null }).activeAgentId = id
 }
@@ -114,6 +119,8 @@ const postedBodies = () =>
 
 beforeEach(() => {
     runs = []
+    worktreesResponse = () =>
+        json({ worktrees: [worktree(ROOT, { is_main: true, is_current: true }), worktree(AGENT_WORKTREE, { agent_id: 3, agent_name: 'Dev' })] })
     terms.length = 0
     FakeWebSocket.instances = []
     page.component = 'Home'
@@ -125,7 +132,6 @@ beforeEach(() => {
 
 afterEach(() => {
     wrappers.splice(0).forEach(w => w.unmount())
-    // Sessions live in module scope by design, so each test drops the ones it opened.
     runStore?.tabs.map(t => t.key).forEach(key => runStore!.closeTab(key))
     vi.unstubAllGlobals()
 })
@@ -169,6 +175,47 @@ describe('RunMenu', () => {
 
         expect(postedBodies()).toEqual([{ worktree: AGENT_WORKTREE }])
         expect(FakeWebSocket.instances[0].url).toContain(`/acme/command-ws/1?worktree=${encodeURIComponent(AGENT_WORKTREE)}`)
+    })
+
+    it('disables Run on the agent detail page while its worktree is loading', async () => {
+        worktreesResponse = () => new Promise(() => {})
+        page.component = 'agents/Detail'
+        const { menu } = await mountMenu(viewAgent(3))
+
+        expect(menu.text()).toContain('in: loading worktree…')
+        const run = menu.get('button[title="Run"]')
+        expect(run.attributes('disabled')).toBeDefined()
+        await run.trigger('click')
+        await menu.get('[data-testid="run-menu-row"]').trigger('click')
+        await flushPromises()
+
+        expect(postedBodies()).toEqual([])
+        expect(runStore!.tabs).toHaveLength(0)
+    })
+
+    it('says so instead of running in the root when the agent has no worktree', async () => {
+        page.component = 'agents/Detail'
+        const { menu } = await mountMenu(viewAgent(4))
+
+        expect(menu.get('[data-testid="run-menu-no-worktree"]').text()).toContain('This agent has no worktree')
+        expect(menu.text()).not.toContain('in: root')
+        const run = menu.get('button[title="Run"]')
+        expect(run.attributes('disabled')).toBeDefined()
+        await run.trigger('click')
+        await flushPromises()
+
+        expect(postedBodies()).toEqual([])
+    })
+
+    it('runs the PM agent in the project root', async () => {
+        page.component = 'agents/Detail'
+        const { menu } = await mountMenu(viewAgent(9))
+
+        expect(menu.text()).toContain('in: root')
+        await menu.get('button[title="Run"]').trigger('click')
+        await flushPromises()
+
+        expect(postedBodies()).toEqual([{}])
     })
 
     it('follows the page when it navigates away from the agent', async () => {

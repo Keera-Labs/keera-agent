@@ -2,9 +2,10 @@ import { useQuery } from '@pinia/colada'
 import { toValue, type MaybeRefOrGetter } from 'vue'
 import type { Command, CommandRun } from '@/components/commands/types'
 
-// JSON:API documents produced by CommandResource and CommandRunResource.
 type CommandResourceObject = { type: 'commands'; id: string; attributes: Omit<Command, 'id'> }
 type CommandRunResourceObject = { type: 'command_runs'; id: string; attributes: CommandRun }
+
+const JSON_API_HEADERS = { Accept: 'application/json' }
 
 export const COMMANDS_QUERY_KEY = ['commands']
 export const COMMAND_RUNS_QUERY_KEY = ['command-runs']
@@ -20,8 +21,7 @@ export function parseCommand(resource: CommandResourceObject): Command {
 }
 
 async function request<T>(url: string, init: { method?: string; body?: object } = {}): Promise<T | null> {
-    // Without Accept: application/json the backend answers validation errors with a 303 redirect instead of a 422 body.
-    const headers: Record<string, string> = { Accept: 'application/json' }
+    const headers: Record<string, string> = { ...JSON_API_HEADERS }
     if (init.body) headers['Content-Type'] = 'application/json'
     const res = await fetch(url, {
         method: init.method ?? 'GET',
