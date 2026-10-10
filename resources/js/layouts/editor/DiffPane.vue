@@ -4,7 +4,11 @@ import { useQueryCache } from '@pinia/colada'
 import type * as Monaco from 'monaco-editor'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useMarkdownViewMode } from '@/composables/useMarkdownViewMode'
+import { isMarkdownPath } from '@/editor/markdown'
 import { EDITOR_THEME, loadMonaco, type MonacoApi, type TextModel } from '@/editor/monaco'
+import MarkdownPreview from '@/layouts/editor/MarkdownPreview.vue'
+import MarkdownViewToggle from '@/layouts/editor/MarkdownViewToggle.vue'
 import { gitKeys, GitRequestError, useGitDiff, type GitDiff } from '@/queries/gitQuery'
 import { useDiffStore } from '@/stores/diffStore'
 import { useEditorSettingsStore } from '@/stores/editorSettingsStore'
@@ -37,6 +41,11 @@ const notice = computed(() => {
     if (current.modified === null && current.original !== null) return 'Deleted file'
     return null
 })
+
+const markdownMode = useMarkdownViewMode('changes', 'code')
+const isMarkdown = computed(() => !!activeTab.value && isMarkdownPath(activeTab.value.path))
+const showPreview = computed(() => isMarkdown.value && markdownMode.value === 'preview' && !!diff.value && !placeholder.value)
+const previewSource = computed(() => diff.value?.modified ?? diff.value?.original ?? '')
 
 const compared = computed(() => (activeTab.value?.committed ? 'Merge base ↔ HEAD' : activeTab.value?.staged ? 'HEAD ↔ Index' : 'Index ↔ Working tree'))
 
@@ -128,7 +137,8 @@ const toggleClass = 'h-5 px-1.5 flex items-center gap-1 rounded cursor-pointer t
                 {{ activeTab.worktreeLabel }}
             </span>
             <span v-if="notice" class="shrink-0 truncate text-zinc-500" data-testid="diff-notice">· {{ notice }}</span>
-            <div class="ml-auto shrink-0 flex items-center gap-0.5" role="group" aria-label="Diff layout">
+            <MarkdownViewToggle v-if="isMarkdown" v-model="markdownMode" :class="{ 'ml-auto': showPreview }" />
+            <div v-if="!showPreview" class="ml-auto shrink-0 flex items-center gap-0.5" role="group" aria-label="Diff layout">
                 <button
                     type="button"
                     data-testid="diff-side-by-side"
@@ -170,6 +180,7 @@ const toggleClass = 'h-5 px-1.5 flex items-center gap-1 rounded cursor-pointer t
             {{ placeholder }}
         </div>
 
-        <div v-show="diff && !placeholder" ref="host" class="flex-1 min-h-0" />
+        <MarkdownPreview v-if="showPreview" :source="previewSource" />
+        <div v-show="diff && !placeholder && !showPreview" ref="host" class="flex-1 min-h-0" />
     </section>
 </template>
