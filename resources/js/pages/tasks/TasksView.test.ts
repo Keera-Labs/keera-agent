@@ -20,6 +20,7 @@ function mountView(tasks: Task[], extra: { canPauseAll?: boolean; notice?: strin
 const completedNow = () => new Date().toISOString()
 
 const sectionTitles = (w: VueWrapper) => w.findAll('[data-testid="task-title"]').map(t => t.text())
+const metaParts = (w: VueWrapper) => w.get('[data-testid="task-meta"]').findAll(':scope > *').map(part => part.text())
 const tab = (w: VueWrapper, id: string) => w.get(`[data-filter="${id}"]`)
 const dialog = () => document.querySelector<HTMLElement>('[role="dialog"]')
 
@@ -40,11 +41,11 @@ describe('TasksView', () => {
 
         expect(w.get('[data-testid="task-total"]').text()).toBe('3')
         expect(w.get('[data-testid="running-pill"]').text()).toBe('1 running')
-        expect(tab(w, 'all').text()).toBe('All (3)')
-        expect(tab(w, 'running').text()).toBe('Running (1)')
-        expect(tab(w, 'done').text()).toBe('Done (1)')
-        expect(tab(w, 'backlog').text()).toBe('Backlog (1)')
-        expect(tab(w, 'review').text()).toBe('In Review (0)')
+        expect(tab(w, 'all').text()).toBe('All 3')
+        expect(tab(w, 'running').text()).toBe('Running 1')
+        expect(tab(w, 'done').text()).toBe('Done 1')
+        expect(tab(w, 'backlog').text()).toBe('Backlog 1')
+        expect(tab(w, 'review').text()).toBe('In review 0')
     })
 
     it('hides the running pill when nothing runs', () => {
@@ -55,11 +56,12 @@ describe('TasksView', () => {
         const w = mountView(tasks)
 
         const sections = w.findAll('[data-section]')
-        expect(sections.map(s => s.attributes('data-section'))).toEqual(['in_progress', 'pending', 'completed'])
+        expect(sections.map(s => s.attributes('data-section'))).toEqual(['in_progress', 'completed', 'pending'])
         expect(sections[0].text()).toContain('Active agents')
-        expect(sections[0].get('[data-testid="section-count"]').text()).toBe('· 1')
-        expect(sections[0].text()).toContain('TASK-2')
-        expect(sections[0].text()).toContain('· salut-ai')
+        expect(sections[0].get('[data-testid="section-count"]').text()).toBe('1')
+        expect(sections[0].get('[data-testid="task-ref"]').text()).toBe('TASK-2')
+        expect(sections[0].get('[data-testid="task-meta"]').text()).toContain('salut-ai')
+        expect(sections[0].get('[data-testid="project-avatar"]').text()).toBe('S')
         expect(sections[0].get('[data-testid="task-status-icon"]').attributes('aria-label')).toBe('Running')
     })
 
@@ -84,8 +86,8 @@ describe('TasksView', () => {
 
         await search.setValue('salut')
         expect(sectionTitles(w)).toEqual(['Build checkout'])
-        expect(tab(w, 'all').text()).toBe('All (1)')
-        expect(tab(w, 'done').text()).toBe('Done (0)')
+        expect(tab(w, 'all').text()).toBe('All 1')
+        expect(tab(w, 'done').text()).toBe('Done 0')
 
         await search.setValue('nothing like this')
         expect(w.get('[data-testid="tasks-empty"]').text()).toBe('No tasks match')
@@ -121,7 +123,7 @@ describe('TasksView', () => {
             testing_methods: ['vitest'],
         })])
 
-        await w.get('[data-testid="task-card"]').trigger('click')
+        await w.get('[data-testid="task-row"]').trigger('click')
 
         expect(dialog()?.textContent).toContain('All the details')
         expect(dialog()?.textContent).toContain('It works')
@@ -154,7 +156,7 @@ describe('TasksView', () => {
         ])
         const search = w.get('input[type="search"]')
 
-        expect(search.attributes('placeholder')).toBe('Search tasks, branches, or PRs...')
+        expect(search.attributes('placeholder')).toBe('Search tasks, branches or PRs...')
         await search.setValue('eu-promo')
         expect(sectionTitles(w)).toEqual(['Promo tax'])
         await search.setValue('#1841')
@@ -173,13 +175,13 @@ describe('TasksView', () => {
             review_note: 'Coderabbit review ready',
         })
 
-        it('has an In Review tab and an Awaiting review section with the review icon', async () => {
+        it('has an In review tab and an Awaiting review section with the review icon', async () => {
             const w = mountView([...tasks, review])
 
-            expect(tab(w, 'review').text()).toBe('In Review (1)')
+            expect(tab(w, 'review').text()).toBe('In review 1')
             const section = w.get('[data-section="in_review"]')
             expect(section.text()).toContain('Awaiting review')
-            expect(section.get('[data-testid="section-count"]').text()).toBe('· 1')
+            expect(section.get('[data-testid="section-count"]').text()).toBe('1')
             expect(section.get('[data-testid="task-status-icon"]').attributes('aria-label')).toBe('In Review')
 
             await tab(w, 'review').trigger('click')
@@ -198,67 +200,54 @@ describe('TasksView', () => {
 
         it('shows In Review in the task modal', async () => {
             const w = mountView([review])
-            await w.get('[data-testid="task-card"]').trigger('click')
+            await w.get('[data-testid="task-row"]').trigger('click')
             expect(dialog()?.textContent).toContain('In Review')
         })
 
-        it('links the PR chip, and shows the diff and review note', async () => {
+        it('links the PR from the meta line without opening the task', async () => {
             const w = mountView([review])
 
-            const ref = w.get('a[data-testid="task-ref"]')
-            expect(ref.text()).toBe('PR #1841')
-            expect(ref.attributes('href')).toBe('https://github.com/acme/web/pull/1841')
-            expect(ref.attributes('target')).toBe('_blank')
-            expect(w.get('[data-testid="task-diff"]').text()).toBe('+12-4')
-            expect(w.get('[data-testid="task-diff"] .text-success').text()).toBe('+12')
-            expect(w.get('[data-testid="task-diff"] .text-danger').text()).toBe('-4')
-            expect(w.get('[data-testid="task-review-note"]').text()).toBe('Coderabbit review ready')
+            const link = w.get('a[data-testid="task-pr"]')
+            expect(link.text()).toBe('PR #1841')
+            expect(link.attributes('href')).toBe('https://github.com/acme/web/pull/1841')
+            expect(link.attributes('target')).toBe('_blank')
+            expect(w.get('[data-testid="task-ref"]').text()).toBe('TASK-5')
 
-            await ref.trigger('click')
+            await link.trigger('click')
             expect(dialog()).toBeNull()
         })
     })
 
-    describe('card chips', () => {
-        it('shows the branch and progress of a running task', () => {
+    describe('row meta', () => {
+        it('shows the project avatar, task id and agents, with high priority as a badge', () => {
             const w = mountView([makeTask({
-                status: 'in_progress',
-                pr_number: 1842,
-                branch: 'fix/eu-promo-checkout',
-                progress_step: 3,
-                progress_total: 4,
+                id: 12,
+                project_id: 2,
+                priority: 'high',
+                assignees: ['Frontend Engineer'],
+                branch: 'fix/eu-promo',
+                acceptance_criteria: ['It works'],
             })])
 
-            expect(w.get('span[data-testid="task-ref"]').text()).toBe('PR #1842')
-            expect(w.get('[data-testid="task-branch"]').text()).toBe('fix/eu-promo-checkout')
-            expect(w.get('[data-testid="task-progress"]').text()).toBe('Step 3/4 (75%)')
+            expect(metaParts(w)).toEqual(['S', 'salut-ai', '·', 'TASK-12', '·', 'Frontend Engineer'])
+            expect(w.get('[data-testid="task-row"]').text()).toContain('high')
+            expect(w.find('[data-testid="task-pr"]').exists()).toBe(false)
+            expect(w.get('[data-testid="task-row"]').text()).not.toContain('fix/eu-promo')
+            expect(w.get('[data-testid="task-row"]').text()).not.toContain('criteria')
         })
 
-        it('hides every chip whose data is null', () => {
-            const w = mountView([
-                makeTask({ id: 1, status: 'in_progress' }),
-                makeTask({ id: 2, status: 'in_review' }),
-            ])
+        it('shows the PR number as plain text when it has no URL', () => {
+            const w = mountView([makeTask({ id: 4, project_id: 99, pr_number: 1842 })])
 
-            expect(w.findAll('[data-testid="task-ref"]').map(r => r.text())).toEqual(['TASK-1', 'TASK-2'])
-            for (const id of ['task-branch', 'task-diff', 'task-review-note', 'task-progress']) {
-                expect(w.find(`[data-testid="${id}"]`).exists()).toBe(false)
-            }
+            expect(w.find('a[data-testid="task-pr"]').exists()).toBe(false)
+            expect(metaParts(w)).toEqual(['TASK-4', '·', 'PR #1842'])
         })
 
-        it('keeps the diff to review cards and progress to running cards', () => {
-            const w = mountView([
-                makeTask({ id: 1, status: 'in_progress', additions: 3, deletions: 1 }),
-                makeTask({ id: 2, status: 'in_review', progress_step: 1, progress_total: 2 }),
-            ])
+        it('leaves out a missing project and agent without stray separators', () => {
+            const w = mountView([makeTask({ id: 3, project_id: 99 })])
 
-            expect(w.find('[data-testid="task-diff"]').exists()).toBe(false)
-            expect(w.find('[data-testid="task-progress"]').exists()).toBe(false)
-        })
-
-        it('shows one side of the diff when the other is null', () => {
-            const w = mountView([makeTask({ status: 'in_review', additions: 7 })])
-            expect(w.get('[data-testid="task-diff"]').text()).toBe('+7')
+            expect(metaParts(w)).toEqual(['TASK-3'])
+            expect(w.find('[data-testid="project-avatar"]').exists()).toBe(false)
         })
     })
 
@@ -269,12 +258,12 @@ describe('TasksView', () => {
         it('lists only today\'s completions under All, and every one under Done', async () => {
             const w = mountView([old, today])
 
-            expect(w.get('[data-section="completed"]').text()).toContain('Completed today')
+            expect(w.get('[data-section="completed"] h2').text()).toContain('Completed today')
             expect(sectionTitles(w)).toEqual(['New ship'])
-            expect(tab(w, 'done').text()).toBe('Done (2)')
+            expect(tab(w, 'done').text()).toBe('Done 2')
 
             await tab(w, 'done').trigger('click')
-            expect(w.get('[data-section="completed"]').text()).not.toContain('Completed today')
+            expect(w.get('[data-section="completed"] h2').text()).not.toContain('Completed today')
             expect(sectionTitles(w)).toEqual(['New ship', 'Old ship'])
         })
 
@@ -289,7 +278,7 @@ describe('TasksView', () => {
             const w = mountView(tasks, { canPauseAll: true })
 
             const link = w.get('[data-section="in_progress"] [data-testid="pause-all"]')
-            expect(link.text()).toBe('pause all')
+            expect(link.text()).toBe('Pause all')
             await link.trigger('click')
             expect(w.emitted('pauseAll')).toHaveLength(1)
         })

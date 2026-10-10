@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import CreateTaskModal, { type NewTask } from '@/pages/tasks/CreateTaskModal.vue'
-import TaskCard from '@/pages/tasks/TaskCard.vue'
+import TaskRow from '@/pages/tasks/TaskRow.vue'
 import {
     TASK_FILTERS,
     countByFilter,
@@ -19,7 +19,6 @@ const props = withDefaults(defineProps<{
     projects: Project[]
     workspaces: Workspace[]
     defaultProjectId: number | null
-    /** Whether the project has running agents that "pause all" would stop. */
     canPauseAll?: boolean
     notice?: string | null
 }>(), { canPauseAll: false, notice: null })
@@ -101,41 +100,44 @@ const pillClass = 'text-ui-11 tabular-nums rounded-full py-px px-2 border'
                 </div>
             </div>
 
-            <label class="flex items-center gap-2 h-8 px-2.5 rounded-md border border-stroke bg-canvas text-zinc-400 focus-within:border-accent">
-                <Icon name="search" :size="13" />
-                <input
-                    ref="searchInput"
-                    v-model="query"
-                    type="search"
-                    aria-label="Search tasks"
-                    placeholder="Search tasks, branches, or PRs..."
-                    class="flex-1 min-w-0 bg-transparent border-none outline-none text-ui-13 text-zinc-900 placeholder:text-zinc-400"
-                    @keydown.esc="query = ''"
-                >
-                <kbd class="font-sans text-ui-10 text-zinc-400 border border-stroke rounded px-1 bg-surface">⌘K</kbd>
-            </label>
+            <div class="flex items-center gap-3 flex-wrap">
+                <label class="flex-1 min-w-[220px] max-w-[420px] flex items-center gap-2 h-8 px-3 rounded-lg border border-stroke bg-canvas text-zinc-400 focus-within:border-accent">
+                    <Icon name="search" :size="13" />
+                    <input
+                        ref="searchInput"
+                        v-model="query"
+                        type="search"
+                        aria-label="Search tasks"
+                        placeholder="Search tasks, branches or PRs..."
+                        class="flex-1 min-w-0 bg-transparent border-none outline-none text-ui-13 text-zinc-900 placeholder:text-zinc-400"
+                        @keydown.esc="query = ''"
+                    >
+                    <kbd class="font-sans text-ui-10 text-zinc-400 border border-stroke rounded px-1 bg-surface">⌘K</kbd>
+                </label>
 
-            <div role="tablist" aria-label="Filter tasks" class="flex items-center gap-1 flex-wrap">
-                <button
-                    v-for="tab in TASK_FILTERS"
-                    :key="tab.id"
-                    type="button"
-                    role="tab"
-                    :data-filter="tab.id"
-                    :aria-selected="filter === tab.id"
-                    :class="[
-                        'inline-flex items-center gap-1.5 h-6 px-2 rounded-md text-ui-12 cursor-pointer transition-colors',
-                        filter === tab.id ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-black/[0.04]',
-                    ]"
-                    @click="filter = tab.id"
-                >
-                    <span v-if="tab.dot" :class="['w-1.5 h-1.5 rounded-full', tab.dot]" />
-                    {{ tab.label }} ({{ counts[tab.id] }})
-                </button>
+                <div role="tablist" aria-label="Filter tasks" class="flex items-center gap-1 flex-wrap">
+                    <button
+                        v-for="tab in TASK_FILTERS"
+                        :key="tab.id"
+                        type="button"
+                        role="tab"
+                        :data-filter="tab.id"
+                        :aria-selected="filter === tab.id"
+                        :class="[
+                            'inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-ui-12 font-medium cursor-pointer transition-colors',
+                            filter === tab.id ? 'bg-zinc-900 text-white' : 'text-zinc-700 hover:bg-black/[0.04]',
+                        ]"
+                        @click="filter = tab.id"
+                    >
+                        <span v-if="tab.dot" :class="['w-1.5 h-1.5 rounded-full', tab.dot]" />
+                        {{ tab.label }}
+                        <span :class="['tabular-nums font-normal', filter === tab.id ? 'text-white/70' : 'text-zinc-400']">{{ counts[tab.id] }}</span>
+                    </button>
+                </div>
             </div>
         </header>
 
-        <div class="flex-1 overflow-y-auto px-6 py-5">
+        <div class="flex-1 overflow-y-auto px-6 py-5 bg-sidebar">
             <p v-if="sections.length === 0" data-testid="tasks-empty" class="m-0 py-12 text-center text-ui-13 text-zinc-400">
                 {{ emptyMessage }}
             </p>
@@ -144,22 +146,22 @@ const pillClass = 'text-ui-11 tabular-nums rounded-full py-px px-2 border'
                 v-for="section in sections"
                 :key="section.status"
                 :data-section="section.status"
-                class="pb-5 mb-5 border-b border-stroke last:border-b-0 last:mb-0"
+                class="mb-6 last:mb-0"
             >
-                <h2 class="m-0 mb-3 flex items-center gap-2 text-ui-11 font-semibold uppercase tracking-[0.06em] text-zinc-600">
+                <h2 class="m-0 mb-2 px-1 flex items-center gap-2 text-ui-11 font-semibold uppercase tracking-[0.08em] text-zinc-600">
                     <span :class="['w-1.5 h-1.5 rounded-full', section.dot]" />
                     {{ section.label }}
-                    <span data-testid="section-count" class="font-normal text-zinc-400">· {{ section.tasks.length }}</span>
+                    <span data-testid="section-count" class="font-normal text-zinc-400 tabular-nums">{{ section.tasks.length }}</span>
                     <button
                         v-if="section.status === 'in_progress' && canPauseAll"
                         type="button"
                         data-testid="pause-all"
-                        class="ml-auto bg-transparent border-none p-0 text-ui-11 font-medium normal-case tracking-normal text-accent cursor-pointer hover:underline"
+                        class="ml-auto bg-transparent border-none p-0 text-ui-12 font-medium normal-case tracking-normal text-accent cursor-pointer hover:underline"
                         @click="emit('pauseAll')"
-                    >pause all</button>
+                    >Pause all</button>
                 </h2>
-                <div class="flex flex-col gap-2">
-                    <TaskCard
+                <div class="rounded-xl border border-stroke bg-surface overflow-hidden divide-y divide-stroke">
+                    <TaskRow
                         v-for="task in section.tasks"
                         :key="task.id"
                         :task="task"

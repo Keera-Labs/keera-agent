@@ -5,23 +5,21 @@ export type TaskFilter = 'all' | 'running' | 'review' | 'done' | 'backlog'
 
 export const TASK_FILTERS: { id: TaskFilter; label: string; statuses: Task['status'][] | null; dot: string | null }[] = [
     { id: 'all', label: 'All', statuses: null, dot: null },
-    { id: 'running', label: 'Running', statuses: ['in_progress'], dot: 'bg-accent' },
-    { id: 'review', label: 'In Review', statuses: ['in_review'], dot: 'bg-amber-500' },
-    { id: 'done', label: 'Done', statuses: ['completed'], dot: 'bg-success' },
+    { id: 'running', label: 'Running', statuses: ['in_progress'], dot: 'bg-orange-500' },
+    { id: 'review', label: 'In review', statuses: ['in_review'], dot: 'bg-blue-500' },
+    { id: 'done', label: 'Done', statuses: ['completed'], dot: 'bg-green-500' },
     { id: 'backlog', label: 'Backlog', statuses: ['pending'], dot: 'bg-zinc-400' },
 ]
 
 export type TaskSection = { status: Task['status']; label: string; dot: string; tasks: Task[] }
 
 const SECTIONS: Omit<TaskSection, 'tasks'>[] = [
-    { status: 'in_progress', label: 'Active agents', dot: 'bg-accent' },
-    { status: 'in_review', label: 'Awaiting review', dot: 'bg-amber-500' },
+    { status: 'in_progress', label: 'Active agents', dot: 'bg-orange-500' },
+    { status: 'in_review', label: 'Awaiting review', dot: 'bg-blue-500' },
+    { status: 'completed', label: 'Completed', dot: 'bg-green-500' },
     { status: 'pending', label: 'Backlog', dot: 'bg-zinc-400' },
-    { status: 'completed', label: 'Completed', dot: 'bg-success' },
     { status: 'cancelled', label: 'Cancelled', dot: 'bg-zinc-300' },
 ]
-
-export const taskRef = (task: Task) => (task.pr_number !== null ? `PR #${task.pr_number}` : `TASK-${task.id}`)
 
 export function matchesSearch(task: Task, query: string, projectName = ''): boolean {
     const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
@@ -71,13 +69,6 @@ export function groupTasks(tasks: Task[], completedSince?: number): TaskSection[
             return { ...section, label, tasks: sectionTasks.sort((a, b) => lastActivity(b) - lastActivity(a)) }
         })
         .filter(section => section.tasks.length > 0)
-}
-
-/** "Step n/N (pct%)", or null when the task reports no usable progress. */
-export function progressLabel(task: Task): string | null {
-    const { progress_step: step, progress_total: total } = task
-    if (step === null || total === null || total <= 0) return null
-    return `Step ${step}/${total} (${Math.round((step / total) * 100)}%)`
 }
 
 // The backend serializes timestamps as naive UTC ("2026-01-01 10:00:00"), which Date.parse would read as local time.
