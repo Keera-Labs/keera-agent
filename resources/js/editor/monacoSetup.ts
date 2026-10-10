@@ -5,6 +5,7 @@ import HtmlWorker from 'monaco-editor/language/html/html.worker?worker'
 import JsonWorker from 'monaco-editor/language/json/json.worker?worker'
 import TsWorker from 'monaco-editor/language/typescript/ts.worker?worker'
 import { githubLightTheme } from './githubLightTheme'
+import { VUE_LANGUAGE_ID, vueLanguage, vueLanguageConfiguration } from './vueLanguage'
 
 // Workers are bundled by Vite (no CDN); Monaco asks for one per language service.
 self.MonacoEnvironment = {
@@ -22,6 +23,10 @@ self.MonacoEnvironment = {
 for (const defaults of [monaco.typescript.typescriptDefaults, monaco.typescript.javascriptDefaults]) {
     defaults.setDiagnosticsOptions({ noSemanticValidation: true, noSyntaxValidation: false })
 }
+
+monaco.languages.register({ id: VUE_LANGUAGE_ID, extensions: ['.vue'], aliases: ['Vue', 'vue'] })
+monaco.languages.setMonarchTokensProvider(VUE_LANGUAGE_ID, vueLanguage)
+monaco.languages.setLanguageConfiguration(VUE_LANGUAGE_ID, vueLanguageConfiguration)
 
 monaco.editor.defineTheme('github-light', githubLightTheme)
 
