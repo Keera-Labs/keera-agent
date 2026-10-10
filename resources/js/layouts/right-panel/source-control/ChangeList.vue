@@ -50,7 +50,7 @@ const iconButton = 'p-0.5 rounded text-zinc-500 hover:text-zinc-800 hover:bg-zin
                 type="button"
                 :aria-expanded="expanded"
                 :aria-controls="sectionId"
-                class="flex-1 min-w-0 flex items-center gap-1 text-left text-ui-11 font-semibold uppercase tracking-[0.08em] text-zinc-600 cursor-pointer"
+                class="flex-1 min-w-0 flex items-center gap-1 text-left text-ui-11 font-semibold uppercase tracking-[0.08em] text-zinc-500 cursor-pointer"
                 @click="expanded = !expanded"
             >
                 <span class="truncate">{{ title }}</span>
@@ -59,14 +59,14 @@ const iconButton = 'p-0.5 rounded text-zinc-500 hover:text-zinc-800 hover:bg-zin
             <span v-if="!committed" data-testid="staged-count" class="shrink-0 text-ui-12 text-zinc-500">
                 {{ stagedCount }} of {{ rows.length }} staged
             </span>
-            <span v-else class="shrink-0 text-ui-12 text-zinc-500">{{ rows.length }}</span>
+            <span v-else data-testid="committed-count" class="shrink-0 text-ui-12 tabular-nums text-zinc-500">{{ rows.length }}</span>
         </div>
 
-        <div v-if="$slots.description" class="px-3 pb-1 text-ui-11 text-zinc-500 break-words">
+        <div v-if="$slots.description" class="px-3 pb-1.5 -mt-1 text-ui-12 text-zinc-500 break-words">
             <slot name="description" />
         </div>
 
-        <ul v-show="expanded" :id="sectionId" class="text-ui-13">
+        <ul v-show="expanded" :id="sectionId" class="text-ui-12.5">
             <li
                 v-for="row in rows"
                 :key="row.file.path"
@@ -86,22 +86,22 @@ const iconButton = 'p-0.5 rounded text-zinc-500 hover:text-zinc-800 hover:bg-zin
                     @click.prevent="emit('toggle', [row.file.path], row.state !== 'staged')"
                 >
                 <span
-                    class="shrink-0 w-[18px] h-[18px] flex items-center justify-center rounded font-mono text-ui-11 font-semibold"
+                    class="shrink-0 w-[18px] h-[18px] flex items-center justify-center rounded font-mono text-ui-10.5 font-semibold"
                     :class="statusBadge(row.file).tone"
                     :aria-label="statusBadge(row.file).label"
                 >{{ statusBadge(row.file).letter }}</span>
 
                 <button
                     type="button"
-                    class="flex-1 min-w-0 flex items-baseline gap-1.5 text-left cursor-pointer"
+                    class="flex-1 min-w-0 flex items-baseline gap-1.5 pr-2 text-left cursor-pointer"
                     :title="worktreeLabels[row.file.path] ? `Switch to worktree ${worktreeLabels[row.file.path]}` : `Show changes in ${row.file.path}`"
                     @click="emit('open', row)"
                 >
                     <span
-                        class="shrink-0 max-w-full truncate font-medium text-zinc-900"
+                        class="shrink-0 max-w-full truncate text-zinc-900"
                         :class="row.file.status === 'D' && 'line-through text-zinc-500'"
                     >{{ worktreeLabels[row.file.path] ?? row.file.name }}</span>
-                    <span class="min-w-0 truncate text-ui-12 text-zinc-400">{{ row.file.dir }}</span>
+                    <span class="min-w-0 truncate text-ui-11.5 text-zinc-400">{{ row.file.dir }}</span>
                 </button>
 
                 <button
@@ -115,7 +115,7 @@ const iconButton = 'p-0.5 rounded text-zinc-500 hover:text-zinc-800 hover:bg-zin
                     <FileText :size="12" />
                 </button>
 
-                <span class="shrink-0 font-mono text-ui-11 tabular-nums" data-testid="line-stats">
+                <span class="shrink-0 text-ui-11.5 tabular-nums" data-testid="line-stats">
                     <span v-if="worktreeLabels[row.file.path]" class="text-zinc-500">worktree</span>
                     <span v-else-if="row.file.untracked && !row.file.additions" class="text-emerald-600">untracked</span>
                     <span v-else-if="row.file.binary" class="text-zinc-400">binary</span>

@@ -119,7 +119,7 @@ onBeforeUnmount(stopListening)
             data-testid="project-item"
             :aria-current="props.active ? 'page' : undefined"
             :title="props.project.path"
-            class="flex-1 min-w-0 flex items-center gap-2 h-9 pl-1.5 pr-2.5 rounded-lg cursor-pointer text-left text-zinc-900 transition-colors duration-100 hover:bg-black/[0.03]"
+            class="flex-1 min-w-0 flex items-center gap-2 h-9 pl-1.5 pr-2 rounded-lg cursor-pointer text-left text-zinc-900 transition-colors duration-100 hover:bg-black/[0.03]"
             @click="visit"
             @keydown.enter="visit"
         >
