@@ -1,4 +1,3 @@
-import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -7,13 +6,14 @@ from app.models.Project import Project
 from app.services.claude_config_dir import claude_env, project_config_dir
 from app.services.git_repository import GitRepository, InvalidWorktree
 from app.utils.agent_worktree import agent_id_for_worktree
+from app.utils.process_env import user_env
 
 PROJECT_ROOT_ENV = "KEERA_PROJECT_ROOT"
 WORKTREE_ENV = "KEERA_WORKTREE"
 
 
 async def command_env(project: Project) -> dict:
-    return {**os.environ, **claude_env(await project_config_dir(project))}
+    return {**user_env(), **claude_env(await project_config_dir(project))}
 
 
 @dataclass(frozen=True)
