@@ -488,6 +488,32 @@ class GitRepository:
                 return ref
         return None
 
+    async def _remote_counterpart(self, local: str) -> str | None:
+        upstream = await self.git("for-each-ref", "--format=%(upstream)", local)
+        tracked = upstream.text.strip() if upstream.ok else ""
+        if tracked.startswith("refs/remotes/") and await self.has_ref(tracked):
+            return tracked
+        remotes = (await self.git_ok("remote")).text.split()
+        if not remotes:
+            return None
+        remote = "origin" if "origin" in remotes else remotes[0]
+        candidate = f"refs/remotes/{remote}/{local.removeprefix('refs/heads/')}"
+        return candidate if await self.has_ref(candidate) else None
+
+    async def _commits_ahead(self, base: str, head: str) -> int:
+        return int((await self.git_ok("rev-list", "--count", f"{base}..{head}")).text)
+
+    async def _closest_counterpart(self, base: str, head: str) -> str:
+        if not base.startswith("refs/heads/"):
+            return base
+        remote = await self._remote_counterpart(base)
+        if remote is None:
+            return base
+        local_ahead, remote_ahead = await asyncio.gather(
+            self._commits_ahead(base, head), self._commits_ahead(remote, head)
+        )
+        return remote if remote_ahead < local_ahead else base
+
     async def branch_changes(self, base_name: str | None = None) -> dict:
         result = {"base": None, "merge_base": None, "head": None, "ahead": 0, "files": []}
         if not await self.has_commits():
@@ -497,12 +523,13 @@ class GitRepository:
         result.update(base=short_ref(base) if base else None, head=head)
         if base is None:
             return result
+        base = await self._closest_counterpart(base, head)
         merge = await self.git("merge-base", base, head)
         if not merge.ok:
             return result
         merge_base = merge.text.strip()
         count, names, stats = await asyncio.gather(
-            self.git_ok("rev-list", "--count", f"{base}..{head}"),
+            self._commits_ahead(base, head),
             self.git_ok("diff", "--name-status", "-z", "-M", merge_base, head, "--"),
             self.git_ok("diff", "--numstat", "-z", "-M", merge_base, head, "--"),
         )
@@ -518,7 +545,5 @@ class GitRepository:
                 i += 1
             changes.append(FileChange(path, _STATUS_LETTERS.get(status[0], "M"), original))
         _apply_numstat(changes, _parse_numstat(stats.stdout))
-        result.update(
-            merge_base=merge_base, ahead=int(count.text), files=[c.to_dict() for c in changes]
-        )
+        result.update(merge_base=merge_base, ahead=count, files=[c.to_dict() for c in changes])
         return result
