@@ -2,7 +2,7 @@
 import { router, usePage } from '@inertiajs/vue3'
 import { FileDiff } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import ConfirmDeleteAgentModal from '@/components/modals/ConfirmDeleteAgentModal.vue'
 import Icon from '@/components/ui/Icon.vue'
 import AgentAddModal from '@/pages/agents/AgentAddModal.vue'
@@ -96,7 +96,8 @@ function scrollActiveTabIntoView() {
     else if (box.right > bounds.right) strip.scrollLeft += box.right - bounds.right
 }
 
-watch([activeFileTab, activeDiffTab, activeAgentId, () => page.component], scrollActiveTabIntoView, { flush: 'post', immediate: true })
+watch([activeFileTab, activeDiffTab, activeAgentId, () => page.component], scrollActiveTabIntoView, { flush: 'post' })
+onMounted(scrollActiveTabIntoView)
 
 function tabClass(active: boolean) {
     return [
