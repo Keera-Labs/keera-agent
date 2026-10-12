@@ -98,7 +98,7 @@ async function save(close: () => void) {
                 <div class="flex flex-col gap-1.5" data-testid="worktree-files">
                     <span :class="labelClass">Worktree files</span>
                     <span class="text-zinc-500 text-ui-12 leading-normal">
-                        Copied from this project into each new agent worktree, e.g. <code>.env</code> or <code>config/*.local.json</code>. Paths are relative to the project root; files already in the worktree are kept.
+                        Copied from this project into each new agent worktree, e.g. <code>.env</code> or <code>config/*.local.json</code>. Paths are relative to the project root; files already in the worktree are kept. Meant for gitignored files: copied files git tracks as changes keep the worktree from being cleaned up automatically.
                     </span>
                     <TagInput
                         v-model="copyPaths"

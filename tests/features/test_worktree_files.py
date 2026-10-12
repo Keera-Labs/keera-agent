@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from app.controllers.agent_trigger_controller import ensure_agent_worktree
+from app.services.worktree_cleanup import cleanup_agent_worktree
 from app.services.worktree_files import copy_worktree_files
 from tests.features.git_test_repo import GitTestRepo
 
@@ -77,6 +78,105 @@ class TestCopyWorktreeFiles(unittest.TestCase):
 
         logger.warning.assert_called_once()
         self.assertIn(".env", logger.warning.call_args.args[0])
+
+
+class TestCopyWorktreeFilesSymlinks(unittest.TestCase):
+    def setUp(self):
+        self.repo = GitTestRepo(self).init()
+        self.repo.write(".gitignore", ".env\nconfig/\nstorage/\nhome\n")
+        self.repo.write("README.md", "tracked\n")
+        self.repo.commit_all("initial")
+        self.repo.write(".env", "SECRET=1\n")
+        self.repo.write("config/app.local.json", "{}")
+        self.repo.write("storage/cache/data.db", "db")
+        self.outside = self.repo.base / "outside"
+        self.outside.mkdir()
+        (self.outside / "id_rsa").write_text("private key")
+        self.worktree = self.repo.add_worktree(".claude/worktrees/agent-7", "worktree-agent-7")
+        logger = mock.patch("app.services.worktree_files.Logger")
+        self.logger = logger.start()
+        self.addCleanup(logger.stop)
+
+    def copy(self, *patterns: str) -> None:
+        copy_worktree_files(self.repo.root, self.worktree, list(patterns))
+
+    def commit_worktree_symlink(self, name: str, target) -> None:
+        (self.worktree / name).symlink_to(target)
+        self.repo.git("add", "-f", name, cwd=self.worktree)
+        self.repo.git("commit", "-q", "-m", f"link {name}", cwd=self.worktree)
+
+    def test_committed_symlink_in_the_worktree_never_redirects_file_writes(self):
+        self.commit_worktree_symlink("config", self.outside)
+
+        self.copy("config/*.local.json")
+
+        self.assertFalse((self.outside / "app.local.json").exists())
+        self.logger.warning.assert_called_once()
+
+    def test_committed_symlink_in_the_worktree_never_redirects_directory_copies(self):
+        self.commit_worktree_symlink("storage", self.outside)
+
+        self.copy("storage")
+
+        self.assertEqual(sorted(p.name for p in self.outside.iterdir()), ["id_rsa"])
+        self.logger.warning.assert_called()
+
+    def test_symlinked_directory_out_of_the_project_is_not_read(self):
+        (self.repo.root / "home").symlink_to(self.outside, target_is_directory=True)
+
+        self.copy("home/*", "home/id_rsa", "**/id_rsa")
+
+        self.assertFalse((self.worktree / "home").exists())
+        self.assertEqual(self.logger.warning.call_count, 2)
+
+    def test_symlink_out_of_the_project_is_copied_as_a_link_not_its_content(self):
+        (self.repo.root / ".env").unlink()
+        (self.repo.root / ".env").symlink_to(self.outside / "id_rsa")
+
+        self.copy(".env")
+
+        self.assertTrue((self.worktree / ".env").is_symlink())
+        self.assertEqual(os.readlink(self.worktree / ".env"), str(self.outside / "id_rsa"))
+
+    def test_symlinks_inside_the_project_keep_working(self):
+        (self.repo.root / "config/current.json").symlink_to("app.local.json")
+        (self.repo.root / "storage/latest").symlink_to("cache", target_is_directory=True)
+
+        self.copy("config/*.json", "storage")
+
+        self.assertEqual(os.readlink(self.worktree / "config/current.json"), "app.local.json")
+        self.assertEqual((self.worktree / "config/current.json").read_text(), "{}")
+        self.assertEqual(os.readlink(self.worktree / "storage/latest"), "cache")
+        self.assertEqual((self.worktree / "storage/cache/data.db").read_text(), "db")
+        self.logger.warning.assert_not_called()
+
+
+class TestCopiedFilesAndWorktreeCleanup(unittest.TestCase):
+    def setUp(self):
+        self.repo = GitTestRepo(self).init()
+        self.repo.write(".gitignore", ".env\n")
+        self.repo.write("README.md", "tracked\n")
+        self.repo.commit_all("initial")
+        self.repo.write(".env", "SECRET=1\n")
+        self.repo.write("notes.txt", "untracked, not ignored\n")
+        self.worktree = self.repo.add_worktree(".claude/worktrees/agent-7", "worktree-agent-7")
+        logger = mock.patch("app.services.worktree_cleanup.Logger")
+        logger.start()
+        self.addCleanup(logger.stop)
+
+    def test_gitignored_copies_leave_the_worktree_removable(self):
+        copy_worktree_files(self.repo.root, self.worktree, [".env"])
+
+        cleanup_agent_worktree(str(self.repo.root), 7, 0)
+
+        self.assertFalse(self.worktree.exists())
+
+    def test_non_ignored_copies_keep_the_worktree_as_unsaved_work(self):
+        copy_worktree_files(self.repo.root, self.worktree, ["notes.txt"])
+
+        cleanup_agent_worktree(str(self.repo.root), 7, 0)
+
+        self.assertTrue((self.worktree / "notes.txt").exists())
 
 
 class TestEnsureAgentWorktree(unittest.TestCase):
