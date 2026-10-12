@@ -7,9 +7,11 @@ export const worktreeFilesKey = (projectId: number) => ['worktree-files', projec
 
 const url = (projectId: number) => `/api/projects/${projectId}/worktree-files`
 
+type ValidationErrorDocument = { errors?: Record<string, string[]> }
+
 function validationMessage(body: unknown): string | undefined {
-    const detail = (body as { detail?: { msg?: string }[] } | null)?.detail
-    return Array.isArray(detail) ? detail[0]?.msg?.replace(/^Value error, /, '') : undefined
+    const errors = (body as ValidationErrorDocument | null)?.errors ?? {}
+    return Object.values(errors).flat()[0]?.replace(/^Value error, /, '')
 }
 
 export async function fetchWorktreeFiles(projectId: number): Promise<string[]> {

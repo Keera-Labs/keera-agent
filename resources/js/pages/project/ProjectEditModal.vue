@@ -21,17 +21,26 @@ const worktreeFiles = useWorktreeFiles(() => props.project.id)
 
 const path = ref(props.project.path)
 const copyPaths = ref<string[]>([])
+const copyPathsEdited = ref(false)
 const saving = ref(false)
 const saved = ref(false)
 const error = ref('')
 const showTemplates = ref(false)
 
-watch(worktreeFiles.paths, paths => { copyPaths.value = [...(paths ?? [])] }, { immediate: true })
+watch(worktreeFiles.paths, paths => {
+    if (!copyPathsEdited.value) copyPaths.value = [...(paths ?? [])]
+}, { immediate: true })
+
+function editCopyPaths(paths: string[]) {
+    copyPathsEdited.value = true
+    copyPaths.value = paths
+}
 
 function onOpenChange(open: boolean) {
     if (open) {
         path.value = props.project.path
         copyPaths.value = [...(worktreeFiles.paths.value ?? [])]
+        copyPathsEdited.value = false
         saving.value = false
         saved.value = false
         error.value = ''
@@ -45,6 +54,12 @@ async function save(close: () => void) {
     saving.value = true
     error.value = ''
     try {
+        try {
+            await worktreeFiles.save(copyPaths.value)
+        } catch (e) {
+            error.value = e instanceof Error ? e.message : 'Failed to save worktree files'
+            return
+        }
         const res = await fetch(`/api/projects/${props.project.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
@@ -52,12 +67,6 @@ async function save(close: () => void) {
         })
         if (!res.ok) { error.value = 'Something went wrong'; return }
         void handleProjectUpdated(await res.json())
-        try {
-            await worktreeFiles.save(copyPaths.value)
-        } catch (e) {
-            error.value = e instanceof Error ? e.message : 'Failed to save worktree files'
-            return
-        }
         saved.value = true
         setTimeout(close, 1000)
     } catch {
@@ -101,7 +110,8 @@ async function save(close: () => void) {
                         Copied from this project into each new agent worktree, e.g. <code>.env</code> or <code>config/*.local.json</code>. Paths are relative to the project root; files already in the worktree are kept. Meant for gitignored files: copied files git tracks as changes keep the worktree from being cleaned up automatically.
                     </span>
                     <TagInput
-                        v-model="copyPaths"
+                        :model-value="copyPaths"
+                        @update:model-value="editCopyPaths"
                         placeholder="Add a path or glob and press Enter"
                         :tag-color="color.accent"
                         :disabled="worktreeFiles.isLoading.value"

@@ -24,12 +24,20 @@ describe('worktreeFilesQuery', () => {
         })
     })
 
-    it('surfaces the validation message of a rejected path', async () => {
+    it.each(['/etc/passwd', '../x', '~/x'])('surfaces the validation message naming %s', async path => {
         vi.stubGlobal('fetch', vi.fn(() => respond(422, {
-            detail: [{ msg: "Value error, '../.env' must be a path relative to the project root" }],
+            errors: { paths: [`Value error, '${path}' must be a path relative to the project root`] },
         })))
 
-        await expect(saveWorktreeFiles(7, ['../.env'])).rejects.toThrow("'../.env' must be a path relative to the project root")
+        const error = await saveWorktreeFiles(7, [path]).catch((e: Error) => e)
+
+        expect((error as Error).message).toBe(`'${path}' must be a path relative to the project root`)
+    })
+
+    it('falls back to a generic message for an empty errors document', async () => {
+        vi.stubGlobal('fetch', vi.fn(() => respond(422, { errors: {} })))
+
+        await expect(saveWorktreeFiles(7, [])).rejects.toThrow('Failed to save worktree files')
     })
 
     it('falls back to a generic message for other failures', async () => {
