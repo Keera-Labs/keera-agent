@@ -18,6 +18,7 @@ class Project(Model):
     permissions_allow: str | None
     permissions_deny: str | None
     is_repository: bool
+    worktree_copy_paths: list
     # NULL hides the project from the sidebar; otherwise it orders the sidebar, newest first.
     last_opened_at: str | None
     created_at: str | None

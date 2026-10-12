@@ -9,6 +9,7 @@ import uuid
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi_startkit.application import app
+from fastapi_startkit.logging import Logger
 
 from app.actions.agent_startup import wait_for_agent_cli
 from app.actions.agent_status_action import CLEARED_ATTENTION, notify_agent_status
@@ -19,6 +20,7 @@ from app.models.Agent import Agent
 from app.models.Project import Project
 from app.services.claude_config_dir import agent_config_dir
 from app.services.worktree_cleanup import cleanup_agent_worktree
+from app.services.worktree_files import copy_worktree_files
 from app.terminal.claude_monitor import make_claude_session_monitor
 from app.terminal.cli_supervisor import supervise_cli
 from app.terminal.connection_manager import ConnectionManager
@@ -97,10 +99,27 @@ async def trigger(request: Request, agent_id: int):
     return JSONResponse({"status": "starting", "message": "Agent is starting up..."})
 
 
-def ensure_codex_worktree(agent, cwd: str) -> str:
-    if getattr(agent, "provider", None) != "codex" or not getattr(agent, "use_worktree", True):
+def ensure_agent_worktree(agent, cwd: str, copy_paths: list[str] | None = None) -> str:
+    if not getattr(agent, "use_worktree", True):
+        return cwd
+    runs_in_worktree = getattr(agent, "provider", None) == "codex"
+    if not runs_in_worktree and not copy_paths:
         return cwd
 
+    if runs_in_worktree:
+        worktree_path = _create_agent_worktree(agent, cwd)
+        copy_worktree_files(cwd, worktree_path, copy_paths or [])
+        return worktree_path
+    try:
+        worktree_path = _create_agent_worktree(agent, cwd)
+    except RuntimeError as exc:
+        Logger.warning(f"Agent {agent.id} worktree not pre-created, files not copied: {exc}")
+        return cwd
+    copy_worktree_files(cwd, worktree_path, copy_paths)
+    return cwd
+
+
+def _create_agent_worktree(agent, cwd: str) -> str:
     worktree_name = f"agent-{agent.id}"
     worktree_path = os.path.join(cwd, ".claude", "worktrees", worktree_name)
     branch_name = f"worktree-{worktree_name}"
@@ -122,7 +141,7 @@ def ensure_codex_worktree(agent, cwd: str) -> str:
         command.extend((worktree_path, branch_name))
     result = subprocess.run(command, capture_output=True, text=True, cwd=cwd)
     if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or "Failed to create Codex worktree")
+        raise RuntimeError(result.stderr.strip() or "Failed to create agent worktree")
     return worktree_path
 
 
@@ -238,14 +257,13 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
 
     base_url = app().make("config").get("fastapi.app_url")
 
-    if getattr(agent, "provider", None) == "codex":
-        agent_cwd = ensure_codex_worktree(agent, cwd)
-    else:
-        if getattr(agent, "use_worktree", True):
-            # A leftover worktree/branch blocks `claude --worktree`; one holding
-            # unsaved work is kept, and the CLI reuses it.
-            await asyncio.to_thread(cleanup_agent_worktree, cwd, agent.id, 0)
-        agent_cwd = cwd
+    if getattr(agent, "provider", None) != "codex" and getattr(agent, "use_worktree", True):
+        # A leftover worktree/branch blocks `claude --worktree`; one holding
+        # unsaved work is kept, and the CLI reuses it.
+        await asyncio.to_thread(cleanup_agent_worktree, cwd, agent.id, 0)
+    agent_cwd = await asyncio.to_thread(
+        ensure_agent_worktree, agent, cwd, project.worktree_copy_paths
+    )
 
     session_id = str(uuid.uuid4())
     # Registered before the session becomes visible (DB row, terminal), so a

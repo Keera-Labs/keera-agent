@@ -155,8 +155,8 @@ class TestAgentSpawnEnv(TestCase, DatabaseTransaction):
             with (
                 mock.patch.object(self.terminals, "create", side_effect=_Spawned) as create,
                 mock.patch(
-                    "app.controllers.agent_trigger_controller.ensure_codex_worktree",
-                    side_effect=lambda agent, cwd: cwd,
+                    "app.controllers.agent_trigger_controller.ensure_agent_worktree",
+                    side_effect=lambda agent, cwd, copy_paths: cwd,
                 ),
                 self.assertRaises(_Spawned),
             ):

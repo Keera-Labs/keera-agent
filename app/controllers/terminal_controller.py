@@ -127,10 +127,12 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
     session_id = str(uuid.uuid4())
     await Agent.where("id", agent_record.id).update({"session_id": session_id})
 
-    from app.controllers.agent_trigger_controller import ensure_codex_worktree
+    from app.controllers.agent_trigger_controller import ensure_agent_worktree
 
     try:
-        agent_cwd = ensure_codex_worktree(agent_record, cwd)
+        agent_cwd = await asyncio.to_thread(
+            ensure_agent_worktree, agent_record, cwd, project_record.worktree_copy_paths
+        )
     except RuntimeError as exc:
         await Agent.where("id", agent_record.id).update({"session_id": None})
         await websocket.send_text(json.dumps({"type": "error", "message": str(exc)}))
