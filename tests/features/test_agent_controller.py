@@ -15,7 +15,7 @@ from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 from app.controllers.agent_trigger_controller import (
     discover_agent_worktree,
     discover_worktree_path,
-    ensure_codex_worktree,
+    ensure_agent_worktree,
 )
 from databases.factories.agent_factory import AgentFactory
 from databases.factories.project_factory import ProjectFactory
@@ -110,8 +110,8 @@ class TestAdoptWork(TestCase, DatabaseTransaction):
             use_worktree=False,
         )
 
-        worker_cwd = ensure_codex_worktree(worker, self._tmpdir)
-        pm_cwd = ensure_codex_worktree(pm, self._tmpdir)
+        worker_cwd = ensure_agent_worktree(worker, self._tmpdir)
+        pm_cwd = ensure_agent_worktree(pm, self._tmpdir)
 
         self.assertNotEqual(os.path.realpath(worker_cwd), os.path.realpath(pm_cwd))
         self.assertEqual(os.path.realpath(pm_cwd), os.path.realpath(self._tmpdir))

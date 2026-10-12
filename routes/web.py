@@ -41,6 +41,7 @@ from app.controllers import (
     project_file_content_controller,
     project_file_controller,
     project_usage_controller,
+    project_worktree_file_controller,
     remote_control_setting_controller,
     settings_controller,
     shell_controller,
@@ -67,6 +68,9 @@ router.post("/api/agent-usage-reports", agent_usage_report_controller.store)
 router.get("/api/projects/{project_id}/files", project_file_controller.index)
 router.get("/api/projects/{project_id}/files/content", project_file_content_controller.show)
 router.put("/api/projects/{project_id}/files/content", project_file_content_controller.update)
+
+router.get("/api/projects/{project_id}/worktree-files", project_worktree_file_controller.show)
+router.put("/api/projects/{project_id}/worktree-files", project_worktree_file_controller.update)
 
 # Source Control panel — git operations on the project's repository; every endpoint
 # takes an optional ?worktree=<path from /git/worktrees>.
