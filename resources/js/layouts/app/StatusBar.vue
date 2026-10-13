@@ -49,7 +49,7 @@ function barColor(percent: number): string {
             v-if="today"
             data-testid="usage-today"
             class="flex items-center gap-1.5"
-            :title="`Claude tokens today in this project\n${tokenBreakdown(today)}`"
+            :title="`Tokens today in this project\n${tokenBreakdown(today)}`"
         >
             Today {{ formatTokens(today.total) }}
         </span>
@@ -57,7 +57,7 @@ function barColor(percent: number): string {
             v-else
             data-testid="usage-placeholder"
             class="flex items-center gap-1.5 text-zinc-400"
-            title="No Claude usage recorded today"
+            title="No usage recorded today"
         >
             <span class="w-6 h-[5px] rounded-full bg-zinc-200" />
             <span>Usage —</span>

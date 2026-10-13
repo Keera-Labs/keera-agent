@@ -10,6 +10,7 @@ export interface TokenUsage {
     cache_creation: number
     cache_read: number
     total: number
+    gemini_estimated_cost_usd?: number
 }
 
 export interface AgentTokenUsage extends TokenUsage {
@@ -89,6 +90,9 @@ export function tokenBreakdown(usage: TokenUsage & { last_model?: string | null 
         `Cache write: ${n(usage.cache_creation)}`,
         `Cache read: ${n(usage.cache_read)}`,
     ]
+    if (usage.gemini_estimated_cost_usd != null) {
+        lines.push(`Gemini API estimate: $${usage.gemini_estimated_cost_usd.toFixed(4)} USD (not a bill)`)
+    }
     if (usage.last_model) lines.push(`Last model: ${usage.last_model}`)
     return lines.join('\n')
 }

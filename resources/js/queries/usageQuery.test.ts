@@ -15,6 +15,11 @@ describe('formatTokens', () => {
 })
 
 describe('tokenBreakdown', () => {
+    it('labels Gemini token cost estimates without presenting them as bills', () => {
+        const usage = { input: 410, output: 70, cache_creation: 0, cache_read: 600, total: 1080, gemini_estimated_cost_usd: 0.000615 }
+        expect(tokenBreakdown(usage)).toContain('Gemini API estimate: $0.0006 USD (not a bill)')
+    })
+
     it('lists each token kind and the last model', () => {
         const usage = { input: 1_200, output: 30, cache_creation: 4, cache_read: 5, total: 1_239, last_model: 'claude-opus-5' }
 

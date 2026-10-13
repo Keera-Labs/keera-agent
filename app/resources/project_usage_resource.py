@@ -16,7 +16,14 @@ class ProjectUsageResource(JsonResource[ProjectUsage]):
         usage = self.model
         reports = [AgentUsageReportResource(report).to_attributes() for report in self.reports]
         return {
-            "today": usage.today.to_dict(),
+            "today": {
+                **usage.today.to_dict(),
+                **(
+                    {"gemini_estimated_cost_usd": usage.gemini_estimated_cost_usd}
+                    if usage.gemini_estimated_cost_usd is not None
+                    else {}
+                ),
+            },
             "agents": {str(agent_id): agent.to_dict() for agent_id, agent in usage.agents.items()},
             "reports": {str(report["agent_id"]): report for report in reports},
             "limits": _latest_limits(reports),
