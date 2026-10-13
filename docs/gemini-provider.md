@@ -1,6 +1,6 @@
 # Gemini CLI provider
 
-Select Gemini CLI in agent creation or send `provider: "gemini"` to the agent or MCP spawn API. Settings > Providers configures its model list and complexity mapping. Built-in defaults are `gemini-2.5-flash` for easy tasks and `gemini-2.5-pro` for medium/hard tasks; custom model IDs are supported.
+Select Gemini CLI in agent creation or send `provider: "gemini"` to the agent or MCP spawn API. Settings > Providers configures its model list and complexity mapping. Built-in defaults are `gemini-3.8-flash` for every complexity tier; custom model IDs are supported.
 
 Install `@google/gemini-cli` with npm and run `gemini` once to authenticate, or provide `GEMINI_API_KEY` / Vertex environment credentials to the Keera process. Login and folder trust dialogs remain interactive in the agent terminal. Missing and incompatible executables produce actionable startup errors. Integration was checked against CLI 0.63.0.
 
@@ -13,6 +13,8 @@ BeforeAgent supplies role/identity context without replacing Gemini's built-in s
 Gemini's headless `stream-json` events (`init`, `message`, `tool_use`, `tool_result`, `error`, `result`) differ from other provider event protocols. They are not parsed by this interactive PTY integration. Missing prior sessions use Keera's existing fresh-session fallback. Authenticated model execution still requires an available account and quota; CLI/MCP discovery can be checked without model credentials.
 
 Primary references:
+
+- [Gemini 3.8 Flash model code](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash)
 
 - [Configuration, flags and GEMINI_CLI_HOME](https://geminicli.com/docs/reference/configuration/)
 - [Authentication](https://geminicli.com/docs/get-started/authentication/)

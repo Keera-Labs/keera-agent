@@ -531,7 +531,7 @@ class SpawnAgentInput(BaseModel):
             "Task complexity (easy|medium|hard). REQUIRED — it selects the model "
             "configured for that tier in Settings > Providers; without a saved choice "
             "codex uses gpt-5.6-luna/gpt-5.6-terra/gpt-5.6-sol and claude uses "
-            "claude-sonnet-5/claude-opus-5/claude-fable-5; gemini uses gemini-2.5-flash/gemini-2.5-pro/gemini-2.5-pro."
+            "claude-sonnet-5/claude-opus-5/claude-fable-5; gemini uses gemini-3.8-flash for all tiers."
         ),
     )
     task_id: Optional[int] = Field(
@@ -552,7 +552,7 @@ class SpawnAgentTool(Tool):
         "Provider defaults to the configured default provider; complexity selects the model configured for that "
         "tier in Settings > Providers, defaulting to "
         "gpt-5.6-luna/gpt-5.6-terra/gpt-5.6-sol for codex "
-        "and claude-sonnet-5/claude-opus-5/claude-fable-5 for claude; gemini-2.5-flash/gemini-2.5-pro/gemini-2.5-pro for gemini."
+        "and claude-sonnet-5/claude-opus-5/claude-fable-5 for claude; gemini-3.8-flash for all gemini tiers."
     )
 
     def schema(self):

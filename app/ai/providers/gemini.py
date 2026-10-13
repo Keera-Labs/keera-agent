@@ -7,7 +7,7 @@ from app.ai.provider import Provider, ProviderCommand
 class GeminiProvider(Provider):
     slug = "gemini"
     display_name = "Gemini CLI"
-    default_models = ("gemini-2.5-flash", "gemini-2.5-pro")
+    default_models = ("gemini-3.8-flash",)
 
     def build_command(self, command: ProviderCommand) -> str:
         parts = []

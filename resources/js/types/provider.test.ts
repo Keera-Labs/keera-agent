@@ -3,9 +3,9 @@ import { FALLBACK_PROVIDERS, modelForProviderComplexity, modelsForProvider, reco
 
 describe('reconcileComplexityModels', () => {
     it('offers Gemini models and resolves its complexity defaults', () => {
-        expect(modelsForProvider(FALLBACK_PROVIDERS, 'gemini')).toEqual(['gemini-2.5-flash', 'gemini-2.5-pro'])
-        expect(modelForProviderComplexity('gemini', 'easy')).toBe('gemini-2.5-flash')
-        expect(modelForProviderComplexity('gemini', 'hard')).toBe('gemini-2.5-pro')
+        expect(modelsForProvider(FALLBACK_PROVIDERS, 'gemini')).toEqual(['gemini-3.8-flash'])
+        expect(modelForProviderComplexity('gemini', 'easy')).toBe('gemini-3.8-flash')
+        expect(modelForProviderComplexity('gemini', 'hard')).toBe('gemini-3.8-flash')
     })
     it('replaces stale selections after the configured provider models change', () => {
         const modelsAfterEdit = ['codex-fast', 'codex-careful']

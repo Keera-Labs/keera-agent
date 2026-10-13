@@ -24,9 +24,9 @@ class TaskComplexity(str, enum.Enum):
                 TaskComplexity.HARD: "claude-fable-5",
             },
             "gemini": {
-                TaskComplexity.EASY: "gemini-2.5-flash",
-                TaskComplexity.MEDIUM: "gemini-2.5-pro",
-                TaskComplexity.HARD: "gemini-2.5-pro",
+                TaskComplexity.EASY: "gemini-3.8-flash",
+                TaskComplexity.MEDIUM: "gemini-3.8-flash",
+                TaskComplexity.HARD: "gemini-3.8-flash",
             },
             "codex": {
                 TaskComplexity.EASY: "gpt-5.6-luna",

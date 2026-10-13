@@ -45,11 +45,11 @@ class TestAgentProviders(TestCase, DatabaseTransaction):
         response.assert_ok()
         attributes = response.json()["data"]["attributes"]
         self.assertEqual(attributes["provider"], "gemini")
-        self.assertEqual(attributes["model"], "gemini-2.5-flash")
+        self.assertEqual(attributes["model"], "gemini-3.8-flash")
         agent = await Agent.find(int(response.json()["data"]["id"]))
         command = agent.to_command()
         self.assertIn("GEMINI_CLI_HOME=", command)
-        self.assertIn("gemini --model gemini-2.5-flash", command)
+        self.assertIn("gemini --model gemini-3.8-flash", command)
         self.assertNotIn("--worktree", command)
 
     async def test_legacy_saved_models_keep_gemini_defaults(self):
@@ -59,7 +59,7 @@ class TestAgentProviders(TestCase, DatabaseTransaction):
             json={"name": "Gemini worker", "provider": "gemini", "complexity": "medium"},
         )
         response.assert_ok()
-        self.assertEqual(response.json()["data"]["attributes"]["model"], "gemini-2.5-pro")
+        self.assertEqual(response.json()["data"]["attributes"]["model"], "gemini-3.8-flash")
 
     async def test_missing_gemini_cli_trigger_returns_actionable_error(self):
         created = await self.post(

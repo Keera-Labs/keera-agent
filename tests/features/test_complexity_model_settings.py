@@ -47,9 +47,9 @@ class TestComplexityModelSettingsController(TestCase):
         }
 
         saved["gemini"] = {
-            "easy": "gemini-2.5-flash",
-            "medium": "gemini-2.5-pro",
-            "hard": "gemini-2.5-pro",
+            "easy": "gemini-3.8-flash",
+            "medium": "gemini-3.8-flash",
+            "hard": "gemini-3.8-flash",
         }
         response = await self._save(saved)
 
