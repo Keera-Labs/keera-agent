@@ -212,6 +212,14 @@ class TestEnsureAgentWorktree(unittest.TestCase):
         self.assertEqual(os.path.realpath(cwd), os.path.realpath(self.worktree))
         self.assertTrue((self.worktree / ".env").exists())
 
+    def test_gemini_agent_runs_in_worktree_and_preserves_existing_work(self):
+        cwd = ensure_agent_worktree(self.agent(provider="gemini"), self.cwd, [".env"])
+        self.assertEqual(os.path.realpath(cwd), os.path.realpath(self.worktree))
+        (self.worktree / "notes.txt").write_text("saved work")
+        self.assertEqual(ensure_agent_worktree(self.agent(provider="gemini"), self.cwd), cwd)
+        self.assertEqual((self.worktree / "notes.txt").read_text(), "saved work")
+        self.assertEqual((self.worktree / ".env").read_text(), "SECRET=1\n")
+
     def test_reusing_an_existing_worktree_tops_up_missing_files(self):
         ensure_agent_worktree(self.agent(), self.cwd, [])
         self.repo.add_worktree(".claude/worktrees/agent-5", "worktree-agent-5")

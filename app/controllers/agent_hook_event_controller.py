@@ -50,7 +50,8 @@ async def _apply(agent: Agent, event: AgentHookEventRequest) -> tuple[str, str |
         return None
     if agent.status == "running" and event.hook_event_name == "PostToolUse":
         return None
-    await Agent.where("id", agent.id).update(
-        {"status": "running", **CLEARED_ATTENTION, "updated_at": utc_now()}
-    )
+    values = {"status": "running", **CLEARED_ATTENTION, "updated_at": utc_now()}
+    if agent.provider == "gemini" and event.hook_event_name == "BeforeAgent":
+        values["has_session"] = True
+    await Agent.where("id", agent.id).update(values)
     return ("running", None) if agent.status != "running" else None

@@ -86,11 +86,14 @@ async def read_global_settings() -> dict:
                 stored = json.loads(row.value)
                 if isinstance(stored, dict):
                     result[key] = {
-                        slug: models
-                        for slug, models in stored.items()
-                        if isinstance(slug, str)
-                        and isinstance(models, list)
-                        and all(isinstance(model, str) for model in models)
+                        **result[key],
+                        **{
+                            slug: models
+                            for slug, models in stored.items()
+                            if isinstance(slug, str)
+                            and isinstance(models, list)
+                            and all(isinstance(model, str) for model in models)
+                        },
                     }
             except (TypeError, ValueError, json.JSONDecodeError):
                 pass
@@ -155,11 +158,15 @@ async def update_global_settings(body: GlobalSettingsUpdateRequest):
     if "provider_models" in body:
         configured = body["provider_models"]
         known = {provider.slug for provider in providers.all()}
-        if not isinstance(configured, dict) or set(configured) != known:
+        if (
+            not isinstance(configured, dict)
+            or not set(configured).issubset(known)
+            or not {"codex", "claude"}.issubset(configured)
+        ):
             return JSONResponse(
                 {"error": "provider_models must define every registered provider"}, status_code=422
             )
-        normalized: dict[str, list[str]] = {}
+        normalized: dict[str, list[str]] = dict((await read_global_settings())["provider_models"])
         for slug, models in configured.items():
             if not isinstance(models, list):
                 return JSONResponse({"error": f"Models for {slug} must be a list"}, status_code=422)

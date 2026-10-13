@@ -8,8 +8,10 @@ directory, so each file's cwd is matched against the project and its agent workt
 
 import datetime
 import json
+import math
 import os
 import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -20,7 +22,8 @@ RELEVANT = (b'"session_meta"', b'"turn_context"', b'"token_count"')
 
 
 def codex_sessions_dir() -> Path:
-    return Path(os.environ.get("KEERA_CODEX_SESSIONS_DIR", "~/.codex/sessions")).expanduser()
+    home = Path(os.environ.get("CODEX_HOME", "~/.codex")).expanduser()
+    return Path(os.environ.get("KEERA_CODEX_SESSIONS_DIR", home / "sessions")).expanduser()
 
 
 @dataclass(frozen=True)
@@ -39,6 +42,8 @@ class _Rollout:
     model: str | None = None
     cumulative: Tokens = field(default_factory=Tokens)
     usages: list[_Usage] = field(default_factory=list)
+    limits: dict | None = None
+    limits_updated_at: str | None = None
 
 
 class CodexUsageReader:
@@ -54,11 +59,17 @@ class CodexUsageReader:
         today = today or datetime.date.today()
         usage = ProjectUsage(id=project_id)
         project = os.path.realpath(os.path.expanduser(project_path))
+        latest_limits = None
         with self._lock:
             for rollout in self._rollouts():
                 owner = _owner(rollout.cwd, project)
                 if owner is False:
                     continue
+                if rollout.limits_updated_at and (
+                    latest_limits is None
+                    or latest_limits.limits_updated_at <= rollout.limits_updated_at
+                ):
+                    latest_limits = rollout
                 agent = usage.agents.setdefault(owner, AgentUsage()) if owner else None
                 for item in rollout.usages:
                     if item.day == today:
@@ -68,14 +79,22 @@ class CodexUsageReader:
                         if item.model and (agent.last_used_at or "") <= item.timestamp:
                             agent.last_model = item.model
                             agent.last_used_at = item.timestamp
+        if latest_limits and latest_limits.limits:
+            limits = _live_limits(latest_limits.limits)
+            if any(limits.values()):
+                usage.provider_limits["codex"] = limits
         usage.agents = {key: agent for key, agent in usage.agents.items() if agent.tokens.total}
         return usage
 
     def _rollouts(self) -> list[_Rollout]:
         base = codex_sessions_dir()
-        if not base.is_dir():
-            return []
-        paths = set(base.rglob("rollout-*.jsonl"))
+        directories = [base, base.parent / "archived_sessions"]
+        paths = {
+            path
+            for directory in directories
+            if directory.is_dir()
+            for path in directory.rglob("rollout-*.jsonl")
+        }
         for gone in self._files.keys() - paths:
             del self._files[gone]
         return [rollout for path in sorted(paths) if (rollout := self._read(path))]
@@ -132,7 +151,47 @@ def _apply(rollout: _Rollout, line: bytes) -> None:
     elif kind == "turn_context" and isinstance(payload.get("model"), str):
         rollout.model = payload["model"]
     elif kind == "event_msg" and payload.get("type") == "token_count":
+        _record_limits(rollout, record.get("timestamp"), payload.get("rate_limits"))
         _count_tokens(rollout, record.get("timestamp"), payload.get("info"))
+
+
+def _record_limits(rollout: _Rollout, timestamp, limits) -> None:
+    if not isinstance(limits, dict) or limits.get("limit_id") not in (None, "codex"):
+        return
+    if not isinstance(timestamp, str):
+        return
+    try:
+        moment = datetime.datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except ValueError:
+        return
+    parsed = {"five_hour": None, "seven_day": None}
+    for name in ("primary", "secondary"):
+        window = limits.get(name)
+        if not isinstance(window, dict):
+            continue
+        duration = window.get("window_minutes")
+        key = (
+            {300: "five_hour", 10080: "seven_day"}.get(duration) if type(duration) is int else None
+        )
+        used, resets = window.get("used_percent"), window.get("resets_at")
+        if (
+            key
+            and type(used) in (int, float)
+            and math.isfinite(used)
+            and used >= 0
+            and type(resets) is int
+        ):
+            parsed[key] = {"used_percentage": used, "resets_at": resets}
+    rollout.limits = parsed
+    rollout.limits_updated_at = moment.astimezone(datetime.UTC).isoformat()
+
+
+def _live_limits(limits: dict) -> dict:
+    now = time.time()
+    return {
+        key: window if window and window["resets_at"] > now else None
+        for key, window in limits.items()
+    }
 
 
 def _count_tokens(rollout: _Rollout, timestamp, info) -> None:

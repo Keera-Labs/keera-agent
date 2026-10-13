@@ -8,6 +8,7 @@ ATTENTION_PROMPT_LENGTH = 500
 # they imply. `idle_prompt` is not one: after Stop the agent is already `waiting`.
 _NOTIFICATION_ATTENTION_KIND = {
     "permission_prompt": "permission",
+    "ToolPermission": "permission",
     "elicitation_dialog": "question",
 }
 
@@ -40,7 +41,7 @@ class AgentHookEventRequest(BaseModel):
         return None
 
     def resumes_work(self) -> bool:
-        return self.hook_event_name in ("PostToolUse", "UserPromptSubmit")
+        return self.hook_event_name in ("PostToolUse", "UserPromptSubmit", "BeforeAgent", "AfterTool")
 
     def _question_text(self) -> Any:
         questions = self.tool_input.get("questions")

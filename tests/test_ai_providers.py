@@ -5,7 +5,9 @@ from app.ai import ProviderCommand, providers
 
 class TestAIProviders(unittest.TestCase):
     def test_builtin_providers_are_registered(self):
-        self.assertEqual([provider.slug for provider in providers.all()], ["codex", "claude"])
+        self.assertEqual(
+            [provider.slug for provider in providers.all()], ["codex", "claude", "gemini"]
+        )
         self.assertIn("gpt-5.6-luna", providers.get("codex").default_models)
         self.assertIn("gpt-5.6-terra", providers.get("codex").default_models)
         self.assertIn("gpt-5.6-sol", providers.get("codex").default_models)

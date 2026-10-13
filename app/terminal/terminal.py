@@ -52,9 +52,11 @@ def paste_safe(message: str) -> str:
 # same words quoted in replayed conversation history don't match.
 DIALOG_OPTIONS = re.compile(
     r"Yes, I trust this folder|Yes, I accept|Trust and continue|Skip until next version"
+    r"|Sign in with Google|Trust folder \([^)]*\)"
 )
 DIALOG_FOOTERS = re.compile(
     r"Enter to confirm · Esc to (?:cancel|exit)|enter continue · esc quit|Press enter to continue"
+    r"|Use Enter to select|Don't trust"
 )
 _DIALOG_MARKERS = re.compile(f"{DIALOG_OPTIONS.pattern}|{DIALOG_FOOTERS.pattern}")
 # How far before its footer a dialog's option may appear.

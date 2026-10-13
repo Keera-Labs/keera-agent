@@ -46,6 +46,11 @@ class TestComplexityModelSettingsController(TestCase):
             "codex": {"easy": "gpt-5.6-sol", "medium": "gpt-5.6-sol", "hard": "gpt-5.6-sol"},
         }
 
+        saved["gemini"] = {
+            "easy": "gemini-3.8-flash",
+            "medium": "gemini-3.8-flash",
+            "hard": "gemini-3.8-flash",
+        }
         response = await self._save(saved)
 
         self.assertEqual(response.status_code, 200)
@@ -85,7 +90,7 @@ class TestComplexityModelSettingsController(TestCase):
         self.assertNotIn("claude-opus-5-5", claude_models)
 
     async def test_rejects_unknown_default_provider(self):
-        response = await self.client.patch(URL, json={"default_provider": "gemini"})
+        response = await self.client.patch(URL, json={"default_provider": "unknown"})
 
         self.assertEqual(response.status_code, 422)
 
