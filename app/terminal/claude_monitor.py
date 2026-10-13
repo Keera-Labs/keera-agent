@@ -7,12 +7,20 @@ from app.models.Agent import Agent
 from app.terminal.cli_supervisor import launch_cli
 from app.terminal.readiness import mark_booting
 
-_NO_CONV = re.compile(rb"No conversation found to continue", re.IGNORECASE)
+_NO_CONV = re.compile(
+    rb"No conversation found to continue|No previous sessions found for this project", re.IGNORECASE
+)
 _ANSI = re.compile(rb"\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[^[]")
 
 
 def make_claude_session_monitor(
-    agent_id, terminal, terminal_manager, session_id, build_cmd, after_restart=None
+    agent_id,
+    terminal,
+    terminal_manager,
+    session_id,
+    build_cmd,
+    after_restart=None,
+    confirm_output=True,
 ):
     """
     Returns an on_output callback for WebsocketTerminal that:
@@ -47,7 +55,7 @@ def make_claude_session_monitor(
                     after_restart,
                 )
             )
-        if not detected and not confirmed and len(plain.strip()) > 20:
+        if confirm_output and not detected and not confirmed and len(plain.strip()) > 20:
             confirmed = True
             await Agent.where("id", agent_id).update({"has_session": True})
 

@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { reconcileComplexityModels } from './provider'
+import { FALLBACK_PROVIDERS, modelForProviderComplexity, modelsForProvider, reconcileComplexityModels } from './provider'
 
 describe('reconcileComplexityModels', () => {
+    it('offers Gemini models and resolves its complexity defaults', () => {
+        expect(modelsForProvider(FALLBACK_PROVIDERS, 'gemini')).toEqual(['gemini-2.5-flash', 'gemini-2.5-pro'])
+        expect(modelForProviderComplexity('gemini', 'easy')).toBe('gemini-2.5-flash')
+        expect(modelForProviderComplexity('gemini', 'hard')).toBe('gemini-2.5-pro')
+    })
     it('replaces stale selections after the configured provider models change', () => {
         const modelsAfterEdit = ['codex-fast', 'codex-careful']
         const submittedComplexityModels = reconcileComplexityModels('codex', modelsAfterEdit, {

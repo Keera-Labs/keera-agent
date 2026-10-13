@@ -26,6 +26,7 @@ export const FALLBACK_PROVIDERS: AIProvider[] = [
         name: 'Claude',
         models: ['claude-opus-5', 'claude-sonnet-5', 'claude-fable-5'],
     },
+    { slug: 'gemini', name: 'Gemini CLI', models: ['gemini-2.5-flash', 'gemini-2.5-pro'] },
 ]
 
 export function modelsForProvider(providers: AIProvider[], slug: string): string[] {
@@ -33,6 +34,7 @@ export function modelsForProvider(providers: AIProvider[], slug: string): string
 }
 
 const COMPLEXITY_MODELS: Record<string, Record<string, string>> = {
+    gemini: { easy: 'gemini-2.5-flash', medium: 'gemini-2.5-pro', hard: 'gemini-2.5-pro' },
     codex: {
         easy: 'gpt-5.6-luna',
         medium: 'gpt-5.6-terra',

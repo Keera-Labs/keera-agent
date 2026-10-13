@@ -59,4 +59,12 @@ class Agent(Model):
             max_turns=max_turns,
             settings_file=statusline_settings_file(),
         )
+        if getattr(self, "provider", None) == "gemini":
+            from fastapi_startkit import Config
+
+            from app.services.gemini_settings import write_gemini_settings
+
+            command.settings_file = write_gemini_settings(
+                self.id, Config.get("fastapi.app_url"), command
+            )
         return providers.get(getattr(self, "provider", None) or "codex").build_command(command)

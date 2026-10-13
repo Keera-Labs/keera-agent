@@ -13,6 +13,7 @@ from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.models.Agent import Agent
 from app.models.Project import Project
 from app.services.claude_config_dir import agent_config_dir
+from app.services.gemini_cli import validate_gemini_cli
 from app.terminal.claude_monitor import make_claude_session_monitor
 from app.terminal.cli_supervisor import restart_cli, supervise_cli
 from app.terminal.connection_manager import ConnectionManager
@@ -124,6 +125,13 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
             conn_manager.remove(existing_key)
         return
 
+    try:
+        await asyncio.to_thread(validate_gemini_cli, agent_record.provider)
+    except RuntimeError as exc:
+        await websocket.send_text(json.dumps({"type": "error", "message": str(exc)}))
+        await websocket.close(code=1011, reason="provider unavailable")
+        return
+
     session_id = str(uuid.uuid4())
     await Agent.where("id", agent_record.id).update({"session_id": session_id})
 
@@ -158,6 +166,7 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
     # Build the output monitor callback (Parts 1 & 3 for WS path)
     monitor = make_claude_session_monitor(
         agent_id=agent_record.id,
+        confirm_output=agent_record.provider != "gemini",
         terminal=terminal,
         terminal_manager=terminal_manager,
         session_id=session_id,
