@@ -42,8 +42,18 @@ describe('plan limit helpers', () => {
 
     it('describes a limit window', () => {
         expect(limitDetail('Weekly limit', { used_percentage: 41.2, resets_at: at(60) }, now))
-            .toBe('Weekly limit: 41% used, resets in 1h 0m')
-        expect(limitDetail('5-hour limit', { used_percentage: 3, resets_at: null }, now)).toBe('5-hour limit: 3% used')
+            .toBe('Weekly limit 59% left · resets in 1h 0m')
+        expect(limitDetail('5-hour limit', { used_percentage: 3, resets_at: null }, now)).toBe('5-hour limit 97% left')
+    })
+
+    it('formats local reset clocks and clamps remaining percentages', () => {
+        const resets = at(60)
+        const clock = new Date(resets * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+        expect(limitDetail('5h limit', { used_percentage: 70, resets_at: resets }, now, 'clock'))
+            .toBe(`5h limit 30% left · resets at ${clock}`)
+        expect(limitDetail('Weekly limit', { used_percentage: 67, resets_at: at(2 * 1440 + 3 * 60) }, now))
+            .toBe('Weekly limit 33% left · resets in 2d 3h')
+        expect(limitDetail('5h limit', { used_percentage: 120, resets_at: null }, now)).toBe('5h limit 0% left')
     })
 
     it('describes the context fill only when reported', () => {

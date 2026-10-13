@@ -15,6 +15,10 @@ class ProjectUsageResource(JsonResource[ProjectUsage]):
     def to_attributes(self) -> dict:
         usage = self.model
         reports = [AgentUsageReportResource(report).to_attributes() for report in self.reports]
+        limits = _latest_limits(reports)
+        provider_limits = dict(usage.provider_limits)
+        if limits:
+            provider_limits["claude"] = limits
         return {
             "today": {
                 **usage.today.to_dict(),
@@ -26,7 +30,8 @@ class ProjectUsageResource(JsonResource[ProjectUsage]):
             },
             "agents": {str(agent_id): agent.to_dict() for agent_id, agent in usage.agents.items()},
             "reports": {str(report["agent_id"]): report for report in reports},
-            "limits": _latest_limits(reports),
+            "limits": limits or provider_limits.get("codex"),
+            "provider_limits": provider_limits,
         }
 
 

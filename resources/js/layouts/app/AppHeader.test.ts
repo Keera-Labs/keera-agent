@@ -404,8 +404,27 @@ describe('StatusBar', () => {
         await flushPromises()
 
         const bar = w.get('[data-testid="limit-five_hour"]')
-        expect(bar.text().replace(/\s+/g, ' ')).toBe('5h 24%')
-        expect(bar.attributes('title')).toMatch(/^5-hour limit: 24% used, resets in 2h [45]m$/)
+        const clock = new Date(resetsAt * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+        expect(bar.text().replace(/\s+/g, ' ')).toBe(`Claude: 5h limit 77% left · resets at ${clock}`)
+        expect(bar.attributes('title')).toBe(bar.text())
         expect(w.find('[data-testid="limit-seven_day"]').exists()).toBe(false)
     })
+    it('shows Codex and other provider limits separately with remaining usage and resets', async () => {
+        const reset = Math.floor(Date.now() / 1000) + 2 * 86400 + 3 * 3600
+        stubFetch({
+            '/api/projects/1/usage': { data: { attributes: {
+                today: { input: 0, output: 0, cache_creation: 0, cache_read: 0, total: 0 }, agents: {}, reports: {}, limits: null,
+                provider_limits: {
+                    codex: { five_hour: { used_percentage: 70, resets_at: reset }, seven_day: { used_percentage: 67, resets_at: reset } },
+                    claude: { five_hour: { used_percentage: 10, resets_at: reset }, seven_day: null },
+                },
+            } } },
+        })
+        const w = await mountHeader()
+        await flushPromises()
+        expect(w.get('[data-testid="limit-five_hour"][data-provider="codex"]').text()).toContain('Codex: 5h limit 30% left · resets at')
+        expect(w.get('[data-testid="limit-seven_day"][data-provider="codex"]').text()).toContain('Weekly limit 33% left · resets in 2d 3h')
+        expect(w.get('[data-testid="limit-five_hour"][data-provider="claude"]').text()).toContain('90% left')
+    })
+
 })

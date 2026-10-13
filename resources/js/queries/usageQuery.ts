@@ -46,6 +46,7 @@ export interface ProjectUsage {
     reports: Record<string, AgentUsageReport>
     /** Account-wide plan limits from the most recent report, null when unknown. */
     limits: PlanLimits | null
+    provider_limits?: Record<string, PlanLimits>
 }
 
 async function fetchProjectUsage(projectId: number): Promise<ProjectUsage | null> {
@@ -108,9 +109,15 @@ export function formatResetsIn(resetsAt: number, now = Date.now()): string {
 }
 
 /** Tooltip line for a plan-limit window. */
-export function limitDetail(label: string, window: LimitWindow, now = Date.now()): string {
-    const resets = window.resets_at ? `, resets in ${formatResetsIn(window.resets_at, now)}` : ''
-    return `${label}: ${Math.round(window.used_percentage)}% used${resets}`
+export function limitDetail(
+    label: string, window: LimitWindow, now = Date.now(), reset: 'clock' | 'countdown' = 'countdown',
+): string {
+    const remaining = Math.max(0, Math.min(100, Math.round(100 - window.used_percentage)))
+    const clock = () => new Date(window.resets_at! * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    const resets = window.resets_at
+        ? (reset === 'clock' ? ` · resets at ${clock()}` : ` · resets in ${formatResetsIn(window.resets_at, now)}`)
+        : ''
+    return `${label} ${remaining}% left${resets}`
 }
 
 /** Tooltip line for an agent's context window fill, or null when not reported. */

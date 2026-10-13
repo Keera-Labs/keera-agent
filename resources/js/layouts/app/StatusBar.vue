@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { useRefetchInterval } from '@/composables/useRefetchInterval'
 import Icon from '@/components/ui/Icon.vue'
 import { formatTokens, limitDetail, tokenBreakdown, useProjectUsage } from '@/queries/usageQuery'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
@@ -15,25 +16,25 @@ const { activeProject } = storeToRefs(useProjectStore())
 const { usage } = useProjectUsage(() => activeProject.value?.id)
 const today = computed(() => (usage.value?.today.total ? usage.value.today : null))
 
-const limitBars = computed(() => {
-    const limits = usage.value?.limits
-    if (!limits) return []
-    const windows = [
-        { key: 'five_hour', label: '5h', name: '5-hour limit', window: limits.five_hour },
-        { key: 'seven_day', label: 'Week', name: 'Weekly limit', window: limits.seven_day },
-    ]
-    return windows.flatMap(({ window, ...rest }) =>
-        window
-            ? [{ ...rest, percent: Math.min(100, Math.round(window.used_percentage)), title: limitDetail(rest.name, window) }]
-            : [],
-    )
-})
+const now = ref(Date.now())
+useRefetchInterval(() => { now.value = Date.now() }, 30_000)
 
-function barColor(percent: number): string {
-    if (percent >= 90) return 'bg-red-500'
-    if (percent >= 70) return 'bg-amber-500'
-    return 'bg-emerald-500'
-}
+const limitWindows = computed(() => {
+    const grouped = usage.value?.provider_limits
+        ?? (usage.value?.limits ? { claude: usage.value.limits } : {})
+    return Object.entries(grouped).flatMap(([provider, limits]) => {
+        const providerName = provider === 'codex' ? 'Codex' : provider === 'claude' ? 'Claude' : provider
+        const windows = [
+            { key: 'five_hour', name: '5h limit', window: limits.five_hour, reset: 'clock' as const },
+            { key: 'seven_day', name: 'Weekly limit', window: limits.seven_day, reset: 'countdown' as const },
+        ]
+        return windows.flatMap(({ window, key, name, reset }) =>
+            window && (window.resets_at == null || window.resets_at * 1000 > now.value)
+                ? [{ key: `${provider}-${key}`, provider, windowKey: key, title: `${providerName}: ${limitDetail(name, window, now.value, reset)}` }]
+                : [],
+        )
+    })
+})
 </script>
 
 <!--
@@ -43,7 +44,7 @@ function barColor(percent: number): string {
 <template>
     <div
         data-testid="status-bar"
-        class="h-6 flex items-center gap-4 px-3 bg-canvas border-t border-stroke text-ui-11 text-zinc-500 whitespace-nowrap overflow-hidden"
+        class="h-6 flex items-center gap-4 px-3 bg-canvas border-t border-stroke text-ui-11 text-zinc-500 whitespace-nowrap overflow-x-auto"
     >
         <span
             v-if="today"
@@ -64,17 +65,14 @@ function barColor(percent: number): string {
         </span>
 
         <span
-            v-for="bar in limitBars"
+            v-for="bar in limitWindows"
             :key="bar.key"
-            :data-testid="`limit-${bar.key}`"
+            :data-testid="`limit-${bar.windowKey}`"
+            :data-provider="bar.provider"
             class="flex items-center gap-1.5"
             :title="bar.title"
         >
-            {{ bar.label }}
-            <span class="w-10 h-[5px] rounded-full bg-zinc-200 overflow-hidden">
-                <span :class="['block h-full rounded-full', barColor(bar.percent)]" :style="{ width: `${bar.percent}%` }" />
-            </span>
-            {{ bar.percent }}%
+            {{ bar.title }}
         </span>
 
         <div class="ml-auto flex items-center gap-4">

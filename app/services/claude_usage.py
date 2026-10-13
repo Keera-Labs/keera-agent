@@ -86,9 +86,11 @@ class ProjectUsage:
     today: Tokens = field(default_factory=Tokens)
     agents: dict[int, AgentUsage] = field(default_factory=dict)
     gemini_estimated_cost_usd: float | None = None
+    provider_limits: dict[str, dict] = field(default_factory=dict)
 
     def merge(self, other: "ProjectUsage") -> "ProjectUsage":
         self.today.add(other.today)
+        self.provider_limits.update(other.provider_limits)
         if other.gemini_estimated_cost_usd is not None:
             self.gemini_estimated_cost_usd = (
                 self.gemini_estimated_cost_usd or 0
