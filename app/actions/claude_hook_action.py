@@ -1,6 +1,6 @@
 import json
 import os
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 from fastapi_startkit import Config
 
@@ -18,6 +18,18 @@ _AGENT_EVENT_PATH = "/api/agent-hook-events"
 AGENT_ID_ENV = "KEERA_AGENT_ID"
 AGENT_ID_HEADER = "X-Keera-Agent-Id"
 
+CLAUDE_HOOK_ALLOWED_HOST = "127.0.0.1"
+
+
+def hook_base_url() -> str:
+    override = Config.get("fastapi.hook_url")
+    if override:
+        return override.rstrip("/")
+    app_url = urlparse(Config.get("fastapi.app_url"))
+    host = CLAUDE_HOOK_ALLOWED_HOST
+    netloc = f"{host}:{app_url.port}" if app_url.port else host
+    return urlunparse((app_url.scheme, netloc, app_url.path.rstrip("/"), "", "", ""))
+
 
 def agent_env(agent_id: int, claude_config_dir: str | None = None) -> dict:
     """The environment for an agent's PTY, pointing Claude at the workspace's config dir if set."""
@@ -29,8 +41,8 @@ class ClaudeHookAction:
 
     Writes the Stop and UserPromptSubmit hooks, plus the agent-status hooks
     (AskUserQuestion, permission prompts, and the tool/prompt events that clear
-    them), with URLs derived from the configured app_url. All other settings keys
-    and user-defined hooks are preserved; keera-managed hooks (matched by URL path)
+    them), with loopback URLs from hook_base_url(). All other settings keys and
+    user-defined hooks are preserved; keera-managed hooks (matched by URL path)
     are updated in place, so the write is idempotent. execute() returns True only
     when the file actually changed.
 
@@ -49,7 +61,7 @@ class ClaudeHookAction:
         return ClaudeHookAction(directory)
 
     def execute(self) -> bool:
-        base_url = Config.get("fastapi.app_url")
+        base_url = hook_base_url()
 
         settings_path = os.path.join(self.directory, ".claude", "settings.json")
         os.makedirs(os.path.dirname(settings_path), exist_ok=True)

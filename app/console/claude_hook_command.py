@@ -19,15 +19,12 @@ class ClaudeHookCommand(Command):
         return asyncio.run(self.handle_async())
 
     async def handle_async(self):
-        from fastapi_startkit import Config
         from fastapi_startkit.application import app
 
-        from app.actions.claude_hook_action import ClaudeHookAction
+        from app.actions.claude_hook_action import ClaudeHookAction, hook_base_url
         from app.models.Project import Project
 
-        self.line(
-            f"<info>Syncing .claude/settings.json from</info> {Config.get('fastapi.app_url')}"
-        )
+        self.line(f"<info>Syncing .claude/settings.json to</info> {hook_base_url()}")
 
         # The keera-agent app's own directory — this is what dist/build.sh relies on.
         ClaudeHookAction.prepare(str(app().base_path)).execute()
