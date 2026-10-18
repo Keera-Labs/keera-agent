@@ -41,7 +41,12 @@ class AgentHookEventRequest(BaseModel):
         return None
 
     def resumes_work(self) -> bool:
-        return self.hook_event_name in ("PostToolUse", "UserPromptSubmit", "BeforeAgent", "AfterTool")
+        return self.hook_event_name in (
+            "PostToolUse",
+            "UserPromptSubmit",
+            "BeforeAgent",
+            "AfterTool",
+        )
 
     def _question_text(self) -> Any:
         questions = self.tool_input.get("questions")
