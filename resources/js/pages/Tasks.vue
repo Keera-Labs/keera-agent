@@ -8,6 +8,7 @@ import type { NewTask } from '@/pages/tasks/CreateTaskModal.vue'
 import TasksView from '@/pages/tasks/TasksView.vue'
 import { useAgents } from '@/queries/agentQuery'
 import { AGENT_SUMMARIES_QUERY_KEY } from '@/queries/agentSummariesQuery'
+import { TASKS_QUERY_KEY } from '@/queries/taskQuery'
 import useProjects from '@/queries/projectsQuery'
 import useWorkspaces from '@/queries/workspacesQuery'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
@@ -48,6 +49,7 @@ async function send(url: string, method: 'POST' | 'PATCH' | 'DELETE', body?: obj
         headers: body ? { 'Content-Type': 'application/json' } : undefined,
         body: body ? JSON.stringify(body) : undefined,
     })
+    queryCache.invalidateQueries({ key: [TASKS_QUERY_KEY] })
     router.reload({ only: ['tasks'] })
 }
 

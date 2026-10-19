@@ -5,10 +5,8 @@ import {
     groupTasks,
     inFilter,
     matchesSearch,
-    progressLabel,
     startOfLocalDay,
     taskAge,
-    taskRef,
 } from './taskList'
 import { makeTask } from './testing'
 
@@ -37,28 +35,6 @@ describe('matchesSearch', () => {
         expect(matchesSearch(pr, '1842')).toBe(true)
         expect(matchesSearch(pr, 'task-7')).toBe(true)
         expect(matchesSearch(pr, '#1841')).toBe(false)
-    })
-})
-
-describe('taskRef', () => {
-    it('prefers the PR number and falls back to the task id', () => {
-        expect(taskRef(makeTask({ id: 3, pr_number: 12 }))).toBe('PR #12')
-        expect(taskRef(makeTask({ id: 3 }))).toBe('TASK-3')
-    })
-})
-
-describe('progressLabel', () => {
-    it('formats step, total and a rounded percentage', () => {
-        expect(progressLabel(makeTask({ progress_step: 3, progress_total: 4 }))).toBe('Step 3/4 (75%)')
-        expect(progressLabel(makeTask({ progress_step: 1, progress_total: 3 }))).toBe('Step 1/3 (33%)')
-        expect(progressLabel(makeTask({ progress_step: 0, progress_total: 5 }))).toBe('Step 0/5 (0%)')
-    })
-
-    it('is null without complete, usable progress', () => {
-        expect(progressLabel(makeTask())).toBeNull()
-        expect(progressLabel(makeTask({ progress_step: 2 }))).toBeNull()
-        expect(progressLabel(makeTask({ progress_total: 4 }))).toBeNull()
-        expect(progressLabel(makeTask({ progress_step: 0, progress_total: 0 }))).toBeNull()
     })
 })
 
@@ -97,8 +73,8 @@ describe('groupTasks', () => {
         expect(sections.map(s => [s.label, s.tasks.map(t => t.id)])).toEqual([
             ['Active agents', [3, 2]],
             ['Awaiting review', [5]],
-            ['Backlog', [6]],
             ['Completed', [1, 4]],
+            ['Backlog', [6]],
         ])
     })
 
@@ -123,8 +99,8 @@ describe('groupTasks', () => {
             ], since)
 
             expect(sections.map(s => [s.label, s.tasks.map(t => t.id)])).toEqual([
-                ['Backlog', [4]],
                 ['Completed today', [1]],
+                ['Backlog', [4]],
             ])
         })
 

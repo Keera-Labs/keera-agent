@@ -2,7 +2,7 @@
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installPinia } from '@/pages/agents/testing'
-import type { GitBranchChanges, GitPullRequestInfo, GitStatus, GitWorktree } from '@/queries/gitQuery'
+import type { GitBranchChanges, GitBranches, GitPullRequestInfo, GitStatus, GitWorktree, GitWorktreeChanges } from '@/queries/gitQuery'
 import { useDiffStore } from '@/stores/diffStore'
 import { useEditorStore } from '@/stores/editorStore'
 import { useProjectStore } from '@/stores/projectStore'
@@ -17,9 +17,11 @@ type Reply = { body: unknown; status?: number }
 const AGENT_TREE = '/code/shop/.claude/worktrees/agent-7'
 
 let branchChanges: GitBranchChanges
+let branches: GitBranches
 let status: GitStatus
 let agentStatus: GitStatus
 let worktrees: GitWorktree[]
+let worktreeChanges: GitWorktreeChanges
 let pullRequestInfo: GitPullRequestInfo
 let posts: Record<string, Reply>
 const fetchMock = vi.fn((url: string, init?: RequestInit) => {
@@ -30,9 +32,11 @@ const fetchMock = vi.fn((url: string, init?: RequestInit) => {
         ? posts[path] ?? { body: { detail: 'unexpected' }, status: 500 }
         : {
             body: path === '/status' ? (inAgentTree ? agentStatus : status)
-                : path === '/branch-changes' ? branchChanges
+                : path === '/branch-changes' ? { ...branchChanges, base: searchParams.get('base') ?? branchChanges.base }
+                : path === '/branches' ? branches
                 : path === '/pull-request' ? pullRequestInfo
                 : path === '/worktrees' ? { worktrees }
+                : path === '/worktrees/changes' ? { changes: worktreeChanges }
                 : { commits: [] },
         }
     const code = reply.status ?? 200
@@ -55,6 +59,7 @@ const referenceStatus = () => gitStatus({
 beforeEach(() => {
     localStorage.clear()
     branchChanges = { base: 'dev', merge_base: 'base', head: 'head', ahead: 0, files: [] }
+    branches = { branches: ['dev', 'main', 'fix/eu-promo-checkout', 'origin/main'], default_base: 'dev' }
     status = referenceStatus()
     agentStatus = gitStatus({ branch: 'task/2034-diff', changes: [gitFile('resources/js/DiffPane.vue', { status: 'A', untracked: true })], count: 1 })
     worktrees = [
@@ -62,6 +67,7 @@ beforeEach(() => {
         gitWorktree(AGENT_TREE, { branch: 'task/2034-diff', agent_id: 7, agent_name: 'Diff Frontend' }),
         gitWorktree('/tmp/gone', { branch: 'old', prunable: true }),
     ]
+    worktreeChanges = {}
     pullRequestInfo = { available: true, error: null, pull_request: null }
     posts = {}
     fetchMock.mockClear()
@@ -82,39 +88,60 @@ const postedTo = (path: string) =>
     fetchMock.mock.calls.filter(([url, init]) => init?.method === 'POST' && url === `/api/projects/9/git${path}`)
 
 describe('SourceControl', () => {
-    it('lists staged and unstaged changes with counts, status letters and line stats', async () => {
+    it('lists staged and unstaged changes in one list with checkboxes, status letters and line stats', async () => {
         const w = await mountPanel()
 
         expect(w.get('[data-testid="branch-pill"]').text()).toBe('fix/eu-promo-checkout')
-        const staged = w.get('[data-testid="staged-changes"]')
         const changes = w.get('[data-testid="changes"]')
-        expect(staged.text()).toContain('Staged changes')
-        expect(staged.findAll('li')).toHaveLength(2)
-        expect(changes.findAll('li')).toHaveLength(3)
-        expect(changes.find('section > div').text()).toContain('3')
+        expect(changes.text()).toContain('Changes')
+        expect(changes.get('[data-testid="staged-count"]').text()).toBe('2 of 5 staged')
 
         const rows = changes.findAll('li')
-        expect(rows[0].text()).toContain('admin_controller.py')
-        expect(rows[0].text()).toContain('app/admin')
-        expect(rows[0].get('[aria-label="Modified"]').text()).toBe('M')
-        expect(rows[0].get('[data-testid="line-stats"]').text()).toBe('+3-1')
-        expect(rows[2].get('[aria-label="Untracked"]').text()).toBe('U')
-        expect(rows[2].get('[data-testid="line-stats"]').text()).toBe('untracked')
-        expect(staged.find('li [aria-label="Staged, added"]').exists()).toBe(true)
+        expect(rows.map(row => row.attributes('data-state'))).toEqual(['staged', 'staged', 'unstaged', 'unstaged', 'unstaged'])
+        expect((rows[0].get('input[type="checkbox"]').element as HTMLInputElement).checked).toBe(true)
+        expect((rows[2].get('input[type="checkbox"]').element as HTMLInputElement).checked).toBe(false)
+        expect(rows[1].get('[aria-label="Added"]').text()).toBe('A')
+        expect(rows[2].text()).toContain('admin_controller.py')
+        expect(rows[2].text()).toContain('app/admin')
+        expect(rows[2].get('[aria-label="Modified"]').text()).toBe('M')
+        expect(rows[2].get('[data-testid="line-stats"]').text()).toBe('+3-1')
+        expect(rows[4].get('[aria-label="Untracked"]').text()).toBe('U')
+        expect(rows[4].get('[data-testid="line-stats"]').text()).toBe('+40')
     })
 
-    it('stages everything from the primary button', async () => {
-        posts['/stage'] = { body: gitStatus({ staged: [...status.staged, ...status.changes], count: 5 }) }
+    it('lists a partly staged file once, as an indeterminate row that stages the rest', async () => {
+        status = gitStatus({ staged: [gitFile('app/tasks.py', { additions: 1 })], changes: [gitFile('app/tasks.py', { additions: 4 })], count: 1 })
+        posts['/stage'] = { body: status }
         const w = await mountPanel()
 
-        const primary = w.get('[data-testid="primary-action"]')
-        expect(primary.text()).toBe('Stage All')
-        await primary.trigger('click')
+        const rows = w.get('[data-testid="changes"]').findAll('li')
+        expect(rows).toHaveLength(1)
+        expect((rows[0].get('input').element as HTMLInputElement).indeterminate).toBe(true)
+        expect(rows[0].get('[data-testid="line-stats"]').text()).toBe('+4')
+        expect(w.get('[data-testid="staged-count"]').text()).toBe('1 of 1 staged')
+        expect(w.get('[data-testid="primary-action"]').text()).toBe('Commit 1 file')
+        await rows[0].get('[aria-label="Stage app/tasks.py"]').trigger('click')
+        await flushPromises()
+        expect(postedTo('/stage')[0][1]?.body).toBe('{"paths":["app/tasks.py"]}')
+    })
+
+    it('stages everything from the select-all checkbox, then unstages everything from it', async () => {
+        posts['/stage'] = { body: gitStatus({ staged: [...status.staged, ...status.changes], count: 5 }) }
+        posts['/unstage'] = { body: status }
+        const w = await mountPanel()
+
+        const selectAll = () => w.get('[data-testid="changes"] > div input[type="checkbox"]')
+        expect((selectAll().element as HTMLInputElement).indeterminate).toBe(true)
+        await w.get('[aria-label="Stage all"]').trigger('click')
         await flushPromises()
 
         expect(postedTo('/stage')[0][1]?.body).toBe('{"all":true}')
-        expect(w.find('[data-testid="changes"]').exists()).toBe(false)
-        expect(w.get('[data-testid="primary-action"]').text()).toBe('Commit')
+        expect(w.get('[data-testid="staged-count"]').text()).toBe('5 of 5 staged')
+        expect(w.get('[data-testid="primary-action"]').text()).toBe('Commit 5 files')
+
+        await w.get('[aria-label="Unstage all"]').trigger('click')
+        await flushPromises()
+        expect(postedTo('/unstage')[0][1]?.body).toBe('{"all":true}')
     })
 
     it('stages and unstages a single file from its row', async () => {
@@ -137,7 +164,7 @@ describe('SourceControl', () => {
         const w = await mountPanel()
 
         const primary = () => w.get('[data-testid="primary-action"]')
-        expect(primary().text()).toBe('Commit')
+        expect(primary().text()).toBe('Commit 1 file')
         expect(primary().attributes('disabled')).toBeDefined()
         expect(primary().attributes('title')).toBe('Enter a commit message')
 
@@ -152,6 +179,24 @@ describe('SourceControl', () => {
         expect(postedTo('/commits')[0][1]?.body).toBe('{"message":"Fix EU promo checkout tax ordering"}')
         expect((w.get('textarea').element as HTMLTextAreaElement).value).toBe('')
         expect(w.find('[data-testid="clean-tree"]').exists()).toBe(true)
+    })
+
+    it('commits with ⌘↵ and commits and pushes with ⌘⇧↵', async () => {
+        posts['/commits'] = { status: 201, body: { sha: 'abc', short_sha: 'abc', subject: 'Fix', status: status } }
+        posts['/push'] = { body: { branch: 'fix/eu-promo-checkout', upstream: 'origin/fix/eu-promo-checkout', output: '', status: status } }
+        const w = await mountPanel()
+
+        await w.get('textarea').setValue('Fix')
+        await w.get('textarea').trigger('keydown', { key: 'Enter', metaKey: true })
+        await flushPromises()
+        expect(postedTo('/commits')).toHaveLength(1)
+        expect(postedTo('/push')).toHaveLength(0)
+
+        await w.get('textarea').setValue('Fix again')
+        await w.get('textarea').trigger('keydown', { key: 'Enter', metaKey: true, shiftKey: true })
+        await flushPromises()
+        expect(postedTo('/commits')).toHaveLength(2)
+        expect(postedTo('/push')).toHaveLength(1)
     })
 
     it('commits and pushes from the dropdown', async () => {
@@ -237,6 +282,8 @@ describe('SourceControl', () => {
         expect(w.find('[data-testid="clean-tree"]').exists()).toBe(false)
         const section = w.get('[data-testid="committed-changes"]')
         expect(section.text()).toContain('2 commits ahead of dev')
+        expect(w.get('[data-testid="base-picker"]').text()).toBe('dev')
+        expect(w.get('[data-testid="ahead-of-base"]').text()).toBe('2 ahead of dev')
         expect(section.find('[aria-label^="Stage"]').exists()).toBe(false)
         await section.get('button[title^="Show changes"]').trigger('click')
         expect(useDiffStore().activeTab).toMatchObject({ path: 'src/feature.ts', committed: true, base: 'dev' })
@@ -248,9 +295,12 @@ describe('SourceControl', () => {
         branchChanges = { base: 'dev', merge_base: 'base', head: 'head', ahead: 1, files: [gitFile('src/feature.ts')] }
         posts['/commits'] = { body: { status: gitStatus({ upstream: 'origin/feature' }) } }
         posts['/push'] = posts['/commits']!
+        const changeCountReads = () => fetchMock.mock.calls.filter(([url]) => url.endsWith('/worktrees/changes')).length
+        expect(changeCountReads()).toBe(1)
         await w.get('textarea').setValue('Feature')
         await w.get('[data-testid="primary-action"]').trigger('click')
         await flushPromises()
+        expect(changeCountReads()).toBe(2)
         expect(w.get('[data-testid="committed-changes"]').text()).toContain('feature.ts')
         expect(w.find('[data-testid="clean-tree"]').exists()).toBe(false)
         for (const action of ['Push']) {
@@ -328,10 +378,125 @@ describe('SourceControl', () => {
         expect(w.text()).toContain('No shared base branch found')
     })
 
-    it('shows a clean tree', async () => {
+    it('shows a clean tree naming the checkout, without a committed section or worktree list', async () => {
         status = gitStatus()
+        worktreeChanges = { '/code/shop': 0, [AGENT_TREE]: 0 }
         const w = await mountPanel()
-        expect(w.get('[data-testid="clean-tree"]').text()).toContain('No changes')
+        const clean = w.get('[data-testid="clean-tree"]')
+        expect(clean.text()).toContain('No changes')
+        expect(clean.text()).toContain('Nothing to commit in the main checkout.')
+        expect(w.get('[data-testid="ahead-of-base"]').text()).toBe('0 ahead of dev')
+        expect(w.get('[data-testid="base-picker"]').text()).toBe('dev')
+        expect(w.find('[data-testid="committed-changes"]').exists()).toBe(false)
+    })
+
+    it('leaves other worktrees with uncommitted changes to the Worktrees tab', async () => {
+        status = gitStatus()
+        worktreeChanges = { '/code/shop': 0, [AGENT_TREE]: 3 }
+        const w = await mountPanel()
+        expect(w.find('[data-testid="clean-tree"]').exists()).toBe(true)
+        expect(w.text()).not.toContain('Uncommitted in other worktrees')
+    })
+
+    it('shows each worktree\'s uncommitted file count in the worktree menu', async () => {
+        worktreeChanges = { '/code/shop': 5, [AGENT_TREE]: 0 }
+        const w = await mountPanel()
+        await w.get('[data-testid="branch-pill"]').trigger('click')
+        const options = w.findAll('[data-testid="worktree-option"]')
+        expect(options[0]!.get('[data-testid="worktree-changes"]').text()).toBe('5')
+        expect(options[0]!.get('[data-testid="worktree-changes"]').attributes('title')).toBe('5 uncommitted files')
+        expect(options[1]!.find('[data-testid="worktree-changes"]').exists()).toBe(false)
+    })
+
+    it('says the working tree is clean while the branch still has commits', async () => {
+        status = gitStatus()
+        branchChanges = { ...branchChanges, ahead: 1, files: [gitFile('src/feature.ts')] }
+        const w = await mountPanel()
+        expect(w.get('[data-testid="no-uncommitted"]').text()).toBe('No uncommitted changes in the main checkout.')
+    })
+
+    it('hides the committed section but keeps the base picker when the branch has nothing ahead of its base', async () => {
+        const w = await mountPanel()
+        expect(w.find('[data-testid="changes"]').exists()).toBe(true)
+        expect(w.find('[data-testid="committed-changes"]').exists()).toBe(false)
+        expect(w.find('[data-testid="clean-tree"]').exists()).toBe(false)
+        expect(w.get('[data-testid="ahead-of-base"]').text()).toBe('0 ahead of dev')
+
+        await w.get('[data-testid="base-picker"]').trigger('click')
+        await w.findAll('[data-testid="base-option"]').find(option => option.text() === 'main')!.trigger('click')
+        await flushPromises()
+
+        expect(fetchMock).toHaveBeenCalledWith('/api/projects/9/git/branch-changes?base=main', expect.anything())
+        expect(w.get('[data-testid="base-picker"]').text()).toBe('main')
+    })
+
+    it('keeps the base picker reachable when the picked base shares no history', async () => {
+        localStorage.setItem('keera.git.base', JSON.stringify({ 9: 'main' }))
+        branchChanges.merge_base = null
+        const w = await mountPanel()
+        expect(w.text()).toContain('No shared base branch found')
+        expect(w.find('[data-testid="ahead-of-base"]').exists()).toBe(false)
+        expect(w.get('[data-testid="base-picker"]').text()).toBe('main')
+    })
+
+    it('has no base picker before the first commit', async () => {
+        status = gitStatus({ has_commits: false })
+        const w = await mountPanel()
+        expect(w.find('[data-testid="base-picker"]').exists()).toBe(false)
+    })
+
+    describe('base branch', () => {
+        const branchChangeUrls = () =>
+            fetchMock.mock.calls.map(([url]) => url).filter(url => url.startsWith('/api/projects/9/git/branch-changes'))
+
+        async function pickBase(w: Awaited<ReturnType<typeof mountPanel>>, name: string) {
+            await w.get('[data-testid="base-picker"]').trigger('click')
+            await w.findAll('[data-testid="base-option"]').find(option => option.text().startsWith(name))!.trigger('click')
+            await flushPromises()
+        }
+
+        it('lists branches with the default marked and filters them', async () => {
+            status = gitStatus()
+            const w = await mountPanel()
+            await w.get('[data-testid="base-picker"]').trigger('click')
+            const options = w.findAll('[data-testid="base-option"]')
+            expect(options.map(option => option.text())).toEqual(['devdefault', 'main', 'fix/eu-promo-checkout', 'origin/main'])
+            expect(options[0]!.attributes('aria-checked')).toBe('true')
+            await w.get('input[aria-label="Filter branches"]').setValue('MAIN')
+            expect(w.findAll('[data-testid="base-option"]').map(option => option.text())).toEqual(['main', 'origin/main'])
+        })
+
+        it('compares against the picked base, remembers it and opens diffs against it', async () => {
+            status = gitStatus()
+            branchChanges = { ...branchChanges, ahead: 1, files: [gitFile('src/feature.ts')] }
+            const w = await mountPanel()
+            expect(branchChangeUrls()).toEqual(['/api/projects/9/git/branch-changes'])
+
+            await pickBase(w, 'origin/main')
+
+            expect(branchChangeUrls().at(-1)).toBe('/api/projects/9/git/branch-changes?base=origin%2Fmain')
+            expect(w.get('[data-testid="base-picker"]').text()).toBe('origin/main')
+            expect(JSON.parse(localStorage.getItem('keera.git.base')!)).toEqual({ 9: 'origin/main' })
+
+            await w.get('[data-testid="committed-changes"] button[title^="Show changes"]').trigger('click')
+            expect(useDiffStore().activeTab).toMatchObject({ path: 'src/feature.ts', committed: true, base: 'origin/main' })
+
+            await pickBase(w, 'dev')
+            expect(w.get('[data-testid="base-picker"]').text()).toBe('dev')
+            expect(JSON.parse(localStorage.getItem('keera.git.base')!)).toEqual({})
+        })
+
+        it('waits for the branch list and uses a remembered base only while it exists', async () => {
+            status = gitStatus()
+            localStorage.setItem('keera.git.base', JSON.stringify({ 9: 'main' }))
+            await mountPanel()
+            expect(branchChangeUrls()).toEqual(['/api/projects/9/git/branch-changes?base=main'])
+
+            fetchMock.mockClear()
+            localStorage.setItem('keera.git.base', JSON.stringify({ 9: 'deleted-branch' }))
+            await mountPanel()
+            expect(branchChangeUrls()).toEqual(['/api/projects/9/git/branch-changes'])
+        })
     })
 
     it('explains when the project is not a git repository', async () => {
@@ -354,13 +519,14 @@ describe('SourceControl', () => {
         const w = await mountPanel()
         const diffs = useDiffStore()
 
-        await w.get('[data-testid="changes"]').findAll('li')[1].get('button[title^="Show changes"]').trigger('click')
+        const rows = w.get('[data-testid="changes"]').findAll('li')
+        await rows[3].get('button[title^="Show changes"]').trigger('click')
         expect(diffs.activeTab).toMatchObject({ path: 'app/tasks.py', staged: false, untracked: false, target: { projectId: 9, worktree: null } })
 
-        await w.get('[data-testid="changes"]').findAll('li')[2].get('button[title^="Show changes"]').trigger('click')
+        await rows[4].get('button[title^="Show changes"]').trigger('click')
         expect(diffs.activeTab).toMatchObject({ path: 'app/bootstrap.py', untracked: true })
 
-        await w.get('[data-testid="staged-changes"]').findAll('li')[0].get('button[title^="Show changes"]').trigger('click')
+        await rows[0].get('button[title^="Show changes"]').trigger('click')
         expect(diffs.activeTab).toMatchObject({ path: 'src/checkout/promo.ts', staged: true })
         expect(diffs.tabsByProject[9]).toHaveLength(3)
     })
@@ -401,7 +567,7 @@ describe('SourceControl', () => {
         expect(fetchMock).toHaveBeenCalledWith(`/api/projects/9/git/branch-changes?${worktreeParam}`, expect.anything())
         expect(w.get('[data-testid="worktree-label"]').text()).toBe('Diff Frontend')
         expect(w.get('[data-testid="changes"]').text()).toContain('DiffPane.vue')
-        expect(w.find('[data-testid="staged-changes"]').exists()).toBe(false)
+        expect(w.find('[data-testid="changes"] li[data-state="staged"]').exists()).toBe(false)
         // The file editor reads the project's own checkout, so another worktree's files open only as diffs.
         expect(w.find('[aria-label="Open resources/js/DiffPane.vue"]').exists()).toBe(false)
 

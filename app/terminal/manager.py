@@ -1,9 +1,12 @@
 import asyncio
 import uuid
+from pathlib import Path
 
 from fastapi_startkit.logging import Logger
 
 from app.terminal.terminal import Terminal
+
+SHELL_SESSION_PREFIX = "shell:"
 
 
 class TerminalManager:
@@ -18,8 +21,9 @@ class TerminalManager:
         rows: int = 24,
         env: dict | None = None,
         session_id: str | None = None,
+        args: list[str] | None = None,
     ) -> str:
-        pty = Terminal(shell=shell, cwd=cwd, cols=cols, rows=rows, env=env)
+        pty = Terminal(shell=shell, cwd=cwd, cols=cols, rows=rows, env=env, args=args)
         pty.start()
 
         sid = session_id if session_id is not None else str(uuid.uuid4())
@@ -45,6 +49,15 @@ class TerminalManager:
         pty = self._sessions.pop(session_id, None)
         if pty:
             await pty.aclose()
+
+    async def close_within(self, directory: str, prefix: str) -> None:
+        root = Path(directory).resolve()
+        doomed = [
+            sid
+            for sid, pty in self._sessions.items()
+            if sid.startswith(prefix) and Path(pty.cwd).resolve().is_relative_to(root)
+        ]
+        await asyncio.gather(*(self.close(sid) for sid in doomed))
 
     async def shutdown(self):
         Logger.info("Shutting down terminal manager")

@@ -55,6 +55,22 @@ class TestAgentHookEventController(TestCase, DatabaseTransaction):
         self.assertEqual(response.json(), {})
         return await Agent.find(self.agent.id)
 
+    async def test_gemini_before_agent_confirms_session_and_resumes_work(self):
+        await Agent.where("id", self.agent.id).update(
+            {"provider": "gemini", "has_session": False, "status": "waiting"}
+        )
+        agent = await self._post({"hook_event_name": "BeforeAgent", "cwd": self.project.path})
+        self.assertTrue(agent.has_session)
+        self.assertEqual(agent.status, "running")
+
+    async def test_gemini_permission_notification_and_after_tool(self):
+        await Agent.where("id", self.agent.id).update({"provider": "gemini"})
+        agent = await self._post({**permission_prompt(), "notification_type": "ToolPermission"})
+        self.assertEqual(agent.status, "needs_input")
+        agent = await self._post({"hook_event_name": "AfterTool"})
+        self.assertEqual(agent.status, "running")
+        self.assertIsNone(agent.attention_kind)
+
     async def test_ask_user_question_marks_agent_needs_input_with_question(self):
         agent = await self._post(ask_question("Which database should we use?"))
 

@@ -1,17 +1,51 @@
 <script setup lang="ts">
 import type * as Monaco from 'monaco-editor'
 import { storeToRefs } from 'pinia'
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
+import { useMarkdownViewMode } from '@/composables/useMarkdownViewMode'
+import { isMarkdownPath } from '@/editor/markdown'
 import { EDITOR_THEME, loadMonaco, type MonacoApi, type TextModel } from '@/editor/monaco'
+import MarkdownPreview from '@/layouts/editor/MarkdownPreview.vue'
+import MarkdownViewToggle from '@/layouts/editor/MarkdownViewToggle.vue'
 import { SAVE_STATUS_LABEL, saveStatus, useEditorStore } from '@/stores/editorStore'
 import { useEditorSettingsStore } from '@/stores/editorSettingsStore'
+import AskLinesPopover from './AskLinesPopover.vue'
+import { agentQuestionMessage, codeSnippet, linesLabel } from './lineSelection'
+import { useAskAgent } from './useAskAgent'
+import { useLineSelection } from './useLineSelection'
 
 const editorStore = useEditorStore()
 const { activeTab } = storeToRefs(editorStore)
 const { font } = storeToRefs(useEditorSettingsStore())
 
 const host = ref<HTMLElement | null>(null)
+const viewport = ref<HTMLElement | null>(null)
+const lines = useLineSelection(viewport)
+const { selection, anchor, dragging } = lines
+const asking = useAskAgent(() => (activeTab.value ? { projectId: activeTab.value.projectId, worktree: null } : null), selection)
+const { owner, status: askStatus, error: askError } = asking
+const popover = ref<InstanceType<typeof AskLinesPopover> | null>(null)
+
+watch(dragging, isDragging => {
+    if (!isDragging) popover.value?.focus()
+})
+
+function ask(question: string) {
+    const tab = activeTab.value
+    const current = selection.value
+    const model = editor?.getModel()
+    if (!tab || !current || !model) return
+    asking.send(agentQuestionMessage({
+        path: tab.path,
+        worktree: null,
+        selection: current,
+        snippet: codeSnippet(current, model.getLinesContent()),
+        question,
+        language: model.getLanguageId(),
+    }))
+}
+
 let editor: Monaco.editor.IStandaloneCodeEditor | null = null
 let monacoApi: MonacoApi | null = null
 let unmounted = false
@@ -24,6 +58,7 @@ function showActiveModel() {
     if (previous && !previous.isDisposed()) viewStates.set(previous, editor.saveViewState())
     const next = activeTab.value ? editorStore.modelFor(activeTab.value) : null
     if (next === previous) return
+    lines.clear()
     editor.setModel(next)
     if (!next) return
     const state = viewStates.get(next)
@@ -43,6 +78,7 @@ onMounted(async () => {
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
     })
+    lines.attach(monaco, { modified: editor })
     remeasureWhenLoaded(font.value)
     editor.onDidBlurEditorText(() => {
         const tab = activeTab.value
@@ -52,6 +88,24 @@ onMounted(async () => {
 })
 
 watch(activeTab, showActiveModel)
+
+const markdownMode = useMarkdownViewMode('files', 'preview')
+const isMarkdown = computed(() => !!activeTab.value && isMarkdownPath(activeTab.value.path))
+const showPreview = computed(() => isMarkdown.value && markdownMode.value === 'preview')
+const previewSource = ref('')
+
+watch([activeTab, showPreview], (_, __, onCleanup) => {
+    const model = showPreview.value && activeTab.value ? editorStore.modelFor(activeTab.value) : null
+    if (!model) return
+    previewSource.value = model.getValue()
+    const listener = model.onDidChangeContent(() => { previewSource.value = model.getValue() })
+    onCleanup(() => listener.dispose())
+}, { immediate: true })
+
+watch(showPreview, (preview, wasPreview) => {
+    lines.clear()
+    if (wasPreview && !preview) editor?.focus()
+}, { flush: 'post' })
 
 // Monaco caches glyph widths; if the face arrives after they were taken, stale
 // measurements misplace the cursor and selections until they are re-taken.
@@ -91,6 +145,7 @@ const bannerButton = 'h-6 px-2 rounded border text-ui-12 cursor-pointer'
     <section class="absolute inset-0 z-10 flex flex-col bg-white" aria-label="Editor">
         <div v-if="activeTab" class="flex items-center gap-2 h-7 px-3 shrink-0 border-b border-stroke text-ui-12 text-zinc-500">
             <span class="truncate font-mono" data-testid="editor-path">{{ activeTab.path }}</span>
+            <MarkdownViewToggle v-if="isMarkdown" v-model="markdownMode" class="ml-2" />
             <span
                 data-testid="editor-save-status"
                 :data-status="saveStatus(activeTab)"
@@ -140,6 +195,21 @@ const bannerButton = 'h-6 px-2 rounded border text-ui-12 cursor-pointer'
             </button>
         </div>
 
-        <div ref="host" class="flex-1 min-h-0" />
+        <MarkdownPreview v-if="showPreview" :source="previewSource" />
+        <div v-show="!showPreview" ref="viewport" class="relative flex-1 min-h-0">
+            <div ref="host" class="absolute inset-0" />
+            <AskLinesPopover
+                v-if="activeTab && selection && anchor"
+                ref="popover"
+                :style="{ top: `${anchor.top}px`, left: `${anchor.left}px`, width: `${anchor.width}px` }"
+                :label="linesLabel(selection)"
+                :file-name="activeTab.name"
+                :agent-name="owner?.name ?? null"
+                :status="askStatus"
+                :error="askError"
+                @send="ask"
+                @close="lines.clear()"
+            />
+        </div>
     </section>
 </template>

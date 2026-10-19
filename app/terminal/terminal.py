@@ -28,6 +28,22 @@ def _with_color_env(env: dict) -> dict:
 
 PASTE_START = b"\x1b[200~"
 PASTE_END = b"\x1b[201~"
+_PASTE_MARKER = re.compile(r"\x1b\[20[01]~")
+_LINE_BREAK = re.compile(r"\r\n?")
+_UNPASTEABLE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
+
+
+def _without_paste_markers(message: str) -> str:
+    while True:
+        stripped = _PASTE_MARKER.sub("", message)
+        if stripped == message:
+            return message
+        message = stripped
+
+
+def paste_safe(message: str) -> str:
+    return _UNPASTEABLE.sub("", _LINE_BREAK.sub("\n", _without_paste_markers(message)))
+
 
 # CLI startup dialogs that wait for a choice. Enter picks the highlighted
 # option (codex's update prompt defaults to running a global npm install), so
@@ -36,9 +52,11 @@ PASTE_END = b"\x1b[201~"
 # same words quoted in replayed conversation history don't match.
 DIALOG_OPTIONS = re.compile(
     r"Yes, I trust this folder|Yes, I accept|Trust and continue|Skip until next version"
+    r"|Sign in with Google|Trust folder \([^)]*\)"
 )
 DIALOG_FOOTERS = re.compile(
     r"Enter to confirm · Esc to (?:cancel|exit)|enter continue · esc quit|Press enter to continue"
+    r"|Use Enter to select|Don't trust"
 )
 _DIALOG_MARKERS = re.compile(f"{DIALOG_OPTIONS.pattern}|{DIALOG_FOOTERS.pattern}")
 # How far before its footer a dialog's option may appear.
@@ -156,6 +174,11 @@ def _wait_for_groups(groups: set[int], timeout: float) -> set[int]:
         time.sleep(0.02)
 
 
+def _lead_a_session_on_the_stdin_terminal() -> None:
+    os.setsid()
+    fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+
+
 def _process_groups(shell_pid: int, master_fd: int | None) -> set[int]:
     """Every process group started from a terminal's shell.
 
@@ -216,8 +239,10 @@ class Terminal:
         cols: int = 80,
         rows: int = 24,
         env: dict | None = None,
+        args: list[str] | None = None,
     ):
         self._shell = shell or os.environ.get("SHELL", "/bin/bash")
+        self._args = args or []
         self._cwd = cwd or os.path.expanduser("~")
         self._cols = cols
         self._rows = rows
@@ -293,12 +318,12 @@ class Terminal:
         self._set_size(master_fd, self._rows, self._cols)
 
         proc = subprocess.Popen(
-            [self._shell],
+            [self._shell, *self._args],
             stdin=slave_fd,
             stdout=slave_fd,
             stderr=slave_fd,
             close_fds=True,
-            preexec_fn=os.setsid,
+            preexec_fn=_lead_a_session_on_the_stdin_terminal,
             cwd=self._cwd,
             env=self._env,
         )
@@ -436,7 +461,7 @@ class Terminal:
         same read the CR is swallowed as part of the paste — the message then
         sits unsubmitted in the input box until the next message's Enter.
         """
-        body = message.encode().rstrip(b"\r\n").replace(PASTE_END, b"")
+        body = paste_safe(message).rstrip("\n").encode()
         async with self._send_lock:
             if body:
                 seen = self._output_seq
@@ -544,8 +569,16 @@ class Terminal:
         if self._proc is not None:
             self._proc.wait()
 
+    @property
+    def cwd(self) -> str:
+        return self._cwd
+
     def is_alive(self) -> bool:
         return self._proc is not None and self._proc.poll() is None
+
+    @property
+    def returncode(self) -> int | None:
+        return self._proc.poll() if self._proc is not None else None
 
     @property
     def pid(self) -> int:

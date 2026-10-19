@@ -4,10 +4,19 @@ import { useQueryCache } from '@pinia/colada'
 import type * as Monaco from 'monaco-editor'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useMarkdownViewMode } from '@/composables/useMarkdownViewMode'
+import { isMarkdownPath } from '@/editor/markdown'
+import { languageForPath } from '@/editor/languages'
 import { EDITOR_THEME, loadMonaco, type MonacoApi, type TextModel } from '@/editor/monaco'
+import MarkdownPreview from '@/layouts/editor/MarkdownPreview.vue'
+import MarkdownViewToggle from '@/layouts/editor/MarkdownViewToggle.vue'
 import { gitKeys, GitRequestError, useGitDiff, type GitDiff } from '@/queries/gitQuery'
 import { useDiffStore } from '@/stores/diffStore'
 import { useEditorSettingsStore } from '@/stores/editorSettingsStore'
+import AskLinesPopover from './AskLinesPopover.vue'
+import { agentQuestionMessage, diffSnippet, linesLabel, type LineSelection } from './lineSelection'
+import { useAskAgent } from './useAskAgent'
+import { useLineSelection } from './useLineSelection'
 
 const diffs = useDiffStore()
 const { activeTab, sideBySide } = storeToRefs(diffs)
@@ -16,7 +25,7 @@ const queryCache = useQueryCache()
 
 const diffRequest = computed(() => {
     const tab = activeTab.value
-    return tab ? { target: tab.target, path: tab.path, staged: tab.staged, committed: tab.committed } : null
+    return tab ? { target: tab.target, path: tab.path, staged: tab.staged, committed: tab.committed, base: tab.base } : null
 })
 const query = useGitDiff(diffRequest)
 const diff = query.data
@@ -38,9 +47,45 @@ const notice = computed(() => {
     return null
 })
 
+const markdownMode = useMarkdownViewMode('changes', 'code')
+const isMarkdown = computed(() => !!activeTab.value && isMarkdownPath(activeTab.value.path))
+const showPreview = computed(() => isMarkdown.value && markdownMode.value === 'preview' && !!diff.value && !placeholder.value)
+const previewSource = computed(() => diff.value?.modified ?? diff.value?.original ?? '')
+
 const compared = computed(() => (activeTab.value?.committed ? 'Merge base ↔ HEAD' : activeTab.value?.staged ? 'HEAD ↔ Index' : 'Index ↔ Working tree'))
 
 const host = ref<HTMLElement | null>(null)
+const viewport = ref<HTMLElement | null>(null)
+const lines = useLineSelection(viewport)
+const { selection, anchor, dragging } = lines
+const asking = useAskAgent(() => activeTab.value?.target ?? null, selection)
+const { owner, status: askStatus, error: askError } = asking
+const popover = ref<InstanceType<typeof AskLinesPopover> | null>(null)
+
+watch(dragging, isDragging => {
+    if (!isDragging) popover.value?.focus()
+})
+
+function selectedSnippet(current: LineSelection) {
+    const model = editor?.getModel()
+    if (!model) return ''
+    return diffSnippet(current, model.original.getLinesContent(), model.modified.getLinesContent(), editor!.getLineChanges() ?? [])
+}
+
+function ask(question: string) {
+    const tab = activeTab.value
+    const current = selection.value
+    if (!tab || !current) return
+    asking.send(agentQuestionMessage({
+        path: tab.path,
+        worktree: tab.target.worktree,
+        selection: current,
+        snippet: selectedSnippet(current),
+        question,
+        diff: true,
+    }))
+}
+
 let monaco: MonacoApi | null = null
 let editor: Monaco.editor.IStandaloneDiffEditor | null = null
 let models: { original: TextModel; modified: TextModel } | null = null
@@ -56,6 +101,7 @@ function disposeModels() {
 function render(current: GitDiff | undefined) {
     if (!monaco || !editor) return
     if (!current || current.binary || current.too_large) {
+        lines.clear()
         editor.setModel(null)
         disposeModels()
         return
@@ -65,9 +111,10 @@ function render(current: GitDiff | undefined) {
     // A background refetch with the same text must not reset the reader's scroll position.
     if (models && models.original.getValue() === original && models.modified.getValue() === modified) return
 
+    lines.clear()
     // Each side needs its own URI; the file's extension lets Monaco pick a language when the API names none.
     const uri = (side: string) => monaco!.Uri.from({ scheme: 'git-diff', path: `/${++modelSeq}/${side}/${current.path}` })
-    const language = current.language ?? undefined
+    const language = languageForPath(current.path) ?? current.language ?? undefined
     const next = {
         original: monaco.editor.createModel(original, language, uri('original')),
         modified: monaco.editor.createModel(modified, language, uri('modified')),
@@ -91,13 +138,19 @@ onMounted(async () => {
         ...font.value,
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
+        showUnused: false,
     })
+    lines.attach(api, { original: editor.getOriginalEditor(), modified: editor.getModifiedEditor() })
     render(diff.value)
 })
 
 watch(diff, render)
 watch(font, next => editor?.updateOptions(next))
-watch(sideBySide, value => editor?.updateOptions({ renderSideBySide: value }))
+watch(sideBySide, value => {
+    lines.clear()
+    editor?.updateOptions({ renderSideBySide: value })
+})
+watch(showPreview, () => lines.clear())
 
 // A 404 means the file left that list (staged, committed or reverted elsewhere): refresh the panel and drop the tab.
 watch(query.error, error => {
@@ -128,7 +181,8 @@ const toggleClass = 'h-5 px-1.5 flex items-center gap-1 rounded cursor-pointer t
                 {{ activeTab.worktreeLabel }}
             </span>
             <span v-if="notice" class="shrink-0 truncate text-zinc-500" data-testid="diff-notice">· {{ notice }}</span>
-            <div class="ml-auto shrink-0 flex items-center gap-0.5" role="group" aria-label="Diff layout">
+            <MarkdownViewToggle v-if="isMarkdown" v-model="markdownMode" :class="{ 'ml-auto': showPreview }" />
+            <div v-if="!showPreview" class="ml-auto shrink-0 flex items-center gap-0.5" role="group" aria-label="Diff layout">
                 <button
                     type="button"
                     data-testid="diff-side-by-side"
@@ -170,6 +224,21 @@ const toggleClass = 'h-5 px-1.5 flex items-center gap-1 rounded cursor-pointer t
             {{ placeholder }}
         </div>
 
-        <div v-show="diff && !placeholder" ref="host" class="flex-1 min-h-0" />
+        <MarkdownPreview v-if="showPreview" :source="previewSource" />
+        <div v-show="diff && !placeholder && !showPreview" ref="viewport" class="relative flex-1 min-h-0">
+            <div ref="host" class="absolute inset-0" />
+            <AskLinesPopover
+                v-if="activeTab && selection && anchor"
+                ref="popover"
+                :style="{ top: `${anchor.top}px`, left: `${anchor.left}px`, width: `${anchor.width}px` }"
+                :label="linesLabel(selection)"
+                :file-name="activeTab.name"
+                :agent-name="owner?.name ?? null"
+                :status="askStatus"
+                :error="askError"
+                @send="ask"
+                @close="lines.clear()"
+            />
+        </div>
     </section>
 </template>

@@ -521,9 +521,9 @@ class SpawnAgentInput(BaseModel):
         default=None,
         description="Initial task or instruction to send to the agent after it starts. Omit to create an idle agent.",
     )
-    provider: Optional[Literal["codex", "claude"]] = Field(
+    provider: Optional[Literal["codex", "claude", "gemini"]] = Field(
         default=None,
-        description="Agent backend to run (codex or claude). Omit to use the configured default.",
+        description="Agent backend to run (codex, claude or gemini). Omit to use the configured default.",
     )
     complexity: str = Field(
         pattern="^(easy|medium|hard)$",
@@ -531,7 +531,7 @@ class SpawnAgentInput(BaseModel):
             "Task complexity (easy|medium|hard). REQUIRED — it selects the model "
             "configured for that tier in Settings > Providers; without a saved choice "
             "codex uses gpt-5.6-luna/gpt-5.6-terra/gpt-5.6-sol and claude uses "
-            "claude-sonnet-5/claude-opus-5/claude-fable-5."
+            "claude-sonnet-5/claude-opus-5/claude-fable-5; gemini uses gemini-3.8-flash for all tiers."
         ),
     )
     task_id: Optional[int] = Field(
@@ -552,7 +552,7 @@ class SpawnAgentTool(Tool):
         "Provider defaults to the configured default provider; complexity selects the model configured for that "
         "tier in Settings > Providers, defaulting to "
         "gpt-5.6-luna/gpt-5.6-terra/gpt-5.6-sol for codex "
-        "and claude-sonnet-5/claude-opus-5/claude-fable-5 for claude."
+        "and claude-sonnet-5/claude-opus-5/claude-fable-5 for claude; gemini-3.8-flash for all gemini tiers."
     )
 
     def schema(self):
@@ -635,6 +635,13 @@ class SpawnAgentTool(Tool):
         if provider is not None:
             request_data["provider"] = provider
         request = AgentStoreRequest(**request_data)
+        if arguments.get("message"):
+            from app.services.gemini_cli import validate_gemini_cli
+
+            try:
+                await asyncio.to_thread(validate_gemini_cli, request.provider)
+            except RuntimeError as exc:
+                return Response.text(f"Error: {exc}")
         try:
             agent = await AgentCreateAction(project_id=project.id, request=request).execute()
         except ValueError as e:

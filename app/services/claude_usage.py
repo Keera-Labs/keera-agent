@@ -65,12 +65,18 @@ class AgentUsage:
     tokens: Tokens = field(default_factory=Tokens)
     last_model: str | None = None
     last_used_at: str | None = None
+    gemini_estimated_cost_usd: float | None = None
 
     def to_dict(self) -> dict:
         return {
             **self.tokens.to_dict(),
             "last_model": self.last_model,
             "last_used_at": self.last_used_at,
+            **(
+                {"gemini_estimated_cost_usd": self.gemini_estimated_cost_usd}
+                if self.gemini_estimated_cost_usd is not None
+                else {}
+            ),
         }
 
 
@@ -79,12 +85,23 @@ class ProjectUsage:
     id: int
     today: Tokens = field(default_factory=Tokens)
     agents: dict[int, AgentUsage] = field(default_factory=dict)
+    gemini_estimated_cost_usd: float | None = None
+    provider_limits: dict[str, dict] = field(default_factory=dict)
 
     def merge(self, other: "ProjectUsage") -> "ProjectUsage":
         self.today.add(other.today)
+        self.provider_limits.update(other.provider_limits)
+        if other.gemini_estimated_cost_usd is not None:
+            self.gemini_estimated_cost_usd = (
+                self.gemini_estimated_cost_usd or 0
+            ) + other.gemini_estimated_cost_usd
         for agent_id, theirs in other.agents.items():
             mine = self.agents.setdefault(agent_id, AgentUsage())
             mine.tokens.add(theirs.tokens)
+            if theirs.gemini_estimated_cost_usd is not None:
+                mine.gemini_estimated_cost_usd = (
+                    mine.gemini_estimated_cost_usd or 0
+                ) + theirs.gemini_estimated_cost_usd
             if (mine.last_used_at or "") <= (theirs.last_used_at or ""):
                 mine.last_model, mine.last_used_at = theirs.last_model, theirs.last_used_at
         return self

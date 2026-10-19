@@ -62,10 +62,11 @@ function commandsFetch(init?: RequestInit) {
     if (method === 'POST') {
         const body = JSON.parse(String(init?.body))
         calls.push({ method, body })
-        const created = { id: 99, project_id: 7, description: '', category: '', shortcut: '', status: 'stopped', pid: null, ...body }
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(created) })
+        const created = { type: 'commands', id: '99', attributes: { project_id: 7, description: '', category: '', shortcut: '', kind: 'run', run: null, ...body } }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: created }) })
     }
-    return Promise.resolve({ ok: true, json: () => Promise.resolve(projectCommands) })
+    const data = projectCommands.map(({ id, ...attributes }) => ({ type: 'commands', id: String(id), attributes }))
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ data }) })
 }
 
 function fakeFetch(url: string, init?: RequestInit) {
@@ -105,7 +106,7 @@ beforeEach(() => {
     globalPatch = { status: 200, body: { max_agents_per_project: 25 } }
     remoteControl = { status: 200, enabled: false }
     appearance = { ui_font_size: 13 }
-    projectCommands = [{ id: 1, project_id: 7, label: 'dev', command: 'npm run dev', description: '', category: '', shortcut: '', status: 'stopped', pid: null }]
+    projectCommands = [{ id: 1, project_id: 7, label: 'dev', command: 'npm run dev', description: '', category: '', shortcut: '', kind: 'run', run: null }]
     localStorage.clear()
     document.documentElement.style.removeProperty('--ui-scale')
     page.component = 'Home'
@@ -453,7 +454,7 @@ describe('SettingsModal', () => {
             await pane.get('button[title="Delete"]').trigger('click')
             await flushPromises()
 
-            expect(fetch).toHaveBeenCalledWith('/api/commands/1', { method: 'DELETE' })
+            expect(fetch).toHaveBeenCalledWith('/api/commands/1', expect.objectContaining({ method: 'DELETE' }))
             expect(pane.text()).not.toContain('/dev')
         })
 

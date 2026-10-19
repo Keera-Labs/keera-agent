@@ -42,6 +42,22 @@ function openSession(agentId: number) {
     store.liveSessionCount = store.sessions.size + store.agentSessions.size
 }
 
+function openFileTabs(...paths: string[]) {
+    const editor = useEditorStore()
+    editor.tabsByProject[project.id] = paths.map(path => ({
+        projectId: project.id, path, name: path, etag: 'e', dirty: false, saving: false, conflict: false, error: null,
+    }))
+    return editor
+}
+
+function layoutTabStrip(tabLefts: Record<string, number>) {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+        if (this.getAttribute('role') === 'tablist') return new DOMRect(0, 0, 300, 48)
+        const left = tabLefts[this.textContent?.trim() ?? ''] ?? 0
+        return new DOMRect(left - (this.closest('[role="tablist"]')?.scrollLeft ?? 0), 8, 100, 32)
+    })
+}
+
 const tabNames = (w: VueWrapper) => w.findAll('[data-testid="session-tab"]').map(el => el.text())
 
 const dialog = () => document.querySelector<HTMLElement>('[data-testid="confirm-delete-agent"]')
@@ -73,6 +89,7 @@ afterEach(() => {
     wrapper?.unmount()
     wrapper = undefined
     vi.unstubAllGlobals()
+    vi.restoreAllMocks()
     vi.mocked(router.visit).mockClear()
 })
 
@@ -238,6 +255,10 @@ describe('SessionTabs', () => {
         expect(fileTabs.map(t => t.text())).toEqual(['app.ts', 'README.md'])
         expect(fileTabs.map(t => t.attributes('data-dirty'))).toEqual(['true', 'false'])
         expect(fileTabs.map(t => t.attributes('data-save-status'))).toEqual(['unsaved', 'saved'])
+        expect(fileTabs.map(t => t.get('[data-testid="editor-tab-dot"]').classes())).toEqual([
+            expect.arrayContaining(['rounded-full', 'bg-amber-500']),
+            expect.arrayContaining(['rounded-full', 'bg-sky-500']),
+        ])
         const selected = w.findAll('[role="tab"][aria-selected="true"]')
         expect(selected.map(t => t.text())).toEqual(['app.ts'])
 
@@ -247,6 +268,33 @@ describe('SessionTabs', () => {
         const close = vi.spyOn(editor, 'close').mockResolvedValue(true)
         await fileTabs[0].get('[data-testid="editor-tab-close"]').trigger('click')
         expect(close).toHaveBeenCalledWith(project.id, 'src/app.ts')
+    })
+
+    it('scrolls the tab strip just enough to show the active file tab', async () => {
+        layoutTabStrip({ 'a.ts': 100, 'b.ts': 500 })
+        const w = await mountHeader()
+        const strip = w.get('[role="tablist"]').element
+        const editor = openFileTabs('a.ts', 'b.ts')
+
+        editor.activate(project.id, 'b.ts')
+        await flushPromises()
+        expect(strip.scrollLeft).toBe(300)
+
+        editor.activate(project.id, 'a.ts')
+        await flushPromises()
+        expect(strip.scrollLeft).toBe(100)
+    })
+
+    it('shows a file tab that is already active on first render', async () => {
+        layoutTabStrip({ 'a.ts': 100, 'b.ts': 500 })
+        const plugins = installPinia()
+        store = useAppLayoutStore()
+        useProjectStore().setActiveProject(project)
+        openFileTabs('a.ts', 'b.ts').activate(project.id, 'b.ts')
+
+        wrapper = mount(AppHeader, { attachTo: document.body, global: { plugins: [...plugins] } })
+
+        expect(wrapper.get('[role="tablist"]').element.scrollLeft).toBe(300)
     })
 
     it('labels committed diff tabs apart from index and working tree diffs of the same file', async () => {
@@ -269,10 +317,10 @@ describe('SessionTabs', () => {
 })
 
 describe('Header toolbar', () => {
-    it('opens the command palette from the Command button', async () => {
+    it('leaves search to the sidebar and commands to the right panel', async () => {
         const w = await mountHeader()
-        await w.get('[data-testid="command-button"]').trigger('click')
-        expect(store.showProjectSearch).toBe(true)
+        expect(w.find('[data-testid="command-button"]').exists()).toBe(false)
+        expect(w.find('[data-testid="run-menu-button"]').exists()).toBe(false)
     })
 
     it('offers a way back only for hidden panels and persists reopening them', async () => {
@@ -296,11 +344,17 @@ describe('Header toolbar', () => {
     it('restores persisted toggles on load', async () => {
         localStorage.setItem('keera.layout.sidebarOpen', 'false')
         localStorage.setItem('keera.layout.rightPanelOpen', 'true')
+        localStorage.setItem('keera.layout.statusBarOpen', 'true')
         await mountHeader()
 
         expect(store.sidebarOpen).toBe(false)
         expect(store.rightPanelOpen).toBe(true)
         expect(store.statusBarOpen).toBe(true)
+    })
+
+    it('hides the status bar until it is turned on', async () => {
+        await mountHeader()
+        expect(store.statusBarOpen).toBe(false)
     })
 })
 
@@ -350,8 +404,27 @@ describe('StatusBar', () => {
         await flushPromises()
 
         const bar = w.get('[data-testid="limit-five_hour"]')
-        expect(bar.text().replace(/\s+/g, ' ')).toBe('5h 24%')
-        expect(bar.attributes('title')).toMatch(/^5-hour limit: 24% used, resets in 2h [45]m$/)
+        const clock = new Date(resetsAt * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+        expect(bar.text().replace(/\s+/g, ' ')).toBe(`Claude: 5h limit 77% left · resets at ${clock}`)
+        expect(bar.attributes('title')).toBe(bar.text())
         expect(w.find('[data-testid="limit-seven_day"]').exists()).toBe(false)
     })
+    it('shows Codex and other provider limits separately with remaining usage and resets', async () => {
+        const reset = Math.floor(Date.now() / 1000) + 2 * 86400 + 3 * 3600
+        stubFetch({
+            '/api/projects/1/usage': { data: { attributes: {
+                today: { input: 0, output: 0, cache_creation: 0, cache_read: 0, total: 0 }, agents: {}, reports: {}, limits: null,
+                provider_limits: {
+                    codex: { five_hour: { used_percentage: 70, resets_at: reset }, seven_day: { used_percentage: 67, resets_at: reset } },
+                    claude: { five_hour: { used_percentage: 10, resets_at: reset }, seven_day: null },
+                },
+            } } },
+        })
+        const w = await mountHeader()
+        await flushPromises()
+        expect(w.get('[data-testid="limit-five_hour"][data-provider="codex"]').text()).toContain('Codex: 5h limit 30% left · resets at')
+        expect(w.get('[data-testid="limit-seven_day"][data-provider="codex"]').text()).toContain('Weekly limit 33% left · resets in 2d 3h')
+        expect(w.get('[data-testid="limit-five_hour"][data-provider="claude"]').text()).toContain('90% left')
+    })
+
 })

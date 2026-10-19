@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, ref } from 'vue'
 import { gitFile, gitStatus } from '@/layouts/right-panel/source-control/testing'
 import {
-    isOpenPullRequest, useGitActions, useGitBranchChanges, useGitDiff, useGitPullRequest, useGitStatus, type GitDiff, type GitDiffRequest, type GitPullRequest, type GitTarget,
+    gitKeys, isOpenPullRequest, useGitActions, useGitBranchChanges, useGitDiff, useGitPullRequest, useGitStatus, type GitDiff, type GitDiffRequest, type GitPullRequest, type GitTarget,
 } from './gitQuery'
 
 function jsonResponse(body: unknown, status = 200) {
@@ -268,5 +268,25 @@ describe('isOpenPullRequest', () => {
         expect(isOpenPullRequest({ available: true, error: null, pull_request: { ...pullRequest, state: 'MERGED' } })).toBe(false)
         expect(isOpenPullRequest({ available: true, error: null, pull_request: null })).toBe(false)
         expect(isOpenPullRequest(undefined)).toBe(false)
+    })
+})
+
+describe('comparison base', () => {
+    const committedDiff = (base: string | null): GitDiffRequest => ({ target: MAIN, path: 'a.ts', staged: false, committed: true, base })
+
+    it('sends the picked base to committed diffs', async () => {
+        routeGets({})
+        mountGit(MAIN, committedDiff('origin/main'))
+        await flushPromises()
+        expect(fetchMock).toHaveBeenCalledWith(
+            '/api/projects/1/git/diff?path=a.ts&staged=false&committed=true&base=origin%2Fmain',
+            { headers: { Accept: 'application/json' } },
+        )
+    })
+
+    it('caches each base separately under one branch-changes prefix', () => {
+        expect(gitKeys.diff(committedDiff('origin/main'))).not.toEqual(gitKeys.diff(committedDiff(null)))
+        expect(gitKeys.branchChanges(MAIN, 'main')).not.toEqual(gitKeys.branchChanges(MAIN))
+        expect(gitKeys.branchChanges(MAIN, 'main').slice(0, -1)).toEqual(gitKeys.allBranchChanges(MAIN))
     })
 })

@@ -15,8 +15,11 @@ const { activeProject } = storeToRefs(useProjectStore())
 
 // The only layout with a project route, so it is the one place that resolves
 // the slug into the active project. Unscoped pages keep the last one resolved.
-const { setActiveProject } = useProjects()
+const { setActiveProject, refresh } = useProjects()
 watchEffect(() => setActiveProject(page.props.project))
+// Opening a project moves it to the top of the sidebar (un-hiding it) server-side,
+// and a hidden one isn't in the cached list for setActiveProject until this refetch.
+watch(() => page.props.project, refresh, { immediate: true })
 
 const isTasksPage = computed(() => page.component === 'Tasks')
 const isConfigPage = computed(() => page.component === 'Configurations')
@@ -65,7 +68,7 @@ onBeforeUnmount(() => {
         <div class="flex-1 flex overflow-hidden">
             <!-- Always mounted (display-toggled) so the terminal slot never unmounts under a live xterm. -->
             <div :class="['flex-1 overflow-hidden relative', showPmTerminal ? 'flex' : 'hidden']">
-                <div ref="terminalSlot" data-testid="pm-terminal" class="flex-1 overflow-hidden terminal-host bg-[#f6f8fa]" />
+                <div ref="terminalSlot" data-testid="pm-terminal" class="flex-1 overflow-hidden terminal-host bg-white" />
                 <div class="absolute top-2 right-3 z-10 flex items-center gap-0.5">
                     <button
                         type="button"

@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import ProjectTemplatesModal from '@/components/modals/ProjectTemplatesModal.vue'
 import Modal from '@/components/ui/Modal.vue'
+import TagInput from '@/components/ui/TagInput.vue'
 import useProjects from '@/queries/projectsQuery'
+import { useWorktreeFiles } from '@/queries/worktreeFilesQuery'
+import { color } from '@/tokens'
 import type { Project } from '@/types/type'
 
 const inputClass = 'bg-canvas border border-stroke rounded text-zinc-900 text-ui-13 py-[7px] px-2.5 outline-none w-full box-border font-mono'
@@ -14,20 +17,35 @@ const emit = defineEmits<{ openChange: [open: boolean] }>()
 defineSlots<{ trigger(): unknown }>()
 
 const { handleProjectUpdated } = useProjects()
+const worktreeFiles = useWorktreeFiles(() => props.project.id)
 
 const path = ref(props.project.path)
+const copyPaths = ref<string[]>([])
+const copyPathsEdited = ref(false)
 const saving = ref(false)
 const saved = ref(false)
 const error = ref('')
 const showTemplates = ref(false)
 
+watch(worktreeFiles.paths, paths => {
+    if (!copyPathsEdited.value) copyPaths.value = [...(paths ?? [])]
+}, { immediate: true })
+
+function editCopyPaths(paths: string[]) {
+    copyPathsEdited.value = true
+    copyPaths.value = paths
+}
+
 function onOpenChange(open: boolean) {
     if (open) {
         path.value = props.project.path
+        copyPaths.value = [...(worktreeFiles.paths.value ?? [])]
+        copyPathsEdited.value = false
         saving.value = false
         saved.value = false
         error.value = ''
         showTemplates.value = false
+        void worktreeFiles.refetch()
     }
     emit('openChange', open)
 }
@@ -36,6 +54,12 @@ async function save(close: () => void) {
     saving.value = true
     error.value = ''
     try {
+        try {
+            await worktreeFiles.save(copyPaths.value)
+        } catch (e) {
+            error.value = e instanceof Error ? e.message : 'Failed to save worktree files'
+            return
+        }
         const res = await fetch(`/api/projects/${props.project.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
@@ -79,6 +103,20 @@ async function save(close: () => void) {
                     </span>
                     <input v-model="path" name="path" placeholder="~/code/my-project" required :class="inputClass">
                 </label>
+
+                <div class="flex flex-col gap-1.5" data-testid="worktree-files">
+                    <span :class="labelClass">Worktree files</span>
+                    <span class="text-zinc-500 text-ui-12 leading-normal">
+                        Copied from this project into each new agent worktree, e.g. <code>.env</code> or <code>config/*.local.json</code>. Paths are relative to the project root; files already in the worktree are kept. Meant for gitignored files: copied files git tracks as changes keep the worktree from being cleaned up automatically.
+                    </span>
+                    <TagInput
+                        :model-value="copyPaths"
+                        @update:model-value="editCopyPaths"
+                        placeholder="Add a path or glob and press Enter"
+                        :tag-color="color.accent"
+                        :disabled="worktreeFiles.isLoading.value"
+                    />
+                </div>
 
                 <div class="flex flex-col gap-2 border-t border-stroke pt-4">
                     <span :class="labelClass">Agent templates</span>

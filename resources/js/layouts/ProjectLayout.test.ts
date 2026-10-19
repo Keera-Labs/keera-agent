@@ -110,4 +110,31 @@ describe('ProjectLayout', () => {
         observed.get(wrapper.get('[data-testid="agent-terminal"]').element)!()
         expect(fit).toHaveBeenCalled()
     })
+
+    it('refetches the sidebar on opening a project, so a hidden one resolves and moves to the top', async () => {
+        const hidden = { ...project, id: 2, name: 'hidden', slug: 'hidden' }
+        let sidebar = [project]
+        const fetchMock = stubFetch({ '/api/projects': () => sidebar })
+        vi.stubGlobal('WebSocket', FakeSocket)
+        vi.stubGlobal('ResizeObserver', FakeResizeObserver)
+
+        // The store is created by the layout itself, inside the app, so it gets the query defaults.
+        wrapper = mount(ProjectLayout, {
+            global: { plugins: [...installPinia()], stubs: { PmCheckinControl: true } },
+            slots: { default: () => h('div') },
+        })
+        store = useAppLayoutStore()
+        await flushPromises()
+
+        // Opening it server-side un-hid it and stamped it as the most recent.
+        sidebar = [hidden, project]
+        const listFetches = () => fetchMock.mock.calls.filter(([url]) => url.startsWith('/api/projects?')).length
+        const before = listFetches()
+        page.props = { project: hidden.slug, agent_id: undefined }
+        await flushPromises()
+
+        expect(listFetches()).toBeGreaterThan(before)
+        expect(useProjectStore().activeProject?.id).toBe(hidden.id)
+        page.props = { project: project.slug, agent_id: PM }
+    })
 })

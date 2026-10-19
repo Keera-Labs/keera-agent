@@ -33,30 +33,15 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
 </script>
 
 <template>
-    <div ref="root" class="relative px-2 pt-2 pb-1 border-t border-stroke">
-        <div class="flex items-center h-6 pl-1.5 pr-0.5 mb-1">
-            <span class="flex-1 text-ui-11 font-semibold tracking-[0.06em] uppercase text-zinc-500">Workspaces</span>
-            <WorkspaceAddModal @open-change="isOpen => { if (isOpen) open = false }">
-                <template #trigger>
-                    <button
-                        type="button"
-                        title="New workspace"
-                        class="flex items-center justify-center w-6 h-6 rounded-md text-zinc-500 cursor-pointer hover:bg-black/[0.05] hover:text-zinc-800"
-                    >
-                        <Icon name="plus" :size="13" />
-                    </button>
-                </template>
-            </WorkspaceAddModal>
-        </div>
-
+    <div ref="root" class="relative">
         <button
             type="button"
             data-testid="workspace-picker"
             :aria-expanded="open"
-            class="flex items-center gap-2 w-full py-1.5 px-2 rounded-lg bg-surface border border-stroke cursor-pointer text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:border-zinc-300"
+            class="flex items-center gap-2.5 w-full py-1.5 px-2 rounded-xl bg-surface border border-stroke cursor-pointer text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:border-zinc-300"
             @click="open = !open"
         >
-            <div class="w-6 h-6 rounded-md bg-violet-600 flex items-center justify-center text-ui-12 font-semibold text-white shrink-0">
+            <div class="w-7 h-7 rounded-lg bg-violet-600 flex items-center justify-center text-ui-12 font-semibold text-white shrink-0">
                 {{ (current?.name[0] ?? 'A').toUpperCase() }}
             </div>
             <div class="flex-1 min-w-0">
@@ -77,7 +62,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
         <div
             v-show="open"
             data-testid="workspace-menu"
-            class="absolute bottom-full left-2 right-2 mb-1 z-[200] bg-surface border border-stroke rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.12)] p-1 overflow-hidden"
+            class="absolute bottom-full left-0 right-0 mb-1 z-[200] bg-surface border border-stroke rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.12)] p-1 overflow-hidden"
         >
             <button
                 type="button"
@@ -126,6 +111,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
                 <template #trigger>
                     <button
                         type="button"
+                        title="New workspace"
                         class="flex items-center gap-1.5 w-full h-7 px-2 rounded-md bg-transparent border-0 cursor-pointer text-ui-12.5 text-accent hover:bg-black/[0.04]"
                     >
                         <Icon name="plus" :size="12" />

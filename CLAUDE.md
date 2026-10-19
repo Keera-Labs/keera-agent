@@ -9,6 +9,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Cut feature/task branches off `dev` and open their PRs back into `dev`.
 - PRs are never auto-merged. A PR only merges after explicit review approval — merging is a manual, deliberate action, not an automated step.
 
+## Coding Standards
+
+1. No comments: Do not write comments or docstrings. Express intent through naming, arguments, and clear structure instead. If a piece of code seems to need a comment to be understood, restructure it until it does not.
+2. Commit message format: write a message in a format that follows the conventional commit message format.
+   ```text
+   feat/fix/test/docs/refactor/chore: {}
+
+   Why: explain in bullet points why this feature/fix was necessary.
+
+   How: explain in bullet points how this feature/fix was implemented.
+   ```
+
+3. When adding or changing exception handling, `try/except` logic, or error reporting, use the exception-handling skill at `.ai/skills/exception-handling/SKILL.md`.
+
+4. When adding or changing JSON responses, response schemas, or HTTP status codes, use the api-response-standard skill at `.ai/skills/api-response-standard/SKILL.md`.
+
+5. For routes and controllers, use `.ai/skills/fastapi-startkit/fastapi/SKILL.md`.
+
+6. When starting a feature or task, consult `.ai/skills/architecture/SKILL.md` for HTTP layers, business logic, and boundaries.
+
 ## Commands
 
 **Install dependencies:**
@@ -87,7 +107,7 @@ bash bin/build.sh --no-build  # skip Vite, just sync files
 
 **Agent status hooks:** `ClaudeHookAction` also registers PreToolUse (`AskUserQuestion`), Notification (`permission_prompt|elicitation_dialog`), PostToolUse and UserPromptSubmit hooks pointing to `/api/agent-hook-events`, which move an agent between `running` and `needs_input` (with `attention_kind`/`attention_prompt`). Agent PTYs get `KEERA_AGENT_ID` in their env and the hooks echo it back as the `X-Keera-Agent-Id` header, so events (and Stop) are attributed to one agent (falling back to the `.claude/worktrees/agent-<id>` cwd). An unattributed Stop only marks the project idle and never touches agents; any attributed PostToolUse/UserPromptSubmit sets a non-running agent back to `running`, so a wrongly-stopped agent self-heals on its next tool call. Agent worktrees check out the committed `.claude/settings.json`, so a project that commits it must commit the synced hooks (`artisan claude:hook`) too.
 
-**Route ordering:** In `routes/web.py`, API routes must be registered before the `/{project}` wildcard page route. PATCH and DELETE routes use `router.router.add_api_route` directly — the `Router` wrapper only exposes GET and POST helpers.
+**Route ordering:** In `routes/web.py`, API routes must be registered before the `/{project}` wildcard page route. The `Router` wrapper exposes `get`, `post`, `put`, `patch` and `delete` helpers, so register every verb with `router.<method>(...)`.
 
 **Data model relationships:**
 - `Workspace` has many `Projects` (via `workspace_id` FK, nullable — projects can be unassigned)

@@ -8,14 +8,14 @@ from tests.test_case import TestCase
 
 class TestProjectController(TestCase, DatabaseTransaction):
     """`index` is a global (unscoped) list, so tests stamp their own projects
-    with far-future ``updated_at`` values that dominate any pre-existing
+    with far-future ``last_opened_at`` values that dominate any pre-existing
     rows in the shared test DB, then assert on the relative order of those
     known slugs rather than absolute positions."""
 
-    async def test_index_orders_by_updated_at_desc(self):
-        oldest = await ProjectFactory.new().create(updated_at="2099-01-01 00:00:00")
-        newest = await ProjectFactory.new().create(updated_at="2099-01-03 00:00:00")
-        middle = await ProjectFactory.new().create(updated_at="2099-01-02 00:00:00")
+    async def test_index_orders_by_last_opened_at_desc(self):
+        oldest = await ProjectFactory.new().create(last_opened_at="2099-01-01 00:00:00")
+        newest = await ProjectFactory.new().create(last_opened_at="2099-01-03 00:00:00")
+        middle = await ProjectFactory.new().create(last_opened_at="2099-01-02 00:00:00")
 
         response = await self.get("/api/projects")
         response.assert_ok()
@@ -25,9 +25,9 @@ class TestProjectController(TestCase, DatabaseTransaction):
         self.assertEqual(mine, [newest.slug, middle.slug, oldest.slug])
 
     async def test_index_respects_per_page(self):
-        await ProjectFactory.new().create(updated_at="2099-03-01 00:00:00")
-        second = await ProjectFactory.new().create(updated_at="2099-03-02 00:00:00")
-        newest = await ProjectFactory.new().create(updated_at="2099-03-03 00:00:00")
+        await ProjectFactory.new().create(last_opened_at="2099-03-01 00:00:00")
+        second = await ProjectFactory.new().create(last_opened_at="2099-03-02 00:00:00")
+        newest = await ProjectFactory.new().create(last_opened_at="2099-03-03 00:00:00")
 
         response = await self.get("/api/projects?per_page=2")
         response.assert_ok()
@@ -37,8 +37,8 @@ class TestProjectController(TestCase, DatabaseTransaction):
         self.assertEqual(slugs, [newest.slug, second.slug])
 
     async def test_index_second_page_returns_next_slice(self):
-        newest = await ProjectFactory.new().create(updated_at="2099-04-03 00:00:00")
-        second = await ProjectFactory.new().create(updated_at="2099-04-02 00:00:00")
+        newest = await ProjectFactory.new().create(last_opened_at="2099-04-03 00:00:00")
+        second = await ProjectFactory.new().create(last_opened_at="2099-04-02 00:00:00")
 
         page1 = (await self.get("/api/projects?per_page=1&page=1")).json()
         page2 = (await self.get("/api/projects?per_page=1&page=2")).json()
@@ -48,7 +48,7 @@ class TestProjectController(TestCase, DatabaseTransaction):
 
     async def test_index_clamps_per_page_to_max_when_requested_higher(self):
         for i in range(PROJECTS_PER_PAGE_MAX + 2):
-            await ProjectFactory.new().create(updated_at=f"2099-07-{i + 1:02d} 00:00:00")
+            await ProjectFactory.new().create(last_opened_at=f"2099-07-{i + 1:02d} 00:00:00")
 
         response = await self.get(f"/api/projects?per_page={PROJECTS_PER_PAGE_MAX * 10}")
         response.assert_ok()
@@ -57,7 +57,7 @@ class TestProjectController(TestCase, DatabaseTransaction):
 
     async def test_index_defaults_to_max_per_page_when_omitted(self):
         for i in range(PROJECTS_PER_PAGE_MAX + 2):
-            await ProjectFactory.new().create(updated_at=f"2099-08-{i + 1:02d} 00:00:00")
+            await ProjectFactory.new().create(last_opened_at=f"2099-08-{i + 1:02d} 00:00:00")
 
         response = await self.get("/api/projects")
         response.assert_ok()
@@ -69,11 +69,11 @@ class TestProjectController(TestCase, DatabaseTransaction):
         projects = [
             await ProjectFactory.new().create(
                 workspace_id=workspace.id,
-                updated_at=f"2099-09-{i + 1:02d} 00:00:00",
+                last_opened_at=f"2099-09-{i + 1:02d} 00:00:00",
             )
             for i in range(15)
         ]
-        await ProjectFactory.new().create(updated_at="2100-01-01 00:00:00")
+        await ProjectFactory.new().create(last_opened_at="2100-01-01 00:00:00")
 
         response = await self.get(f"/api/projects?workspace_id={workspace.id}")
         response.assert_ok()
@@ -90,15 +90,15 @@ class TestProjectController(TestCase, DatabaseTransaction):
         own_projects = [
             await ProjectFactory.new().create(
                 workspace_id=workspace.id,
-                updated_at=f"2099-10-0{i + 1} 00:00:00",
+                last_opened_at=f"2099-10-0{i + 1} 00:00:00",
             )
             for i in range(3)
         ]
         other_workspace = await WorkspaceFactory.new().create()
         other = await ProjectFactory.new().create(
-            workspace_id=other_workspace.id, updated_at="2100-01-01 00:00:00"
+            workspace_id=other_workspace.id, last_opened_at="2100-01-01 00:00:00"
         )
-        unassigned = await ProjectFactory.new().create(updated_at="2100-01-02 00:00:00")
+        unassigned = await ProjectFactory.new().create(last_opened_at="2100-01-02 00:00:00")
 
         response = await self.get(f"/api/projects?workspace_id={workspace.id}")
         response.assert_ok()
@@ -111,7 +111,7 @@ class TestProjectController(TestCase, DatabaseTransaction):
 
     async def test_index_selected_workspace_with_no_projects_returns_empty_list(self):
         workspace = await WorkspaceFactory.new().create()
-        await ProjectFactory.new().create(updated_at="2100-01-01 00:00:00")
+        await ProjectFactory.new().create(last_opened_at="2100-01-01 00:00:00")
 
         response = await self.get(f"/api/projects?workspace_id={workspace.id}")
         response.assert_ok()
@@ -123,7 +123,7 @@ class TestProjectController(TestCase, DatabaseTransaction):
         projects = [
             await ProjectFactory.new().create(
                 workspace_id=workspace.id if i % 2 else None,
-                updated_at=f"2099-11-{i + 1:02d} 00:00:00",
+                last_opened_at=f"2099-11-{i + 1:02d} 00:00:00",
             )
             for i in range(12)
         ]

@@ -190,6 +190,9 @@ class TestHistoryReplay(unittest.IsolatedAsyncioTestCase):
         client.type(f"{sys.executable} {script}\n")
         self.assertTrue(await _until(lambda: b"watching" in client.received))
 
+    async def test_the_pty_is_the_shells_controlling_terminal_so_resizes_signal_it(self):
+        self.assertEqual(os.tcgetpgrp(self.terminal.master_fd), os.getpgid(self.terminal.pid))
+
     async def test_a_reattaching_client_makes_the_cli_see_a_real_resize_at_an_unchanged_size(self):
         first = self.attach(replay_history=False)
         await asyncio.sleep(0.1)

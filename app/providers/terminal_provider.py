@@ -1,13 +1,16 @@
 from fastapi_startkit.support import Provider
 
+from app.terminal.command_runs import CommandRunRegistry
 from app.terminal.connection_manager import ConnectionManager
 from app.terminal.manager import TerminalManager
 
 
 class TerminalProvider(Provider):
     def register(self):
-        self.app.bind("terminal", TerminalManager())
+        terminal_manager = TerminalManager()
+        self.app.bind("terminal", terminal_manager)
         self.app.bind("connections", ConnectionManager())
+        self.app.bind("command_runs", CommandRunRegistry(terminal_manager))
 
     def boot(self):
         terminal_manager = self.app.make("terminal")

@@ -12,7 +12,7 @@ async function fetchAllProjects(): Promise<Project[]> {
     const all: Project[] = []
     let page = 1
     while (true) {
-        const res = await fetch(`/api/projects?per_page=${PAGE_SIZE}&page=${page}`)
+        const res = await fetch(`/api/projects?per_page=${PAGE_SIZE}&page=${page}&include_hidden=1`)
         if (!res.ok) throw new Error("Failed to fetch projects")
         const batch: Project[] = await res.json()
         all.push(...batch)
@@ -22,9 +22,9 @@ async function fetchAllProjects(): Promise<Project[]> {
     return all
 }
 
-// Full, unpaginated project list — for surfaces like the Cmd+P search
-// palette that must be able to reach every project, unlike the sidebar's
-// capped recent-projects list.
+// Full, unpaginated project list, hidden projects included — for surfaces
+// like the Cmd+P search palette that must be able to reach every project,
+// unlike the sidebar's capped recent-projects list.
 export default function useAllProjects(enabled: MaybeRefOrGetter<boolean>) {
     const query = useQuery({
         key: ["projects", "all"],

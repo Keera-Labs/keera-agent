@@ -18,27 +18,33 @@ from app.controllers import (
     broadcasting_controller,
     claude_hook_controller,
     command_controller,
+    command_run_controller,
     configurations_page_controller,
     dashboard_controller,
     default_permission_controller,
     editor_settings_controller,
     git_branch_changes_controller,
+    git_branch_controller,
     git_commit_controller,
     git_diff_controller,
     git_pull_request_controller,
     git_push_controller,
     git_stage_controller,
     git_status_controller,
+    git_worktree_change_controller,
     git_worktree_controller,
     global_settings_controller,
     heartbeat_controller,
     home_controller,
     plugin_controller,
+    project_command_run_controller,
     project_file_content_controller,
     project_file_controller,
     project_usage_controller,
+    project_worktree_file_controller,
     remote_control_setting_controller,
     settings_controller,
+    shell_controller,
     task_controller,
     tasks_page_controller,
     terminal_controller,
@@ -63,9 +69,15 @@ router.get("/api/projects/{project_id}/files", project_file_controller.index)
 router.get("/api/projects/{project_id}/files/content", project_file_content_controller.show)
 router.put("/api/projects/{project_id}/files/content", project_file_content_controller.update)
 
+router.get("/api/projects/{project_id}/worktree-files", project_worktree_file_controller.show)
+router.put("/api/projects/{project_id}/worktree-files", project_worktree_file_controller.update)
+
 # Source Control panel — git operations on the project's repository; every endpoint
 # takes an optional ?worktree=<path from /git/worktrees>.
 router.get("/api/projects/{project_id}/git/worktrees", git_worktree_controller.index)
+router.delete("/api/projects/{project_id}/git/worktrees", git_worktree_controller.destroy)
+router.get("/api/projects/{project_id}/git/worktrees/changes", git_worktree_change_controller.index)
+router.get("/api/projects/{project_id}/git/branches", git_branch_controller.index)
 router.get("/api/projects/{project_id}/git/branch-changes", git_branch_changes_controller.show)
 router.get("/api/projects/{project_id}/git/diff", git_diff_controller.show)
 router.get("/api/projects/{project_id}/git/status", git_status_controller.show)
@@ -79,12 +91,15 @@ router.post("/api/projects/{project_id}/git/pull-request", git_pull_request_cont
 
 router.get("/api/projects/{project_id}/commands", command_controller.index)
 router.post("/api/projects/{project_id}/commands", command_controller.store)
-router.post("/api/commands/{command_id}/run", command_controller.run)
-router.post("/api/commands/{command_id}/stop", command_controller.stop)
-router.get("/api/commands/{command_id}/output", command_controller.output)
-router.get("/api/commands/{command_id}/runs", command_controller.runs)
 router.patch("/api/commands/{command_id}", command_controller.update)
 router.delete("/api/commands/{command_id}", command_controller.destroy)
+router.get("/api/projects/{project_id}/command-runs", project_command_run_controller.index)
+router.post("/api/projects/{project_id}/command-runs", project_command_run_controller.store)
+router.delete(
+    "/api/projects/{project_id}/command-runs/{run_id}", project_command_run_controller.destroy
+)
+router.post("/api/commands/{command_id}/runs", command_run_controller.store)
+router.delete("/api/commands/{command_id}/runs", command_run_controller.destroy)
 
 router.post("/api/claude-started", claude_hook_controller.claude_started)
 router.post("/api/claude-stopped", claude_hook_controller.claude_stopped)
@@ -180,5 +195,9 @@ router.get("/{project}", home_controller.project_home)
 
 router.router.add_api_websocket_route("/{project}/ws", terminal_controller.terminal_ws)
 router.router.add_api_websocket_route(
-    "/{project}/command-ws/{command_id}", command_controller.command_ws
+    "/{project}/command-ws/{command_id}", command_run_controller.attach
 )
+router.router.add_api_websocket_route(
+    "/{project}/command-run-ws/{run_id}", project_command_run_controller.attach
+)
+router.router.add_api_websocket_route("/{project}/shell-ws", shell_controller.attach)

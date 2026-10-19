@@ -1,7 +1,7 @@
 from collections.abc import Iterable
 
 from app.ai.provider import Provider
-from app.ai.providers import ClaudeProvider, CodexProvider
+from app.ai.providers import ClaudeProvider, CodexProvider, GeminiProvider
 
 
 class ProviderRegistry:
@@ -23,4 +23,4 @@ class ProviderRegistry:
         return list(self._providers.values())
 
 
-providers = ProviderRegistry((CodexProvider(), ClaudeProvider()))
+providers = ProviderRegistry((CodexProvider(), ClaudeProvider(), GeminiProvider()))

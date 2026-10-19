@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import { computed, h, ref, type Component } from 'vue'
+import { computed, h, ref, type Component, type Ref } from 'vue'
 import type { Project, Workspace } from '@/types/type'
 import ProjectDeleteModal from './ProjectDeleteModal.vue'
 import ProjectEditModal from './ProjectEditModal.vue'
@@ -16,6 +16,29 @@ const projects = vi.hoisted(() => ({
 vi.mock('@/queries/projectsQuery', () => ({
     default: () => ({ ...projects, deleting: ref(false) }),
 }))
+
+const worktreeFiles = vi.hoisted(() => ({
+    paths: { value: ['.env'] as string[] | undefined },
+    fetched: undefined as unknown as Ref<string[] | undefined>,
+    save: vi.fn(),
+    refetch: vi.fn(),
+}))
+
+vi.mock('@/queries/worktreeFilesQuery', async () => {
+    const { ref } = await import('vue')
+    worktreeFiles.fetched = ref<string[] | undefined>()
+    return {
+        useWorktreeFiles: () => {
+            worktreeFiles.fetched.value = worktreeFiles.paths.value
+            return {
+                paths: worktreeFiles.fetched,
+                isLoading: ref(false),
+                refetch: worktreeFiles.refetch,
+                save: worktreeFiles.save,
+            }
+        },
+    }
+})
 
 vi.mock('@/queries/workspacesQuery', () => ({
     default: () => ({
@@ -52,6 +75,9 @@ const button = (label: string) => [...dialog()!.querySelectorAll('button')].find
 
 beforeEach(() => {
     Object.values(projects).forEach(fn => fn.mockReset())
+    worktreeFiles.paths.value = ['.env']
+    worktreeFiles.save.mockReset().mockImplementation((paths: string[]) => Promise.resolve(paths))
+    worktreeFiles.refetch.mockReset()
 })
 
 afterEach(() => {
@@ -155,6 +181,96 @@ describe('ProjectEditModal', () => {
 
         expect(dialog()!.textContent).toContain('Something went wrong')
         expect(projects.handleProjectUpdated).not.toHaveBeenCalled()
+    })
+
+    it('lists, adds and removes worktree files, then saves them', async () => {
+        vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(project) })))
+        await open(ProjectEditModal)
+
+        const section = dialog()!.querySelector('[data-testid="worktree-files"]')!
+        expect(section.textContent).toContain('.env')
+        expect(worktreeFiles.refetch).toHaveBeenCalled()
+
+        const input = section.querySelector<HTMLInputElement>('input')!
+        input.value = 'config/*.local.json'
+        input.dispatchEvent(new Event('input'))
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+        await flushPromises()
+        section.querySelector<HTMLButtonElement>('button[aria-label="Remove .env"]')!.click()
+        await flushPromises()
+
+        dialog()!.querySelector('form')!.dispatchEvent(new Event('submit'))
+        await flushPromises()
+
+        expect(worktreeFiles.save).toHaveBeenCalledWith(['config/*.local.json'])
+        expect(dialog()!.textContent).toContain('✓ Saved')
+    })
+
+    it('shows the validation error when worktree files are rejected', async () => {
+        vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(project) })))
+        worktreeFiles.save.mockRejectedValue(new Error("'../.env' must be a path relative to the project root"))
+        await open(ProjectEditModal)
+
+        dialog()!.querySelector('form')!.dispatchEvent(new Event('submit'))
+        await flushPromises()
+
+        expect(dialog()!.textContent).toContain("'../.env' must be a path relative to the project root")
+        expect(dialog()!.textContent).not.toContain('✓ Saved')
+    })
+
+    it('leaves the project untouched when worktree files are rejected', async () => {
+        vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(project) })))
+        worktreeFiles.save.mockRejectedValue(new Error("'/etc/passwd' must be a path relative to the project root"))
+        await open(ProjectEditModal)
+
+        dialog()!.querySelector('form')!.dispatchEvent(new Event('submit'))
+        await flushPromises()
+
+        expect(fetch).not.toHaveBeenCalled()
+        expect(projects.handleProjectUpdated).not.toHaveBeenCalled()
+    })
+
+    it('saves worktree files before patching the project', async () => {
+        const order: string[] = []
+        worktreeFiles.save.mockImplementation((paths: string[]) => { order.push('worktree-files'); return Promise.resolve(paths) })
+        vi.stubGlobal('fetch', vi.fn(() => { order.push('project'); return Promise.resolve({ ok: true, json: () => Promise.resolve(project) }) }))
+        await open(ProjectEditModal)
+
+        dialog()!.querySelector('form')!.dispatchEvent(new Event('submit'))
+        await flushPromises()
+
+        expect(order).toEqual(['worktree-files', 'project'])
+    })
+
+    it('keeps edits made before a late refetch resolves', async () => {
+        vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(project) })))
+        await open(ProjectEditModal)
+
+        const section = dialog()!.querySelector('[data-testid="worktree-files"]')!
+        const input = section.querySelector<HTMLInputElement>('input')!
+        input.value = 'storage/app'
+        input.dispatchEvent(new Event('input'))
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+        await flushPromises()
+
+        worktreeFiles.fetched.value = []
+        await flushPromises()
+        dialog()!.querySelector('form')!.dispatchEvent(new Event('submit'))
+        await flushPromises()
+
+        expect(worktreeFiles.save).toHaveBeenCalledWith(['.env', 'storage/app'])
+    })
+
+    it('takes the refetched list when nothing was edited', async () => {
+        vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(project) })))
+        await open(ProjectEditModal)
+
+        worktreeFiles.fetched.value = ['.env', '.env.local']
+        await flushPromises()
+        dialog()!.querySelector('form')!.dispatchEvent(new Event('submit'))
+        await flushPromises()
+
+        expect(worktreeFiles.save).toHaveBeenCalledWith(['.env', '.env.local'])
     })
 
     it('opens the project templates manager', async () => {

@@ -1,3 +1,6 @@
+import os
+import tempfile
+
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
 from app.controllers.global_settings_controller import write_global_setting
@@ -33,6 +36,49 @@ class TestAgentProviders(TestCase, DatabaseTransaction):
                 "codex --config check_for_update_on_startup=false --model gpt-5.6-terra"
             )
         )
+
+    async def test_create_gemini_agent_uses_complexity_model_and_native_command(self):
+        response = await self.post(
+            f"/api/projects/{self.project.id}/agents",
+            json={"name": "Gemini worker", "provider": "gemini", "complexity": "easy"},
+        )
+        response.assert_ok()
+        attributes = response.json()["data"]["attributes"]
+        self.assertEqual(attributes["provider"], "gemini")
+        self.assertEqual(attributes["model"], "gemini-3.8-flash")
+        agent = await Agent.find(int(response.json()["data"]["id"]))
+        command = agent.to_command()
+        self.assertIn("GEMINI_CLI_HOME=", command)
+        self.assertIn("gemini --model gemini-3.8-flash", command)
+        self.assertNotIn("--worktree", command)
+
+    async def test_legacy_saved_models_keep_gemini_defaults(self):
+        await write_global_setting("provider_models", {"codex": ["custom"], "claude": ["custom"]})
+        response = await self.post(
+            f"/api/projects/{self.project.id}/agents",
+            json={"name": "Gemini worker", "provider": "gemini", "complexity": "medium"},
+        )
+        response.assert_ok()
+        self.assertEqual(response.json()["data"]["attributes"]["model"], "gemini-3.8-flash")
+
+    async def test_missing_gemini_cli_trigger_returns_actionable_error(self):
+        created = await self.post(
+            f"/api/projects/{self.project.id}/agents",
+            json={"name": "Gemini worker", "provider": "gemini", "complexity": "easy"},
+        )
+        agent_id = int(created.json()["data"]["id"])
+        with tempfile.TemporaryDirectory() as directory:
+            previous = os.environ.get("PATH", "")
+            os.environ["PATH"] = directory
+            try:
+                response = await self.post(
+                    f"/api/agents/{agent_id}/trigger", json={"message": "Work"}
+                )
+            finally:
+                os.environ["PATH"] = previous
+        response.assert_status(422)
+        self.assertIn("Install @google/gemini-cli", response.json()["error"])
+        self.assertIsNone((await Agent.find(agent_id)).session_id)
 
     async def test_create_defaults_to_codex(self):
         response = await self.post(

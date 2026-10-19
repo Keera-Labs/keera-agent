@@ -1,6 +1,6 @@
 from fastapi_startkit.fastapi import Router
 
-from app.controllers import project_controller, workspace_controller
+from app.controllers import project_controller, project_visibility_controller, workspace_controller
 
 router = Router()
 
@@ -14,5 +14,6 @@ router.get("/api/validate-path", project_controller.validate_path)
 router.post("/api/projects", project_controller.store)
 router.patch("/api/projects/{project_id}", project_controller.update)
 router.delete("/api/projects/{project_id}", project_controller.destroy)
+router.patch("/api/projects/{project_id}/visibility", project_visibility_controller.update)
 router.post("/api/projects/{project_id}/upload-image", project_controller.upload_image)
 router.post("/api/projects/{project_id}/open-directory", project_controller.open_directory)

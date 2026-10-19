@@ -36,6 +36,7 @@ const projects = [project(10, 'alpha-api', 1), project(11, 'alpha-web', 1), proj
 
 type Call = { url: string; method: string }
 let calls: Call[]
+let hiddenIds: Set<number>
 
 function summary(id: number, projectId: number, status: string, extra: Record<string, unknown> = {}) {
     return {
@@ -47,12 +48,20 @@ function summary(id: number, projectId: number, status: string, extra: Record<st
         },
     }
 }
+let projectTasks = { rows: 0, total: 0 }
 let summaries: ReturnType<typeof summary>[]
 
 function fakeFetch(url: string, init?: RequestInit) {
     calls.push({ url, method: init?.method ?? 'GET' })
     const { pathname, searchParams } = new URL(url, 'http://test')
     let body: unknown = []
+    const visibility = pathname.match(/^\/api\/projects\/(\d+)\/visibility$/)
+    if (visibility && init?.method === 'PATCH') {
+        const id = Number(visibility[1])
+        if (JSON.parse(String(init.body)).hidden) hiddenIds.add(id)
+        else hiddenIds.delete(id)
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: { id: String(id) } }) })
+    }
     if (pathname === '/api/workspaces') body = { data: workspaces.map(({ id, ...attributes }) => ({ type: 'workspaces', id: String(id), attributes })) }
     if (pathname === '/api/agent-summaries') {
         const ids = searchParams.getAll('project_ids').map(Number)
@@ -64,9 +73,16 @@ function fakeFetch(url: string, init?: RequestInit) {
     if (pathname === '/api/projects' && init?.method === 'POST') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(project(99, 'fresh', 1)) })
     }
+    if (pathname === '/api/projects/10/tasks') {
+        const data = Array.from({ length: projectTasks.rows }, (_, i) => ({
+            type: 'tasks', id: String(i + 1), attributes: { id: i + 1, project_id: 10, title: `t${i + 1}`, status: 'pending' },
+        }))
+        body = { data, meta: { total: projectTasks.total, count: data.length, per_page: 15, current_page: 1, last_page: 3, next_page: 2, previous_page: null } }
+    }
     if (pathname === '/api/projects') {
         const ws = searchParams.get('workspace_id')
-        body = ws === null ? projects : projects.filter(p => p.workspace_id === Number(ws))
+        const listed = searchParams.has('include_hidden') ? projects : projects.filter(p => !hiddenIds.has(p.id))
+        body = ws === null ? listed : listed.filter(p => p.workspace_id === Number(ws))
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve(body) })
 }
@@ -83,13 +99,15 @@ async function mountSidebar() {
     return wrapper
 }
 
-const projectNames = (w: VueWrapper) => w.findAll('[data-testid="project-item"]').map(el => el.text())
+const projectNames = (w: VueWrapper) => w.findAll('[data-testid="project-name"]').map(el => el.text())
 const agentNames = (el: { findAll: VueWrapper['findAll'] }) =>
     el.findAll('[data-testid="agent-name"]').map(a => a.text())
 
 beforeEach(() => {
     calls = []
+    hiddenIds = new Set()
     summaries = []
+    projectTasks = { rows: 0, total: 0 }
     page.component = 'Home'
     page.props = {}
     vi.stubGlobal('fetch', vi.fn(fakeFetch))
@@ -138,7 +156,7 @@ describe('Sidebar', () => {
 
         expect(projectNames(w)).toEqual([])
         expect(w.text()).toContain('No projects')
-        expect(w.find('[data-testid="add-project-group"]').exists()).toBe(true)
+        expect(w.find('[data-testid="add-project"]').exists()).toBe(true)
     })
 
     it('highlights the active project and shows its Claude status', async () => {
@@ -149,7 +167,7 @@ describe('Sidebar', () => {
 
         const items = w.findAll('[data-testid="project-item"]')
         expect(items[0].attributes('aria-current')).toBe('page')
-        expect(items[0].text()).toContain('/tmp/p-10')
+        expect(items[0].attributes('title')).toBe('/tmp/p-10')
         expect(items[1].attributes('aria-current')).toBeUndefined()
         expect(items[1].get('[data-testid="project-status"]').attributes('data-status')).toBe('done')
         expect(items[2].get('[data-testid="project-status"]').attributes('data-status')).toBe('idle')
@@ -319,59 +337,23 @@ describe('Sidebar', () => {
         expect(w.find('[aria-label="Edit project"]').exists()).toBe(false)
     })
 
-    it('creates a workspace from the Workspaces header', async () => {
+    it('creates a workspace from the workspace menu', async () => {
         const w = await mountSidebar()
 
-        await w.get('[title="New workspace"]').trigger('click')
+        await w.get('[data-testid="workspace-picker"]').trigger('click')
+        await w.get('[data-testid="workspace-menu"] [title="New workspace"]').trigger('click')
 
         expect(document.querySelector('form')!.textContent).toContain('New Workspace')
         expect(w.get('[data-testid="workspace-menu"]').isVisible()).toBe(false)
     })
 
-    // A narrow footer (e.g. 18px in a 180px sidebar) shows only the icon, named by
-    // aria-label and title, rather than clipping the label to "+ N".
-    it('names New Agent even when its label collapses to the icon', async () => {
+    it('shows the server task total in the Tasks tab, not the length of the first page', async () => {
+        projectTasks = { rows: 15, total: 40 }
         const w = await mountSidebar()
-
-        const newAgent = w.get('[aria-label="New Agent"]')
-        expect(newAgent.attributes('title')).toBe('New Agent')
-        expect(newAgent.get('span').classes()).toEqual(expect.arrayContaining(['hidden', '@min-[13.75em]:inline']))
-    })
-
-    it('goes to the Dashboard from the logo at the top of the sidebar', async () => {
-        const w = await mountSidebar()
-
-        await w.get('[aria-label="Go to Dashboard"]').trigger('click')
-
-        expect(router.visit).toHaveBeenCalledWith('/')
-    })
-
-    it('opens the project search palette from the Search button', async () => {
-        const w = await mountSidebar()
-
-        await w.get('[data-testid="sidebar-search"]').trigger('click')
+        useProjectStore().setActiveProject(projects[0])
         await flushPromises()
 
-        expect(useAppLayoutStore().showProjectSearch).toBe(true)
-        expect(document.querySelector('[aria-label="Search projects"]')).not.toBeNull()
-    })
-
-    it('opens the Settings modal in place from the gear', async () => {
-        const w = await mountSidebar()
-        const gear = w.get('[title="Settings"]')
-        const dialog = () => w.find('[role="dialog"][aria-label="Settings"]')
-
-        expect(gear.attributes('aria-expanded')).toBe('false')
-        await gear.trigger('click')
-        await flushPromises()
-
-        expect(dialog().exists()).toBe(true)
-        expect(gear.attributes('aria-expanded')).toBe('true')
-        expect(router.visit).not.toHaveBeenCalledWith('/settings')
-
-        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-        await flushPromises()
-        expect(dialog().exists()).toBe(false)
+        expect(w.get('[data-tab="tasks"]').text()).toContain('40')
     })
 
     it('offers only Tasks in the nav, marked current on the Tasks page', async () => {
@@ -411,12 +393,64 @@ describe('Sidebar', () => {
         const layout = useAppLayoutStore()
 
         await w.get('[data-testid="toggle-panel-bottom"]').trigger('click')
-        expect(layout.statusBarOpen).toBe(false)
-        expect(localStorage.getItem('keera.layout.statusBarOpen')).toBe('false')
+        expect(layout.statusBarOpen).toBe(true)
+        expect(localStorage.getItem('keera.layout.statusBarOpen')).toBe('true')
 
         await w.get('[data-testid="toggle-panel-left"]').trigger('click')
         expect(layout.sidebarOpen).toBe(false)
         expect(localStorage.getItem('keera.layout.sidebarOpen')).toBe('false')
+    })
+
+    describe('hiding a project', () => {
+        async function hideFromMenu(w: VueWrapper, name: string) {
+            const row = w.findAll('[data-testid="project-item"]').find(el => el.text().includes(name))!
+            await row.element.parentElement!.querySelector<HTMLElement>('[aria-label="Project actions"]')!.click()
+            await flushPromises()
+            const item = w.findAll('[data-testid="project-menu"] button').find(b => b.text() === 'Hide project')!
+            await item.trigger('click')
+            await flushPromises()
+        }
+
+        it('removes the project from the sidebar without deleting it', async () => {
+            const w = await mountSidebar()
+
+            await hideFromMenu(w, 'alpha-web')
+
+            const patch = vi.mocked(fetch).mock.calls.find(([url]) => url === '/api/projects/11/visibility')!
+            expect(patch[1]).toMatchObject({ method: 'PATCH' })
+            expect(JSON.parse(patch[1]!.body as string)).toEqual({ hidden: true })
+            expect(calls.some(c => c.method === 'DELETE')).toBe(false)
+            expect(projectNames(w).some(n => n.includes('alpha-web'))).toBe(false)
+            expect(w.find('[data-testid="project-menu"]').exists()).toBe(false)
+            expect(router.visit).not.toHaveBeenCalled()
+        })
+
+        it('leaves the page when hiding the project that is open', async () => {
+            page.props = { project: 'p-11' }
+            const w = await mountSidebar()
+
+            await hideFromMenu(w, 'alpha-web')
+
+            expect(router.visit).toHaveBeenCalledWith('/')
+        })
+
+        it('still finds a hidden project in search', async () => {
+            hiddenIds.add(11)
+            const w = await mountSidebar()
+            expect(projectNames(w).some(n => n.includes('alpha-web'))).toBe(false)
+
+            useAppLayoutStore().showProjectSearch = true
+            await flushPromises()
+
+            const results = [...document.querySelectorAll('[data-testid="search-result"]')].map(r => r.textContent)
+            expect(results.some(text => text?.includes('alpha-web'))).toBe(true)
+        })
+    })
+
+    it('opens the search palette from the sidebar search box', async () => {
+        const w = await mountSidebar()
+        await w.get('[data-testid="sidebar-search"]').trigger('click')
+        expect(useAppLayoutStore().showProjectSearch).toBe(true)
     })
 
     it('opens the project search palette from the store', async () => {
@@ -450,7 +484,7 @@ describe('Sidebar', () => {
 
             const row = cards[0].get('[data-testid="sidebar-agent"]')
             expect(row.attributes('data-status')).toBe('waiting')
-            expect(row.text()).toContain('– Fix the login bug')
+            expect(row.get('[data-testid="agent-preview"]').text()).toBe('Fix the login bug')
             expect(row.text()).toContain('now')
 
             const summaryCalls = calls.filter(c => c.url.startsWith('/api/agent-summaries'))
@@ -464,7 +498,7 @@ describe('Sidebar', () => {
 
             expect(w.get('[data-testid="section-projects"]').text().trim()).toBe('Projects')
             expect(w.text()).not.toContain('In progress')
-            expect(projectNames(w).map(n => n.replace(/\d+$/, ''))).toEqual(['alpha-api', 'alpha-web', 'loose'])
+            expect(projectNames(w)).toEqual(['alpha-api', 'alpha-web', 'loose'])
         })
 
         it('opens an agent on click and marks it active', async () => {
@@ -523,7 +557,7 @@ describe('Sidebar', () => {
 
             expect(w.get('[data-testid="agent-name"]').classes()).toEqual(expect.arrayContaining(['flex-1', 'min-w-0', 'truncate']))
             const reply = w.get('[data-testid="agent-reply"]')
-            expect(reply.classes()).toContain('shrink-0')
+            expect(reply.classes()).toEqual(expect.arrayContaining(['absolute', 'right-1.5']))
             expect(reply.get('svg').classes()).toContain('@min-[10em]:hidden')
             expect(reply.get('span').classes()).toEqual(expect.arrayContaining(['hidden', '@min-[10em]:inline']))
             expect(reply.get('span').text()).toBe('Reply')
@@ -540,9 +574,8 @@ describe('Sidebar', () => {
             summaries = [summary(1, 10, 'idle'), summary(2, 10, 'idle')]
             const w = await mountSidebar()
 
-            const toggle = w.get('[data-testid="project-collapse"]')
-            expect(toggle.text()).toContain('2')
-            await toggle.trigger('click')
+            expect(w.get('[data-testid="project-count"]').text()).toBe('2')
+            await w.get('[data-testid="project-collapse"]').trigger('click')
 
             expect(w.find('[data-testid="project-agents"]').exists()).toBe(false)
             expect(router.visit).not.toHaveBeenCalled()
@@ -554,8 +587,8 @@ describe('Sidebar', () => {
         })
     })
 
-    describe('tab-group styling', () => {
-        it('colors each project header and its agent rule from the project id', async () => {
+    describe('project card styling', () => {
+        it('tints each project card and its letter tile from the project id', async () => {
             summaries = [summary(1, 10, 'idle'), summary(2, 11, 'idle')]
             const w = await mountSidebar()
 
@@ -563,10 +596,12 @@ describe('Sidebar', () => {
             cards.forEach((card, i) => {
                 const color = projectColor(projects[i].id)
                 expect(card.attributes('data-color')).toBe(color.name)
-                expect(card.get('[data-testid="project-item"]').classes()).toEqual(expect.arrayContaining([color.fill, color.text]))
+                expect(card.classes()).toContain(color.tint)
+                const tile = card.get('[data-testid="project-tile"]')
+                expect(tile.classes()).toEqual(expect.arrayContaining([color.tile, color.tileText]))
+                expect(tile.text()).toBe(projects[i].name.charAt(0).toUpperCase())
             })
             expect(cards[0].attributes('data-color')).not.toBe(cards[1].attributes('data-color'))
-            expect(cards[0].get('[data-testid="project-agents"]').classes()).toContain(projectColor(10).border)
         })
 
         it('renders a project without agents as a bare header with no count or chevron', async () => {
@@ -577,59 +612,50 @@ describe('Sidebar', () => {
             expect(card.get('[data-testid="project-item"]').attributes('aria-current')).toBeUndefined()
             expect(card.get('[title="alpha-web"]').text()).toBe('alpha-web')
             expect(card.find('[data-testid="project-collapse"]').exists()).toBe(false)
+            expect(card.find('[data-testid="project-count"]').exists()).toBe(false)
             expect(card.find('[data-testid="project-agents"]').exists()).toBe(false)
             expect(card.find('[data-testid="sidebar-agent"]').exists()).toBe(false)
         })
 
-        it('rings only the active project\'s header and keeps the status dot on a solid white backdrop', async () => {
+        it('rings only the active project\'s card and hides the status dot while idle', async () => {
             const w = await mountSidebar()
             useProjectStore().setActiveProject(projects[0])
+            useAppLayoutStore().setClaudeStatus(11, 'running')
             await flushPromises()
 
-            const [active, inactive] = w.findAll('[data-testid="project-item"]')
-            const ACTIVE_RING = ['ring-2', 'ring-inset', 'ring-black/15']
-            expect(active.classes()).toEqual(expect.arrayContaining(ACTIVE_RING))
-            ACTIVE_RING.forEach(c => expect(inactive.classes()).not.toContain(c))
-
-            for (const item of [active, inactive]) {
-                expect(item.get('[data-testid="project-status"]').classes()).toEqual(expect.arrayContaining(['ring-2', 'ring-white']))
-            }
+            const [active, inactive] = w.findAll('[data-testid="project-card"]')
+            expect(active.classes()).toContain('ring-1')
+            expect(inactive.classes()).not.toContain('ring-1')
+            expect(active.get('[data-testid="project-status"]').classes()).toContain('hidden')
+            expect(inactive.get('[data-testid="project-status"]').classes()).toContain('animate-pulse')
         })
 
-        it('puts the agent count at the right end of the pill, just before the chevron', async () => {
+        it('puts the collapse chevron first and the agent count last in the header row', async () => {
             summaries = [summary(1, 10, 'idle'), summary(2, 10, 'idle')]
             const w = await mountSidebar()
-            useProjectStore().setActiveProject(projects[0])
-            await flushPromises()
 
             const header = w.findAll('[data-testid="project-item"]')[0].element
-            const toggle = w.get('[data-testid="project-collapse"]').element
-            // A direct child of the pill row, after the stretching name column, so it is right-aligned
-            // and vertically centred even when the active project's path line shows.
-            expect(toggle.parentElement).toBe(header)
-            expect(header.lastElementChild).toBe(toggle)
-            expect(header.querySelector('[title="alpha-api"]')!.parentElement!.classList).toContain('flex-1')
-            expect(toggle.textContent!.trim()).toBe('2')
-            expect(toggle.lastElementChild!.tagName.toLowerCase()).toBe('svg')
+            expect(header.firstElementChild).toBe(w.get('[data-testid="project-collapse"]').element)
+            expect(header.lastElementChild).toBe(w.get('[data-testid="project-count"]').element)
+            expect(w.get('[data-testid="project-count"]').text()).toBe('2')
         })
 
-        it('flips the chevron when a group collapses', async () => {
+        it('turns the chevron down while a group is open', async () => {
             summaries = [summary(1, 10, 'idle')]
             const w = await mountSidebar()
 
             const chevron = () => w.get('[data-testid="project-collapse"] svg')
-            expect(chevron().classes()).toContain('rotate-180')
+            expect(chevron().classes()).toContain('rotate-90')
             await w.get('[data-testid="project-collapse"]').trigger('click')
-            expect(chevron().classes()).not.toContain('rotate-180')
+            expect(chevron().classes()).not.toContain('rotate-90')
             expect(w.get('[data-testid="project-collapse"]').attributes('aria-expanded')).toBe('false')
         })
 
-        it('opens the new-project dialog from the "+" button below the groups', async () => {
+        it('opens the new-project dialog from the "+" beside the Projects heading', async () => {
             const w = await mountSidebar()
 
-            const list = w.get('[data-testid="add-project-group"]').element.closest('ul')!
-            expect(list.lastElementChild!.contains(w.get('[data-testid="add-project-group"]').element)).toBe(true)
-            await w.get('[data-testid="add-project-group"]').trigger('click')
+            expect(w.get('[data-testid="section-projects"]').find('[data-testid="add-project"]').exists()).toBe(true)
+            await w.get('[data-testid="add-project"]').trigger('click')
             expect(document.querySelector('[role="dialog"]')!.textContent).toContain('New Project')
         })
     })

@@ -95,9 +95,32 @@ export default function useProjects() {
         return deleteMutation.mutateAsync(projectId)
     }
 
+    const hideMutation = useMutation({
+        mutation: async (project: Project) => {
+            const res = await fetch(`/api/projects/${project.id}/visibility`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ hidden: true }),
+            })
+            if (!res.ok) throw new Error("Failed to hide project")
+            return project
+        },
+        onSuccess: project => {
+            invalidate()
+            // Staying would re-open it on the next in-project navigation, putting it straight back.
+            if (page.props.project === project.slug) router.visit("/")
+        },
+    })
+
+    function handleProjectHidden(project: Project) {
+        return hideMutation.mutateAsync(project)
+    }
+
     return {
         projects,
         setActiveProject,
+        refresh: invalidate,
+        handleProjectHidden,
         deleting: deleteMutation.isLoading,
         handleProjectCreated,
         handleMoveProject,

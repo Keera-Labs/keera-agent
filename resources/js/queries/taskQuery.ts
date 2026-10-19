@@ -32,6 +32,8 @@ export function parseTaskPage(document: TaskCollectionDocument): TaskPage {
     return { tasks, total: document.meta?.total ?? tasks.length }
 }
 
+export const TASKS_QUERY_KEY = 'tasks'
+
 async function fetchTasks(projectId: number): Promise<TaskPage> {
     const res = await fetch(`/api/projects/${projectId}/tasks`)
     if (!res.ok) throw new Error('Failed to fetch tasks')
@@ -52,7 +54,7 @@ async function sendTask(url: string, method: 'POST' | 'PATCH', body: object): Pr
 export function useTasks(projectIdSource: MaybeRefOrGetter<number | null>) {
     const queryCache = useQueryCache()
     const projectId = () => toValue(projectIdSource)
-    const key = () => ['tasks', projectId()]
+    const key = () => [TASKS_QUERY_KEY, projectId()]
 
     const query = useQuery({
         key,
@@ -61,26 +63,18 @@ export function useTasks(projectIdSource: MaybeRefOrGetter<number | null>) {
         staleTime: 1000 * 30,
     })
 
-    // Keeps `total` in step with local additions/removals so `hasMore` stays right.
-    const setTasks = (updater: (prev: Task[]) => Task[]) =>
-        queryCache.setQueryData<TaskPage>(key(), prev => {
-            const before = prev?.tasks ?? []
-            const tasks = updater(before)
-            return { tasks, total: (prev?.total ?? before.length) + tasks.length - before.length }
-        })
-
-    const invalidate = () => queryCache.invalidateQueries({ key: key(), exact: true })
+    const invalidate = () => queryCache.invalidateQueries({ key: [TASKS_QUERY_KEY] })
 
     const create = useMutation({
         mutation: (data: { title: string; body: string; assignees: string[] }) =>
             sendTask(`/api/projects/${projectId()}/tasks`, 'POST', data),
-        onSuccess: task => setTasks(prev => [...prev, task]),
+        onSuccess: invalidate,
     })
 
     const updateStatus = useMutation({
         mutation: ({ taskId, status }: { taskId: number; status: Task['status'] }) =>
             sendTask(`/api/tasks/${taskId}`, 'PATCH', { status }),
-        onSuccess: updated => setTasks(prev => prev.map(t => (t.id === updated.id ? updated : t))),
+        onSuccess: invalidate,
     })
 
     const remove = useMutation({
@@ -89,7 +83,7 @@ export function useTasks(projectIdSource: MaybeRefOrGetter<number | null>) {
             if (!res.ok) throw new Error('Failed to delete task')
             return taskId
         },
-        onSuccess: taskId => setTasks(prev => prev.filter(t => t.id !== taskId)),
+        onSuccess: invalidate,
     })
 
     const tasks = computed<Task[]>(() => query.data.value?.tasks ?? [])

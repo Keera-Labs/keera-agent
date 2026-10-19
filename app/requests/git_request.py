@@ -25,6 +25,18 @@ class GitWorktreeQuery(BaseModel):
     worktree: Optional[str] = None
 
 
+class GitWorktreeDestroyQuery(BaseModel):
+    worktree: str = Field(min_length=1)
+    force: bool = False
+
+
+BRANCH_NAME = r"^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+
+
+class GitBranchChangesQuery(GitWorktreeQuery):
+    base: Optional[str] = Field(default=None, pattern=BRANCH_NAME)
+
+
 class GitCommitIndexQuery(GitWorktreeQuery):
     limit: int = Field(default=20, ge=1, le=100)
 
@@ -34,6 +46,7 @@ class GitDiffQuery(GitWorktreeQuery):
     path: str = ""
     staged: bool = False
     committed: bool = False
+    base: Optional[str] = Field(default=None, pattern=BRANCH_NAME)
 
 
 class GitCommitStoreRequest(BaseModel):
@@ -47,5 +60,5 @@ class PullRequestStoreRequest(BaseModel):
 
     title: Optional[str] = None
     body: Optional[str] = None
-    base: Optional[str] = Field(default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
+    base: Optional[str] = Field(default=None, pattern=BRANCH_NAME)
     draft: bool = False

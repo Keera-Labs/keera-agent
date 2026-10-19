@@ -118,7 +118,7 @@ function onDrop(e: DragEvent) {
                 @dragleave="onDragLeave"
                 @drop.prevent="onDrop"
             >
-                <div class="min-h-[48px] shrink-0 flex items-center pl-4 pr-3.5 pt-[7px] pb-[7px] gap-2.5 border-b border-stroke bg-white">
+                <div class="min-h-[72px] shrink-0 flex items-center pl-4 pr-4 py-3 gap-3 border-b border-stroke bg-white">
                     <button
                         title="Back"
                         class="bg-transparent border-0 text-zinc-400 cursor-pointer p-1 flex items-center rounded-sm hover:text-zinc-900 hover:bg-canvas"
@@ -128,7 +128,7 @@ function onDrop(e: DragEvent) {
                     </button>
 
                     <div
-                        class="w-7 h-7 rounded-md shrink-0 flex items-center justify-center text-ui-11 font-bold text-white"
+                        class="w-10 h-10 rounded-lg shrink-0 flex items-center justify-center text-ui-15 font-bold text-white"
                         :style="{ background: agentBg }"
                     >
                         {{ displayName.charAt(0).toUpperCase() }}
@@ -136,15 +136,15 @@ function onDrop(e: DragEvent) {
 
                     <div class="flex-1 min-w-0 flex flex-col justify-center gap-px">
                         <div class="flex items-center gap-2">
-                            <span class="text-zinc-900 text-ui-13 font-semibold truncate">{{ displayName }}</span>
+                            <span class="text-zinc-900 text-ui-17 font-semibold truncate">{{ displayName }}</span>
                             <span
-                                class="text-ui-10 font-semibold py-0.5 px-[7px] rounded-lg tracking-[0.04em] border shrink-0"
+                                class="text-ui-11 font-semibold py-0.5 px-2 rounded-md tracking-[0.08em] border shrink-0"
                                 :style="{ background: `${agentBg}18`, borderColor: `${agentBg}40`, color: agentBg }"
                             >
                                 {{ typeLabel }}
                             </span>
                         </div>
-                        <span v-if="subtitle" class="text-zinc-500 text-ui-12 truncate">{{ subtitle }}</span>
+                        <span v-if="subtitle" class="text-zinc-500 text-ui-13 truncate">{{ subtitle }}</span>
                     </div>
 
                     <div class="flex items-center gap-3 shrink-0">
@@ -180,7 +180,7 @@ function onDrop(e: DragEvent) {
                     </div>
                 </div>
 
-                <div ref="terminalSlot" data-testid="agent-terminal" class="flex-1 relative overflow-hidden bg-canvas terminal-host" />
+                <div ref="terminalSlot" data-testid="agent-terminal" class="flex-1 relative overflow-hidden bg-white terminal-host" />
             </div>
         </div>
     </template>

@@ -49,6 +49,10 @@ const firstOfTwoPagesEnvelope = {
     meta: { total: 17, count: 15, per_page: 15, current_page: 1, last_page: 2, next_page: 2, previous_page: null },
 }
 
+function envelope(data: ReturnType<typeof resource>[], total: number) {
+    return { data, meta: { total, count: data.length, per_page: 15, current_page: 1, last_page: Math.ceil(total / 15), next_page: null, previous_page: null } }
+}
+
 const storeResponse = {
     data: {
         type: 'tasks',
@@ -135,41 +139,48 @@ describe('useTasks', () => {
         expect(api.tasks.value).toEqual([])
     })
 
-    it('appends a created task parsed from the resource document', async () => {
+    it('refetches the server total after a created task', async () => {
         fetchMock.mockResolvedValueOnce(jsonResponse(emptyEnvelope))
         const { api } = mountUseTasks()
         await flushPromises()
 
         fetchMock.mockResolvedValueOnce(jsonResponse(storeResponse, 201))
+        fetchMock.mockResolvedValueOnce(jsonResponse(envelope([resource(18)], 1)))
         await api.create.mutateAsync({ title: 'Write docs', body: 'Details', assignees: ['QA'] })
+        await flushPromises()
 
-        expect(fetchMock).toHaveBeenLastCalledWith('/api/projects/1/tasks', expect.objectContaining({ method: 'POST' }))
-        expect(api.tasks.value).toEqual([expect.objectContaining({ id: 18, title: 'Write docs' })])
+        expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/projects/1/tasks', expect.objectContaining({ method: 'POST' }))
+        expect(fetchMock).toHaveBeenLastCalledWith('/api/projects/1/tasks')
+        expect(api.tasks.value.map(t => t.id)).toEqual([18])
         expect(api.total.value).toBe(1)
     })
 
-    it('replaces an updated task in place', async () => {
+    it('refetches the server total after an updated task', async () => {
         fetchMock.mockResolvedValueOnce(jsonResponse(firstOfTwoPagesEnvelope))
         const { api } = mountUseTasks()
         await flushPromises()
 
         fetchMock.mockResolvedValueOnce(jsonResponse({ data: resource(2, { status: 'completed', completed_at: '2026-09-26T02:00:00' }) }))
+        fetchMock.mockResolvedValueOnce(jsonResponse(firstOfTwoPagesEnvelope))
         await api.updateStatus.mutateAsync({ taskId: 2, status: 'completed' })
+        await flushPromises()
 
-        expect(fetchMock).toHaveBeenLastCalledWith('/api/tasks/2', expect.objectContaining({ method: 'PATCH', body: '{"status":"completed"}' }))
-        expect(api.tasks.value[1]).toMatchObject({ id: 2, status: 'completed' })
-        expect(api.tasks.value).toHaveLength(15)
+        expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/tasks/2', expect.objectContaining({ method: 'PATCH', body: '{"status":"completed"}' }))
+        expect(fetchMock).toHaveBeenCalledTimes(3)
         expect(api.total.value).toBe(17)
     })
 
-    it('drops a deleted task and decrements the total', async () => {
+    it('refetches the server total after a deleted task', async () => {
         fetchMock.mockResolvedValueOnce(jsonResponse(firstOfTwoPagesEnvelope))
         const { api } = mountUseTasks()
         await flushPromises()
 
         fetchMock.mockResolvedValueOnce({ ok: true, status: 204, json: async () => { throw new Error('no body') } })
+        fetchMock.mockResolvedValueOnce(jsonResponse(envelope(firstOfTwoPagesEnvelope.data.filter(t => t.id !== '5'), 16)))
         await api.remove.mutateAsync(5)
+        await flushPromises()
 
+        expect(fetchMock).toHaveBeenCalledTimes(3)
         expect(api.tasks.value.some(t => t.id === 5)).toBe(false)
         expect(api.total.value).toBe(16)
     })

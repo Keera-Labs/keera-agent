@@ -1,19 +1,25 @@
-import re
 from pathlib import Path
+from typing import Annotated
 
+from fastapi import Query
+from fastapi.responses import JSONResponse, Response
+
+from app.actions.worktree_remove_action import remove_worktree
 from app.models.Agent import Agent
+from app.requests.git_request import GitWorktreeDestroyQuery
 from app.services.git_repository import GitRepository
 from app.services.process import CommandError
-from app.utils.git_responses import git_error_response
+from app.utils.agent_worktree import agent_id_for_worktree
+from app.utils.git_responses import git_error_response, git_error_status
 from app.utils.project_paths import project_root
 
-# `claude --worktree agent-<id>` checks an agent out at <repo>/.claude/worktrees/agent-<id>.
-_AGENT_WORKTREE = re.compile(r"/\.claude/worktrees/agent-(\d+)$")
 
-
-def _agent_id(path: str) -> int | None:
-    match = _AGENT_WORKTREE.search(path)
-    return int(match.group(1)) if match else None
+async def destroy(project_id: int, query: Annotated[GitWorktreeDestroyQuery, Query()]):
+    try:
+        await remove_worktree(project_id, query.worktree, force=query.force)
+    except CommandError as e:
+        return JSONResponse({"error": e.message}, status_code=git_error_status(e))
+    return Response(status_code=204)
 
 
 async def index(project_id: int):
@@ -25,8 +31,17 @@ async def index(project_id: int):
     except CommandError as e:
         return git_error_response(e)
 
-    agent_ids = [i for i in map(_agent_id, (w.path for w in worktrees)) if i is not None]
-    agents = await Agent.where_in("id", agent_ids).get() if agent_ids else []
+    agent_ids = [
+        i for i in map(agent_id_for_worktree, (w.path for w in worktrees)) if i is not None
+    ]
+    agents = (
+        await Agent.where("project_id", project_id)
+        .where_in("id", agent_ids)
+        .where_null("deleted_at")
+        .get()
+        if agent_ids
+        else []
+    )
     names = {agent.id: agent.name for agent in agents}
 
     rows = []
@@ -34,7 +49,7 @@ async def index(project_id: int):
         # A bare main repo has no working tree to show; it still counts as "main".
         if worktree.bare:
             continue
-        agent_id = _agent_id(worktree.path)
+        agent_id = agent_id_for_worktree(worktree.path)
         rows.append(
             {
                 "path": worktree.path,

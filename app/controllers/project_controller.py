@@ -36,8 +36,11 @@ async def index(request: Request):
     page = _int_param(request, "page", 1)
     workspace_id_raw = request.query_params.get("workspace_id")
 
-    # Recently-touched first, with id making ties deterministic.
-    query = Project.order_by_raw("updated_at DESC, id DESC")
+    # The sidebar lists visible projects only; search passes include_hidden to reach every one.
+    if request.query_params.get("include_hidden") in ("1", "true"):
+        query = Project.order_by_raw("last_opened_at IS NULL, last_opened_at DESC, id DESC")
+    else:
+        query = Project.in_sidebar()
     if workspace_id_raw is not None:
         try:
             query = query.where("workspace_id", int(workspace_id_raw))
@@ -229,6 +232,7 @@ async def store(request: Request):
             "path": path,
             "language": language,
             "workspace_id": workspace_id,
+            "last_opened_at": Project.now(),
         }
     )
 

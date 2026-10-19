@@ -33,6 +33,22 @@ class AppProvider(Provider):
         register_exception_handlers(self.app)
 
         from fastapi_startkit import Config
+        from fastapi_startkit.environment import env
+
+        from app.middleware.trusted_origin_middleware import TrustedOriginMiddleware, TrustedOrigins
+
+        vite_hot_file = (
+            self.app.base_path
+            / Config.get("vite.public_path", "public")
+            / Config.get("vite.hot_file", "hot")
+        )
+        self.app.add_middleware(
+            TrustedOriginMiddleware,
+            trusted=TrustedOrigins(
+                app_url=Config.get("fastapi.app_url"),
+                vite_hot_file=vite_hot_file if env("APP_ENV") == "local" else None,
+            ),
+        )
 
         from app.services.log_maintenance import open_log_files, utc_today
 
@@ -95,20 +111,3 @@ class AppProvider(Provider):
                 pass
 
         self.app.fastapi.add_event_handler("startup", on_startup)
-
-        async def on_shutdown():
-            import os
-            import signal
-
-            from app.controllers.command_controller import _processes
-
-            for proc in list(_processes.values()):
-                try:
-                    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-                except Exception:
-                    try:
-                        proc.kill()
-                    except Exception:
-                        pass
-
-        self.app.fastapi.add_event_handler("shutdown", on_shutdown)

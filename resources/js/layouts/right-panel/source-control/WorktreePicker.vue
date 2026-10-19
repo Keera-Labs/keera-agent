@@ -1,12 +1,17 @@
 <script setup lang="ts">
-import { Check, ChevronDown, FolderGit2 } from '@lucide/vue'
+import { Check, ChevronDown, GitBranch } from '@lucide/vue'
 import { worktreeLabel } from '@/composables/useGitWorktree'
 import type { GitWorktree } from '@/queries/gitQuery'
 import PanelMenu from './PanelMenu.vue'
 import { menuItemClass } from './sourceControl'
 
-defineProps<{ worktrees: GitWorktree[]; selected: GitWorktree | null; branchLabel: string; title?: string }>()
+withDefaults(
+    defineProps<{ worktrees: GitWorktree[]; selected: GitWorktree | null; branchLabel: string; title?: string; changes?: Record<string, number> }>(),
+    { title: undefined, changes: () => ({}) },
+)
 const emit = defineEmits<{ select: [path: string] }>()
+
+const changedFiles = (count: number) => `${count} uncommitted ${count === 1 ? 'file' : 'files'}`
 
 const branchOf = (worktree: GitWorktree) =>
     worktree.branch ?? (worktree.head ? `detached @ ${worktree.head.slice(0, 7)}` : 'no commits')
@@ -18,17 +23,21 @@ const branchOf = (worktree: GitWorktree) =>
             <button
                 type="button"
                 data-testid="branch-pill"
-                class="min-w-0 flex items-center gap-1 px-1.5 py-0.5 rounded bg-zinc-200/70 font-mono text-ui-11 text-zinc-700 hover:bg-zinc-200 cursor-pointer"
+                class="min-w-0 flex items-center gap-2 h-7 rounded-md text-ui-12 text-zinc-700 hover:text-zinc-950 cursor-pointer"
                 :title="selected ? `${title ?? branchLabel}\n${selected.path}` : title"
                 aria-label="Switch worktree"
                 @click="toggle"
             >
-                <FolderGit2 v-if="selected && !selected.is_current" :size="11" class="shrink-0 text-accent" />
-                <span v-if="selected && !selected.is_current" class="shrink-0 max-w-20 truncate font-sans" data-testid="worktree-label">
-                    {{ worktreeLabel(selected) }}
+                <span
+                    v-if="selected && !selected.is_current"
+                    class="shrink-0 max-w-28 flex items-center gap-1.5 h-7 px-2 rounded-md bg-amber-100 font-medium text-amber-900"
+                >
+                    <span class="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    <span class="min-w-0 truncate" data-testid="worktree-label">{{ worktreeLabel(selected) }}</span>
                 </span>
-                <span class="min-w-0 truncate">{{ branchLabel }}</span>
-                <ChevronDown :size="11" class="shrink-0 text-zinc-500" />
+                <GitBranch :size="13" class="shrink-0 text-zinc-500" />
+                <span class="min-w-0 truncate font-mono">{{ branchLabel }}</span>
+                <ChevronDown :size="11" class="shrink-0 text-zinc-400" />
             </button>
         </template>
         <template #default="{ close }">
@@ -50,6 +59,14 @@ const branchOf = (worktree: GitWorktree) =>
                     <span class="block truncate text-ui-11 text-zinc-400">
                         {{ worktreeLabel(worktree) }}<template v-if="worktree.locked"> · locked</template>
                     </span>
+                </span>
+                <span
+                    v-if="changes[worktree.path]"
+                    data-testid="worktree-changes"
+                    class="shrink-0 mt-0.5 px-1.5 rounded-full bg-zinc-200/70 font-mono text-ui-11 text-zinc-600"
+                    :title="changedFiles(changes[worktree.path]!)"
+                >
+                    {{ changes[worktree.path] }}
                 </span>
             </button>
         </template>

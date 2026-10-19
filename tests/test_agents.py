@@ -427,7 +427,9 @@ class TestGlobalSettings(TestCase):
         data = response.json()
         self.assertIn("max_agents_per_project", data)
         self.assertEqual(data["max_agents_per_project"], 10)
-        self.assertEqual([provider["slug"] for provider in data["providers"]], ["codex", "claude"])
+        self.assertEqual(
+            [provider["slug"] for provider in data["providers"]], ["codex", "claude", "gemini"]
+        )
         self.assertIn("gpt-5.6-luna", data["provider_models"]["codex"])
         self.assertIn("gpt-5.6-terra", data["provider_models"]["codex"])
         self.assertIn("gpt-5.6-sol", data["provider_models"]["codex"])

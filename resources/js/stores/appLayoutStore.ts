@@ -48,7 +48,7 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
     const { activeProject } = storeToRefs(useProjectStore())
     const activeProjectId = computed(() => activeProject.value?.id ?? null)
 
-    const { tasks } = useTasks(activeProjectId)
+    const { total: taskTotal } = useTasks(activeProjectId)
     const agentHook = useAgents(activeProjectId)
     const projectAgents = agentHook.agents
 
@@ -78,7 +78,7 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
     const projectView = ref<ProjectView>('agents')
     const sidebarOpen = persistedFlag('keera.layout.sidebarOpen', true)
     const rightPanelOpen = persistedFlag('keera.layout.rightPanelOpen', false)
-    const statusBarOpen = persistedFlag('keera.layout.statusBarOpen', true)
+    const statusBarOpen = persistedFlag('keera.layout.statusBarOpen', false)
     const isDraggingOver = ref(false)
 
     // Raw selection — may still name an agent of the previous project right after a switch.
@@ -228,7 +228,7 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
     })
 
     return {
-        tasks,
+        taskTotal,
         showProjectSearch,
         settingsSection,
         openSettings,

@@ -1,5 +1,20 @@
-// Prop contract served by the "/{project}/configurations" route as
-// Inertia.render("Configurations", { project, project_id, commands }).
+export type CommandKind = 'run' | 'setup'
+
+export type CommandRunStatus = 'running' | 'stopped' | 'exited'
+
+export interface CommandRun {
+    id?: string
+    command_id: number | null
+    label?: string
+    command?: string
+    worktree: string | null
+    status: CommandRunStatus
+    exit_code: number | null
+    started_at: string
+    ended_at?: string | null
+    duration_ms?: number | null
+    timeout_seconds?: number | null
+}
 
 export interface Command {
     id: number
@@ -9,6 +24,6 @@ export interface Command {
     description: string
     category: string
     shortcut: string
-    status: 'running' | 'stopped'
-    pid: number | null
+    kind: CommandKind
+    run: CommandRun | null
 }
