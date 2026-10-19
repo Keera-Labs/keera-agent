@@ -4,6 +4,7 @@ import { defineStore, storeToRefs } from 'pinia'
 import { computed, markRaw, onScopeDispose, ref, shallowRef, watch } from 'vue'
 import { attachTerminal, reportSize, useTerminalSessions } from '@/composables/useTerminalSessions'
 import { useAgents } from '@/queries/agentQuery'
+import { AGENT_QUESTIONS_QUERY_KEY } from '@/queries/agentQuestionsQuery'
 import { AGENT_SUMMARIES_QUERY_KEY } from '@/queries/agentSummariesQuery'
 import useProjects, { PROJECTS_QUERY_KEY } from '@/queries/projectsQuery'
 import { useTasks } from '@/queries/taskQuery'
@@ -61,6 +62,7 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
         onAgentStatus: () => {
             queryCache.invalidateQueries({ key: AGENT_SUMMARIES_QUERY_KEY })
             queryCache.invalidateQueries({ key: ['agents'] })
+            queryCache.invalidateQueries({ key: AGENT_QUESTIONS_QUERY_KEY })
         },
     })
 

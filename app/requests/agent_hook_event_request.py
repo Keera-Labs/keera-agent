@@ -1,6 +1,8 @@
 from typing import Any, NamedTuple, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
+
+from app.requests.agent_question_request import AskedQuestion
 
 ATTENTION_PROMPT_LENGTH = 500
 
@@ -26,19 +28,47 @@ class AgentHookEventRequest(BaseModel):
     hook_event_name: str = ""
     cwd: str = ""
     tool_name: Optional[str] = None
+    session_id: Optional[str] = None
+    tool_use_id: Optional[str] = None
     tool_input: dict[str, Any] = {}
+    tool_response: Any = None
     message: Optional[str] = None
     notification_type: Optional[str] = None
 
     def attention(self) -> Attention | None:
         """What the agent is now waiting on the user for, if this event blocks it."""
-        if self.hook_event_name == "PreToolUse" and self.tool_name == "AskUserQuestion":
+        if self.asks_user_question():
             return Attention("question", truncate_prompt(self._question_text()))
         if self.hook_event_name == "Notification":
             kind = _NOTIFICATION_ATTENTION_KIND.get(self.notification_type)
             if kind:
                 return Attention(kind, truncate_prompt(self.message))
         return None
+
+    def asks_user_question(self) -> bool:
+        return self.hook_event_name == "PreToolUse" and self.tool_name == "AskUserQuestion"
+
+    def answers_user_question(self) -> bool:
+        return self.hook_event_name == "PostToolUse" and self.tool_name == "AskUserQuestion"
+
+    def asked_questions(self) -> list[AskedQuestion]:
+        questions = self.tool_input.get("questions")
+        if not isinstance(questions, list):
+            return []
+        asked = []
+        for question in questions:
+            try:
+                asked.append(AskedQuestion.model_validate(question))
+            except ValidationError:
+                continue
+        return asked
+
+    def answers(self) -> dict[str, str]:
+        response = self.tool_response if isinstance(self.tool_response, dict) else {}
+        answers = response.get("answers") or self.tool_input.get("answers")
+        if not isinstance(answers, dict):
+            return {}
+        return {str(question): str(answer) for question, answer in answers.items()}
 
     def resumes_work(self) -> bool:
         return self.hook_event_name in ("PostToolUse", "UserPromptSubmit", "BeforeAgent", "AfterTool")

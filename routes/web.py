@@ -9,6 +9,7 @@ from app.controllers import (
     agent_message_controller,
     agent_pause_controller,
     agent_permission_controller,
+    agent_question_controller,
     agent_relay_controller,
     agent_summary_controller,
     agent_template_controller,
@@ -118,6 +119,7 @@ router.post("/api/projects/{project_id}/default-agent", agent_default_controller
 router.patch("/api/agents/{agent_id}", agent_controller.update)
 router.delete("/api/agents/{agent_id}", agent_controller.destroy)
 router.get("/api/agents/{agent_id}/output", agent_controller.output)
+router.get("/api/agents/{agent_id}/questions", agent_question_controller.index)
 router.post("/api/agents/{agent_id}/adopt-work", agent_dispatch_controller.adopt_work)
 
 # Agent templates — GLOBAL (project_id NULL)
