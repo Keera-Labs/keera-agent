@@ -2,6 +2,7 @@
 import { router, usePage } from '@inertiajs/vue3'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, ref } from 'vue'
+import keeraIcon from '../../../icons/keera-icon.svg'
 import ProjectCreateModal from '@/components/project/ProjectCreateModal.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { useAgentSummaries, type AgentSummary } from '@/queries/agentSummariesQuery'
@@ -68,11 +69,13 @@ const iconButtonClass = 'shrink-0 flex items-center justify-center w-6 h-6 round
                 class="flex-1 min-w-0 flex items-center gap-2.5 h-full text-left cursor-pointer"
                 @click="router.visit('/')"
             >
-                <span
+                <img
                     data-testid="sidebar-logo"
-                    class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-zinc-900 text-amber-400 text-ui-16 font-black leading-none"
+                    :src="keeraIcon"
+                    alt=""
+                    class="w-8 h-8 shrink-0"
                     aria-hidden="true"
-                >K</span>
+                >
                 <span class="min-w-0 flex flex-col">
                     <span class="font-semibold text-ui-14 text-zinc-900 tracking-[-0.01em] truncate leading-tight">Keera</span>
                     <span class="text-ui-12 text-zinc-500 truncate leading-tight">Agent workspace</span>

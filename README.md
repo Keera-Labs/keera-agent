@@ -1,34 +1,45 @@
-# keera-agent
+<p align="center">
+  <img src="resources/icons/keera-logo.svg" alt="Keera" width="208" height="64">
+</p>
 
-A local-first AI agent manager built with FastAPI (Python) and Vue 3 (TypeScript).
+<p align="center">
+  A local-first workspace for running and orchestrating teams of AI coding agents.
+</p>
 
-![keera-agent dashboard — the persistent AppLayout showing the workspace/projects sidebar, the agents panel, and a live agent terminal](docs/images/image.png)
+---
 
-*The main dashboard: workspaces and projects on the left, the agents panel in the middle, and a live agent terminal on the right.*
+Keera lets you run a small team of AI coding agents — a PM, software engineers, a reviewer and QA — side by side on your own machine. Each agent works in its own git worktree inside a real terminal, picks up tasks from a shared board, and talks to the other agents through Keera's MCP server. You watch, steer and step in from one browser window.
+
+![The Keera dashboard: workspaces and projects on the left, the agents panel in the middle, and a live agent terminal on the right](docs/images/image.png)
+
+## Features
+
+- **Multi-agent orchestration** — spawn agents from built-in role templates (PM, software engineer, frontend engineer, reviewer, QA). The PM breaks work into tasks and hands them out; engineers open pull requests; the reviewer and QA check them.
+- **Multiple providers** — run each agent on Claude Code, Codex or Gemini CLI, with per-provider usage and cost reporting.
+- **Persistent server-side terminals** — every agent runs in a PTY owned by the backend, streamed to xterm.js over WebSocket. Terminals keep running across page navigations and browser reconnects.
+- **MCP server and agent relay** — agents get a `keera-agent-mcp` server (`/mcp`) with tools to manage tasks, message other agents, spawn or delete agents, and drive a browser for QA. Messages are injected into the target agent's terminal, or queued until it reconnects.
+- **Tasks** — a per-project task board that agents and humans share, with status, assignee and linked pull request.
+- **Workspaces and projects** — group local repositories into workspaces; each project gets its own agents, worktrees, git changes view, file editor and command runner.
+- **Live agent status** — Claude hooks report when an agent is running, idle or waiting on a question or permission prompt, so you know who needs attention.
 
 ## Stack
 
 - **Backend:** Python 3.13+, FastAPI via `fastapi-startkit`, Masonite ORM (async), SQLite
 - **Frontend:** Vue 3 + TypeScript, Inertia.js, Pinia + Pinia Colada, Vite, Tailwind CSS v4
-- **Terminal:** xterm.js (frontend) + Python `pty` module over WebSocket
+- **Terminal:** xterm.js on the frontend, Python's `pty` module on the backend, over WebSocket
 
-## Quick Start
+## Getting started
 
-The fastest way to set up a dev environment is the install script:
+You need [`uv`](https://docs.astral.sh/uv/), Node.js with `npm`, `git`, and at least one agent CLI (`claude`, `codex` or `gemini`) on your `PATH`.
+
+### Quick start
 
 ```bash
 ./bin/install.sh
 npm run dev
 ```
 
-`bin/install.sh` is a one-command, idempotent dev onboarding script. It:
-
-- Checks that `uv`, `node`, and `npm` are installed (with install hints if any are missing)
-- Installs dependencies with `uv sync` and `npm install`
-- Creates `.env` from `.env.example` if it doesn't exist (never overwrites an existing `.env`)
-- Runs the dev database migrations (`uv run python artisan db:migrate`)
-
-When it finishes, start the dev server (FastAPI + Vite) with `npm run dev`.
+`bin/install.sh` is idempotent. It checks for `uv`, `node` and `npm`, installs dependencies, creates `.env` from `.env.example` if it does not exist, and runs the dev database migrations.
 
 ### Manual setup
 
@@ -37,44 +48,55 @@ When it finishes, start the dev server (FastAPI + Vite) with `npm run dev`.
 uv sync
 npm install
 
+# Create your environment file
+cp .env.example .env
+
 # Run migrations
 uv run python artisan db:migrate
 
-# Start dev server (FastAPI + Vite)
+# Start the dev server (FastAPI + Vite)
 npm run dev
 ```
 
 ## Testing
 
 ```bash
+# Backend tests (migrate the test database first)
+uv run python artisan db:migrate --env=testing
 uv run pytest
+
+# Frontend tests
+npm run test:frontend
+
+# Frontend type check
+npm run types:check
 ```
 
-## Building for Deployment
+## Building for deployment
 
 ```bash
 bash bin/build.sh
 ```
 
-The build outputs a self-contained deployable to `dist/` and starts the server on port `:4545`.
-
-### Production build
-
-For an unattended production build, run it under `caffeinate` so macOS never sleeps mid-build (the build compiles Vite assets, syncs dependencies, and then keeps a long-running server alive):
-
-```bash
-caffeinate -i ./bin/build.sh
-```
-
-`caffeinate -i` prevents the system from idle-sleeping while the command runs. `./bin/build.sh` performs the full production build:
+The build writes a self-contained deployable to `dist/` and serves it on `http://127.0.0.1:4545`. It:
 
 - Builds the frontend (`npm run build`) and copies the project into `dist/`
-- Patches `dist/.env` (`KEERA_APP_URL=http://127.0.0.1:4545`, `KEERA_APP_RELOAD=false`) and points the `.claude/settings.json` hooks + MCP server at that URL
-- Installs Python dependencies (`uv sync --frozen`), runs database migrations, and updates the built-in agent templates
-- Commits the build inside `dist/`, then starts the server on `http://127.0.0.1:4545` (reload disabled)
+- Patches `dist/.env` and points the Claude hooks and MCP server at the `dist` URL
+- Installs Python dependencies (`uv sync --frozen`), runs migrations and updates the built-in agent templates
+- Starts the server with reload disabled
 
-Because the server keeps running in the foreground, `caffeinate -i` holds the machine awake for as long as the server is up. Pass `--no-build` to skip the Vite build and only re-sync files:
+Pass `--no-build` to skip the Vite build and only re-sync files:
 
 ```bash
-caffeinate -i ./bin/build.sh --no-build
+bash bin/build.sh --no-build
 ```
+
+On macOS, run it under `caffeinate -i` (`caffeinate -i ./bin/build.sh`) so the machine does not sleep while the server is up.
+
+## Contributing
+
+- Branch off `dev` and open pull requests into `dev`. `main` is the release branch and is updated by merging `dev`.
+- Pull requests are merged manually after review approval.
+- Write commit messages in the [Conventional Commits](https://www.conventionalcommits.org/) format (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`), with a short **Why** and **How** in the body.
+- Run `uv run pytest`, `npm run test:frontend` and `npm run types:check` before opening a pull request.
+- See [`CLAUDE.md`](CLAUDE.md) for architecture notes and coding standards.
