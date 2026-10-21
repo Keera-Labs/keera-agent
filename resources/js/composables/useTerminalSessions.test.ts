@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { effectScope } from 'vue'
+import { effectScope, nextTick, ref } from 'vue'
 import { playQuestionSound } from '@/composables/useAudio'
+import type { Project } from '@/types/type'
 import { acknowledgeReplay, chimeOnNewQuestion, reportSize, socketMessageHandler, resetChimedQuestions, useTerminalSessions, type Session } from './useTerminalSessions'
 
 vi.mock('@/composables/useAudio', () => ({ playQuestionSound: vi.fn() }))
@@ -215,6 +216,73 @@ describe('detaching an agent terminal', () => {
         expect(fetchMock).not.toHaveBeenCalled()
         scope.stop()
         vi.unstubAllGlobals()
+    })
+})
+
+describe('switching tabs', () => {
+    function setup() {
+        const fetchMock = vi.fn()
+        vi.stubGlobal('fetch', fetchMock)
+        vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { callback(0); return 0 })
+        const activeProject = ref<Project | null>({ id: 1 } as Project)
+        const scope = effectScope()
+        const terminals = scope.run(() => useTerminalSessions({
+            activeProject,
+            projectAgents: [],
+            onAgentCreated: () => {},
+            onClaudeStopped: () => {},
+            onAgentMessage: () => {},
+            onAgentStatus: () => {},
+        }))!
+        const agents = [2, 3].map(id => {
+            const { session, send } = fakeSession(slot)
+            Object.assign(session, {
+                ws: { readyState: WebSocket.OPEN, send, close: vi.fn() },
+                term: { ...session.term, dispose: vi.fn(), focus: vi.fn() },
+                fitAddon: { fit: vi.fn() },
+                observer: { disconnect: vi.fn() },
+            })
+            terminals.agentSessions.set(id, session)
+            terminals.agentContainerRefs.set(id, slot)
+            return { id, session, send }
+        })
+        const cleanup = () => {
+            terminals.agentContainerRefs.delete(2)
+            terminals.agentContainerRefs.delete(3)
+            scope.stop()
+            vi.unstubAllGlobals()
+        }
+        return { terminals, agents, activeProject, fetchMock, cleanup }
+    }
+
+    it('reuses each agent socket across repeated switches without closing it or deleting the agent', () => {
+        const { terminals, agents, fetchMock, cleanup } = setup()
+
+        for (let i = 0; i < 20; i++) {
+            for (const { id } of agents) terminals.launchAgentSession(id)
+        }
+
+        for (const { id, session, send } of agents) {
+            expect(terminals.agentSessions.get(id)).toBe(session)
+            expect(session.ws.close).not.toHaveBeenCalled()
+            expect(sent(send).every(message => message.type === 'resize')).toBe(true)
+        }
+        expect(fetchMock).not.toHaveBeenCalled()
+        cleanup()
+    })
+
+    it('only detaches agent sockets when switching projects, never deleting or signalling the agents', async () => {
+        const { agents, activeProject, fetchMock, cleanup } = setup()
+
+        activeProject.value = { id: 2 } as Project
+        await nextTick()
+
+        for (const { session, send } of agents) {
+            expect(session.ws.close).toHaveBeenCalledWith()
+            expect(send).not.toHaveBeenCalled()
+        }
+        expect(fetchMock).not.toHaveBeenCalled()
+        cleanup()
     })
 })
 
