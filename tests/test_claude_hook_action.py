@@ -9,23 +9,28 @@ from app.actions.claude_hook_action import (
     AGENT_ID_HEADER,
     ClaudeHookAction,
     agent_env,
+    hook_base_url,
 )
 from tests.test_case import TestCase
 
-BASE = "http://example.test:4545"
+APP_URL = "http://example.test:4545"
+BASE = "http://127.0.0.1:4545"
 
 
 class TestClaudeHookAction(TestCase):
     async def asyncSetUp(self):
         await super().asyncSetUp()
         self._original_url = Config.get("fastapi.app_url")
-        Config.set("fastapi.app_url", BASE)
+        self._original_hook_url = Config.get("fastapi.hook_url")
+        Config.set("fastapi.app_url", APP_URL)
+        Config.set("fastapi.hook_url", "")
         self._tmp = tempfile.TemporaryDirectory()
         self.dir = self._tmp.name
         self.settings_path = os.path.join(self.dir, ".claude", "settings.json")
 
     async def asyncTearDown(self):
         Config.set("fastapi.app_url", self._original_url)
+        Config.set("fastapi.hook_url", self._original_hook_url)
         self._tmp.cleanup()
         await super().asyncTearDown()
 
@@ -61,12 +66,36 @@ class TestClaudeHookAction(TestCase):
         Config.set("fastapi.app_url", "http://old:1111")
         ClaudeHookAction.prepare(self.dir).execute()
 
-        Config.set("fastapi.app_url", BASE)
+        Config.set("fastapi.app_url", APP_URL)
         self.assertTrue(ClaudeHookAction.prepare(self.dir).execute())
 
         urls = [h["url"] for h in self._stop_hooks(self._read())]
         self.assertIn(f"{BASE}/api/claude-stopped", urls)
-        self.assertNotIn("http://old:1111/api/claude-stopped", urls)
+        self.assertNotIn("http://127.0.0.1:1111/api/claude-stopped", urls)
+
+    async def test_tailnet_app_url_writes_loopback_hooks(self):
+        Config.set("fastapi.app_url", "http://my-host.tail6b2d9f.ts.net:4545")
+        ClaudeHookAction.prepare(self.dir).execute()
+
+        hooks = [h for groups in self._read()["hooks"].values() for g in groups for h in g["hooks"]]
+        self.assertTrue(hooks)
+        for hook in hooks:
+            self.assertTrue(hook["url"].startswith("http://127.0.0.1:4545/api/"), hook["url"])
+
+    def test_hook_base_url_keeps_scheme_and_port_on_loopback(self):
+        Config.set("fastapi.app_url", "https://192.168.1.20:8443/")
+        self.assertEqual(hook_base_url(), "https://127.0.0.1:8443")
+
+    def test_hook_base_url_without_port_uses_bare_loopback(self):
+        Config.set("fastapi.app_url", "http://100.112.6.47")
+        self.assertEqual(hook_base_url(), "http://127.0.0.1")
+
+    async def test_hook_url_override_wins(self):
+        Config.set("fastapi.hook_url", "http://localhost:9000/")
+        ClaudeHookAction.prepare(self.dir).execute()
+
+        urls = [h["url"] for h in self._stop_hooks(self._read())]
+        self.assertIn("http://localhost:9000/api/claude-stopped", urls)
 
     async def test_does_not_write_mcp_servers(self):
         ClaudeHookAction.prepare(self.dir).execute()
