@@ -9,6 +9,7 @@ import { useProjectStore } from '@/stores/projectStore'
 import { color } from '@/tokens'
 import { AGENT_TYPE_COLORS, AGENT_TYPE_LABELS } from '@/types/agent'
 import { agentColor } from '@/utils/agentColor'
+import AgentQuestions from './AgentQuestions.vue'
 import PmCheckinControl from './PmCheckinControl.vue'
 import ProjectOverview from './ProjectOverview.vue'
 import { agentRoleLabel } from './presentation'
@@ -182,6 +183,7 @@ function onDrop(e: DragEvent) {
 
                 <div ref="terminalSlot" data-testid="agent-terminal" class="flex-1 relative overflow-hidden bg-white terminal-host" />
             </div>
+            <AgentQuestions :agent-id="activeAgentId" />
         </div>
     </template>
 </template>
