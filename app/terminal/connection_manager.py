@@ -19,7 +19,9 @@ class ConnectionManager:
     def get(self, key: str) -> WebsocketTerminal | None:
         return self._connections.get(key)
 
-    def remove(self, key: str) -> None:
+    def remove(self, key: str, bridge: WebsocketTerminal | None = None) -> None:
+        if bridge is not None and self._connections.get(key) is not bridge:
+            return
         self._connections.pop(key, None)
         self._cwd_index.pop(key, None)
 

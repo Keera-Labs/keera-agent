@@ -188,6 +188,36 @@ describe('tab visibility', () => {
     })
 })
 
+describe('detaching an agent terminal', () => {
+    it('only closes the socket and never deletes the agent, so its server process keeps running', () => {
+        const fetchMock = vi.fn()
+        vi.stubGlobal('fetch', fetchMock)
+        const scope = effectScope()
+        const terminals = scope.run(() => useTerminalSessions({
+            activeProject: { id: 1 } as never,
+            projectAgents: [],
+            onAgentCreated: () => {},
+            onClaudeStopped: () => {},
+            onAgentMessage: () => {},
+            onAgentStatus: () => {},
+        }))!
+        const session = {
+            term: { dispose: vi.fn() },
+            ws: { close: vi.fn() },
+            observer: { disconnect: vi.fn() },
+        } as unknown as Session
+        terminals.agentSessions.set(2, session)
+
+        terminals.disposeAgentSession(2)
+
+        expect(session.ws.close).toHaveBeenCalled()
+        expect(terminals.agentSessions.has(2)).toBe(false)
+        expect(fetchMock).not.toHaveBeenCalled()
+        scope.stop()
+        vi.unstubAllGlobals()
+    })
+})
+
 describe('restartClaude', () => {
     function setup() {
         const scope = effectScope()

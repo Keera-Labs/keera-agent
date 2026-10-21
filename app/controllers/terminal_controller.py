@@ -14,12 +14,11 @@ from app.models.Agent import Agent
 from app.models.Project import Project
 from app.services.claude_config_dir import agent_config_dir
 from app.services.gemini_cli import validate_gemini_cli
+from app.terminal.agent_session import attach_client, live_terminal, own_session, spawn_lock
 from app.terminal.claude_monitor import make_claude_session_monitor
-from app.terminal.cli_supervisor import restart_cli, supervise_cli
-from app.terminal.connection_manager import ConnectionManager
+from app.terminal.cli_supervisor import supervise_cli
 from app.terminal.manager import TerminalManager
-from app.terminal.readiness import claude_ready, mark_booting
-from app.terminal.websocket_terminal import WebsocketTerminal
+from app.terminal.readiness import mark_booting
 
 
 def _build_identity_suffix(agent_id: int) -> str:
@@ -105,32 +104,31 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
         await websocket.close(code=1011, reason="git init failed")
         return
 
-    terminal_manager: TerminalManager = app().make("terminal")
-    conn_manager: ConnectionManager = app().make("connections")
-
-    # If this agent already has an active session, reattach without stopping it on disconnect.
-    existing_key = agent_record.session_id
-    existing_terminal = terminal_manager.find(existing_key) if existing_key else None
-    if existing_terminal and existing_terminal.is_alive():
-        reattach_bridge = WebsocketTerminal(
-            websocket,
-            existing_terminal,
-            on_restart=lambda: restart_cli(existing_key),
-            replay_history=True,
-        )
-        conn_manager.set(existing_key, reattach_bridge, cwd=cwd)
-        try:
-            await reattach_bridge.run(stop_on_disconnect=False)
-        finally:
-            conn_manager.remove(existing_key)
+    async with spawn_lock(agent_record.id):
+        agent_record = await Agent.where("id", agent_id).where_null("deleted_at").first()
+        if not agent_record:
+            await websocket.close(code=1008, reason="Agent not found")
+            return
+        session_id = agent_record.session_id
+        terminal = live_terminal(session_id)
+        if terminal is None:
+            session_id = await _spawn_agent_session(websocket, agent_record, project_record, cwd)
+            terminal = live_terminal(session_id)
+    if terminal is None:
         return
 
+    await attach_client(websocket, session_id, terminal, cwd)
+
+
+async def _spawn_agent_session(
+    websocket: WebSocket, agent_record: Agent, project_record: Project, cwd: str
+) -> str | None:
     try:
         await asyncio.to_thread(validate_gemini_cli, agent_record.provider)
     except RuntimeError as exc:
         await websocket.send_text(json.dumps({"type": "error", "message": str(exc)}))
         await websocket.close(code=1011, reason="provider unavailable")
-        return
+        return None
 
     session_id = str(uuid.uuid4())
     await Agent.where("id", agent_record.id).update({"session_id": session_id})
@@ -145,8 +143,9 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
         await Agent.where("id", agent_record.id).update({"session_id": None})
         await websocket.send_text(json.dumps({"type": "error", "message": str(exc)}))
         await websocket.close(code=1011, reason="worktree creation failed")
-        return
+        return None
 
+    terminal_manager: TerminalManager = app().make("terminal")
     config_dir = await agent_config_dir(agent_record, project_record)
     terminal_manager.create(
         cwd=agent_cwd, session_id=session_id, env=agent_env(agent_record.id, config_dir)
@@ -156,14 +155,9 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
     ready_event = mark_booting(session_id)
     asyncio.create_task(_signal_ready_and_relay(ready_event, agent_record.id, terminal))
 
-    claude_cmd = agent_record.to_command(
-        system_prompt_suffix=_build_identity_suffix(agent_record.id)
-    )
-
     def build_cmd(a):
         return a.to_command(system_prompt_suffix=_build_identity_suffix(a.id))
 
-    # Build the output monitor callback (Parts 1 & 3 for WS path)
     monitor = make_claude_session_monitor(
         agent_id=agent_record.id,
         confirm_output=agent_record.provider != "gemini",
@@ -172,20 +166,15 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
         session_id=session_id,
         build_cmd=build_cmd,
     )
-
-    bridge = WebsocketTerminal(
-        websocket, terminal, on_output=monitor, on_restart=lambda: restart_cli(session_id)
-    )
-    conn_manager.set(session_id, bridge, cwd=cwd)
     supervisor = supervise_cli(agent_record.id, terminal, session_id, build_cmd)
-
-    try:
-        await bridge.run(auto_send=supervisor.launch_line(claude_cmd).encode() + b"\n")
-    finally:
-        conn_manager.remove(session_id)
-        claude_ready.pop(session_id, None)
-        await terminal_manager.close(session_id)
-        await Agent.where("id", agent_record.id).update({"session_id": None})
+    own_session(
+        agent_record.id,
+        session_id,
+        terminal,
+        on_output=monitor,
+        auto_send=supervisor.launch_line(build_cmd(agent_record)).encode() + b"\n",
+    )
+    return session_id
 
 
 async def _signal_ready_and_relay(event: asyncio.Event, agent_id: int, terminal) -> None:
