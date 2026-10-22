@@ -54,7 +54,7 @@ class AgentQuestionAnswerAction:
             raise AgentQuestionConflictError("The agent's terminal is not running.")
         if agent.status != "needs_input":
             await self._mark_answered(None)
-            raise AgentQuestionConflictError("This was already answered in the terminal, so the agent is no longer waiting.")
+            raise AgentQuestionConflictError("This question is no longer waiting for an answer.")
 
         await self._mark_answered(self._answer())
 

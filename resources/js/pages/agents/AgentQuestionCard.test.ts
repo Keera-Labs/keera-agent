@@ -148,7 +148,7 @@ describe('AgentQuestionCard', () => {
     })
 
     it('toasts when the question was already answered in the terminal', async () => {
-        const message = 'This was already answered in the terminal, so the agent is no longer waiting.'
+        const message = 'This question is no longer waiting for an answer.'
         response = { ok: false, status: 409, body: { error: message } }
         const wrapper = mountCard()
         await wrapper.get('form').trigger('submit')

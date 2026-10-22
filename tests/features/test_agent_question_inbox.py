@@ -239,6 +239,34 @@ class TestAgentQuestionInbox(TestCase, DatabaseTransaction):
         answers = {item["kind"]: item["answer"] for item in await self._inbox("answered")}
         self.assertEqual(answers["question"], "Keep login-shell PATH")
 
+    async def test_an_unrelated_tool_call_leaves_the_pending_question_waiting(self):
+        await self._hook(ask([PATH_QUESTION], "toolu_inbox_15"))
+
+        await self._hook(
+            {"session_id": SESSION_ID, "hook_event_name": "PostToolUse", "tool_name": "Read", "tool_use_id": "toolu_other"}
+        )
+
+        [item] = await self._inbox()
+        self.assertEqual(item["kind"], "question")
+        agent = await Agent.find(self.agent.id)
+        self.assertEqual((agent.status, agent.attention_kind), ("needs_input", "question"))
+
+    async def test_the_matching_tool_call_settles_the_question_and_resumes_the_agent(self):
+        await self._hook(ask([PATH_QUESTION], "toolu_inbox_16"))
+
+        await self._hook(
+            {
+                "session_id": SESSION_ID,
+                "hook_event_name": "PostToolUse",
+                "tool_name": "AskUserQuestion",
+                "tool_use_id": "toolu_inbox_16",
+                "tool_response": {"answers": {PATH_QUESTION["question"]: "Keep login-shell PATH"}},
+            }
+        )
+
+        self.assertEqual(await self._inbox(), [])
+        self.assertEqual((await Agent.find(self.agent.id)).status, "running")
+
     async def test_stop_settles_every_pending_item(self):
         await self._hook(permission_request("rm -rf build"))
 
@@ -379,7 +407,7 @@ class TestAgentQuestionInbox(TestCase, DatabaseTransaction):
         response = await self._answer(item["id"], {"text": "too late"})
 
         response.assert_status(409)
-        self.assertEqual(response.json()["error"], "This was already answered in the terminal, so the agent is no longer waiting.")
+        self.assertEqual(response.json()["error"], "This question is no longer waiting for an answer.")
         self.assertEqual(self.terminal.writes, [])
         self.assertEqual(await self._inbox(), [])
 

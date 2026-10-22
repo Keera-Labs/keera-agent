@@ -16,8 +16,10 @@ async def record_agent_questions(agent: Agent, event: AgentHookEventRequest) -> 
         await _store_answers(agent, event)
     elif event.asks_permission():
         await _store_permission(agent, event)
-    if event.resumes_work():
+    if event.starts_turn():
         await settle_pending_questions(agent.id)
+    elif event.finishes_tool_call():
+        await _settle_pending_permissions(agent)
 
 
 async def _store_asked(agent: Agent, event: AgentHookEventRequest) -> None:
@@ -83,6 +85,16 @@ async def _store_permission(agent: Agent, event: AgentHookEventRequest) -> None:
 async def settle_pending_questions(agent_id: int) -> None:
     for question in await AgentQuestion.where("agent_id", agent_id).where("status", "pending").get():
         await _mark_answered(question.id, None)
+
+
+async def has_pending_question(agent_id: int) -> bool:
+    pending = AgentQuestion.where("agent_id", agent_id).where("status", "pending")
+    return await pending.where("kind", "question").first() is not None
+
+
+async def _settle_pending_permissions(agent: Agent) -> None:
+    for permission in await _pending(agent).where("kind", "permission").get():
+        await _mark_answered(permission.id, None)
 
 
 async def _mark_answered(question_id: int, answer: str | None) -> None:

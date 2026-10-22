@@ -108,12 +108,13 @@ class AgentHookEventRequest(BaseModel):
         return {str(question): str(answer) for question, answer in answers.items()}
 
     def resumes_work(self) -> bool:
-        return self.hook_event_name in (
-            "PostToolUse",
-            "UserPromptSubmit",
-            "BeforeAgent",
-            "AfterTool",
-        )
+        return self.finishes_tool_call() or self.starts_turn()
+
+    def finishes_tool_call(self) -> bool:
+        return self.hook_event_name in ("PostToolUse", "AfterTool")
+
+    def starts_turn(self) -> bool:
+        return self.hook_event_name in ("UserPromptSubmit", "BeforeAgent")
 
     def _question_text(self) -> Any:
         questions = self.tool_input.get("questions")

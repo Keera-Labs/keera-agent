@@ -13,11 +13,15 @@ from tests.test_case import TestCase
 URL = "/api/agent-hook-events"
 
 
+ASK_TOOL_USE_ID = "toolu_ask"
+
+
 def ask_question(question: str) -> dict:
     return {
         "hook_event_name": "PreToolUse",
         "cwd": "/tmp/somewhere",
         "tool_name": "AskUserQuestion",
+        "tool_use_id": ASK_TOOL_USE_ID,
         "tool_input": {"questions": [{"question": question, "header": "Q", "options": []}]},
     }
 
@@ -112,7 +116,9 @@ class TestAgentHookEventController(TestCase, DatabaseTransaction):
     async def test_post_tool_use_clears_needs_input(self):
         await self._post(ask_question("Proceed?"))
 
-        agent = await self._post({"hook_event_name": "PostToolUse", "tool_name": "AskUserQuestion"})
+        agent = await self._post(
+            {"hook_event_name": "PostToolUse", "tool_name": "AskUserQuestion", "tool_use_id": ASK_TOOL_USE_ID}
+        )
 
         self.assertEqual(agent.status, "running")
         self.assertIsNone(agent.attention_kind)
@@ -242,7 +248,7 @@ class TestAgentHookEventControllerPushPayload(TestCase, DatabaseTransaction):
         self.bridge.sent.clear()
 
         pushed = await self._post(
-            {"hook_event_name": "PostToolUse", "tool_name": "AskUserQuestion"}
+            {"hook_event_name": "PostToolUse", "tool_name": "AskUserQuestion", "tool_use_id": ASK_TOOL_USE_ID}
         )
 
         self.assertEqual(

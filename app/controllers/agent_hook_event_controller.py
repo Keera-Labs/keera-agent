@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import Header
 from fastapi.responses import JSONResponse
 
-from app.actions.agent_question_action import record_agent_questions
+from app.actions.agent_question_action import has_pending_question, record_agent_questions
 from app.actions.agent_status_action import (
     CLEARED_ATTENTION,
     find_hook_agent,
@@ -53,6 +53,8 @@ async def _apply(agent: Agent, event: AgentHookEventRequest) -> tuple[str, str |
     if not event.resumes_work():
         return None
     if agent.status == "running" and event.hook_event_name == "PostToolUse":
+        return None
+    if event.finishes_tool_call() and await has_pending_question(agent.id):
         return None
     values = {"status": "running", **CLEARED_ATTENTION, "updated_at": utc_now()}
     if agent.provider == "gemini" and event.hook_event_name == "BeforeAgent":
