@@ -10,7 +10,7 @@
 
 Keera lets you run a small team of AI coding agents — a PM, software engineers, a reviewer and QA — side by side on your own machine. Each agent works in its own git worktree inside a real terminal, picks up tasks from a shared board, and talks to the other agents through Keera's MCP server. You watch, steer and step in from one browser window.
 
-![The Keera dashboard: workspaces and projects on the left, the agents panel in the middle, and a live agent terminal on the right](docs/images/image.png)
+![The Keera app: projects and agents on the left, a live agent terminal in the middle, and the worktrees panel on the right](docs/images/image.png)
 
 ## Features
 
