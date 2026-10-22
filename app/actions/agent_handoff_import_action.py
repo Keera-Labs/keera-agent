@@ -66,6 +66,9 @@ class AgentHandoffImportAction:
                     transcript.encoded_dir_name(req.paths.worktree): transcript.encoded_dir_name(
                         worktree
                     ),
+                    transcript.encoded_dir_name(req.paths.project): transcript.encoded_dir_name(
+                        project_path
+                    ),
                     req.paths.home: str(Path.home()),
                 }
             )

@@ -13,6 +13,7 @@ def rewriter() -> PathRewriter:
             SOURCE_WORKTREE: TARGET_WORKTREE,
             "/home/alice/code/app": "/srv/keera/app",
             encoded_dir_name(SOURCE_WORKTREE): encoded_dir_name(TARGET_WORKTREE),
+            encoded_dir_name("/home/alice/code/app"): encoded_dir_name("/srv/keera/app"),
             "/home/alice": "/home/keera",
         }
     )
@@ -36,6 +37,14 @@ class TestTranscriptPathRewriter(unittest.TestCase):
         source = f"/home/alice/.claude/projects/{encoded_dir_name(SOURCE_WORKTREE)}/s1/tool-results/a.txt"
         expected = f"/home/keera/.claude/projects/{encoded_dir_name(TARGET_WORKTREE)}/s1/tool-results/a.txt"
         self.assertEqual(rewriter().text(source), expected)
+
+    def test_rewrites_the_encoded_project_dir_without_breaking_the_worktree_one(self):
+        scratch = "/tmp/claude-1000/-home-alice-code-app/s1/scratchpad"
+        worktree_dir = f"projects/{encoded_dir_name(SOURCE_WORKTREE)}/x"
+        self.assertEqual(rewriter().text(scratch), "/tmp/claude-1000/-srv-keera-app/s1/scratchpad")
+        self.assertEqual(
+            rewriter().text(worktree_dir), f"projects/{encoded_dir_name(TARGET_WORKTREE)}/x"
+        )
 
     def test_rewrites_every_string_in_a_jsonl_entry(self):
         entry = {
