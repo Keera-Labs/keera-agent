@@ -198,7 +198,70 @@ class TestAgentQuestionInbox(TestCase, DatabaseTransaction):
         response = await self._answer(item["id"], {"choices": [], "text": "  "})
 
         response.assert_status(422)
+        self.assertIn("choices", response.json()["errors"])
         self.assertEqual(self.terminal.sent, [])
+
+    async def test_a_question_never_creates_a_permission_item(self):
+        await self._hook(ask([PATH_QUESTION], "toolu_inbox_12"))
+        await self._hook({**permission_request("x"), "tool_name": "AskUserQuestion", "tool_input": {"questions": [PATH_QUESTION]}})
+        await self._hook({**PERMISSION_NOTIFICATION, "message": "Claude needs your permission to use AskUserQuestion"})
+        await self._hook(PERMISSION_NOTIFICATION)
+
+        items = await self._inbox()
+
+        self.assertEqual([item["kind"] for item in items], ["question"])
+        self.assertEqual((await Agent.find(self.agent.id)).attention_kind, "question")
+
+    async def test_a_bash_permission_still_records_its_command_without_a_pending_question(self):
+        await self._hook(PERMISSION_NOTIFICATION)
+        await self._hook(permission_request("rm -rf build"))
+
+        [item] = await self._inbox()
+
+        self.assertEqual(item["kind"], "permission")
+        self.assertEqual(item["detail"], "rm -rf build")
+
+    async def test_answering_in_the_terminal_settles_every_pending_item(self):
+        await self._hook(ask([PATH_QUESTION], "toolu_inbox_13"))
+        await self._hook(permission_request("rm -rf build"))
+
+        await self._hook(
+            {
+                "session_id": SESSION_ID,
+                "hook_event_name": "PostToolUse",
+                "tool_name": "AskUserQuestion",
+                "tool_use_id": "toolu_inbox_13",
+                "tool_response": {"answers": {PATH_QUESTION["question"]: "Keep login-shell PATH"}},
+            }
+        )
+
+        self.assertEqual(await self._inbox(), [])
+        answers = {item["kind"]: item["answer"] for item in await self._inbox("answered")}
+        self.assertEqual(answers["question"], "Keep login-shell PATH")
+
+    async def test_stop_settles_every_pending_item(self):
+        await self._hook(permission_request("rm -rf build"))
+
+        response = await self.post(
+            "/api/claude-stopped",
+            json={"session_id": SESSION_ID, "cwd": "/tmp/somewhere", "hook_event_name": "Stop"},
+            headers={"X-Keera-Agent-Id": str(self.agent.id)},
+        )
+
+        response.assert_ok()
+        self.assertEqual(await self._inbox(), [])
+
+    async def test_answering_a_question_settles_leftover_items(self):
+        await self._hook(ask([PATH_QUESTION], "toolu_inbox_14"))
+        [question] = await self._inbox()
+        leftover = await AgentQuestion.create(
+            {"agent_id": self.agent.id, "project_id": self.project.id, "kind": "permission",
+             "question": "Allow Bash?", "options": [], "multi_select": False, "status": "pending"}
+        )
+
+        (await self._answer(question["id"], {"text": "keep it"})).assert_ok()
+
+        self.assertEqual((await AgentQuestion.find(leftover.id)).status, "answered")
 
     async def test_answering_twice_is_a_conflict(self):
         await self._hook(ask([PATH_QUESTION], "toolu_inbox_6"))
@@ -316,7 +379,7 @@ class TestAgentQuestionInbox(TestCase, DatabaseTransaction):
         response = await self._answer(item["id"], {"text": "too late"})
 
         response.assert_status(409)
-        self.assertEqual(response.json()["error"], "The agent is no longer waiting for this answer.")
+        self.assertEqual(response.json()["error"], "This was already answered in the terminal, so the agent is no longer waiting.")
         self.assertEqual(self.terminal.writes, [])
         self.assertEqual(await self._inbox(), [])
 

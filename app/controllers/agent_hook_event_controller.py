@@ -34,6 +34,8 @@ async def _apply(agent: Agent, event: AgentHookEventRequest) -> tuple[str, str |
     """Persist the transition the event implies; the (status, attention_kind), or None if
     unchanged."""
     attention = event.attention()
+    if attention and event.notifies_permission() and agent.attention_kind == "question":
+        return None
     if attention:
         await Agent.where("id", agent.id).update(
             {

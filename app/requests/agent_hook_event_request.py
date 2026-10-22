@@ -7,6 +7,7 @@ from app.requests.agent_question_request import AskedQuestion
 
 ATTENTION_PROMPT_LENGTH = 500
 PERMISSION_DETAIL_LENGTH = 4000
+USER_QUESTION_TOOL = "AskUserQuestion"
 _PERMISSION_DETAIL_KEYS = ("command", "file_path", "notebook_path", "url", "pattern", "query")
 
 # Notification types that mean Claude is blocked on the user, mapped to the attention_kind
@@ -45,26 +46,30 @@ class AgentHookEventRequest(BaseModel):
         if self.requests_permission():
             detail = self.permission_detail() or ""
             return Attention("permission", truncate_prompt(f"{self.permission_question()} {detail}"))
-        if self.hook_event_name == "Notification":
+        if self.hook_event_name == "Notification" and not self._concerns_user_question():
             kind = _NOTIFICATION_ATTENTION_KIND.get(self.notification_type)
             if kind:
                 return Attention(kind, truncate_prompt(self.message))
         return None
 
     def asks_user_question(self) -> bool:
-        return self.hook_event_name == "PreToolUse" and self.tool_name == "AskUserQuestion"
+        return self.hook_event_name == "PreToolUse" and self.tool_name == USER_QUESTION_TOOL
 
     def asks_permission(self) -> bool:
         return self.requests_permission() or self.notifies_permission()
 
     def requests_permission(self) -> bool:
-        return self.hook_event_name == "PermissionRequest"
+        return self.hook_event_name == "PermissionRequest" and not self._concerns_user_question()
 
     def notifies_permission(self) -> bool:
         return (
             self.hook_event_name == "Notification"
             and _NOTIFICATION_ATTENTION_KIND.get(self.notification_type) == "permission"
+            and not self._concerns_user_question()
         )
+
+    def _concerns_user_question(self) -> bool:
+        return self.tool_name == USER_QUESTION_TOOL or USER_QUESTION_TOOL in (self.message or "")
 
     def permission_question(self) -> str:
         if self.requests_permission() and self.tool_name:
@@ -81,7 +86,7 @@ class AgentHookEventRequest(BaseModel):
         return json.dumps(self.tool_input, indent=2, default=str)[:PERMISSION_DETAIL_LENGTH]
 
     def answers_user_question(self) -> bool:
-        return self.hook_event_name == "PostToolUse" and self.tool_name == "AskUserQuestion"
+        return self.hook_event_name == "PostToolUse" and self.tool_name == USER_QUESTION_TOOL
 
     def asked_questions(self) -> list[AskedQuestion]:
         questions = self.tool_input.get("questions")

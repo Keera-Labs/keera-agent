@@ -96,6 +96,17 @@ export function useInboxQuestions(status: AgentQuestionStatus) {
     return { questions, isLoading: query.isLoading }
 }
 
+export class AnswerError extends Error {
+    constructor(message: string, readonly status: number) {
+        super(message)
+    }
+}
+
+function errorMessage(json: { error?: string; errors?: Record<string, string[]> }): string {
+    const firstFieldError = Object.values(json.errors ?? {})[0]?.[0]
+    return json.error ?? firstFieldError ?? 'Failed to send the answer'
+}
+
 async function postAnswer(questionId: number, answer: AgentQuestionAnswer): Promise<AgentQuestion> {
     const res = await fetch(`/api/agent-questions/${questionId}/answer`, {
         method: 'POST',
@@ -103,7 +114,7 @@ async function postAnswer(questionId: number, answer: AgentQuestionAnswer): Prom
         body: JSON.stringify(answer),
     })
     const json = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(json.error ?? 'Failed to send the answer')
+    if (!res.ok) throw new AnswerError(errorMessage(json), res.status)
     return fromResource(json.data)
 }
 

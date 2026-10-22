@@ -1,6 +1,7 @@
 import asyncio
 import weakref
 
+from app.actions.agent_question_action import settle_pending_questions
 from app.actions.agent_status_action import CLEARED_ATTENTION, notify_agent_status, utc_now
 from app.actions.terminal_write_action import TerminalWriteAction
 from app.exceptions.agent_question_conflict_error import AgentQuestionConflictError
@@ -53,7 +54,7 @@ class AgentQuestionAnswerAction:
             raise AgentQuestionConflictError("The agent's terminal is not running.")
         if agent.status != "needs_input":
             await self._mark_answered(None)
-            raise AgentQuestionConflictError("The agent is no longer waiting for this answer.")
+            raise AgentQuestionConflictError("This was already answered in the terminal, so the agent is no longer waiting.")
 
         await self._mark_answered(self._answer())
 
@@ -64,6 +65,7 @@ class AgentQuestionAnswerAction:
         else:
             return await AgentQuestion.find(self.question.id)
 
+        await settle_pending_questions(agent.id)
         await Agent.where("id", agent.id).update(
             {"status": "running", **CLEARED_ATTENTION, "updated_at": utc_now()}
         )

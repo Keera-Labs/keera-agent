@@ -41,13 +41,18 @@ function openInInbox() {
             class="@container flex flex-col gap-3 p-3 rounded-xl border border-blue-200 bg-blue-50/50"
             @submit.prevent="send"
         >
-            <div class="flex items-center gap-2 min-w-0">
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
                 <QuestionKindPill :kind="question.kind" />
-                <span class="flex-1 min-w-0 truncate text-zinc-600 text-ui-12">{{ agentName }} is paused until you answer</span>
+                <span
+                    data-testid="agent-question-paused"
+                    class="order-last basis-full min-w-0 text-zinc-600 text-ui-12 @md:order-none @md:basis-auto @md:flex-1 @md:truncate"
+                >
+                    {{ agentName }} is paused until you answer
+                </span>
                 <button
                     type="button"
                     data-testid="open-in-inbox"
-                    class="shrink-0 text-accent text-ui-12 font-semibold cursor-pointer hover:underline"
+                    class="shrink-0 ml-auto text-accent text-ui-12 font-semibold cursor-pointer hover:underline"
                     @click="openInInbox"
                 >
                     Open in Inbox
@@ -56,20 +61,20 @@ function openInInbox() {
             <p class="m-0 text-zinc-900 text-ui-14 font-semibold">{{ question.question }}</p>
             <QuestionDetail v-if="question.detail" :detail="question.detail" />
             <QuestionOptions :question="question" :selected="selected" layout="row" @toggle="toggle" />
-            <div class="flex flex-wrap gap-2">
+            <div class="flex flex-col gap-2 @md:flex-row">
                 <input
                     v-model="text"
                     data-testid="question-free-text"
                     type="text"
                     :placeholder="textLabel"
                     :aria-label="textLabel"
-                    class="flex-1 min-w-[12rem] h-9 px-3 rounded-lg border border-stroke bg-white text-ui-13 text-zinc-900 outline-none focus:border-zinc-500"
+                    class="w-full min-w-0 @md:flex-1 h-9 px-3 rounded-lg border border-stroke bg-white text-ui-13 text-zinc-900 outline-none focus:border-zinc-500"
                 >
                 <button
                     type="submit"
                     data-testid="send-answer"
                     :disabled="!canSend"
-                    class="shrink-0 h-9 px-4 rounded-lg bg-zinc-900 text-white text-ui-13 font-semibold cursor-pointer hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                    class="shrink-0 self-start h-9 px-4 rounded-lg bg-zinc-900 text-white text-ui-13 font-semibold cursor-pointer hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                     {{ sending ? 'Sending…' : 'Send answer' }}
                 </button>

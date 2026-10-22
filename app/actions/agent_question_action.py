@@ -16,10 +16,8 @@ async def record_agent_questions(agent: Agent, event: AgentHookEventRequest) -> 
         await _store_answers(agent, event)
     elif event.asks_permission():
         await _store_permission(agent, event)
-    if event.hook_event_name == "UserPromptSubmit":
-        await _settle_pending(agent, kinds=("question", "permission"))
-    elif event.resumes_work():
-        await _settle_pending(agent, kinds=("permission",))
+    if event.resumes_work():
+        await settle_pending_questions(agent.id)
 
 
 async def _store_asked(agent: Agent, event: AgentHookEventRequest) -> None:
@@ -53,6 +51,8 @@ async def _store_answers(agent: Agent, event: AgentHookEventRequest) -> None:
 
 
 async def _store_permission(agent: Agent, event: AgentHookEventRequest) -> None:
+    if event.notifies_permission() and await _pending(agent).where("kind", "question").first():
+        return
     pending = await _pending(agent).where("kind", "permission").first()
     if pending and event.notifies_permission() and pending.detail:
         return
@@ -80,8 +80,8 @@ async def _store_permission(agent: Agent, event: AgentHookEventRequest) -> None:
     )
 
 
-async def _settle_pending(agent: Agent, kinds: tuple[str, ...]) -> None:
-    for question in await _pending(agent).where_in("kind", list(kinds)).get():
+async def settle_pending_questions(agent_id: int) -> None:
+    for question in await AgentQuestion.where("agent_id", agent_id).where("status", "pending").get():
         await _mark_answered(question.id, None)
 
 

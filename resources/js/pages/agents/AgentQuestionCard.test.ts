@@ -4,6 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { router } from '@inertiajs/vue3'
 import type { AgentQuestion } from '@/queries/agentQuestionsQuery'
 import AgentQuestionCard from './AgentQuestionCard.vue'
+import { useToastStore } from '@/stores/toastStore'
 import { installPinia } from './testing'
 
 vi.mock('@inertiajs/vue3', () => ({ router: { visit: vi.fn() } }))
@@ -23,7 +24,7 @@ function question(overrides: Partial<AgentQuestion> = {}): AgentQuestion {
 }
 
 let posts: { url: string; body: unknown }[]
-let response: { ok: boolean; body: unknown }
+let response: { ok: boolean; status?: number; body: unknown }
 
 function mountCard(q: AgentQuestion = question()) {
     return mount(AgentQuestionCard, { props: { question: q, agentName: 'Ada' }, global: { plugins: [...installPinia()] } })
@@ -36,7 +37,7 @@ beforeEach(() => {
     response = { ok: true, body: { data: { id: '5', attributes: {} } } }
     vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
         if (init?.method === 'POST') posts.push({ url, body: JSON.parse(String(init.body)) })
-        return Promise.resolve({ ok: response.ok, json: () => Promise.resolve(response.body) })
+        return Promise.resolve({ ok: response.ok, status: response.status ?? (response.ok ? 200 : 500), json: () => Promise.resolve(response.body) })
     }))
     vi.mocked(router.visit).mockClear()
 })
@@ -135,5 +136,35 @@ describe('AgentQuestionCard', () => {
         await flushPromises()
 
         expect(wrapper.get('[role="alert"]').text()).toBe("The agent's terminal is not running.")
+    })
+
+    it('shows the first field error from a validation failure', async () => {
+        response = { ok: false, status: 422, body: { errors: { choices: ['Pick an option or write an answer.'] } } }
+        const wrapper = mountCard()
+        await wrapper.get('form').trigger('submit')
+        await flushPromises()
+
+        expect(wrapper.get('[role="alert"]').text()).toBe('Pick an option or write an answer.')
+    })
+
+    it('toasts when the question was already answered in the terminal', async () => {
+        const message = 'This was already answered in the terminal, so the agent is no longer waiting.'
+        response = { ok: false, status: 409, body: { error: message } }
+        const wrapper = mountCard()
+        await wrapper.get('form').trigger('submit')
+        await flushPromises()
+
+        expect(useToastStore().message).toBe(message)
+        expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    })
+
+    it('stacks the paused text, input and button for narrow widths', () => {
+        const wrapper = mountCard()
+
+        expect(wrapper.get('[data-testid="agent-question-paused"]').classes()).toEqual(
+            expect.arrayContaining(['basis-full', '@md:basis-auto']),
+        )
+        const inputRow = wrapper.get('[data-testid="question-free-text"]').element.parentElement!
+        expect([...inputRow.classList]).toEqual(expect.arrayContaining(['flex-col', '@md:flex-row']))
     })
 })

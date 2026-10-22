@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 
 class AskedOption(BaseModel):
@@ -24,11 +24,12 @@ class AgentQuestionIndexRequest(BaseModel):
 
 
 class AgentQuestionAnswerRequest(BaseModel):
-    choices: list[str] = []
     text: str | None = Field(default=None, max_length=4000)
+    choices: list[str] = Field(default=[], validate_default=True)
 
-    @model_validator(mode="after")
-    def requires_an_answer(self) -> "AgentQuestionAnswerRequest":
-        if not self.choices and not (self.text or "").strip():
+    @field_validator("choices")
+    @classmethod
+    def requires_an_answer(cls, choices: list[str], info: ValidationInfo) -> list[str]:
+        if not choices and not (info.data.get("text") or "").strip():
             raise ValueError("Pick an option or write an answer.")
-        return self
+        return choices

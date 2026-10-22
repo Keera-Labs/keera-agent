@@ -1,5 +1,6 @@
 import { computed, ref, toValue, watch, type MaybeRefOrGetter } from 'vue'
-import { useAnswerQuestion, type AgentQuestion } from '@/queries/agentQuestionsQuery'
+import { AnswerError, useAnswerQuestion, type AgentQuestion } from '@/queries/agentQuestionsQuery'
+import { useToastStore } from '@/stores/toastStore'
 
 export function useQuestionAnswer(questionSource: MaybeRefOrGetter<AgentQuestion | null>) {
     const question = () => toValue(questionSource)
@@ -7,6 +8,7 @@ export function useQuestionAnswer(questionSource: MaybeRefOrGetter<AgentQuestion
     const text = ref('')
     const error = ref('')
     const answer = useAnswerQuestion()
+    const toast = useToastStore()
 
     watch(
         () => question()?.id,
@@ -47,6 +49,10 @@ export function useQuestionAnswer(questionSource: MaybeRefOrGetter<AgentQuestion
             })
             return true
         } catch (err) {
+            if (err instanceof AnswerError && err.status === 409) {
+                toast.show(err.message)
+                return false
+            }
             error.value = err instanceof Error ? err.message : 'Failed to send the answer'
             return false
         }

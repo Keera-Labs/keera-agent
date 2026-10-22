@@ -177,13 +177,33 @@ describe('Inbox page', () => {
         expect(wrapper.find('[data-testid="send-answer"]').exists()).toBe(false)
     })
 
+    it('switches between the list and the detail as a single pane below lg', async () => {
+        const wrapper = mountInbox()
+        await flushPromises()
+        const listPane = () => wrapper.get('[data-testid="inbox-list-pane"]').classes()
+        const detailPane = () => wrapper.get('[data-testid="inbox-detail-pane"]').classes()
+
+        expect(listPane()).not.toContain('hidden')
+        expect(detailPane()).toEqual(expect.arrayContaining(['hidden', 'lg:block']))
+
+        await wrapper.findAll('[data-testid="inbox-item"]')[1].trigger('click')
+        expect(listPane()).toEqual(expect.arrayContaining(['hidden', 'lg:block']))
+        expect(detailPane()).not.toContain('hidden')
+
+        await wrapper.get('[data-testid="inbox-back"]').trigger('click')
+        expect(listPane()).not.toContain('hidden')
+    })
+
     it('shows empty states', async () => {
         pending = []
         answered = []
         const wrapper = mountInbox()
         await flushPromises()
 
-        expect(wrapper.get('[data-testid="inbox-pending-pill"]').text()).toBe('0 pending')
+        const pill = wrapper.get('[data-testid="inbox-pending-pill"]')
+        expect(pill.text()).toBe('0 pending')
+        expect(pill.classes()).toContain('bg-zinc-100')
+        expect(pill.classes()).not.toContain('bg-blue-50')
         expect(wrapper.get('[data-testid="inbox-empty"]').text()).toContain('Nothing waiting on you')
         await wrapper.get('[data-testid="inbox-tab-answered"]').trigger('click')
         expect(wrapper.get('[data-testid="inbox-empty"]').text()).toContain('No answered questions yet')
