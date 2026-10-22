@@ -236,9 +236,17 @@ Verified in the run behind this PR:
 
 - An agent on A was told a code word, committed `feature.py`, left `README.md` modified
   and `notes.txt` untracked, and created a git-ignored `.env`.
-- Push to a bad-token server and to a down server both returned 502, and the agent kept
-  running.
-- Two concurrent pushes returned one 200 and one 409.
+- With an untracked `.npmrc` and `.aws/credentials` present, the push returned 422 listing
+  both files.
+- Push to a bad-token server and to a down server both returned 502.
+- In all three cases the agent kept running with its session and no claim held.
+- B restarted with `KEERA_HANDOFF_MAX_BYTES=100000` rejected the send with 413 (a definite
+  4xx). A deleted the remote `handoff/*` branch, recorded the failure, and resumed the agent
+  in the same session with a "moving you failed" note.
+- Two concurrent pushes returned one 200 and one 409. The 200 reused the failed attempt's
+  key.
+- The custom system prompt's `http://127.0.0.1:4601/mcp` arrived on B as
+  `http://127.0.0.1:4602/mcp`.
 - B's agent ran `claude --worktree agent-2 --resume <same sid>`, showed ` M README.md` /
   `?? notes.txt` on top of `add feature`, had no `.env`, and answered the code word from
   B's worktree path.

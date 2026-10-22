@@ -403,7 +403,8 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     claude_ready.pop(session_id, None)
 
     # Part 2: Reset has_session if process exited too quickly — it never established a real session
+    unless_respawned = Agent.where("id", agent.id).where("session_id", session_id)
     if elapsed < _MIN_SESSION_LIFETIME:
-        await Agent.where("id", agent.id).update({"has_session": False, "session_id": None})
+        await unless_respawned.update({"has_session": False, "session_id": None})
     else:
-        await Agent.where("id", agent.id).update({"session_id": None})
+        await unless_respawned.update({"session_id": None})

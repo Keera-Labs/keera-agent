@@ -352,3 +352,42 @@ class TestMarkAgentWorkingPushesAgentStatus(TestCase, DatabaseTransaction):
                 }
             ],
         )
+
+
+class TestHeadlessSpawnCleanup(TestCase, DatabaseTransaction):
+    async def test_an_exiting_spawn_does_not_clear_a_newer_session(self):
+        import tempfile
+        from unittest import mock
+
+        from app.controllers.agent_trigger_controller import _spawn_headless_agent
+
+        cwd = tempfile.mkdtemp()
+        project = await ProjectFactory.new().create(path=cwd)
+        agent = await AgentFactory.new().create(project_id=project.id, has_session=True)
+
+        async def respawned_meanwhile(terminal, agent_id):
+            own = (await Agent.find(agent_id)).session_id
+            await Agent.where("id", agent_id).update({"session_id": "newer-session"})
+            await app().make("terminal").close(own)
+            return True
+
+        bridge = mock.Mock()
+        bridge.return_value.run = mock.AsyncMock()
+        supervisor = mock.Mock()
+        supervisor.return_value.launch_line.return_value = "true"
+        target = "app.controllers.agent_trigger_controller"
+        with (
+            mock.patch(f"{target}.cleanup_agent_worktree"),
+            mock.patch(
+                f"{target}.ensure_agent_worktree", side_effect=lambda agent, cwd, paths: cwd
+            ),
+            mock.patch(f"{target}.WebsocketTerminal", bridge),
+            mock.patch(f"{target}.supervise_cli", supervisor),
+            mock.patch(f"{target}.make_claude_session_monitor"),
+            mock.patch(f"{target}.wait_for_agent_cli", side_effect=respawned_meanwhile),
+        ):
+            await _spawn_headless_agent(agent, project, cwd, "hello")
+
+        refreshed = await Agent.find(agent.id)
+        self.assertEqual(refreshed.session_id, "newer-session")
+        self.assertTrue(refreshed.has_session)
