@@ -14,6 +14,7 @@ from app.models.Agent import Agent
 from app.models.Project import Project
 from app.services.claude_config_dir import agent_config_dir
 from app.services.gemini_cli import validate_gemini_cli
+from app.services.handoff.state import is_handed_off
 from app.terminal.agent_session import attach_client, live_terminal, own_session, spawn_lock
 from app.terminal.claude_monitor import make_claude_session_monitor
 from app.terminal.cli_supervisor import supervise_cli
@@ -88,6 +89,9 @@ async def terminal_ws(websocket: WebSocket, project: str, agent_id: int = Query(
     agent_record = await Agent.where("id", agent_id).where_null("deleted_at").first()
     if not agent_record:
         await websocket.close(code=1008, reason="Agent not found")
+        return
+    if is_handed_off(agent_record):
+        await websocket.close(code=1008, reason="Agent was handed off")
         return
 
     cwd = os.path.expanduser(project_record.path)

@@ -50,6 +50,7 @@ class Agent(Model):
             model=self.model,
             worktree=f"agent-{self.id}" if getattr(self, "use_worktree", True) else None,
             continue_session=getattr(self, "has_session", False),
+            resume_session=getattr(self, "resume_session_id", None),
             system_prompt_file=prompt_file,
             allowed_tools=self.permissions_allow if enforce_permissions else [],
             disallowed_tools=self.permissions_deny if enforce_permissions else [],

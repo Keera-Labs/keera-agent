@@ -20,6 +20,7 @@ from app.models.Agent import Agent
 from app.models.Project import Project
 from app.services.claude_config_dir import agent_config_dir
 from app.services.gemini_cli import validate_gemini_cli
+from app.services.handoff.state import is_handed_off
 from app.services.worktree_cleanup import cleanup_agent_worktree
 from app.services.worktree_files import copy_worktree_files
 from app.terminal.claude_monitor import make_claude_session_monitor
@@ -84,6 +85,10 @@ async def trigger(request: Request, agent_id: int):
         return JSONResponse({"error": "message is required"}, status_code=400)
 
     agent = await Agent.find_or_fail(agent_id)
+    if is_handed_off(agent):
+        return JSONResponse(
+            {"error": f"{agent.name} was handed off to another server."}, status_code=409
+        )
     project = await Project.find_or_fail(agent.project_id)
 
     # If an interactive Claude session is already running, wait for it to be ready then inject
@@ -249,7 +254,8 @@ def _make_after_restart(terminal, message: str):
 
 
 async def _is_deleted(agent_id: int) -> bool:
-    return not await Agent.where("id", agent_id).where_null("deleted_at").first()
+    agent = await Agent.where("id", agent_id).where_null("deleted_at").first()
+    return not agent or is_handed_off(agent)
 
 
 async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) -> None:
@@ -277,8 +283,11 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
 
     base_url = app().make("config").get("fastapi.app_url")
 
-    if getattr(agent, "provider", None) not in ("codex", "gemini") and getattr(
-        agent, "use_worktree", True
+    awaiting_resume = bool(getattr(agent, "resume_session_id", None))
+    if (
+        getattr(agent, "provider", None) not in ("codex", "gemini")
+        and getattr(agent, "use_worktree", True)
+        and not awaiting_resume
     ):
         # A leftover worktree/branch blocks `claude --worktree`; one holding
         # unsaved work is kept, and the CLI reuses it.

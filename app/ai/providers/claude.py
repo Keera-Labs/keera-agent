@@ -12,7 +12,9 @@ class ClaudeProvider(Provider):
         parts = ["claude"]
         if command.worktree:
             parts.extend(("--worktree", shlex.quote(command.worktree)))
-        if command.continue_session:
+        if command.resume_session:
+            parts.extend(("--resume", shlex.quote(command.resume_session)))
+        elif command.continue_session:
             parts.append("--continue")
         if command.system_prompt_file:
             path = shlex.quote(command.system_prompt_file)

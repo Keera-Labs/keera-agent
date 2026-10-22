@@ -9,6 +9,8 @@ class FastAPIConfig:
         default_factory=lambda: env("KEERA_APP_URL", "http://127.0.0.1:4545")
     )
     hook_url: str = dataclasses.field(default_factory=lambda: env("KEERA_HOOK_URL", ""))
+    handoff_token: str = dataclasses.field(default_factory=lambda: env("KEERA_HANDOFF_TOKEN", ""))
+    server_name: str = dataclasses.field(default_factory=lambda: env("KEERA_SERVER_NAME", ""))
     reload: bool = dataclasses.field(default_factory=lambda: env("KEERA_APP_RELOAD", False))
     reload_dirs: list | None = None
     reload_excludes: list = dataclasses.field(

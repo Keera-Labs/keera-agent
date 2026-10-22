@@ -5,6 +5,7 @@ from app.controllers import (
     agent_controller,
     agent_default_controller,
     agent_dispatch_controller,
+    agent_handoff_controller,
     agent_hook_event_controller,
     agent_message_controller,
     agent_pause_controller,
@@ -35,6 +36,7 @@ from app.controllers import (
     git_worktree_change_controller,
     git_worktree_controller,
     global_settings_controller,
+    handoff_controller,
     heartbeat_controller,
     home_controller,
     plugin_controller,
@@ -44,6 +46,7 @@ from app.controllers import (
     project_usage_controller,
     project_worktree_file_controller,
     remote_control_setting_controller,
+    server_controller,
     settings_controller,
     shell_controller,
     task_controller,
@@ -180,6 +183,16 @@ router.post("/api/plugins/{slug}/uninstall", plugin_controller.uninstall)
 router.get("/api/heartbeat/status", heartbeat_controller.status)
 router.post("/api/heartbeat/start", heartbeat_controller.start)
 router.post("/api/heartbeat/stop", heartbeat_controller.stop)
+
+# Keera servers and agent handoff — before wildcard
+router.get("/api/servers", server_controller.index)
+router.post("/api/servers", server_controller.store)
+router.patch("/api/servers/{server_id}", server_controller.update)
+router.delete("/api/servers/{server_id}", server_controller.destroy)
+router.get("/api/agents/{agent_id}/handoffs", agent_handoff_controller.index)
+router.post("/api/agents/{agent_id}/handoffs", agent_handoff_controller.store)
+router.get("/api/handoff", handoff_controller.show)
+router.post("/api/handoffs", handoff_controller.store)
 
 # Settings page — before wildcard
 router.get("/settings", settings_controller.settings)

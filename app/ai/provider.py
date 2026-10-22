@@ -9,6 +9,7 @@ class ProviderCommand:
     model: str | None = None
     worktree: str | None = None
     continue_session: bool = False
+    resume_session: str | None = None
     system_prompt_file: str | None = None
     allowed_tools: list[str] = field(default_factory=list)
     disallowed_tools: list[str] = field(default_factory=list)

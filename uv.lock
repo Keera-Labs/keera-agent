@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.13"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -571,6 +571,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "fastapi-startkit", extra = ["database", "fastapi", "sqlite", "vite"] },
+    { name = "httpx" },
     { name = "playwright" },
 ]
 
@@ -587,6 +588,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi-startkit", extras = ["database", "fastapi", "sqlite", "vite"], specifier = ">=0.58.0" },
+    { name = "httpx", specifier = ">=0.28" },
     { name = "playwright", specifier = ">=1.60.0" },
 ]
 

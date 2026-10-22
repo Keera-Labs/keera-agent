@@ -57,7 +57,9 @@ def make_claude_session_monitor(
             )
         if confirm_output and not detected and not confirmed and len(plain.strip()) > 20:
             confirmed = True
-            await Agent.where("id", agent_id).update({"has_session": True})
+            await Agent.where("id", agent_id).update(
+                {"has_session": True, "resume_session_id": None}
+            )
 
     return on_output
 
