@@ -68,6 +68,22 @@ describe('agent handoff', () => {
         expect(dispose).toHaveBeenCalledWith(11)
     })
 
+    it('tells the user when the target runs the agent on another model', async () => {
+        vi.stubGlobal('confirm', vi.fn(() => true))
+        const alert = vi.fn()
+        vi.stubGlobal('alert', alert)
+        const notice = 'claude-sonnet-5 is not configured on this server, so the agent runs on claude-opus-5.'
+        const { wrapper } = await mountOverview([agentResource(11, 'Builder')], {
+            'POST /api/agents/11/handoffs': { data: { type: 'handoffs', id: '1', attributes: { status: 'completed', notice } } },
+        })
+
+        await wrapper.get('[data-testid="agent-card-push"]').trigger('click')
+        await wrapper.get('[data-testid="agent-card-push-target"]').trigger('click')
+        await flushPromises()
+
+        expect(alert).toHaveBeenCalledWith(`Builder moved to Cloud box. ${notice}`)
+    })
+
     it('does nothing when the push is not confirmed', async () => {
         vi.stubGlobal('confirm', vi.fn(() => false))
         const { wrapper, fetchMock } = await mountOverview([agentResource(11, 'Builder')])

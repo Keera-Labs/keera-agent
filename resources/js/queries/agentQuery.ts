@@ -180,9 +180,12 @@ export function useAgents(projectIdSource: MaybeRefOrGetter<number | null>) {
                 headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
                 body: JSON.stringify({ server_id: serverId }),
             })
-            const json = (await res.json().catch(() => ({}))) as { error?: string }
+            const json = (await res.json().catch(() => ({}))) as {
+                error?: string
+                data?: { attributes?: { notice?: string | null } }
+            }
             if (!res.ok) throw new Error(json.error || 'Failed to hand off the agent')
-            return agentId
+            return { agentId, notice: json.data?.attributes?.notice ?? null }
         },
         onSettled: invalidate,
     })

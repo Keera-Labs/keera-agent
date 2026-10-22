@@ -213,7 +213,8 @@ class TestHandoffController(TestCase, DatabaseTransaction):
         ok = await self.post("/api/handoffs/preflight", json=body, headers=AUTH)
         ok.assert_ok()
         self.assertEqual(
-            ok.json()["data"], {"project_id": self.target_project.id, "model": "claude-sonnet-5"}
+            ok.json()["data"],
+            {"project_id": self.target_project.id, "model": "claude-sonnet-5", "notice": None},
         )
 
         unknown = {**body, "remote_url": "git@example.com:other/repo.git"}
@@ -227,8 +228,49 @@ class TestHandoffController(TestCase, DatabaseTransaction):
         response = await self._import(payload)
 
         response.assert_ok()
+        fallback = await complexity_model("claude", "medium")
         agent = await Agent.find(response.json()["data"]["agent_id"])
-        self.assertEqual(agent.model, await complexity_model("claude", "medium"))
+        self.assertEqual(agent.model, fallback)
+        notice = response.json()["data"]["notice"]
+        self.assertIn("claude-retired-1 is not configured", notice)
+        self.assertIn(fallback, notice)
+        self.assertIn(notice, self.spawn.call_args.args[3])
+
+        replay = await self._import(payload)
+        self.assertEqual(replay.json()["data"]["notice"], notice)
+
+    async def test_preflight_reports_the_model_fallback(self):
+        agent = {"provider": "claude", "model": "claude-retired-1", "complexity": "medium"}
+        body = {"remote_url": self.payload["git"]["remote_url"], "agent": agent}
+
+        response = await self.post("/api/handoffs/preflight", json=body, headers=AUTH)
+
+        response.assert_ok()
+        self.assertIn("claude-retired-1 is not configured", response.json()["data"]["notice"])
+
+    async def test_a_configured_model_has_no_notice(self):
+        response = await self._import()
+
+        self.assertIsNone(response.json()["data"]["notice"])
+
+    async def test_a_failure_after_installing_removes_the_transcript_and_worktree(self):
+        from app.actions.agent_handoff_import_action import AgentHandoffImportAction
+        from app.services.handoff.errors import HandoffConflict
+
+        taken = await self._next_agent_id()
+        worktree = os.path.realpath(self.target_root / ".claude" / "worktrees" / f"agent-{taken}")
+        directory = transcript_dir(self.repos.config_dir, worktree)
+        with mock.patch.object(
+            AgentHandoffImportAction, "_activate", side_effect=HandoffConflict("late failure")
+        ):
+            response = await self._import()
+
+        response.assert_status(409)
+        self.assertFalse((directory / f"{SESSION_ID}.jsonl").exists())
+        self.assertFalse((directory / SESSION_ID / "tool-results" / "out.txt").exists())
+        self.assertFalse(os.path.exists(worktree))
+        self.assertIsNotNone((await Agent.find(taken)).deleted_at)
+        self.spawn.assert_not_called()
 
     async def test_a_custom_system_prompt_points_at_this_server(self):
         prompt = "Use http://10.0.0.5:4600/mcp and http://box.tailnet.ts.net:4600/api/tasks, not http://x:9/mcp."

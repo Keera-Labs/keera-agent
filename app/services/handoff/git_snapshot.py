@@ -44,6 +44,14 @@ SECRET_NAME_PATTERNS = (
     "*.tfstate.backup",
     "secrets.*",
     "settings.local.json",
+    ".htpasswd",
+    ".s3cfg",
+    ".boto",
+    ".vault-token",
+    "client_secret*.json",
+    "kubeconfig",
+    "*.kubeconfig",
+    "*.asc",
 )
 SECRET_PATH_PATTERNS = (".aws/*", ".ssh/*", ".docker/config.json", ".kube/config", ".gnupg/*")
 SAFE_NAME_PATTERNS = (".env.example", ".env.sample", ".env.template", ".env.dist", "*.pub")
@@ -145,10 +153,24 @@ def check_secrets(worktree: str) -> None:
 
 
 def refuse_secrets(worktree: str, tree: str) -> None:
-    changed = _out(
+    uncommitted = _out(
         worktree, "diff", "--name-only", "-z", "--no-renames", "--diff-filter=ACMT", "HEAD", tree
     )
-    secrets = sorted(path for path in changed.split("\0") if path and looks_secret(path))
+    unpushed = _out(
+        worktree,
+        "log",
+        "-z",
+        "-m",
+        "--no-renames",
+        "--diff-filter=ACMT",
+        "--name-only",
+        "--format=",
+        "HEAD",
+        "--not",
+        "--remotes",
+    )
+    changed = {path.strip("\n") for path in f"{uncommitted}\0{unpushed}".split("\0")}
+    secrets = sorted(path for path in changed if path and looks_secret(path))
     if secrets:
         raise HandoffSecretsFound(secrets)
 

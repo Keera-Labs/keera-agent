@@ -17,7 +17,7 @@ from app.requests.handoff_request import HandoffAgentSettings, IncomingHandoffRe
 from app.services.claude_config_dir import agent_config_dir, default_config_dir
 from app.services.handoff import git_snapshot, transcript
 from app.services.handoff.errors import HandoffConflict, HandoffError, HandoffInvalid
-from app.services.handoff.tasks import run_in_background
+from app.services.handoff.tasks import heartbeat, run_in_background
 from app.services.handoff.urls import rewrite_keera_urls
 
 IMPORT_TTL = datetime.timedelta(minutes=15)
@@ -73,6 +73,12 @@ def _store_request(settings: HandoffAgentSettings, model: str, **fields) -> Agen
     )
 
 
+def model_notice(requested: str, used: str) -> str | None:
+    if requested == used:
+        return None
+    return f"{requested} is not configured on this server, so the agent runs on {used}."
+
+
 def _stale_before() -> str:
     return (datetime.datetime.now(datetime.UTC) - IMPORT_TTL).strftime("%Y-%m-%d %H:%M:%S")
 
@@ -81,14 +87,16 @@ class AgentHandoffImportAction:
     def __init__(self, request: IncomingHandoffRequest, spawn: bool = True):
         self.request = request
         self.spawn = spawn
+        self.notice: str | None = None
 
     async def execute(self) -> dict:
         replay = await self._replayable()
         if replay:
-            return await self._result(replay.agent_id, replayed=True)
+            return await self._result(replay.agent_id, replayed=True, notice=replay.notice)
         claim = await self._claim_key()
         try:
-            return await self._import(claim)
+            async with heartbeat(lambda: self._keep_claim(claim)):
+                return await self._import(claim)
         except Exception:
             await Handoff.where("id", claim.id).delete()
             raise
@@ -135,9 +143,11 @@ class AgentHandoffImportAction:
     async def _import(self, claim: Handoff) -> dict:
         req = self.request
         project, model = await plan_target(req.git.remote_url, req.agent)
+        self.notice = model_notice(req.agent.model, model)
         project_path = os.path.expanduser(project.path)
         agent, worktree, local_branch = await self._agent_with_free_slot(project, model)
         checked_out = False
+        installed: list[Path] = []
         try:
             await asyncio.to_thread(
                 git_snapshot.checkout_snapshot,
@@ -149,21 +159,16 @@ class AgentHandoffImportAction:
             checked_out = True
             worktree = os.path.realpath(worktree)
             config_dir = await agent_config_dir(agent, project) or default_config_dir()
-            await asyncio.to_thread(
+            installed = await asyncio.to_thread(
                 transcript.install_session,
                 transcript.transcript_dir(config_dir, worktree),
                 req.transcript.session_id,
                 [file.model_dump() for file in req.transcript.files],
                 self._rewriter(worktree, project_path, config_dir),
             )
-            await Agent.where("id", agent.id).update(
-                {"resume_session_id": req.transcript.session_id, "has_session": True}
-            )
-            await Handoff.where("id", claim.id).update(
-                {"agent_id": agent.id, "status": "completed", "updated_at": utc_now()}
-            )
+            await self._activate(agent, claim)
         except Exception:
-            await self._discard(agent, project_path, worktree, local_branch, checked_out)
+            await self._discard(agent, project_path, worktree, local_branch, checked_out, installed)
             raise
 
         Logger.info(
@@ -171,7 +176,24 @@ class AgentHandoffImportAction:
         )
         if self.spawn:
             await self._resume(agent.id, project, worktree, local_branch)
-        return await self._result(agent.id, replayed=False)
+        return await self._result(agent.id, replayed=False, notice=self.notice)
+
+    @staticmethod
+    async def _keep_claim(claim: Handoff) -> None:
+        await Handoff.where("id", claim.id).update({"updated_at": utc_now()})
+
+    async def _activate(self, agent: Agent, claim: Handoff) -> None:
+        await Agent.where("id", agent.id).update(
+            {"resume_session_id": self.request.transcript.session_id, "has_session": True}
+        )
+        await Handoff.where("id", claim.id).update(
+            {
+                "agent_id": agent.id,
+                "status": "completed",
+                "notice": self.notice,
+                "updated_at": utc_now(),
+            }
+        )
 
     async def _agent_with_free_slot(self, project: Project, model: str):
         project_path = os.path.expanduser(project.path)
@@ -230,8 +252,10 @@ class AgentHandoffImportAction:
         )
 
     @staticmethod
-    async def _discard(agent, project_path, worktree, local_branch, checked_out) -> None:
+    async def _discard(agent, project_path, worktree, local_branch, checked_out, installed) -> None:
         await Agent.where("id", agent.id).update({"deleted_at": utc_now()})
+        for path in installed:
+            path.unlink(missing_ok=True)
         if checked_out:
             await asyncio.to_thread(
                 git_snapshot.remove_checkout, project_path, worktree, local_branch
@@ -249,6 +273,9 @@ class AgentHandoffImportAction:
                 agent, project, cwd, self._resume_note(agent, worktree, local_branch)
             )
         )
+
+    def _model_hint(self) -> str:
+        return f"{self.notice} " if self.notice else ""
 
     def _resume_note(self, agent: Agent, worktree: str, local_branch: str) -> str:
         req = self.request
@@ -271,11 +298,11 @@ class AgentHandoffImportAction:
             f"the old agent roster and relay URL. Your worktree is now {worktree} on branch "
             f"{local_branch}.{push_hint}{task} Uncommitted and untracked changes came with you; "
             f"git-ignored files such as .env and any running processes did not. "
-            f"Continue your task from where you left off."
+            f"{self._model_hint()}Continue your task from where you left off."
         )
 
     @staticmethod
-    async def _result(agent_id: int, replayed: bool) -> dict:
+    async def _result(agent_id: int, replayed: bool, notice: str | None) -> dict:
         agent = await Agent.find(agent_id)
         project = await Project.find(agent.project_id)
         base_url = Config.get("fastapi.app_url").rstrip("/")
@@ -284,4 +311,5 @@ class AgentHandoffImportAction:
             "project_id": project.id,
             "url": f"{base_url}/{project.slug}/agents/{agent.id}",
             "replayed": replayed,
+            "notice": notice,
         }

@@ -25,8 +25,8 @@ from app.services.handoff.errors import (
     HandoffInvalid,
     HandoffTargetRejected,
 )
-from app.services.handoff.state import claim_agent, release_claim
-from app.services.handoff.tasks import run_in_background
+from app.services.handoff.state import claim_agent, refresh_claim, release_claim
+from app.services.handoff.tasks import heartbeat, run_in_background
 
 logger = logging.getLogger("keera.handoff")
 
@@ -48,7 +48,8 @@ class AgentHandoffPushAction:
         if not self.claim:
             raise HandoffConflict(f"{agent.name} is already being handed off.")
         try:
-            return await self._hand_off(await Agent.find(agent.id), server, project)
+            async with heartbeat(lambda: refresh_claim(agent.id, self.claim)):
+                return await self._hand_off(await Agent.find(agent.id), server, project)
         finally:
             await release_claim(agent.id, self.claim)
 
@@ -223,6 +224,7 @@ class AgentHandoffPushAction:
                 "branch": snapshot.branch,
                 "session_id": session_id,
                 "error": None,
+                "notice": result.get("notice"),
                 "updated_at": now,
             }
         )

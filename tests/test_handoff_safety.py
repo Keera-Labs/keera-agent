@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import tempfile
 import unittest
@@ -7,6 +8,7 @@ from pydantic import ValidationError
 
 from app.requests.handoff_request import HandoffPaths
 from app.services.handoff.git_snapshot import looks_secret
+from app.services.handoff.tasks import heartbeat
 from app.services.handoff.transcript import PathRewriter, install_session
 from app.services.handoff.urls import rewrite_keera_urls
 
@@ -47,6 +49,14 @@ class TestSecretHeuristic(unittest.TestCase):
             "secrets.yaml",
             ".claude/settings.local.json",
             ".docker/config.json",
+            ".htpasswd",
+            ".s3cfg",
+            ".boto",
+            ".vault-token",
+            "client_secret_123.apps.googleusercontent.com.json",
+            "kubeconfig",
+            "ops/prod.kubeconfig",
+            "signing/private.asc",
         ]
         for path in secrets:
             with self.subTest(path=path):
@@ -64,6 +74,8 @@ class TestSecretHeuristic(unittest.TestCase):
             "environment.ts",
             "keyboard.json",
             "docs/credentials-guide.md",
+            "kubeconfig.md",
+            "client.json",
         ]
         for path in safe:
             with self.subTest(path=path):
@@ -114,6 +126,24 @@ class TestInstallSessionCleanup(unittest.TestCase):
 
             self.assertEqual(len(written), 2)
             self.assertEqual((directory / SESSION / "b.bin").read_bytes(), b"\x00\xff")
+
+
+class TestHeartbeat(unittest.IsolatedAsyncioTestCase):
+    async def test_beats_while_the_work_runs_survives_a_failure_and_stops_after(self):
+        beats = []
+
+        async def beat():
+            beats.append(len(beats))
+            if len(beats) == 2:
+                raise RuntimeError("database is locked")
+
+        async with heartbeat(beat, interval=0.01):
+            await asyncio.sleep(0.08)
+        counted = len(beats)
+        await asyncio.sleep(0.05)
+
+        self.assertGreaterEqual(counted, 3)
+        self.assertEqual(len(beats), counted)
 
 
 class TestHandoffPaths(unittest.TestCase):

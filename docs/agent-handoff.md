@@ -69,17 +69,31 @@ from HEAD, creates `W = commit-tree <tree> -p HEAD`. Pushing `W` also pushes eve
 commit under it, so committed, uncommitted and untracked work all arrive. `.gitignore` is
 respected, so ignored files never leave the machine.
 
-**Secrets are refused, not silently dropped.** Every file the snapshot would add or change
-relative to HEAD is checked case-insensitively against `looks_secret()`. That covers `.env`,
+**Secrets are refused, not silently dropped.** Two sets of files are checked
+case-insensitively against `looks_secret()`. The first is every file the snapshot would add
+or change relative to HEAD. The second is every file added or changed by a commit no remote
+has yet (`git log -m --name-only HEAD --not --remotes`), including one a later commit
+deleted again, because pushing the snapshot publishes those commits too. That covers `.env`,
 `.env.*`, `*.env`, `.envrc`, every `id_*` SSH key type, `*.pem`, `*.key`, `*.p12`, `*.pfx`,
 `*.jks`, `*.keystore`, `*.kdbx`, `.npmrc`, `.pypirc`, `.netrc`, `.git-credentials`,
 `.pgpass`, `credentials`, `credentials.json`, `*-key.json`, `service-account*.json`,
-`*.tfvars`, `*.tfstate`, `secrets.*`, `settings.local.json`, and anything under `.aws/`,
+`*.tfvars`, `*.tfstate`, `secrets.*`, `settings.local.json`, `.htpasswd`, `.s3cfg`,
+`.boto`, `.vault-token`, `client_secret*.json`, `kubeconfig`, `*.kubeconfig`, `*.asc`, and
+anything under `.aws/`,
 `.ssh/`, `.gnupg/`, `.docker/config.json` or `.kube/config`. Templates such as
 `.env.example` and public keys (`*.pub`) are allowed. On a match the push fails with a 422
-that lists the files, so the user can delete or ignore them. The check runs before
-anything is stopped and again on the final snapshot. Secrets already committed in history
-are out of scope.
+that lists the files, so the user can delete or ignore them, or rewrite the unpushed
+commits. The check runs before anything is stopped and again on the final snapshot.
+Secrets that already exist on a remote are out of scope, since the handoff doesn't
+publish them again.
+
+### Model
+
+The target runs the agent on the source's model when it is configured there. Otherwise it
+uses its own default for the task's complexity. The preflight result, the push result
+(`notice` on the outgoing handoff) and the agent's resume note all say so, for example
+"claude-sonnet-5 is not configured on this server, so the agent runs on claude-opus-5."
+The UI shows it after the push.
 
 On the target the WIP commit is undone with `reset --mixed <base_sha>`, so the agent finds
 the same committed history plus the same modified/untracked files it left behind (the
@@ -189,6 +203,17 @@ second push gets a 409.
   key returns the same agent (`replayed: true`), and a completed key whose agent was
   deleted since is imported again. A failed import deletes its row. A stale `importing`
   row (over 15 minutes old) is taken over.
+- **Why 15 minutes is enough**: `CLAIM_TTL` and `IMPORT_TTL` must outlast the longest gap
+  between two refreshes, so a slow but healthy handoff is never taken over. Bounding the
+  steps instead would not be tight enough. Each git call times out at 300 s, the
+  preflight at 30 s and the send at 300 s, but a snapshot or checkout chains several git
+  calls, so their worst case adds up past 15 minutes. So a heartbeat
+  (`app/services/handoff/tasks.py`) refreshes `handoff_claimed_at` on the source, and the
+  `importing` row's `updated_at` on the target, every 60 s for as long as the handoff
+  runs, whatever step it is in. The longest gap is then about 60 s plus event-loop
+  delay, far under 15 minutes. A failed beat is logged and the next one retries. A server
+  that dies mid-handoff stops beating, and its claim becomes takeable 15 minutes after
+  the last beat.
 
 ## What does not move
 

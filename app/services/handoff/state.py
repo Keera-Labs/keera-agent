@@ -35,6 +35,14 @@ async def claim_agent(agent_id: int) -> str | None:
     return token if claimed and claimed.handoff_claim == token else None
 
 
+async def refresh_claim(agent_id: int, token: str) -> None:
+    await (
+        Agent.where("id", agent_id)
+        .where("handoff_claim", token)
+        .update({"handoff_claimed_at": utc_now()})
+    )
+
+
 async def release_claim(agent_id: int, token: str) -> None:
     await (
         Agent.where("id", agent_id)

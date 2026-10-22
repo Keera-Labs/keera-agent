@@ -44,10 +44,11 @@ export function useAgentActions(project: MaybeRefOrGetter<Project>) {
 
     async function push(agent: ProjectAgent, server: KeeraServer) {
         if (agentsQuery.handoff.isLoading.value) return
-        if (!window.confirm(`Push ${agent.name} to ${server.name}?\n\nThe agent is stopped here, its worktree changes are pushed to a handoff branch, and its conversation resumes on ${server.name}. If anything fails it stays here, stopped but resumable.`)) return
+        if (!window.confirm(`Push ${agent.name} to ${server.name}?\n\nThe agent is stopped here, its worktree changes are pushed to a handoff branch, and its conversation resumes on ${server.name}. If anything fails it stays here and resumes its conversation.`)) return
         try {
-            await agentsQuery.handoff.mutateAsync({ agentId: agent.id, serverId: server.id })
+            const { notice } = await agentsQuery.handoff.mutateAsync({ agentId: agent.id, serverId: server.id })
             layout.disposeAgentSession(agent.id)
+            if (notice) window.alert(`${agent.name} moved to ${server.name}. ${notice}`)
         } catch (err) {
             window.alert(err instanceof Error ? err.message : 'Failed to hand off the agent')
         }

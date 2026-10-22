@@ -5,7 +5,11 @@ from fastapi import Depends, Request
 from fastapi.responses import JSONResponse
 from fastapi_startkit import Config
 
-from app.actions.agent_handoff_import_action import AgentHandoffImportAction, plan_target
+from app.actions.agent_handoff_import_action import (
+    AgentHandoffImportAction,
+    model_notice,
+    plan_target,
+)
 from app.requests.handoff_request import (
     HandoffPreflightRequest,
     IncomingHandoffRequest,
@@ -31,7 +35,8 @@ async def show(_: Authenticated):
 async def preflight(request: Request, _: Authenticated):
     body = await read_bounded_body(request, HandoffPreflightRequest)
     project, model = await plan_target(body.remote_url, body.agent)
-    return JSONResponse({"data": {"project_id": project.id, "model": model}})
+    notice = model_notice(body.agent.model, model)
+    return JSONResponse({"data": {"project_id": project.id, "model": model, "notice": notice}})
 
 
 async def store(request: Request, _: Authenticated):

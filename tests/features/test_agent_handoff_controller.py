@@ -24,6 +24,7 @@ class FakeTarget:
         self.send_body: bytes | None = None
         self.down = False
         self.send_delay = 0.0
+        self.notice: str | None = None
         self.preflights: list[dict] = []
         self.payloads: list[dict] = []
         self.authorizations: list[str] = []
@@ -45,7 +46,14 @@ class FakeTarget:
         if self.send_status != 200:
             return httpx.Response(self.send_status, json={"error": "target exploded"})
         return httpx.Response(
-            200, json={"data": {"agent_id": 77, "url": "http://target.test/p/agents/77"}}
+            200,
+            json={
+                "data": {
+                    "agent_id": 77,
+                    "url": "http://target.test/p/agents/77",
+                    "notice": self.notice,
+                }
+            },
         )
 
     def client(self, base_url: str, token: str) -> HandoffClient:
@@ -210,6 +218,51 @@ class TestAgentHandoffController(TestCase, DatabaseTransaction):
 
         response.assert_status(422)
         self.assertIn(".env", response.json()["error"])
+
+    def _commit_secret(self, path: str) -> None:
+        (self.repos.worktree / path).write_text("export TOKEN=s3cret\n")
+        self.repos.repo.git("add", "-f", path, cwd=self.repos.worktree)
+        self.repos.repo.git("commit", "-q", "-m", f"add {path}", cwd=self.repos.worktree)
+
+    async def test_a_secret_committed_on_an_unpushed_branch_refuses_the_push(self):
+        self._commit_secret(".envrc")
+        spawned = self._live()
+
+        response = await self._push()
+
+        response.assert_status(422)
+        self.assertIn(".envrc", response.json()["error"])
+        self.assertEqual(self.target.preflights, [])
+        self.assertEqual(self._remote_handoff_branches(), [])
+        AgentHandoffPushAction._stop.assert_not_called()
+        spawned.assert_not_called()
+
+    async def test_a_secret_removed_again_in_an_unpushed_commit_still_refuses(self):
+        self._commit_secret(".envrc")
+        self.repos.repo.git("rm", "-q", "--cached", ".envrc", cwd=self.repos.worktree)
+        (self.repos.worktree / ".envrc").unlink()
+        self.repos.repo.git("commit", "-q", "-m", "remove it", cwd=self.repos.worktree)
+
+        response = await self._push()
+
+        response.assert_status(422)
+        self.assertIn(".envrc", response.json()["error"])
+
+    async def test_a_secret_already_on_the_remote_is_not_blocked_again(self):
+        self._commit_secret(".envrc")
+        self.repos.repo.git("push", "-q", "origin", "task/feature", cwd=self.repos.worktree)
+
+        (await self._push()).assert_ok()
+
+    async def test_the_target_model_notice_is_part_of_the_push_result(self):
+        self.target.notice = (
+            "claude-sonnet-5 is not configured on this server, so the agent runs on claude-opus-5."
+        )
+
+        response = await self._push()
+
+        response.assert_ok()
+        self.assertEqual(response.json()["data"]["attributes"]["notice"], self.target.notice)
 
     async def test_a_handed_off_agent_cannot_be_pushed_or_started_again(self):
         (await self._push()).assert_ok()
