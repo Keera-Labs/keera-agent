@@ -46,6 +46,11 @@ async def relay(request: Request):
         return JSONResponse(
             {"error": f"Agent {to_agent_id} not found or has been deleted"}, status_code=404
         )
+    if getattr(to_agent, "handed_off_at", None):
+        return JSONResponse(
+            {"error": f"Agent {to_agent_id} was handed off to {to_agent.handed_off_to}"},
+            status_code=409,
+        )
 
     from app.actions.agent_message_send_action import AgentMessageSendAction
 

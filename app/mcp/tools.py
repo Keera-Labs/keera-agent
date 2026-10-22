@@ -400,6 +400,12 @@ class SendMessageTool(Tool):
                     "Use list_agents to see available agents and their IDs."
                 )
 
+        if getattr(receiver, "handed_off_at", None):
+            return Response.text(
+                f"Error: agent #{receiver.id} was handed off to {receiver.handed_off_to} "
+                "and can no longer receive messages here"
+            )
+
         content = str(arguments["message"]).strip()
         if not content:
             return Response.text("Error: message cannot be empty")

@@ -10,6 +10,7 @@ from app.models.Server import Server
 from app.services.handoff.client import HandoffClient
 from app.services.handoff.state import agents_in_flight
 from app.services.handoff.transcript import transcript_dir
+from databases.factories.agent_factory import AgentFactory
 from tests.features.handoff_repos import SESSION_ID, HandoffRepos
 from tests.test_case import TestCase
 
@@ -120,6 +121,18 @@ class TestAgentHandoffController(TestCase, DatabaseTransaction):
         trigger = await self.post(f"/api/agents/{self.agent.id}/trigger", json={"message": "hi"})
         trigger.assert_status(409)
         self.assertEqual(len(self.target.payloads), 1)
+
+    async def test_a_handed_off_agent_refuses_relay_messages(self):
+        (await self._push()).assert_ok()
+        sender = await AgentFactory.new().create(project_id=self.agent.project_id)
+
+        response = await self.post(
+            "/api/agent-relay",
+            json={"from_agent_id": sender.id, "to_agent_id": self.agent.id, "content": "hi"},
+        )
+
+        response.assert_status(409)
+        self.assertIn("Cloud box", response.json()["error"])
 
     async def test_a_push_already_in_flight_is_rejected(self):
         agents_in_flight.add(self.agent.id)
