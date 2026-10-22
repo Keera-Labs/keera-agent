@@ -9,7 +9,9 @@ from app.controllers import (
     agent_message_controller,
     agent_pause_controller,
     agent_permission_controller,
+    agent_question_answer_controller,
     agent_question_controller,
+    agent_question_inbox_controller,
     agent_relay_controller,
     agent_summary_controller,
     agent_template_controller,
@@ -37,6 +39,7 @@ from app.controllers import (
     global_settings_controller,
     heartbeat_controller,
     home_controller,
+    inbox_page_controller,
     plugin_controller,
     project_command_run_controller,
     project_file_content_controller,
@@ -120,6 +123,8 @@ router.patch("/api/agents/{agent_id}", agent_controller.update)
 router.delete("/api/agents/{agent_id}", agent_controller.destroy)
 router.get("/api/agents/{agent_id}/output", agent_controller.output)
 router.get("/api/agents/{agent_id}/questions", agent_question_controller.index)
+router.get("/api/agent-questions", agent_question_inbox_controller.index)
+router.post("/api/agent-questions/{question_id}/answer", agent_question_answer_controller.store)
 router.post("/api/agents/{agent_id}/adopt-work", agent_dispatch_controller.adopt_work)
 
 # Agent templates — GLOBAL (project_id NULL)
@@ -180,6 +185,9 @@ router.post("/api/plugins/{slug}/uninstall", plugin_controller.uninstall)
 router.get("/api/heartbeat/status", heartbeat_controller.status)
 router.post("/api/heartbeat/start", heartbeat_controller.start)
 router.post("/api/heartbeat/stop", heartbeat_controller.stop)
+
+# Inbox page — before wildcard
+router.get("/inbox", inbox_page_controller.index)
 
 # Settings page — before wildcard
 router.get("/settings", settings_controller.settings)

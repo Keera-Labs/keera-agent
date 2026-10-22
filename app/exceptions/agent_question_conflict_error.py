@@ -1,0 +1,2 @@
+class AgentQuestionConflictError(Exception):
+    pass

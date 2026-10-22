@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import AgentStatusIndicator from '@/components/ui/AgentStatusIndicator.vue'
-import Icon from '@/components/ui/Icon.vue'
 import type { AgentSummary } from '@/queries/agentSummariesQuery'
 import { relativeTime } from '@/utils/relativeTime'
 
@@ -11,6 +10,10 @@ defineEmits<{ select: [] }>()
 const needsInput = computed(() => props.agent.status === 'needs_input')
 const attention = computed(() => props.agent.attention_prompt
     ?? (props.agent.attention_kind === 'permission' ? 'Waiting for permission' : 'Asked a question'))
+const waitingFor = computed(() => {
+    const elapsed = relativeTime(props.agent.last_activity_at, props.now)
+    return elapsed && elapsed !== 'now' ? `Waiting for you · ${elapsed}` : 'Waiting for you'
+})
 const preview = computed(() => (needsInput.value ? null : props.agent.last_message))
 const running = computed(() => props.agent.status === 'running')
 const title = computed(() => {
@@ -43,17 +46,16 @@ const title = computed(() => {
                 >
                     {{ props.agent.name }}
                 </span>
-                <span v-if="!needsInput" class="shrink-0 text-ui-12 tabular-nums text-zinc-500">
+                <span class="shrink-0 text-ui-12 tabular-nums text-zinc-500">
                     {{ relativeTime(props.agent.last_activity_at, props.now) }}
                 </span>
-                <span v-else class="shrink-0 w-12" />
             </span>
             <span
                 v-if="needsInput"
                 data-testid="agent-attention"
-                class="pl-4 truncate text-ui-12 text-amber-700"
+                class="pl-4 truncate text-ui-12 font-medium text-blue-700"
             >
-                {{ attention }}
+                {{ waitingFor }}
             </span>
             <span
                 v-else-if="preview"
@@ -62,18 +64,6 @@ const title = computed(() => {
             >
                 {{ preview }}
             </span>
-        </button>
-        <button
-            v-if="needsInput"
-            type="button"
-            data-testid="agent-reply"
-            :aria-label="`Reply to ${props.agent.name}`"
-            :title="`Reply to ${props.agent.name}`"
-            class="absolute right-1.5 top-1.5 flex items-center h-5 px-1.5 rounded border border-amber-300 bg-amber-50 text-amber-800 text-ui-11 font-semibold cursor-pointer hover:bg-amber-100"
-            @click="$emit('select')"
-        >
-            <Icon name="reply" :size="12" class="@min-[10em]:hidden" />
-            <span class="hidden @min-[10em]:inline">Reply</span>
         </button>
     </div>
 </template>

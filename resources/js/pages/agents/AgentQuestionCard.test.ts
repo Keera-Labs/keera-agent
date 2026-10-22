@@ -1,0 +1,116 @@
+// @vitest-environment happy-dom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
+import { router } from '@inertiajs/vue3'
+import type { AgentQuestion } from '@/queries/agentQuestionsQuery'
+import AgentQuestionCard from './AgentQuestionCard.vue'
+import { installPinia } from './testing'
+
+vi.mock('@inertiajs/vue3', () => ({ router: { visit: vi.fn() } }))
+
+function question(overrides: Partial<AgentQuestion> = {}): AgentQuestion {
+    return {
+        id: 5, agent_id: 1, project_id: 1, tool_use_id: 't1', kind: 'question',
+        question: 'Which database should we use?', header: 'Database',
+        options: [
+            { label: 'Postgres', description: 'Battle tested', recommended: true },
+            { label: 'SQLite', description: 'Zero setup', recommended: false },
+        ],
+        multi_select: false, status: 'pending', answer: null, answered_at: null,
+        created_at: '2026-10-22T10:00:00Z',
+        ...overrides,
+    }
+}
+
+let posts: { url: string; body: unknown }[]
+let response: { ok: boolean; body: unknown }
+
+function mountCard(q: AgentQuestion = question()) {
+    return mount(AgentQuestionCard, { props: { question: q, agentName: 'Ada' }, global: { plugins: [...installPinia()] } })
+}
+
+beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-22T10:12:00Z'))
+    posts = []
+    response = { ok: true, body: { data: { id: '5', attributes: {} } } }
+    vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
+        if (init?.method === 'POST') posts.push({ url, body: JSON.parse(String(init.body)) })
+        return Promise.resolve({ ok: response.ok, json: () => Promise.resolve(response.body) })
+    }))
+    vi.mocked(router.visit).mockClear()
+})
+
+afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+})
+
+describe('AgentQuestionCard', () => {
+    it('shows the question pill, paused agent and how long ago it was asked', () => {
+        const wrapper = mountCard()
+
+        expect(wrapper.get('[data-testid="question-kind-pill"]').text()).toBe('Question')
+        expect(wrapper.text()).toContain('Ada is paused until you answer')
+        expect(wrapper.get('[data-testid="agent-question-waiting"]').text()).toContain('Waiting for your answer… (asked 12m ago)')
+    })
+
+    it('preselects the agent pick', () => {
+        const options = mountCard().findAll('[data-testid="question-option"]')
+
+        expect(options[0].attributes('aria-checked')).toBe('true')
+        expect(options[0].text()).toContain("Agent's pick")
+        expect(options[1].attributes('aria-checked')).toBe('false')
+    })
+
+    it('opens the question in the Inbox', async () => {
+        await mountCard().get('[data-testid="open-in-inbox"]').trigger('click')
+
+        expect(router.visit).toHaveBeenCalledWith('/inbox?item=5')
+    })
+
+    it('sends the chosen option with an optional note', async () => {
+        const wrapper = mountCard()
+        await wrapper.findAll('[data-testid="question-option"]')[1].trigger('click')
+        await wrapper.get('[data-testid="question-free-text"]').setValue('  keep it local  ')
+        await wrapper.get('form').trigger('submit')
+        await flushPromises()
+
+        expect(posts).toEqual([{ url: '/api/agent-questions/5/answer', body: { choices: ['SQLite'], text: 'keep it local' } }])
+    })
+
+    it('answers free text when the question has no options', async () => {
+        const wrapper = mountCard(question({ options: [] }))
+        const sendButton = wrapper.get('[data-testid="send-answer"]')
+
+        expect(wrapper.findAll('[data-testid="question-option"]')).toHaveLength(0)
+        expect(sendButton.attributes('disabled')).toBeDefined()
+
+        await wrapper.get('[data-testid="question-free-text"]').setValue('Use Postgres')
+        expect(sendButton.attributes('disabled')).toBeUndefined()
+        await wrapper.get('form').trigger('submit')
+        await flushPromises()
+
+        expect(posts[0].body).toEqual({ choices: [], text: 'Use Postgres' })
+    })
+
+    it('starts with nothing selected when no option is recommended', () => {
+        const wrapper = mountCard(question({ options: [
+            { label: 'A', description: null, recommended: false },
+            { label: 'B', description: null, recommended: false },
+        ] }))
+
+        expect(wrapper.findAll('[aria-checked="true"]')).toHaveLength(0)
+        expect(wrapper.find('[data-testid="agent-pick"]').exists()).toBe(false)
+        expect(wrapper.get('[data-testid="send-answer"]').attributes('disabled')).toBeDefined()
+    })
+
+    it('shows the error when the answer cannot be delivered', async () => {
+        response = { ok: false, body: { error: "The agent's terminal is not running." } }
+        const wrapper = mountCard()
+        await wrapper.get('form').trigger('submit')
+        await flushPromises()
+
+        expect(wrapper.get('[role="alert"]').text()).toBe("The agent's terminal is not running.")
+    })
+})

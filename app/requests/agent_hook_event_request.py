@@ -48,6 +48,12 @@ class AgentHookEventRequest(BaseModel):
     def asks_user_question(self) -> bool:
         return self.hook_event_name == "PreToolUse" and self.tool_name == "AskUserQuestion"
 
+    def asks_permission(self) -> bool:
+        return (
+            self.hook_event_name == "Notification"
+            and _NOTIFICATION_ATTENTION_KIND.get(self.notification_type) == "permission"
+        )
+
     def answers_user_question(self) -> bool:
         return self.hook_event_name == "PostToolUse" and self.tool_name == "AskUserQuestion"
 

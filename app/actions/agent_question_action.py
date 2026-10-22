@@ -3,12 +3,23 @@ from app.models.Agent import Agent
 from app.models.AgentQuestion import AgentQuestion
 from app.requests.agent_hook_event_request import AgentHookEventRequest
 
+PERMISSION_OPTIONS = [
+    {"label": "Allow", "description": "Let the agent go ahead with this step"},
+    {"label": "Deny", "description": "Block it and tell the agent why below"},
+]
+
 
 async def record_agent_questions(agent: Agent, event: AgentHookEventRequest) -> None:
     if event.asks_user_question():
         await _store_asked(agent, event)
     elif event.answers_user_question():
         await _store_answers(agent, event)
+    elif event.asks_permission():
+        await _store_permission(agent, event)
+    if event.hook_event_name == "UserPromptSubmit":
+        await _settle_pending(agent, kinds=("question", "permission"))
+    elif event.resumes_work():
+        await _settle_pending(agent, kinds=("permission",))
 
 
 async def _store_asked(agent: Agent, event: AgentHookEventRequest) -> None:
@@ -22,6 +33,7 @@ async def _store_asked(agent: Agent, event: AgentHookEventRequest) -> None:
                 "session_id": event.session_id,
                 "tool_use_id": event.tool_use_id,
                 "position": position,
+                "kind": "question",
                 "question": asked.question,
                 "header": asked.header,
                 "options": [option.model_dump() for option in asked.options],
@@ -37,14 +49,44 @@ async def _store_answers(agent: Agent, event: AgentHookEventRequest) -> None:
     answers = event.answers()
     pending = await _questions_for(agent, event.tool_use_id).where("status", "pending").get()
     for question in pending:
-        await AgentQuestion.where("id", question.id).update(
-            {
-                "status": "answered",
-                "answer": answers.get(question.question),
-                "answered_at": utc_now(),
-                "updated_at": utc_now(),
-            }
-        )
+        await _mark_answered(question.id, answers.get(question.question))
+
+
+async def _store_permission(agent: Agent, event: AgentHookEventRequest) -> None:
+    if await _pending(agent).where("kind", "permission").first():
+        return
+    await AgentQuestion.create(
+        {
+            "agent_id": agent.id,
+            "project_id": agent.project_id,
+            "session_id": event.session_id,
+            "kind": "permission",
+            "question": event.message or "The agent needs your permission to continue",
+            "options": PERMISSION_OPTIONS,
+            "multi_select": False,
+            "status": "pending",
+        }
+    )
+
+
+async def _settle_pending(agent: Agent, kinds: tuple[str, ...]) -> None:
+    for question in await _pending(agent).where_in("kind", list(kinds)).get():
+        await _mark_answered(question.id, None)
+
+
+async def _mark_answered(question_id: int, answer: str | None) -> None:
+    await AgentQuestion.where("id", question_id).update(
+        {
+            "status": "answered",
+            "answer": answer,
+            "answered_at": utc_now(),
+            "updated_at": utc_now(),
+        }
+    )
+
+
+def _pending(agent: Agent):
+    return AgentQuestion.where("agent_id", agent.id).where("status", "pending")
 
 
 def _questions_for(agent: Agent, tool_use_id: str):
