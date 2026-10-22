@@ -127,7 +127,7 @@ describe('SettingsModal', () => {
     it('lists every section and switches the pane', async () => {
         const { w } = await open()
 
-        expect(navLabels(w)).toEqual(['general', 'ai', 'appearance', 'editor', 'terminal', 'commands', 'git', 'workspaces', 'keybindings', 'billing'])
+        expect(navLabels(w)).toEqual(['general', 'ai', 'appearance', 'editor', 'terminal', 'commands', 'git', 'workspaces', 'servers', 'keybindings', 'billing'])
         expect(w.find('[data-view="providers"]').exists()).toBe(true)
 
         await w.get('[data-ai-tab="templates"]').trigger('click')
@@ -139,6 +139,9 @@ describe('SettingsModal', () => {
         await w.get('[data-section="editor"]').trigger('click')
         expect(w.find('[data-testid="editor-section"]').exists()).toBe(true)
         expect(w.get('[data-section="editor"]').attributes('aria-current')).toBe('page')
+
+        await w.get('[data-section="servers"]').trigger('click')
+        expect(w.find('[data-testid="servers-section"]').exists()).toBe(true)
     })
 
     it('shows an empty state for sections with nothing to configure', async () => {

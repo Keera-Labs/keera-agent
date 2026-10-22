@@ -11,7 +11,7 @@ export interface AgentFlags {
 }
 
 /** `needs_input`: blocked on a question or permission prompt (Claude agents only). */
-export type AgentStatus = 'idle' | 'running' | 'waiting' | 'needs_input'
+export type AgentStatus = 'idle' | 'running' | 'waiting' | 'needs_input' | 'handed_off'
 export type AttentionKind = 'question' | 'permission'
 
 export interface ProjectAgent {
@@ -34,6 +34,9 @@ export interface ProjectAgent {
     /** The agent that spawned this one (typically a PM). */
     orchestrator_id?: number | null
     created_at: string | null
+    handed_off_at: string | null
+    handed_off_to: string | null
+    handed_off_url: string | null
 }
 
 /** A single JSON:API resource object: { type, id, attributes }. */
@@ -81,6 +84,9 @@ export function normalizeAgent(resource: AgentResource): ProjectAgent {
         task_id: (attr.task_id as number | null) ?? null,
         orchestrator_id: attr.orchestrator_id == null ? null : Number(attr.orchestrator_id),
         created_at: (attr.created_at as string | null) ?? null,
+        handed_off_at: (attr.handed_off_at as string | null) ?? null,
+        handed_off_to: (attr.handed_off_to as string | null) ?? null,
+        handed_off_url: (attr.handed_off_url as string | null) ?? null,
     }
 }
 
@@ -167,6 +173,20 @@ export function useAgents(projectIdSource: MaybeRefOrGetter<number | null>) {
         },
     })
 
+    const handoff = useMutation({
+        mutation: async ({ agentId, serverId }: { agentId: number; serverId: number }) => {
+            const res = await fetch(`/api/agents/${agentId}/handoffs`, {
+                method: 'POST',
+                headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+                body: JSON.stringify({ server_id: serverId }),
+            })
+            const json = (await res.json().catch(() => ({}))) as { error?: string }
+            if (!res.ok) throw new Error(json.error || 'Failed to hand off the agent')
+            return agentId
+        },
+        onSettled: invalidate,
+    })
+
     const setDefault = async (agentId: number): Promise<boolean> => {
         const res = await fetch(`/api/projects/${projectId()}/default-agent`, {
             method: 'POST',
@@ -223,6 +243,7 @@ export function useAgents(projectIdSource: MaybeRefOrGetter<number | null>) {
         remove,
         update,
         adoptWork,
+        handoff,
         setDefault,
         spawnViaMCP,
     }

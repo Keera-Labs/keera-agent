@@ -9,6 +9,7 @@ export type SettingsSectionId =
     | 'commands'
     | 'git'
     | 'workspaces'
+    | 'servers'
     | 'keybindings'
     | 'billing'
 
@@ -29,6 +30,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     { id: 'commands', label: 'Commands', icon: 'command', keywords: 'scripts run dev server processes configurations' },
     { id: 'git', label: 'Git & Version Control', icon: 'git-branch', keywords: 'commit branch source control' },
     { id: 'workspaces', label: 'Workspaces & Sync', icon: 'folder', keywords: 'workspace sync' },
+    { id: 'servers', label: 'Servers & Handoff', icon: 'server', keywords: 'servers cloud local remote handoff push move agent token' },
     { id: 'keybindings', label: 'Keybindings', icon: 'command', keywords: 'shortcuts keyboard hotkeys' },
     { id: 'billing', label: 'Billing & Limits', icon: 'layout-grid', keywords: 'plan usage limits' },
 ]

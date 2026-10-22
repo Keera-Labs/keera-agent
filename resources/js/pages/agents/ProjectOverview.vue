@@ -3,8 +3,10 @@ import { computed, ref } from 'vue'
 import ConfirmDeleteAgentModal from '@/components/modals/ConfirmDeleteAgentModal.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { orchestratedCount, type ProjectAgent } from '@/queries/agentQuery'
+import { useServers } from '@/queries/serversQuery'
 import { contextDetail, formatTokens, tokenBreakdown, useProjectUsage } from '@/queries/usageQuery'
 import useWorkspaces from '@/queries/workspacesQuery'
+import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import { color } from '@/tokens'
 import type { Project } from '@/types/type'
 import AgentAddModal from './AgentAddModal.vue'
@@ -16,7 +18,10 @@ const props = defineProps<{ project: Project }>()
 
 const { workspaces } = useWorkspaces()
 const { usage } = useProjectUsage(() => props.project.id)
-const { agents, isPending, adoptPending, isRunning, open, restart, adopt, remove } = useAgentActions(() => props.project)
+const { agents, isPending, adoptPending, handoffPending, handoffAgentId, isRunning, open, restart, adopt, push, remove } =
+    useAgentActions(() => props.project)
+const { servers } = useServers()
+const layout = useAppLayoutStore()
 
 const removing = ref<ProjectAgent | null>(null)
 const removePending = ref(false)
@@ -117,6 +122,8 @@ const pillClass = 'inline-flex items-center gap-1.5 bg-surface border border-str
                     :running="isRunning(agent.id)"
                     :status-line="agent.description"
                     :adopt-pending="adoptPending"
+                    :servers="servers"
+                    :handoff-pending="handoffPending && handoffAgentId === agent.id"
                     :stats="{
                         runtime: PLACEHOLDER,
                         provider: agent.provider,
@@ -128,6 +135,8 @@ const pillClass = 'inline-flex items-center gap-1.5 bg-surface border border-str
                     @restart="restart(agent)"
                     @adopt="adopt(agent)"
                     @remove="requestRemove(agent)"
+                    @push="server => push(agent, server)"
+                    @configure-servers="layout.openSettings('servers')"
                 />
             </div>
         </div>

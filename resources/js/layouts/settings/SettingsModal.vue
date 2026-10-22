@@ -15,6 +15,7 @@ import AgentsTab from './AgentsTab.vue'
 import AppearanceSection from './AppearanceSection.vue'
 import CommandsSection from './CommandsSection.vue'
 import EditorSection from './EditorSection.vue'
+import ServersSection from './ServersSection.vue'
 import { filterSections, SETTINGS_SECTIONS, type SettingsSectionId } from './sections'
 
 type AiTab = 'providers' | 'agents' | 'templates' | 'permissions'
@@ -191,6 +192,7 @@ const navItem = (active: boolean) => [
                 <div v-else class="flex-1 min-w-0 overflow-y-auto px-6 py-5" :data-pane="current.id">
                     <AppearanceSection v-if="current.id === 'appearance'" />
                     <EditorSection v-else-if="current.id === 'editor'" />
+                    <ServersSection v-else-if="current.id === 'servers'" />
 
                     <div v-else-if="current.id === 'terminal'" class="flex flex-col gap-3">
                         <h2 class="m-0 text-zinc-900 text-ui-16 font-semibold">Terminal & Shell</h2>

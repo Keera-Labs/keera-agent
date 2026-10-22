@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import AgentStatusIndicator from '@/components/ui/AgentStatusIndicator.vue'
 import Icon from '@/components/ui/Icon.vue'
 import type { ProjectAgent } from '@/queries/agentQuery'
+import type { KeeraServer } from '@/queries/serversQuery'
 import { color } from '@/tokens'
 import AgentEditModal from './AgentEditModal.vue'
 import PmCheckinControl from './PmCheckinControl.vue'
@@ -23,14 +24,31 @@ const props = defineProps<{
     statusLine: string | null
     stats: AgentCardStats
     adoptPending: boolean
+    servers: KeeraServer[]
+    handoffPending: boolean
 }>()
 
-const emit = defineEmits<{ open: []; restart: []; adopt: []; remove: [] }>()
+const emit = defineEmits<{ open: []; restart: []; adopt: []; remove: []; push: [server: KeeraServer]; configureServers: [] }>()
 
+const handedOff = computed(() => props.agent.handed_off_at !== null)
+const canPush = computed(() => props.agent.provider === 'claude' && props.agent.agent_type !== 'pm')
+const pushMenuOpen = ref(false)
+
+function choose(server: KeeraServer) {
+    pushMenuOpen.value = false
+    emit('push', server)
+}
+
+function configureServers() {
+    pushMenuOpen.value = false
+    emit('configureServers')
+}
 
 const needsInput = computed(() => props.agent.status === 'needs_input')
 // A live session is "Active"; the spinner only turns while the agent is actually mid-turn.
 const statusTone = computed(() => {
+    if (handedOff.value) return { bg: '#eef2ff', fg: '#4f46e5', label: 'Handed off', indicator: null }
+    if (props.handoffPending) return { bg: '#eef2ff', fg: '#4f46e5', label: 'Handing off…', indicator: null }
     if (needsInput.value) return { bg: '#fef3c7', fg: '#b45309', label: 'Needs input', indicator: 'needs_input' as const }
     if (props.running) {
         const working = props.agent.status === 'running'
@@ -94,6 +112,18 @@ const iconButtonClass = 'bg-transparent border border-stroke text-zinc-500 curso
                 Reply
             </button>
         </div>
+        <p v-else-if="handedOff" data-testid="agent-card-handed-off" class="m-0 text-ui-13.5 leading-[1.55] text-zinc-700">
+            Moved to
+            <a
+                v-if="agent.handed_off_url"
+                :href="agent.handed_off_url"
+                target="_blank"
+                rel="noopener"
+                class="text-blue-600 font-semibold no-underline hover:underline"
+            >{{ agent.handed_off_to }}</a>
+            <span v-else class="font-semibold">{{ agent.handed_off_to }}</span>.
+            Its conversation and worktree continue there; this record stays for history.
+        </p>
         <p v-else :class="['m-0 text-ui-13.5 leading-[1.55]', statusLine ? 'text-zinc-700' : 'text-zinc-400']">
             {{ statusLine ?? 'No status reported.' }}
         </p>
@@ -121,7 +151,29 @@ const iconButtonClass = 'bg-transparent border border-stroke text-zinc-500 curso
         <hr class="h-px bg-stroke border-0 m-0">
 
         <!-- Footer: action icons + Open link -->
-        <div class="flex items-center gap-2">
+        <div v-if="handedOff" class="flex items-center gap-2">
+            <button
+                type="button"
+                title="Delete agent"
+                data-testid="agent-card-delete"
+                :class="iconButtonClass"
+                :style="{ '--hover': color.danger }"
+                @click.stop="emit('remove')"
+            >
+                <Icon name="trash-2" :size="14" />
+            </button>
+            <a
+                v-if="agent.handed_off_url"
+                :href="agent.handed_off_url"
+                target="_blank"
+                rel="noopener"
+                class="ml-auto text-blue-600 text-ui-13.5 font-semibold flex items-center gap-[5px] no-underline hover:opacity-70"
+            >
+                Open on target
+                <Icon name="arrow-right" :size="14" />
+            </a>
+        </div>
+        <div v-else class="flex items-center gap-2">
             <button
                 type="button"
                 :title="running ? 'Restart agent' : 'Start agent'"
@@ -151,6 +203,45 @@ const iconButtonClass = 'bg-transparent border border-stroke text-zinc-500 curso
             >
                 <Icon name="git-merge" :size="14" />
             </button>
+
+            <div v-if="canPush" class="relative" @click.stop>
+                <button
+                    type="button"
+                    title="Push to another Keera server"
+                    data-testid="agent-card-push"
+                    :class="iconButtonClass"
+                    style="--hover: #4f46e5"
+                    :disabled="handoffPending"
+                    :aria-expanded="pushMenuOpen"
+                    @click="pushMenuOpen = !pushMenuOpen"
+                >
+                    <Icon name="send" :size="14" />
+                </button>
+                <div
+                    v-if="pushMenuOpen"
+                    data-testid="agent-card-push-menu"
+                    class="absolute bottom-[36px] left-0 z-10 min-w-[220px] bg-white border border-stroke rounded-lg shadow-lg py-1"
+                >
+                    <button
+                        v-for="server in servers"
+                        :key="server.id"
+                        type="button"
+                        data-testid="agent-card-push-target"
+                        class="w-full flex items-center gap-2 px-3 py-1.5 text-left text-ui-12.5 text-zinc-800 bg-transparent border-0 cursor-pointer hover:bg-canvas"
+                        @click="choose(server)"
+                    >
+                        <Icon name="server" :size="13" class="text-zinc-400" />
+                        <span class="truncate">Push to {{ server.name }}</span>
+                        <span class="ml-auto text-ui-10 uppercase text-zinc-400">{{ server.kind }}</span>
+                    </button>
+                    <button
+                        type="button"
+                        data-testid="agent-card-configure-servers"
+                        class="w-full px-3 py-1.5 text-left text-ui-12 text-zinc-500 bg-transparent border-0 cursor-pointer hover:bg-canvas"
+                        @click="configureServers"
+                    >{{ servers.length ? 'Manage servers…' : 'Add a server…' }}</button>
+                </div>
+            </div>
 
             <button
                 type="button"

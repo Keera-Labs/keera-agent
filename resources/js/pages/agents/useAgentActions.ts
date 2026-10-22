@@ -1,6 +1,7 @@
 import { router } from '@inertiajs/vue3'
-import { toValue, type MaybeRefOrGetter } from 'vue'
+import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import { useAgents, type ProjectAgent } from '@/queries/agentQuery'
+import type { KeeraServer } from '@/queries/serversQuery'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
 import type { Project } from '@/types/type'
 
@@ -41,6 +42,17 @@ export function useAgentActions(project: MaybeRefOrGetter<Project>) {
         }
     }
 
+    async function push(agent: ProjectAgent, server: KeeraServer) {
+        if (agentsQuery.handoff.isLoading.value) return
+        if (!window.confirm(`Push ${agent.name} to ${server.name}?\n\nThe agent is stopped here, its worktree changes are pushed to a handoff branch, and its conversation resumes on ${server.name}. If anything fails it stays here, stopped but resumable.`)) return
+        try {
+            await agentsQuery.handoff.mutateAsync({ agentId: agent.id, serverId: server.id })
+            layout.disposeAgentSession(agent.id)
+        } catch (err) {
+            window.alert(err instanceof Error ? err.message : 'Failed to hand off the agent')
+        }
+    }
+
     async function remove(agent: ProjectAgent) {
         if (agent.agent_type === 'pm') layout.disposePmSession(toValue(project).id)
         else layout.disposeAgentSession(agent.id)
@@ -52,10 +64,13 @@ export function useAgentActions(project: MaybeRefOrGetter<Project>) {
         agents: agentsQuery.agents,
         isPending: agentsQuery.isPending,
         adoptPending: agentsQuery.adoptWork.isLoading,
+        handoffPending: agentsQuery.handoff.isLoading,
+        handoffAgentId: computed(() => agentsQuery.handoff.variables.value?.agentId ?? null),
         isRunning,
         open,
         restart,
         adopt,
+        push,
         remove,
     }
 }

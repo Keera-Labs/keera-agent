@@ -11,6 +11,7 @@ const LABEL: Record<AgentStatus, string> = {
     needs_input: 'Needs input',
     waiting: 'Waiting',
     idle: 'Idle',
+    handed_off: 'Handed off',
 }
 
 const status = computed<AgentStatus>(() => (props.status && props.status in LABEL ? props.status : 'idle'))
