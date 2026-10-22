@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from fastapi_startkit.masoniteorm.exceptions import ModelNotFoundException
 
 from app.exceptions.agent_question_conflict_error import AgentQuestionConflictError
+from app.exceptions.agent_question_invalid_answer_error import AgentQuestionInvalidAnswerError
 
 
 async def model_not_found_handler(request: Request, exc: ModelNotFoundException) -> JSONResponse:
@@ -22,6 +23,13 @@ async def agent_question_conflict_handler(
     return JSONResponse({"error": str(exc)}, status_code=409)
 
 
+async def agent_question_invalid_answer_handler(
+    request: Request, exc: AgentQuestionInvalidAnswerError
+) -> JSONResponse:
+    return JSONResponse({"error": str(exc)}, status_code=422)
+
+
 def register_exception_handlers(app) -> None:
     app.add_exception_handler(ModelNotFoundException, model_not_found_handler)
     app.add_exception_handler(AgentQuestionConflictError, agent_question_conflict_handler)
+    app.add_exception_handler(AgentQuestionInvalidAnswerError, agent_question_invalid_answer_handler)

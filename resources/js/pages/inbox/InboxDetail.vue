@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3'
 import { computed, onBeforeUnmount, onMounted } from 'vue'
+import QuestionDetail from '@/components/questions/QuestionDetail.vue'
 import QuestionKindPill from '@/components/questions/QuestionKindPill.vue'
 import QuestionOptions from '@/components/questions/QuestionOptions.vue'
 import { useQuestionAnswer } from '@/composables/useQuestionAnswer'
@@ -14,11 +15,15 @@ const props = defineProps<{ question: AgentQuestion; now: number }>()
 const emit = defineEmits<{ later: [] }>()
 
 const layout = useAppLayoutStore()
-const { selected, text, error, sending, canSend, toggle, send } = useQuestionAnswer(() => props.question)
+const { selected, text, error, sending, canSend, needsChoice, toggle, send } = useQuestionAnswer(() => props.question)
 
 const isPending = computed(() => props.question.status === 'pending')
 const waited = computed(() => relativeTime(props.question.created_at, props.now))
 const answeredAgo = computed(() => relativeTime(props.question.answered_at, props.now))
+const textLabel = computed(() => {
+    if (needsChoice.value) return 'Note for the agent (optional)'
+    return props.question.options.length ? 'Something else? (optional)' : 'Your answer'
+})
 const canOpenChat = computed(() => Boolean(props.question.project_slug))
 
 function openChat() {
@@ -75,6 +80,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
             <QuestionKindPill :kind="question.kind" class="self-start" />
             <h2 class="m-0 text-zinc-900 text-ui-17 font-semibold leading-snug">{{ question.question }}</h2>
             <p v-if="question.header && question.kind === 'question'" class="m-0 text-zinc-500 text-ui-13">{{ question.header }}</p>
+            <QuestionDetail v-if="question.detail" :detail="question.detail" />
         </div>
 
         <template v-if="isPending">
@@ -82,7 +88,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
             <label class="flex flex-col gap-2">
                 <span class="text-zinc-900 text-ui-13 font-semibold">
-                    {{ question.options.length ? 'Something else? (optional)' : 'Your answer' }}
+                    {{ textLabel }}
                 </span>
                 <textarea
                     v-model="text"

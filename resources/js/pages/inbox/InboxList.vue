@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import QuestionDetail from '@/components/questions/QuestionDetail.vue'
 import QuestionKindPill from '@/components/questions/QuestionKindPill.vue'
 import type { AgentQuestion } from '@/queries/agentQuestionsQuery'
 import { relativeTime } from '@/utils/relativeTime'
@@ -35,6 +36,7 @@ const timeOf = (question: AgentQuestion) => question.answered_at ?? question.cre
                     <span class="shrink-0 text-zinc-500 text-ui-12 tabular-nums">{{ relativeTime(timeOf(question), now) }}</span>
                 </span>
                 <span class="text-zinc-700 text-ui-13 line-clamp-2">{{ question.question }}</span>
+                <QuestionDetail v-if="question.detail" :detail="question.detail" compact />
                 <span class="flex items-center gap-2 min-w-0">
                     <QuestionKindPill :kind="question.kind" />
                     <InboxProjectMeta :question="question" class="min-w-0" />

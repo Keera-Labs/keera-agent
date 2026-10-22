@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi_startkit.application import app
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
@@ -59,6 +61,24 @@ PATH_QUESTION = {
         {"label": "Rebuild a minimal PATH", "description": "Fast, but brew tools won't resolve"},
     ],
 }
+
+
+PERMISSION_NOTIFICATION = {
+    "session_id": SESSION_ID,
+    "hook_event_name": "Notification",
+    "notification_type": "permission_prompt",
+    "message": "Claude needs your permission to use Bash",
+}
+
+
+def permission_request(command: str) -> dict:
+    return {
+        "session_id": SESSION_ID,
+        "cwd": "/tmp/somewhere",
+        "hook_event_name": "PermissionRequest",
+        "tool_name": "Bash",
+        "tool_input": {"command": command, "description": "Clean the build"},
+    }
 
 
 class TestAgentQuestionInbox(TestCase, DatabaseTransaction):
@@ -259,6 +279,88 @@ class TestAgentQuestionInbox(TestCase, DatabaseTransaction):
         await self._hook({"session_id": SESSION_ID, "hook_event_name": "UserPromptSubmit"})
 
         self.assertEqual(await self._inbox(), [])
+
+    async def test_concurrent_answers_to_one_question_deliver_once(self):
+        await self._hook(ask([PATH_QUESTION], "toolu_inbox_9"))
+        [item] = await self._inbox()
+
+        responses = await asyncio.gather(
+            self._answer(item["id"], {"text": "first"}),
+            self._answer(item["id"], {"text": "second"}),
+        )
+
+        self.assertEqual(sorted(response.status_code for response in responses), [200, 409])
+        self.assertEqual(self.terminal.writes, [b"\x1b"])
+        self.assertEqual(len(self.terminal.sent), 1)
+
+    async def test_concurrent_answers_to_sibling_questions_deliver_the_call_once(self):
+        second = {**PATH_QUESTION, "question": "Also pin Python?"}
+        await self._hook(ask([PATH_QUESTION, second], "toolu_inbox_10"))
+        first_item, second_item = await self._inbox()
+
+        responses = await asyncio.gather(
+            self._answer(first_item["id"], {"text": "keep it"}),
+            self._answer(second_item["id"], {"text": "3.13"}),
+        )
+
+        self.assertEqual([response.status_code for response in responses], [200, 200])
+        self.assertEqual(self.terminal.writes, [b"\x1b"])
+        self.assertEqual(len(self.terminal.sent), 1)
+        self.assertIn('"Also pin Python?": 3.13', self.terminal.sent[0])
+
+    async def test_answering_an_agent_that_is_no_longer_waiting_is_a_conflict(self):
+        await self._hook(ask([PATH_QUESTION], "toolu_inbox_11"))
+        [item] = await self._inbox()
+        await Agent.where("id", self.agent.id).update({"status": "running"})
+
+        response = await self._answer(item["id"], {"text": "too late"})
+
+        response.assert_status(409)
+        self.assertEqual(response.json()["error"], "The agent is no longer waiting for this answer.")
+        self.assertEqual(self.terminal.writes, [])
+        self.assertEqual(await self._inbox(), [])
+
+    async def test_a_permission_needs_allow_or_deny(self):
+        await self._hook(PERMISSION_NOTIFICATION)
+        [item] = await self._inbox()
+
+        response = await self._answer(item["id"], {"text": "go ahead"})
+
+        response.assert_status(422)
+        self.assertEqual(response.json()["error"], "Choose Allow or Deny.")
+        self.assertEqual(self.terminal.writes, [])
+        self.assertEqual((await AgentQuestion.find(item["id"])).status, "pending")
+
+    async def test_a_permission_request_shows_the_tool_and_command(self):
+        await self._hook(permission_request("rm -rf build"))
+        await self._hook(PERMISSION_NOTIFICATION)
+
+        [item] = await self._inbox()
+
+        self.assertEqual(item["question"], "Allow Bash?")
+        self.assertEqual(item["header"], "Bash")
+        self.assertEqual(item["detail"], "rm -rf build")
+        agent = await Agent.find(self.agent.id)
+        self.assertEqual(agent.status, "needs_input")
+        self.assertEqual(agent.attention_kind, "permission")
+
+    async def test_a_new_permission_prompt_replaces_the_stale_one(self):
+        await self._hook(permission_request("rm -rf build"))
+        [stale] = await self._inbox()
+
+        await self._hook(permission_request("make deploy"))
+
+        [item] = await self._inbox()
+        self.assertEqual(item["id"], stale["id"])
+        self.assertEqual(item["detail"], "make deploy")
+
+    async def test_a_new_permission_notification_replaces_a_stale_generic_one(self):
+        await self._hook(PERMISSION_NOTIFICATION)
+        await self._hook({**PERMISSION_NOTIFICATION, "message": "Claude needs your permission to use Write"})
+
+        [item] = await self._inbox()
+
+        self.assertEqual(item["question"], "Claude needs your permission to use Write")
 
     async def test_inbox_page_renders(self):
         response = await self.get("/inbox?item=3", headers={"X-Inertia": "true"})

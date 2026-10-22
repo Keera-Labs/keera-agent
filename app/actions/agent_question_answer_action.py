@@ -1,8 +1,10 @@
 import asyncio
+import weakref
 
 from app.actions.agent_status_action import CLEARED_ATTENTION, notify_agent_status, utc_now
 from app.actions.terminal_write_action import TerminalWriteAction
 from app.exceptions.agent_question_conflict_error import AgentQuestionConflictError
+from app.exceptions.agent_question_invalid_answer_error import AgentQuestionInvalidAnswerError
 from app.models.Agent import Agent
 from app.models.AgentQuestion import AgentQuestion
 from app.terminal.terminal import Terminal
@@ -10,6 +12,17 @@ from app.terminal.terminal import Terminal
 ESCAPE = b"\x1b"
 ENTER = b"\r"
 DIALOG_CLOSE_DELAY = 0.3
+PERMISSION_CHOICES = ("Allow", "Deny")
+
+_agent_locks: "weakref.WeakValueDictionary[int, asyncio.Lock]" = weakref.WeakValueDictionary()
+
+
+def _lock_for(agent_id: int) -> asyncio.Lock:
+    lock = _agent_locks.get(agent_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _agent_locks[agent_id] = lock
+    return lock
 
 
 class AgentQuestionAnswerAction:
@@ -25,21 +38,24 @@ class AgentQuestionAnswerAction:
         return AgentQuestionAnswerAction(question, choices, text)
 
     async def execute(self) -> AgentQuestion:
+        if self.question.kind == "permission" and not self._permission_choice():
+            raise AgentQuestionInvalidAnswerError("Choose Allow or Deny.")
+        async with _lock_for(self.question.agent_id):
+            return await self._answer_exclusively()
+
+    async def _answer_exclusively(self) -> AgentQuestion:
+        self.question = await AgentQuestion.find_or_fail(self.question.id)
         if self.question.status != "pending":
             raise AgentQuestionConflictError("This question has already been answered.")
         agent = await Agent.find_or_fail(self.question.agent_id)
         terminal = TerminalWriteAction.prepare(agent.session_id, "").resolve_terminal()
         if not terminal:
             raise AgentQuestionConflictError("The agent's terminal is not running.")
+        if agent.status != "needs_input":
+            await self._mark_answered(None)
+            raise AgentQuestionConflictError("The agent is no longer waiting for this answer.")
 
-        await AgentQuestion.where("id", self.question.id).update(
-            {
-                "status": "answered",
-                "answer": self._answer(),
-                "answered_at": utc_now(),
-                "updated_at": utc_now(),
-            }
-        )
+        await self._mark_answered(self._answer())
 
         if self.question.kind == "permission":
             await self._reply_to_permission(terminal)
@@ -53,6 +69,19 @@ class AgentQuestionAnswerAction:
         )
         await notify_agent_status(agent, "running")
         return await AgentQuestion.find(self.question.id)
+
+    async def _mark_answered(self, answer: str | None) -> None:
+        await AgentQuestion.where("id", self.question.id).update(
+            {
+                "status": "answered",
+                "answer": answer,
+                "answered_at": utc_now(),
+                "updated_at": utc_now(),
+            }
+        )
+
+    def _permission_choice(self) -> str | None:
+        return next((choice for choice in self.choices if choice in PERMISSION_CHOICES), None)
 
     def _answer(self) -> str:
         return " — ".join(part for part in (", ".join(self.choices), self.text) if part)
@@ -68,7 +97,7 @@ class AgentQuestionAnswerAction:
         )
 
     async def _reply_to_permission(self, terminal: Terminal) -> None:
-        await terminal.write(ENTER if "Allow" in self.choices else ESCAPE)
+        await terminal.write(ENTER if self._permission_choice() == "Allow" else ESCAPE)
         if self.text:
             await asyncio.sleep(DIALOG_CLOSE_DELAY)
             await terminal.send(self.text)

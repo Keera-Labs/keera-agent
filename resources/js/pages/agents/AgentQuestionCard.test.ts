@@ -11,7 +11,7 @@ vi.mock('@inertiajs/vue3', () => ({ router: { visit: vi.fn() } }))
 function question(overrides: Partial<AgentQuestion> = {}): AgentQuestion {
     return {
         id: 5, agent_id: 1, project_id: 1, tool_use_id: 't1', kind: 'question',
-        question: 'Which database should we use?', header: 'Database',
+        question: 'Which database should we use?', header: 'Database', detail: null,
         options: [
             { label: 'Postgres', description: 'Battle tested', recommended: true },
             { label: 'SQLite', description: 'Zero setup', recommended: false },
@@ -103,6 +103,29 @@ describe('AgentQuestionCard', () => {
         expect(wrapper.findAll('[aria-checked="true"]')).toHaveLength(0)
         expect(wrapper.find('[data-testid="agent-pick"]').exists()).toBe(false)
         expect(wrapper.get('[data-testid="send-answer"]').attributes('disabled')).toBeDefined()
+    })
+
+    it('shows what a permission approves and requires Allow or Deny', async () => {
+        const wrapper = mountCard(question({
+            kind: 'permission', question: 'Allow Bash?', header: 'Bash', detail: 'rm -rf build',
+            options: [
+                { label: 'Allow', description: null, recommended: false },
+                { label: 'Deny', description: null, recommended: false },
+            ],
+        }))
+        const sendButton = wrapper.get('[data-testid="send-answer"]')
+
+        expect(wrapper.get('[data-testid="question-kind-pill"]').text()).toBe('Permission')
+        expect(wrapper.get('[data-testid="question-detail"]').text()).toBe('rm -rf build')
+        await wrapper.get('[data-testid="question-free-text"]').setValue('only the build dir')
+        expect(sendButton.attributes('disabled')).toBeDefined()
+
+        await wrapper.findAll('[data-testid="question-option"]')[1].trigger('click')
+        expect(sendButton.attributes('disabled')).toBeUndefined()
+        await wrapper.get('form').trigger('submit')
+        await flushPromises()
+
+        expect(posts[0].body).toEqual({ choices: ['Deny'], text: 'only the build dir' })
     })
 
     it('shows the error when the answer cannot be delivered', async () => {

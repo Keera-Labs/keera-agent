@@ -53,6 +53,7 @@ class AgentQuestionResource(JsonResource[AgentQuestion]):
             "kind": question.kind or "question",
             "question": question.question,
             "header": question.header,
+            "detail": question.detail,
             "options": [_option(option) for option in _as_list(question.options)],
             "multi_select": bool(question.multi_select),
             "status": question.status,

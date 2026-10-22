@@ -15,7 +15,7 @@ function resource(id: number, attributes: Record<string, unknown> = {}) {
         id: String(id),
         attributes: {
             agent_id: id * 10, project_id: 1, tool_use_id: `t${id}`, kind: 'question',
-            question: `Question ${id}?`, header: null,
+            question: `Question ${id}?`, header: null, detail: null,
             options: [
                 { label: 'Yes', description: 'Ship it', recommended: true },
                 { label: 'No', description: null, recommended: false },
@@ -101,6 +101,31 @@ describe('Inbox page', () => {
 
         expect(wrapper.get('[data-testid="inbox-detail"] h2').text()).toBe('Allow Bash: rm -rf build?')
         expect(wrapper.findAll('[data-testid="inbox-item"]')[1].attributes('aria-current')).toBe('true')
+    })
+
+    it('shows the command a permission approves and requires Allow or Deny', async () => {
+        pending = [resource(4, {
+            kind: 'permission', question: 'Allow Bash?', header: 'Bash', detail: 'rm -rf build',
+            options: [
+                { label: 'Allow', description: null, recommended: false },
+                { label: 'Deny', description: null, recommended: false },
+            ],
+        })]
+        const wrapper = mountInbox()
+        await flushPromises()
+
+        expect(wrapper.get('[data-testid="inbox-item"] [data-testid="question-detail"]').text()).toBe('rm -rf build')
+        const detail = wrapper.get('[data-testid="inbox-detail"]')
+        expect(detail.get('[data-testid="question-detail"]').text()).toBe('rm -rf build')
+        expect(detail.text()).toContain('Note for the agent (optional)')
+        await detail.get('[data-testid="question-free-text"]').setValue('fine')
+        expect(detail.get('[data-testid="send-answer"]').attributes('disabled')).toBeDefined()
+
+        await detail.findAll('[data-testid="question-option"]')[0].trigger('click')
+        await detail.get('[data-testid="send-answer"]').trigger('click')
+        await flushPromises()
+
+        expect(posts).toEqual([{ url: '/api/agent-questions/4/answer', body: { choices: ['Allow'], text: 'fine' } }])
     })
 
     it('opens the item requested in the URL', async () => {

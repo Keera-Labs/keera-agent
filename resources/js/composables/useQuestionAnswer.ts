@@ -29,8 +29,11 @@ export function useQuestionAnswer(questionSource: MaybeRefOrGetter<AgentQuestion
     }
 
     const sending = computed(() => answer.isLoading.value)
+    const needsChoice = computed(() => question()?.kind === 'permission')
     const canSend = computed(() =>
-        question() !== null && !sending.value && (selected.value.length > 0 || text.value.trim() !== ''),
+        question() !== null
+        && !sending.value
+        && (selected.value.length > 0 || (!needsChoice.value && text.value.trim() !== '')),
     )
 
     async function send(): Promise<boolean> {
@@ -49,5 +52,5 @@ export function useQuestionAnswer(questionSource: MaybeRefOrGetter<AgentQuestion
         }
     }
 
-    return { selected, text, error, sending, canSend, toggle, send }
+    return { selected, text, error, sending, canSend, needsChoice, toggle, send }
 }

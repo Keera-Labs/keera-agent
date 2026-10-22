@@ -53,15 +53,26 @@ async def _store_answers(agent: Agent, event: AgentHookEventRequest) -> None:
 
 
 async def _store_permission(agent: Agent, event: AgentHookEventRequest) -> None:
-    if await _pending(agent).where("kind", "permission").first():
+    pending = await _pending(agent).where("kind", "permission").first()
+    if pending and event.notifies_permission() and pending.detail:
+        return
+    prompt = {
+        "session_id": event.session_id,
+        "question": event.permission_question(),
+        "header": event.tool_name if event.requests_permission() else None,
+        "detail": event.permission_detail(),
+    }
+    if pending:
+        await AgentQuestion.where("id", pending.id).update(
+            {**prompt, "created_at": utc_now(), "updated_at": utc_now()}
+        )
         return
     await AgentQuestion.create(
         {
+            **prompt,
             "agent_id": agent.id,
             "project_id": agent.project_id,
-            "session_id": event.session_id,
             "kind": "permission",
-            "question": event.message or "The agent needs your permission to continue",
             "options": PERMISSION_OPTIONS,
             "multi_select": False,
             "status": "pending",

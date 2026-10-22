@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3'
 import { computed } from 'vue'
+import QuestionDetail from '@/components/questions/QuestionDetail.vue'
 import QuestionKindPill from '@/components/questions/QuestionKindPill.vue'
 import QuestionOptions from '@/components/questions/QuestionOptions.vue'
 import { useNow } from '@/composables/useNow'
@@ -10,8 +11,13 @@ import { relativeTime } from '@/utils/relativeTime'
 
 const props = defineProps<{ question: AgentQuestion; agentName: string }>()
 
-const { selected, text, error, sending, canSend, toggle, send } = useQuestionAnswer(() => props.question)
+const { selected, text, error, sending, canSend, needsChoice, toggle, send } = useQuestionAnswer(() => props.question)
 const now = useNow()
+
+const textLabel = computed(() => {
+    if (needsChoice.value) return 'Note for the agent (optional)'
+    return props.question.options.length ? 'Something else? (optional)' : 'Type your answer'
+})
 
 const askedAgo = computed(() => {
     const elapsed = relativeTime(props.question.created_at, now.value)
@@ -48,14 +54,15 @@ function openInInbox() {
                 </button>
             </div>
             <p class="m-0 text-zinc-900 text-ui-14 font-semibold">{{ question.question }}</p>
+            <QuestionDetail v-if="question.detail" :detail="question.detail" />
             <QuestionOptions :question="question" :selected="selected" layout="row" @toggle="toggle" />
             <div class="flex flex-wrap gap-2">
                 <input
                     v-model="text"
                     data-testid="question-free-text"
                     type="text"
-                    :placeholder="question.options.length ? 'Something else? (optional)' : 'Type your answer'"
-                    :aria-label="question.options.length ? 'Something else? (optional)' : 'Type your answer'"
+                    :placeholder="textLabel"
+                    :aria-label="textLabel"
                     class="flex-1 min-w-[12rem] h-9 px-3 rounded-lg border border-stroke bg-white text-ui-13 text-zinc-900 outline-none focus:border-zinc-500"
                 >
                 <button

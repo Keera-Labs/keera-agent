@@ -23,6 +23,7 @@ export interface AgentQuestion {
     kind: AgentQuestionKind
     question: string
     header: string | null
+    detail: string | null
     options: AgentQuestionOption[]
     multi_select: boolean
     status: AgentQuestionStatus
