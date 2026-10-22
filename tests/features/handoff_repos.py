@@ -12,13 +12,13 @@ SESSION_ID = "0b6c1d52-3c1e-4f43-9d8a-6a2f0e8f1a11"
 
 
 class HandoffRepos:
-    """A source checkout with an agent worktree full of work, a bare origin and a Claude config dir."""
-
     def __init__(self, test_case):
         self.test_case = test_case
         self.repo = GitTestRepo(test_case).init()
         self.repo.write("README.md", "hello\n")
         self.repo.write("app.py", "print('v1')\n")
+        self.repo.write(".gitignore", ".env\n")
+        self.repo.write(".gitignore", ".env\n")
         self.repo.commit_all("initial")
         self.remote = self.repo.add_bare_remote()
         self.repo.git("push", "-q", "origin", "main")

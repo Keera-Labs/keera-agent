@@ -11,9 +11,9 @@ both a source and a target.
 | --- | --- |
 | Servers resource (`local`/`cloud`, name, base URL, token) | `servers` table, `server_controller`, Settings → Servers & Handoff |
 | Push (source side) | `POST /api/agents/{id}/handoffs` → `AgentHandoffPushAction` |
-| Import (target side) | `GET /api/handoff`, `POST /api/handoffs` → `AgentHandoffImportAction` |
-| History | `handoffs` table (`outgoing` on the source, `incoming` on the target) |
-| Agent state | `agents.handed_off_at`, `handed_off_to`, `handed_off_url`, `resume_session_id` |
+| Import (target side) | `GET /api/handoff`, `POST /api/handoffs/preflight`, `POST /api/handoffs` → `plan_target`, `AgentHandoffImportAction` |
+| History | `handoffs` table (`outgoing` on the source, `incoming` on the target), unique on `(handoff_key, direction)` |
+| Agent state | `agents.handed_off_at`, `handed_off_to`, `handed_off_url`, `resume_session_id`, `handoff_claim`, `handoff_claimed_at` |
 | Git snapshot / checkout | `app/services/handoff/git_snapshot.py` |
 | Transcript export, rewrite, install | `app/services/handoff/transcript.py` |
 
@@ -22,33 +22,40 @@ both a source and a target.
 ```
 Source Keera                                   Target Keera
 ------------                                   ------------
-1. GET  /api/handoff  (Bearer token)   ───────▶ 200 {name, base_url, providers}
-2. stop the agent's PTY (session kept resumable)
-3. snapshot worktree → commit W (temp index)
-4. git push origin W:refs/heads/handoff/agent-<id>-<ts>
-5. read ~/.claude/projects/<enc(worktree)>/<sid>.jsonl (+ <sid>/**)
-6. POST /api/handoffs (Bearer token, JSON) ───────▶ a. dedupe on handoff_key
-                                                   b. match project by origin URL
-                                                   c. create agent (AgentCreateAction)
-                                                   d. fetch branch, verify SHA == W,
+0. claim the agent in the DB (handoff_claim), refuse if claimed or handed off
+1. refuse if any changed file looks like a secret (nothing stopped yet)
+2. POST /api/handoffs/preflight ─────────────────▶ match project by origin URL, resolve the
+   {remote_url, provider, model, complexity}       model (or the complexity default), run
+                                       ◀─────────  AgentCreateAction.validate(); 200 or 4xx
+3. stop the agent's PTY (session kept resumable)
+4. snapshot worktree → commit W (temp index), re-check secrets
+5. git push origin W:refs/heads/handoff/agent-<id>-<ts>
+6. read ~/.claude/projects/<enc(worktree)>/<sid>.jsonl (+ <sid>/**)
+7. POST /api/handoffs (Bearer token, JSON) ───────▶ a. auth, then a size-capped body parse
+                                                   b. replay or claim handoff_key (unique row)
+                                                   c. plan_target again (project, model)
+                                                   d. create agent; skip ids whose
+                                                      worktree slot is already taken
+                                                   e. fetch branch, verify SHA == W,
                                                       worktree add -b worktree-agent-<new>
                                                       reset --mixed base (W → uncommitted)
-                                                   e. rewrite + install transcript under
+                                                   f. rewrite + install transcript under
                                                       <config>/projects/<enc(new worktree)>/
-                                                   f. resume_session_id = sid, has_session
-                                                   g. record incoming handoff
+                                                   g. resume_session_id = sid, has_session,
+                                                      incoming handoff completed
                                        ◀─────── 200 {agent_id, project_id, url, replayed}
                                                    h. spawn: claude --worktree agent-<new>
                                                       --resume <sid>, then inject a
                                                       handoff note
-7. mark source agent handed_off (+ target name/url), handoff completed
+8. mark source agent handed_off (+ target name/url), handoff completed, release the claim
 ```
 
 The payload (`IncomingHandoffRequest`) carries:
 
 - `handoff_key`, `source` (name, base URL);
 - `agent`: source id, name, role (`agent_type`), provider, model, complexity, description,
-  system prompt, flags, permission mode, and the source task (`id`, `title`);
+  system prompt and whether it is the source's default for that role, flags, permission
+  mode, and the source task (`id`, `title`);
 - `git`: remote URL, handoff branch, source branch, `base_sha` (source HEAD), `head_sha`
   (snapshot), `wip` (whether the snapshot added a commit);
 - `transcript`: session id and files (`text`, or `base64` when not UTF-8);
@@ -60,8 +67,19 @@ The snapshot never touches the source checkout. It builds a tree in a temporary
 `GIT_INDEX_FILE` (`read-tree HEAD`, `add -A`, `write-tree`) and, only when the tree differs
 from HEAD, creates `W = commit-tree <tree> -p HEAD`. Pushing `W` also pushes every local
 commit under it, so committed, uncommitted and untracked work all arrive. `.gitignore` is
-respected, and these are excluded even if not ignored: `.env`, `.env.*`, `*.pem`, `*.key`,
-`id_rsa*`, `id_ed25519*`, `.claude/settings.local.json`.
+respected, so ignored files never leave the machine.
+
+**Secrets are refused, not silently dropped.** Every file the snapshot would add or change
+relative to HEAD is checked case-insensitively against `looks_secret()`. That covers `.env`,
+`.env.*`, `*.env`, `.envrc`, every `id_*` SSH key type, `*.pem`, `*.key`, `*.p12`, `*.pfx`,
+`*.jks`, `*.keystore`, `*.kdbx`, `.npmrc`, `.pypirc`, `.netrc`, `.git-credentials`,
+`.pgpass`, `credentials`, `credentials.json`, `*-key.json`, `service-account*.json`,
+`*.tfvars`, `*.tfstate`, `secrets.*`, `settings.local.json`, and anything under `.aws/`,
+`.ssh/`, `.gnupg/`, `.docker/config.json` or `.kube/config`. Templates such as
+`.env.example` and public keys (`*.pub`) are allowed. On a match the push fails with a 422
+that lists the files, so the user can delete or ignore them. The check runs before
+anything is stopped and again on the final snapshot. Secrets already committed in history
+are out of scope.
 
 On the target the WIP commit is undone with `reset --mixed <base_sha>`, so the agent finds
 the same committed history plus the same modified/untracked files it left behind (the
@@ -69,6 +87,19 @@ staged/unstaged split is not preserved). The target branch is always
 `worktree-agent-<new id>` so it never collides with a branch the target already has (a
 round trip would otherwise hit the original, still checked-out branch). The resume note
 tells the agent its old branch name and how to push to it.
+
+Agent ids are per database, so two Keeras on one checkout (for example dev and dist) can
+both own an `agent-<id>` slot. If the new agent's `worktree-agent-<id>` branch or
+`.claude/worktrees/agent-<id>` path already exists, the import soft-deletes that unused
+agent row and creates another, up to five times, then returns 409. An existing checkout or
+transcript is never modified or removed. Rollback only removes what this import created.
+
+### System prompt
+
+If the source prompt is the source's default for the role, the target regenerates its own
+default, which embeds the target's MCP URL. A custom prompt is kept, but URLs on the
+source's origin, and any `http(s)://<host>:<source port>/mcp|/api…` alias of it (for
+example a tailnet name), are rewritten to the target's base URL.
 
 ### Conversation
 
@@ -108,9 +139,19 @@ rejected.
 - Each server's inbound handoff API is enabled by `KEERA_HANDOFF_TOKEN` in its `.env`.
   Without it, `/api/handoff*` returns 403. A wrong or missing bearer gets 401. The token
   is compared with `hmac.compare_digest`.
+- Auth is a FastAPI dependency (`require_handoff_token`), and the endpoints declare no body
+  parameter, so the token is checked **before** the body is read. An unauthenticated
+  caller gets a 401 and never sees the schema. Only then is the body streamed, capped at
+  `KEERA_HANDOFF_MAX_BYTES` (default 64 MiB, 413 above it), and validated (422).
 - A server record stores the **target's** token. The API never returns it (`has_token`
   only), the settings form keeps it when left blank on edit, and it is never logged
   (errors and logs carry only the server id or name).
+- **The token is stored in plaintext** in the `servers` table. Encrypting it is not cheap
+  here: Keera has no app key or crypto dependency, and a key kept in the same `storage/`
+  directory as `keera.db` would protect very little. Treat `storage/keera.db` as a
+  secret: it is git-ignored and should stay readable only by the Keera user. Use a
+  dedicated, rotatable `KEERA_HANDOFF_TOKEN` per server, never a reused credential (see
+  open questions).
 - Requests also pass Keera's existing trusted-host check, so `base_url` must use the
   host the target serves on.
 
@@ -118,11 +159,14 @@ rejected.
 
 | Failure | Outcome |
 | --- | --- |
-| Target down, bad token, handoffs disabled | Preflight `GET /api/handoff` fails **before** anything is stopped. The agent keeps running. 502 with a client-safe message. |
+| Changed files look like secrets | 422 listing them, before anything is stopped. |
+| Target down, bad token, handoffs disabled, no matching project, model or provider not allowed | The preflight fails **before** anything is stopped. The agent keeps running. 502 with the target's client-safe reason. |
 | Not a Claude agent, PM/no-worktree agent, no transcript, no `origin` | 422 before stopping. |
-| Push or target rejection after the stop | Outgoing handoff is marked `failed` with the error. The source worktree, branch and transcript are untouched (snapshot used a temp index). The agent is stopped but resumable with Restart (`--continue`). 502. |
-| Target fails midway (fetch, worktree, transcript) | The import compensates: soft-deletes the new agent, removes its worktree and branch, deletes written transcript files, records nothing. The source sees a 4xx/5xx, as above. |
-| Target accepted but the response was lost (timeout) | The source records `failed`. A retry reuses the same `handoff_key`, so the target returns the agent it already created (`replayed: true`) instead of a duplicate. |
+| Failure after the stop with a definite outcome (git error, push rejected, target 4xx) | The remote `handoff/*` branch is deleted, the outgoing handoff is marked `failed` with the error, the claim is released, and if the agent had a live session it is **restarted** (`--continue`) with a note that the move failed. The source worktree and transcript were never touched. |
+| Failure after the stop with an **uncertain** outcome (timeout, connection drop, 5xx, invalid response) | Same, except the source is **not** restarted, because the target may already be running it. The error says to push again, and the retry reuses the key, so the target replays (`replayed: true`) or imports cleanly. |
+| Any other exception (an `OSError`, a bug) | The same compensation runs, logged with a traceback, recorded as "Unexpected handoff failure.", then re-raised (500). |
+| Target fails midway (fetch, worktree, transcript) | The import compensates. It soft-deletes the new agent, removes only the worktree and branch it created, removes transcript files written so far, and deletes its claim row so a retry can run. The source sees a 4xx/5xx, as above. |
+| Git command hangs | Every git call has a 300 s timeout, translated to a handoff error. |
 
 The source agent is marked `handed_off` only after the target returns 200. It is never
 deleted. It keeps its worktree and transcript and shows "Moved to <server> (agent #n)"
@@ -132,14 +176,19 @@ second push gets a 409.
 
 ## Idempotency
 
-- **Double-click**: an in-process per-agent guard (`agents_in_flight`) makes a second push
-  return 409 while the first runs. The same guard blocks terminal and trigger spawns during
-  the push. A finished handoff makes later pushes 409.
-- **Retries**: a new push to the same server after a failure reuses the failed handoff's
-  key. The target serializes imports per key and returns the existing agent for a
-  completed key.
-- The guard is per process. Keera runs as one process, and a multi-worker deployment
-  would need a DB-level lock (see open questions).
+- **Double-click / concurrent pushes**: the source claims the agent with one conditional
+  `UPDATE agents SET handoff_claim=<token> WHERE id=? AND handed_off_at IS NULL AND
+  (handoff_claim IS NULL OR handoff_claimed_at < now-15min)` and re-reads it. Only the
+  request whose token landed proceeds; the others get 409. This works across processes.
+  While claimed, terminal, trigger and headless spawns refuse the agent. A claim older
+  than 15 minutes (a crashed server) can be taken over.
+- **Retries**: a new push to the same server after a failure reopens the failed outgoing
+  handoff and reuses its key.
+- **Target dedupe**: the target inserts an `importing` row for `(handoff_key, incoming)`
+  under a unique index before doing any work. A concurrent duplicate gets 409, a completed
+  key returns the same agent (`replayed: true`), and a completed key whose agent was
+  deleted since is imported again. A failed import deletes its row. A stale `importing`
+  row (over 15 minutes old) is taken over.
 
 ## What does not move
 
@@ -202,12 +251,13 @@ Verified in the run behind this PR:
 
 ## Open questions
 
-1. **Token storage**: server tokens are stored in plaintext in SQLite. Should we encrypt
-   them at rest, or keep them in the OS keychain?
+1. **Token storage**: server tokens are stored in plaintext in SQLite (see Auth). Should we
+   add an app key plus a crypto dependency, or use the OS keychain?
 2. **Token issuance**: there is one static inbound token per server. Should we have
    per-peer tokens, rotation, or a pairing flow ("show a code on the target")?
-3. **Handoff branch cleanup**: `handoff/*` branches stay on the remote. Should they be
-   deleted after the target checks them out, or kept as an audit trail?
+3. **Handoff branch cleanup**: a failed handoff deletes its `handoff/*` branch. A successful
+   one keeps it as an audit trail and as the base the target worktree came from. Should
+   the target delete it once checked out?
 4. **Branch identity on the target**: the agent works on `worktree-agent-<new id>` and is
    told to push to its old branch. Should we check out the original branch name when the
    target doesn't already have it?
@@ -217,7 +267,8 @@ Verified in the run behind this PR:
    (forwarding or a shared relay)?
 7. **Long transfers**: the push is a synchronous request (target timeout 300 s). Large
    transcripts or slow remotes may need a background job with progress.
-8. **Multi-worker deployments**: the in-flight guard is per process. Replace it with a DB
-   row lock if Keera ever runs several workers.
+8. **Shared agent ids**: two Keeras on one checkout share the `agent-<id>` namespace. Import
+   skips taken slots, but the *other* Keera can still collide later. Should worktree names
+   carry a per-server prefix?
 9. **Codex and Gemini support**: design their session export and resume, and decide
    whether PM agents (no worktree) should be movable.

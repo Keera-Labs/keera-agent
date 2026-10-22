@@ -1,19 +1,52 @@
+import fnmatch
 import os
 import subprocess
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from app.services.handoff.errors import HandoffConflict, HandoffInvalid, HandoffTargetFailed
-
-SECRET_PATHSPECS = (
-    ":(exclude,glob)**/.env",
-    ":(exclude,glob)**/.env.*",
-    ":(exclude,glob)**/*.pem",
-    ":(exclude,glob)**/*.key",
-    ":(exclude,glob)**/id_rsa*",
-    ":(exclude,glob)**/id_ed25519*",
-    ":(exclude,glob)**/.claude/settings.local.json",
+from app.services.handoff.errors import (
+    HandoffConflict,
+    HandoffInvalid,
+    HandoffSecretsFound,
+    HandoffTargetFailed,
 )
+
+SECRET_NAME_PATTERNS = (
+    ".env",
+    ".env.*",
+    "*.env",
+    ".envrc",
+    "id_rsa*",
+    "id_dsa*",
+    "id_ecdsa*",
+    "id_ed25519*",
+    "*.pem",
+    "*.key",
+    "*.p12",
+    "*.pfx",
+    "*.jks",
+    "*.keystore",
+    "*.kdbx",
+    ".npmrc",
+    ".pypirc",
+    ".netrc",
+    "_netrc",
+    ".git-credentials",
+    ".pgpass",
+    "credentials",
+    "credentials.json",
+    "*-key.json",
+    "*_key.json",
+    "service-account*.json",
+    "*.tfvars",
+    "*.tfvars.json",
+    "*.tfstate",
+    "*.tfstate.backup",
+    "secrets.*",
+    "settings.local.json",
+)
+SECRET_PATH_PATTERNS = (".aws/*", ".ssh/*", ".docker/config.json", ".kube/config", ".gnupg/*")
+SAFE_NAME_PATTERNS = (".env.example", ".env.sample", ".env.template", ".env.dist", "*.pub")
 _GIT_ENV = {"GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C"}
 _IDENTITY = {
     "GIT_AUTHOR_NAME": "Keera Handoff",
@@ -21,6 +54,7 @@ _IDENTITY = {
     "GIT_COMMITTER_NAME": "Keera Handoff",
     "GIT_COMMITTER_EMAIL": "handoff@keera.local",
 }
+GIT_TIMEOUT = 300
 
 
 @dataclass
@@ -30,7 +64,6 @@ class Snapshot:
     base_sha: str
     head_sha: str
     wip: bool
-    excluded: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -43,14 +76,17 @@ class Snapshot:
 
 
 def git(cwd: str, *args: str, env: dict | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        ["git", *args],
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        env={**os.environ, **_GIT_ENV, **(env or {})},
-        timeout=300,
-    )
+    try:
+        return subprocess.run(
+            ["git", *args],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            env={**os.environ, **_GIT_ENV, **(env or {})},
+            timeout=GIT_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise HandoffTargetFailed(f"git {args[0]} timed out.") from exc
 
 
 def _out(cwd: str, *args: str, env: dict | None = None) -> str:
@@ -78,40 +114,51 @@ def normalize_remote(url: str) -> str:
     return value
 
 
+def looks_secret(path: str) -> bool:
+    lowered = path.lower()
+    name = os.path.basename(lowered)
+    if any(fnmatch.fnmatchcase(name, pattern) for pattern in SAFE_NAME_PATTERNS):
+        return False
+    if any(fnmatch.fnmatchcase(name, pattern) for pattern in SECRET_NAME_PATTERNS):
+        return True
+    return any(
+        fnmatch.fnmatchcase(lowered, pattern) or fnmatch.fnmatchcase(lowered, f"*/{pattern}")
+        for pattern in SECRET_PATH_PATTERNS
+    )
+
+
 def take_snapshot(worktree: str, branch: str) -> Snapshot:
     base_sha = _out(worktree, "rev-parse", "HEAD")
     head = git(worktree, "symbolic-ref", "-q", "--short", "HEAD")
     source_branch = head.stdout.strip() or None
-    excluded = _excluded_secrets(worktree)
+    tree = _worktree_tree(worktree)
+    refuse_secrets(worktree, tree)
+    if tree == _out(worktree, "rev-parse", "HEAD^{tree}"):
+        return Snapshot(branch, source_branch, base_sha, base_sha, False)
+    message = f"wip: handoff snapshot of {source_branch or base_sha[:12]}"
+    head_sha = _out(worktree, "commit-tree", tree, "-p", base_sha, "-m", message, env=_IDENTITY)
+    return Snapshot(branch, source_branch, base_sha, head_sha, True)
+
+
+def check_secrets(worktree: str) -> None:
+    refuse_secrets(worktree, _worktree_tree(worktree))
+
+
+def refuse_secrets(worktree: str, tree: str) -> None:
+    changed = _out(
+        worktree, "diff", "--name-only", "-z", "--no-renames", "--diff-filter=ACMT", "HEAD", tree
+    )
+    secrets = sorted(path for path in changed.split("\0") if path and looks_secret(path))
+    if secrets:
+        raise HandoffSecretsFound(secrets)
+
+
+def _worktree_tree(worktree: str) -> str:
     with tempfile.TemporaryDirectory() as scratch:
         index = {"GIT_INDEX_FILE": os.path.join(scratch, "index")}
         _out(worktree, "read-tree", "HEAD", env=index)
-        _out(worktree, "add", "-A", "--", ".", *SECRET_PATHSPECS, env=index)
-        tree = _out(worktree, "write-tree", env=index)
-    head_tree = _out(worktree, "rev-parse", "HEAD^{tree}")
-    if tree == head_tree:
-        return Snapshot(branch, source_branch, base_sha, base_sha, False, excluded)
-    message = f"wip: handoff snapshot of {source_branch or base_sha[:12]}"
-    head_sha = _out(worktree, "commit-tree", tree, "-p", base_sha, "-m", message, env=_IDENTITY)
-    return Snapshot(branch, source_branch, base_sha, head_sha, True, excluded)
-
-
-def _excluded_secrets(worktree: str) -> list[str]:
-    listed = git(worktree, "ls-files", "--others", "--modified", "--exclude-standard", "-z")
-    paths = [path for path in listed.stdout.split("\0") if path]
-    kept = git(
-        worktree,
-        "ls-files",
-        "--others",
-        "--modified",
-        "--exclude-standard",
-        "-z",
-        "--",
-        ".",
-        *SECRET_PATHSPECS,
-    )
-    kept_paths = {path for path in kept.stdout.split("\0") if path}
-    return sorted(path for path in paths if path not in kept_paths)
+        _out(worktree, "add", "-A", "--", ".", env=index)
+        return _out(worktree, "write-tree", env=index)
 
 
 def push_snapshot(worktree: str, snapshot: Snapshot) -> None:
@@ -120,14 +167,21 @@ def push_snapshot(worktree: str, snapshot: Snapshot) -> None:
         raise HandoffTargetFailed("Could not push the handoff branch to the shared remote.")
 
 
+def delete_remote_branch(worktree: str, branch: str) -> bool:
+    try:
+        return git(worktree, "push", "origin", "--delete", branch).returncode == 0
+    except HandoffTargetFailed:
+        return False
+
+
+def checkout_slot_taken(project_path: str, worktree: str, local_branch: str) -> bool:
+    branch = git(project_path, "rev-parse", "--verify", "-q", f"refs/heads/{local_branch}")
+    return branch.returncode == 0 or os.path.lexists(worktree)
+
+
 def checkout_snapshot(project_path: str, worktree: str, local_branch: str, git_info: dict) -> None:
-    if (
-        git(project_path, "rev-parse", "--verify", "-q", f"refs/heads/{local_branch}").returncode
-        == 0
-    ):
-        raise HandoffConflict(f"Branch {local_branch} already exists on this server.")
-    if os.path.exists(worktree):
-        raise HandoffConflict("The agent worktree path already exists on this server.")
+    if checkout_slot_taken(project_path, worktree, local_branch):
+        raise HandoffConflict(f"{local_branch} or its worktree already exists on this server.")
     branch = git_info["branch"]
     fetched = git(
         project_path, "fetch", "origin", f"+refs/heads/{branch}:refs/remotes/origin/{branch}"
@@ -140,7 +194,11 @@ def checkout_snapshot(project_path: str, worktree: str, local_branch: str, git_i
     if added.returncode != 0:
         raise HandoffInvalid("Could not create the agent worktree.")
     if git_info.get("wip"):
-        _out(worktree, "reset", "-q", "--mixed", git_info["base_sha"])
+        try:
+            _out(worktree, "reset", "-q", "--mixed", git_info["base_sha"])
+        except Exception:
+            remove_checkout(project_path, worktree, local_branch)
+            raise
 
 
 def remove_checkout(project_path: str, worktree: str, local_branch: str) -> None:

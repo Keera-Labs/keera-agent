@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 from unittest import mock
@@ -49,7 +50,7 @@ class TestHandoffController(TestCase, DatabaseTransaction):
         captured = {}
 
         def handler(request: httpx.Request) -> httpx.Response:
-            if request.method == "POST":
+            if request.url.path == "/api/handoffs":
                 captured.update(json.loads(request.content))
             return httpx.Response(200, json={"data": {"agent_id": 1}})
 
@@ -180,3 +181,196 @@ class TestHandoffController(TestCase, DatabaseTransaction):
         payload = {**self.payload, "git": {**self.payload["git"], "branch": "--upload-pack=evil"}}
 
         (await self._import(payload)).assert_status(422)
+
+    async def test_authentication_runs_before_the_body_is_validated(self):
+        for path in ("/api/handoffs", "/api/handoffs/preflight"):
+            response = await self.post(path, json={"nonsense": True})
+            response.assert_status(401)
+            self.assertNotIn("detail", response.json())
+
+            garbage = await self.post(path, json={"nonsense": True}, headers=AUTH)
+            garbage.assert_status(422)
+
+    async def test_an_oversized_body_is_refused(self):
+        original = Config.get("fastapi.handoff_max_bytes")
+        Config.set("fastapi.handoff_max_bytes", 1024)
+        self.addCleanup(Config.set, "fastapi.handoff_max_bytes", original)
+
+        response = await self._import()
+
+        response.assert_status(413)
+        self.assertEqual(await Agent.where("project_id", self.target_project.id).count(), 0)
+
+    async def test_too_broad_source_paths_are_rejected(self):
+        for home in ("/", "/home", "//", "relative/home"):
+            payload = {**self.payload, "paths": {**self.payload["paths"], "home": home}}
+            (await self._import(payload)).assert_status(422)
+
+    async def test_preflight_validates_the_project_and_model(self):
+        agent = {"provider": "claude", "model": "claude-sonnet-5", "complexity": "medium"}
+        body = {"remote_url": self.payload["git"]["remote_url"], "agent": agent}
+
+        ok = await self.post("/api/handoffs/preflight", json=body, headers=AUTH)
+        ok.assert_ok()
+        self.assertEqual(
+            ok.json()["data"], {"project_id": self.target_project.id, "model": "claude-sonnet-5"}
+        )
+
+        unknown = {**body, "remote_url": "git@example.com:other/repo.git"}
+        (await self.post("/api/handoffs/preflight", json=unknown, headers=AUTH)).assert_status(422)
+
+    async def test_an_unconfigured_model_falls_back_to_the_complexity_default(self):
+        from app.controllers.global_settings_controller import complexity_model
+
+        payload = {**self.payload, "agent": {**self.payload["agent"], "model": "claude-retired-1"}}
+
+        response = await self._import(payload)
+
+        response.assert_ok()
+        agent = await Agent.find(response.json()["data"]["agent_id"])
+        self.assertEqual(agent.model, await complexity_model("claude", "medium"))
+
+    async def test_a_custom_system_prompt_points_at_this_server(self):
+        prompt = "Use http://10.0.0.5:4600/mcp and http://box.tailnet.ts.net:4600/api/tasks, not http://x:9/mcp."
+        payload = {
+            **self.payload,
+            "source": {**self.payload["source"], "base_url": "http://10.0.0.5:4600"},
+            "agent": {**self.payload["agent"], "system_prompt": prompt},
+        }
+
+        response = await self._import(payload)
+
+        target = Config.get("fastapi.app_url").rstrip("/")
+        agent = await Agent.find(response.json()["data"]["agent_id"])
+        self.assertIn(f"{target}/mcp", agent.system_prompt)
+        self.assertIn(f"{target}/api/tasks", agent.system_prompt)
+        self.assertIn("http://x:9/mcp", agent.system_prompt)
+        self.assertNotIn(":4600", agent.system_prompt)
+
+    async def test_a_default_system_prompt_is_regenerated_for_this_server(self):
+        from app.utils.system_prompts import default_system_prompt
+
+        payload = {
+            **self.payload,
+            "agent": {
+                **self.payload["agent"],
+                "system_prompt": "old default with http://elsewhere:4545/mcp",
+                "system_prompt_is_default": True,
+            },
+        }
+
+        response = await self._import(payload)
+
+        agent = await Agent.find(response.json()["data"]["agent_id"])
+        self.assertEqual(agent.system_prompt, default_system_prompt("software_engineer"))
+
+    async def _next_agent_id(self) -> int:
+        latest = await Agent.order_by("id", "desc").first()
+        return latest.id + 1
+
+    async def test_an_occupied_worktree_slot_is_skipped_and_left_untouched(self):
+        taken = await self._next_agent_id()
+        existing = self.target_root / ".claude" / "worktrees" / f"agent-{taken}"
+        self._git(
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            f"worktree-agent-{taken}",
+            str(existing),
+            "origin/main",
+            cwd=self.target_root,
+        )
+        (existing / "precious.txt").write_text("unsaved work\n")
+
+        response = await self._import()
+
+        response.assert_ok()
+        self.assertNotEqual(response.json()["data"]["agent_id"], taken)
+        self.assertEqual((existing / "precious.txt").read_text(), "unsaved work\n")
+        self.assertIn(
+            f"worktree-agent-{taken}", self._git("branch", "--list", cwd=self.target_root)
+        )
+        self.assertIsNotNone((await Agent.find(taken)).deleted_at)
+
+    async def test_a_conflicting_slot_never_removes_the_existing_checkout(self):
+        taken = await self._next_agent_id()
+        existing = self.target_root / ".claude" / "worktrees" / f"agent-{taken}"
+        self._git(
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            f"worktree-agent-{taken}",
+            str(existing),
+            "origin/main",
+            cwd=self.target_root,
+        )
+        (existing / "precious.txt").write_text("unsaved work\n")
+
+        with mock.patch("app.actions.agent_handoff_import_action.SLOT_ATTEMPTS", 1):
+            response = await self._import()
+
+        response.assert_status(409)
+        self.assertEqual((existing / "precious.txt").read_text(), "unsaved work\n")
+        self.assertIn(
+            f"worktree-agent-{taken}", self._git("branch", "--list", cwd=self.target_root)
+        )
+        self.spawn.assert_not_called()
+
+    async def test_an_existing_transcript_is_never_overwritten(self):
+        taken = await self._next_agent_id()
+        worktree = os.path.realpath(self.target_root / ".claude" / "worktrees" / f"agent-{taken}")
+        directory = transcript_dir(self.repos.config_dir, worktree)
+        directory.mkdir(parents=True)
+        (directory / f"{SESSION_ID}.jsonl").write_text('{"keep": true}\n')
+
+        response = await self._import()
+
+        response.assert_status(409)
+        self.assertEqual((directory / f"{SESSION_ID}.jsonl").read_text(), '{"keep": true}\n')
+        self.assertFalse(os.path.exists(worktree))
+        self.assertNotIn(
+            f"worktree-agent-{taken}", self._git("branch", "--list", cwd=self.target_root)
+        )
+
+    async def test_concurrent_imports_with_the_same_key_create_one_agent(self):
+        responses = await asyncio.gather(self._import(), self._import(), self._import())
+
+        codes = [response.status_code for response in responses]
+        self.assertIn(200, codes)
+        self.assertTrue(set(codes) <= {200, 409})
+        agent_ids = {r.json()["data"]["agent_id"] for r in responses if r.status_code == 200}
+        self.assertEqual(len(agent_ids), 1)
+        live = (
+            await Agent.where("project_id", self.target_project.id).where_null("deleted_at").count()
+        )
+        self.assertEqual(live, 1)
+        self.spawn.assert_called_once()
+
+    async def test_an_import_in_progress_blocks_the_same_key(self):
+        from app.actions.agent_status_action import utc_now
+        from app.models.Handoff import Handoff
+
+        await Handoff.create(
+            {
+                "handoff_key": self.payload["handoff_key"],
+                "direction": "incoming",
+                "agent_id": 0,
+                "status": "importing",
+                "created_at": utc_now(),
+                "updated_at": utc_now(),
+            }
+        )
+
+        (await self._import()).assert_status(409)
+
+    async def test_a_replay_of_a_deleted_agent_imports_again(self):
+        first = (await self._import()).json()["data"]
+        await self.delete(f"/api/agents/{first['agent_id']}")
+
+        second = await self._import()
+
+        second.assert_ok()
+        self.assertFalse(second.json()["data"]["replayed"])
+        self.assertNotEqual(second.json()["data"]["agent_id"], first["agent_id"])

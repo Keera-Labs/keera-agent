@@ -1,16 +1,22 @@
 import socket
+from typing import Annotated
 
-from fastapi import Request
+from fastapi import Depends, Request
 from fastapi.responses import JSONResponse
 from fastapi_startkit import Config
 
-from app.actions.agent_handoff_import_action import AgentHandoffImportAction
-from app.requests.handoff_request import IncomingHandoffRequest
-from app.services.handoff.auth import verify_handoff_token
+from app.actions.agent_handoff_import_action import AgentHandoffImportAction, plan_target
+from app.requests.handoff_request import (
+    HandoffPreflightRequest,
+    IncomingHandoffRequest,
+    read_bounded_body,
+)
+from app.services.handoff.auth import require_handoff_token
+
+Authenticated = Annotated[None, Depends(require_handoff_token)]
 
 
-async def show(request: Request):
-    verify_handoff_token(request.headers.get("authorization"))
+async def show(_: Authenticated):
     return JSONResponse(
         {
             "data": {
@@ -22,7 +28,12 @@ async def show(request: Request):
     )
 
 
-async def store(request: Request, body: IncomingHandoffRequest):
-    verify_handoff_token(request.headers.get("authorization"))
-    result = await AgentHandoffImportAction(body).execute()
-    return JSONResponse({"data": result})
+async def preflight(request: Request, _: Authenticated):
+    body = await read_bounded_body(request, HandoffPreflightRequest)
+    project, model = await plan_target(body.remote_url, body.agent)
+    return JSONResponse({"data": {"project_id": project.id, "model": model}})
+
+
+async def store(request: Request, _: Authenticated):
+    body = await read_bounded_body(request, IncomingHandoffRequest)
+    return JSONResponse({"data": await AgentHandoffImportAction(body).execute()})

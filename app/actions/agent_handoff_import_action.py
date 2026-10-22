@@ -1,9 +1,11 @@
 import asyncio
+import datetime
 import os
 from pathlib import Path
 
 from fastapi_startkit import Config
 from fastapi_startkit.logging import Logger
+from sqlalchemy.exc import IntegrityError
 
 from app.actions.agent_create_action import AgentCreateAction
 from app.actions.agent_status_action import utc_now
@@ -11,12 +13,68 @@ from app.models.Agent import Agent
 from app.models.Handoff import Handoff
 from app.models.Project import Project
 from app.requests.agent_requests import AgentStoreRequest
-from app.requests.handoff_request import IncomingHandoffRequest
+from app.requests.handoff_request import HandoffAgentSettings, IncomingHandoffRequest
 from app.services.claude_config_dir import agent_config_dir, default_config_dir
 from app.services.handoff import git_snapshot, transcript
-from app.services.handoff.errors import HandoffError, HandoffInvalid
+from app.services.handoff.errors import HandoffConflict, HandoffError, HandoffInvalid
+from app.services.handoff.tasks import run_in_background
+from app.services.handoff.urls import rewrite_keera_urls
 
-_key_locks: dict[str, asyncio.Lock] = {}
+IMPORT_TTL = datetime.timedelta(minutes=15)
+SLOT_ATTEMPTS = 5
+
+
+async def plan_target(remote_url: str, settings: HandoffAgentSettings) -> tuple[Project, str]:
+    project = await _matching_project(remote_url)
+    model = await _target_model(settings)
+    store = _store_request(settings, model, name="handoff preflight")
+    try:
+        await AgentCreateAction(project_id=project.id, request=store).validate()
+    except ValueError as exc:
+        raise HandoffInvalid(str(exc)) from exc
+    return project, model
+
+
+async def _matching_project(remote_url: str) -> Project:
+    wanted = git_snapshot.normalize_remote(remote_url)
+    for project in await Project.all():
+        path = os.path.expanduser(project.path or "")
+        if not os.path.isdir(path):
+            continue
+        try:
+            url = await asyncio.to_thread(git_snapshot.remote_url, path)
+        except HandoffError:
+            continue
+        if git_snapshot.normalize_remote(url) == wanted:
+            return project
+    raise HandoffInvalid("No project on this server uses the handed-off repository's remote.")
+
+
+async def _target_model(settings: HandoffAgentSettings) -> str:
+    from app.controllers.global_settings_controller import (
+        complexity_model,
+        provider_model_is_configured,
+    )
+
+    if await provider_model_is_configured(settings.provider, settings.model):
+        return settings.model
+    fallback = await complexity_model(settings.provider, settings.complexity)
+    if await provider_model_is_configured(settings.provider, fallback):
+        return fallback
+    raise HandoffInvalid(
+        f"Neither {settings.model} nor the {settings.complexity} default is configured "
+        f"for {settings.provider} on this server."
+    )
+
+
+def _store_request(settings: HandoffAgentSettings, model: str, **fields) -> AgentStoreRequest:
+    return AgentStoreRequest(
+        provider=settings.provider, model=model, complexity=settings.complexity, **fields
+    )
+
+
+def _stale_before() -> str:
+    return (datetime.datetime.now(datetime.UTC) - IMPORT_TTL).strftime("%Y-%m-%d %H:%M:%S")
 
 
 class AgentHandoffImportAction:
@@ -25,29 +83,61 @@ class AgentHandoffImportAction:
         self.spawn = spawn
 
     async def execute(self) -> dict:
-        lock = _key_locks.setdefault(self.request.handoff_key, asyncio.Lock())
-        async with lock:
-            existing = await self._completed()
-            if existing:
-                return await self._result(existing.agent_id, replayed=True)
-            return await self._import()
+        replay = await self._replayable()
+        if replay:
+            return await self._result(replay.agent_id, replayed=True)
+        claim = await self._claim_key()
+        try:
+            return await self._import(claim)
+        except Exception:
+            await Handoff.where("id", claim.id).delete()
+            raise
 
-    async def _completed(self) -> Handoff | None:
-        return (
-            await Handoff.where("handoff_key", self.request.handoff_key)
-            .where("direction", "incoming")
-            .where("status", "completed")
-            .first()
-        )
+    def _key_query(self):
+        return Handoff.where("handoff_key", self.request.handoff_key).where("direction", "incoming")
 
-    async def _import(self) -> dict:
+    async def _replayable(self) -> Handoff | None:
+        existing = await self._key_query().first()
+        if not existing:
+            return None
+        if existing.status == "completed":
+            agent = await Agent.find(existing.agent_id)
+            if agent and not getattr(agent, "deleted_at", None):
+                return existing
+            await Handoff.where("id", existing.id).delete()
+            return None
+        if str(existing.updated_at)[:19] >= _stale_before():
+            raise HandoffConflict("This handoff is already being imported.")
+        await Handoff.where("id", existing.id).delete()
+        return None
+
+    async def _claim_key(self) -> Handoff:
         req = self.request
-        project = await self._matching_project(req.git.remote_url)
+        now = utc_now()
+        try:
+            return await Handoff.create(
+                {
+                    "handoff_key": req.handoff_key,
+                    "direction": "incoming",
+                    "agent_id": 0,
+                    "peer_url": req.source.base_url,
+                    "remote_agent_id": req.agent.source_agent_id,
+                    "branch": req.git.branch,
+                    "session_id": req.transcript.session_id,
+                    "status": "importing",
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            )
+        except IntegrityError as exc:
+            raise HandoffConflict("This handoff is already being imported.") from exc
+
+    async def _import(self, claim: Handoff) -> dict:
+        req = self.request
+        project, model = await plan_target(req.git.remote_url, req.agent)
         project_path = os.path.expanduser(project.path)
-        agent = await self._create_agent(project)
-        worktree = os.path.join(project_path, ".claude", "worktrees", f"agent-{agent.id}")
-        local_branch = f"worktree-agent-{agent.id}"
-        written: list[Path] = []
+        agent, worktree, local_branch = await self._agent_with_free_slot(project, model)
+        checked_out = False
         try:
             await asyncio.to_thread(
                 git_snapshot.checkout_snapshot,
@@ -56,46 +146,24 @@ class AgentHandoffImportAction:
                 local_branch,
                 req.git.model_dump(),
             )
+            checked_out = True
             worktree = os.path.realpath(worktree)
             config_dir = await agent_config_dir(agent, project) or default_config_dir()
-            rewriter = transcript.PathRewriter(
-                {
-                    req.paths.worktree: worktree,
-                    req.paths.project: project_path,
-                    req.paths.config_dir: config_dir,
-                    transcript.encoded_dir_name(req.paths.worktree): transcript.encoded_dir_name(
-                        worktree
-                    ),
-                    transcript.encoded_dir_name(req.paths.project): transcript.encoded_dir_name(
-                        project_path
-                    ),
-                    req.paths.home: str(Path.home()),
-                }
-            )
-            written = await asyncio.to_thread(
+            await asyncio.to_thread(
                 transcript.install_session,
                 transcript.transcript_dir(config_dir, worktree),
                 req.transcript.session_id,
                 [file.model_dump() for file in req.transcript.files],
-                rewriter,
+                self._rewriter(worktree, project_path, config_dir),
             )
             await Agent.where("id", agent.id).update(
                 {"resume_session_id": req.transcript.session_id, "has_session": True}
             )
-            await Handoff.create(
-                {
-                    "handoff_key": req.handoff_key,
-                    "direction": "incoming",
-                    "agent_id": agent.id,
-                    "peer_url": req.source.base_url,
-                    "remote_agent_id": req.agent.source_agent_id,
-                    "branch": req.git.branch,
-                    "session_id": req.transcript.session_id,
-                    "status": "completed",
-                }
+            await Handoff.where("id", claim.id).update(
+                {"agent_id": agent.id, "status": "completed", "updated_at": utc_now()}
             )
         except Exception:
-            await self._discard(agent, project_path, worktree, local_branch, written)
+            await self._discard(agent, project_path, worktree, local_branch, checked_out)
             raise
 
         Logger.info(
@@ -105,48 +173,69 @@ class AgentHandoffImportAction:
             await self._resume(agent.id, project, worktree, local_branch)
         return await self._result(agent.id, replayed=False)
 
-    async def _matching_project(self, remote_url: str) -> Project:
-        wanted = git_snapshot.normalize_remote(remote_url)
-        for project in await Project.all():
-            path = os.path.expanduser(project.path or "")
-            if not os.path.isdir(path):
-                continue
-            try:
-                url = await asyncio.to_thread(git_snapshot.remote_url, path)
-            except HandoffError:
-                continue
-            if git_snapshot.normalize_remote(url) == wanted:
-                return project
-        raise HandoffInvalid("No project on this server uses the handed-off repository's remote.")
+    async def _agent_with_free_slot(self, project: Project, model: str):
+        project_path = os.path.expanduser(project.path)
+        for _ in range(SLOT_ATTEMPTS):
+            agent = await self._create_agent(project, model)
+            worktree = os.path.join(project_path, ".claude", "worktrees", f"agent-{agent.id}")
+            local_branch = f"worktree-agent-{agent.id}"
+            taken = await asyncio.to_thread(
+                git_snapshot.checkout_slot_taken, project_path, worktree, local_branch
+            )
+            if not taken:
+                return agent, worktree, local_branch
+            Logger.warning(f"Handoff skipped agent id {agent.id}: its worktree slot is in use")
+            await Agent.where("id", agent.id).update({"deleted_at": utc_now()})
+        raise HandoffConflict("No free agent worktree slot on this server; prune old worktrees.")
 
-    async def _create_agent(self, project: Project) -> Agent:
+    async def _create_agent(self, project: Project, model: str) -> Agent:
         meta = self.request.agent
-        store = AgentStoreRequest(
+        store = _store_request(
+            meta,
+            model,
             name=meta.name,
             agent_type=meta.agent_type,
             description=meta.description,
-            provider=meta.provider,
-            model=meta.model,
-            system_prompt=meta.system_prompt,
+            system_prompt=self._system_prompt(),
             flags=meta.flags,
             dangerously_skip_permissions=meta.dangerously_skip_permissions,
             plan_mode=meta.plan_mode,
-            complexity=meta.complexity,
         )
         try:
             return await AgentCreateAction(project_id=project.id, request=store).execute()
         except ValueError as exc:
             raise HandoffInvalid(str(exc)) from exc
 
+    def _system_prompt(self) -> str | None:
+        meta = self.request.agent
+        if meta.system_prompt_is_default or not (meta.system_prompt or "").strip():
+            return None
+        return rewrite_keera_urls(
+            meta.system_prompt, self.request.source.base_url, Config.get("fastapi.app_url")
+        )
+
+    def _rewriter(self, worktree: str, project_path: str, config_dir: str):
+        paths = self.request.paths
+        return transcript.PathRewriter(
+            {
+                paths.worktree: worktree,
+                paths.project: project_path,
+                paths.config_dir: config_dir,
+                transcript.encoded_dir_name(paths.worktree): transcript.encoded_dir_name(worktree),
+                transcript.encoded_dir_name(paths.project): transcript.encoded_dir_name(
+                    project_path
+                ),
+                paths.home: str(Path.home()),
+            }
+        )
+
     @staticmethod
-    async def _discard(agent, project_path, worktree, local_branch, written) -> None:
+    async def _discard(agent, project_path, worktree, local_branch, checked_out) -> None:
         await Agent.where("id", agent.id).update({"deleted_at": utc_now()})
-        if os.path.isdir(worktree):
+        if checked_out:
             await asyncio.to_thread(
                 git_snapshot.remove_checkout, project_path, worktree, local_branch
             )
-        for path in written:
-            path.unlink(missing_ok=True)
 
     async def _resume(
         self, agent_id: int, project: Project, worktree: str, local_branch: str
@@ -155,7 +244,7 @@ class AgentHandoffImportAction:
 
         agent = await Agent.find(agent_id)
         cwd = os.path.expanduser(project.path)
-        asyncio.create_task(
+        run_in_background(
             _spawn_headless_agent(
                 agent, project, cwd, self._resume_note(agent, worktree, local_branch)
             )

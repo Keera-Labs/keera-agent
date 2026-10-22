@@ -192,6 +192,7 @@ router.delete("/api/servers/{server_id}", server_controller.destroy)
 router.get("/api/agents/{agent_id}/handoffs", agent_handoff_controller.index)
 router.post("/api/agents/{agent_id}/handoffs", agent_handoff_controller.store)
 router.get("/api/handoff", handoff_controller.show)
+router.post("/api/handoffs/preflight", handoff_controller.preflight)
 router.post("/api/handoffs", handoff_controller.store)
 
 # Settings page — before wildcard

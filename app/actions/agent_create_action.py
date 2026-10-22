@@ -17,13 +17,11 @@ class AgentCreateAction:
     def prepare(project_id: int, request: AgentStoreRequest):
         return AgentCreateAction(project_id=project_id, request=request)
 
-    async def execute(self) -> Agent:
-        from app.controllers.agent_controller import _default_permissions
+    async def validate(self) -> str:
         from app.controllers.global_settings_controller import (
             complexity_model,
             read_global_settings,
         )
-        from app.utils.system_prompts import default_system_prompt
 
         # Enforce per-project agent limit
         settings = await read_global_settings()
@@ -51,6 +49,14 @@ class AgentCreateAction:
         model = req.model or await complexity_model(req.provider, req.complexity)
         if model not in available_models:
             raise ValueError(f"Model '{model or ''}' is not configured for {req.provider}")
+        return model
+
+    async def execute(self) -> Agent:
+        from app.controllers.agent_controller import _default_permissions
+        from app.utils.system_prompts import default_system_prompt
+
+        model = await self.validate()
+        req = self.request
 
         # Resolve system prompt: caller value wins, fall back to type default
         system_prompt = (req.system_prompt or "").strip() or default_system_prompt(req.agent_type)

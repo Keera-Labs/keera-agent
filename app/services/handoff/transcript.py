@@ -4,7 +4,7 @@ import os
 import re
 from pathlib import Path
 
-from app.services.handoff.errors import HandoffInvalid
+from app.services.handoff.errors import HandoffConflict, HandoffInvalid
 
 SESSION_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,127}$")
 _PATH_CHARS = "A-Za-z0-9._-"
@@ -90,11 +90,19 @@ def install_session(
     if not any(file["path"] == f"{session_id}.jsonl" for file in files):
         raise HandoffInvalid("The handoff is missing the session transcript.")
     targets = [(_safe_target(directory, session_id, file["path"]), file) for file in files]
-    written = []
-    for target, file in targets:
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(_installed_bytes(file, rewriter))
-        written.append(target)
+    if any(target.exists() for target, _ in targets):
+        raise HandoffConflict("A transcript for this session already exists for that worktree.")
+    written: list[Path] = []
+    try:
+        for target, file in targets:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            content = _installed_bytes(file, rewriter)
+            written.append(target)
+            target.write_bytes(content)
+    except Exception:
+        for path in written:
+            path.unlink(missing_ok=True)
+        raise
     return written
 
 

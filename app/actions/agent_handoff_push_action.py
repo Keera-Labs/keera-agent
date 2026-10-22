@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 import socket
 import time
@@ -18,8 +19,16 @@ from app.models.Task import Task
 from app.services.claude_config_dir import agent_config_dir, default_config_dir
 from app.services.handoff import git_snapshot, transcript
 from app.services.handoff.client import HandoffClient
-from app.services.handoff.errors import HandoffConflict, HandoffError, HandoffInvalid
-from app.services.handoff.state import agents_in_flight
+from app.services.handoff.errors import (
+    HandoffConflict,
+    HandoffError,
+    HandoffInvalid,
+    HandoffTargetRejected,
+)
+from app.services.handoff.state import claim_agent, release_claim
+from app.services.handoff.tasks import run_in_background
+
+logger = logging.getLogger("keera.handoff")
 
 
 class AgentHandoffPushAction:
@@ -35,13 +44,13 @@ class AgentHandoffPushAction:
         server = await Server.find_or_fail(self.server_id)
         project = await Project.find_or_fail(agent.project_id)
         self._ensure_movable(agent)
-        if agent.id in agents_in_flight:
+        self.claim = await claim_agent(agent.id)
+        if not self.claim:
             raise HandoffConflict(f"{agent.name} is already being handed off.")
-        agents_in_flight.add(agent.id)
         try:
-            return await self._hand_off(agent, server, project)
+            return await self._hand_off(await Agent.find(agent.id), server, project)
         finally:
-            agents_in_flight.discard(agent.id)
+            await release_claim(agent.id, self.claim)
 
     @staticmethod
     def _ensure_movable(agent: Agent) -> None:
@@ -53,11 +62,9 @@ class AgentHandoffPushAction:
             raise HandoffInvalid("Only agents that work in their own worktree can be handed off.")
 
     async def _hand_off(self, agent: Agent, server: Server, project: Project) -> Handoff:
-        client = self.client or HandoffClient(server.base_url, server.token)
-        await client.ping()
-
         from app.controllers.agent_trigger_controller import discover_agent_worktree
 
+        client = self.client or HandoffClient(server.base_url, server.token)
         project_path = os.path.expanduser(project.path)
         located = await asyncio.to_thread(discover_agent_worktree, project_path, agent.id)
         if not located:
@@ -68,38 +75,32 @@ class AgentHandoffPushAction:
         if not transcript.latest_session_id(session_dir):
             raise HandoffInvalid(f"{agent.name} has no Claude conversation to hand off.")
         remote_url = await asyncio.to_thread(git_snapshot.remote_url, worktree)
+        await asyncio.to_thread(git_snapshot.check_secrets, worktree)
+        task = await Task.find(agent.task_id) if getattr(agent, "task_id", None) else None
+        settings = {"provider": "claude", "model": agent.model, "complexity": _complexity(task)}
+        await client.preflight({"remote_url": remote_url, "agent": settings})
 
-        handoff = await Handoff.create(
-            {
-                "handoff_key": await self._handoff_key(agent.id, server.id),
-                "direction": "outgoing",
-                "agent_id": agent.id,
-                "server_id": server.id,
-                "peer_url": server.base_url,
-                "status": "pending",
-            }
-        )
+        handoff = await self._open_handoff(agent.id, server)
+        progress = _Progress(was_live=await self._stop(agent))
         try:
-            await self._stop(agent)
             branch = f"handoff/agent-{agent.id}-{int(time.time())}"
             snapshot = await asyncio.to_thread(git_snapshot.take_snapshot, worktree, branch)
             await asyncio.to_thread(git_snapshot.push_snapshot, worktree, snapshot)
+            progress.pushed_branch = branch
             session_id = transcript.latest_session_id(session_dir)
             files = await asyncio.to_thread(transcript.export_session, session_dir, session_id)
-            payload = await self._payload(
-                handoff,
-                agent,
-                remote_url,
-                snapshot,
-                session_id,
-                files,
-                worktree,
-                project_path,
-                config_dir,
-            )
+            payload = self._payload(handoff, agent, task, settings, remote_url, snapshot)
+            payload["transcript"] = {"session_id": session_id, "files": files}
+            payload["paths"] = {
+                "worktree": worktree,
+                "project": project_path,
+                "home": str(Path.home()),
+                "config_dir": config_dir,
+            }
+            progress.sending = True
             result = await client.send(payload)
-        except HandoffError as exc:
-            await self._record_failure(handoff, exc)
+        except Exception as exc:
+            await self._compensate(handoff, agent, server, project, worktree, progress, exc)
             raise
 
         Logger.info(
@@ -108,40 +109,50 @@ class AgentHandoffPushAction:
         return await self._record_success(handoff, agent, server, snapshot, session_id, result)
 
     @staticmethod
-    async def _handoff_key(agent_id: int, server_id: int) -> str:
+    async def _open_handoff(agent_id: int, server: Server) -> Handoff:
         retry = (
             await Handoff.where("agent_id", agent_id)
-            .where("server_id", server_id)
+            .where("server_id", server.id)
             .where("direction", "outgoing")
             .where("status", "failed")
             .order_by("id", "desc")
             .first()
         )
-        return retry.handoff_key if retry else str(uuid.uuid4())
+        if retry:
+            await Handoff.where("id", retry.id).update(
+                {"status": "pending", "error": None, "updated_at": utc_now()}
+            )
+            return await Handoff.find(retry.id)
+        return await Handoff.create(
+            {
+                "handoff_key": str(uuid.uuid4()),
+                "direction": "outgoing",
+                "agent_id": agent_id,
+                "server_id": server.id,
+                "peer_url": server.base_url,
+                "status": "pending",
+            }
+        )
 
     @staticmethod
-    async def _stop(agent: Agent) -> None:
+    async def _stop(agent: Agent) -> bool:
+        from fastapi_startkit.application import app
+
         from app.controllers.agent_controller import stop_agent_session
 
-        current = await Agent.find(agent.id)
-        await stop_agent_session(current.session_id if current else agent.session_id)
+        session_id = agent.session_id
+        was_live = bool(session_id and app().make("terminal").find(session_id))
+        await stop_agent_session(session_id)
         await Agent.where("id", agent.id).update(
             {"session_id": None, "status": "idle", "updated_at": utc_now()}
         )
+        return was_live
 
-    async def _payload(
-        self,
-        handoff,
-        agent,
-        remote_url,
-        snapshot,
-        session_id,
-        files,
-        worktree,
-        project_path,
-        config_dir,
-    ) -> dict:
-        task = await Task.find(agent.task_id) if getattr(agent, "task_id", None) else None
+    @staticmethod
+    def _payload(handoff, agent, task, settings, remote_url, snapshot) -> dict:
+        from app.utils.system_prompts import default_system_prompt
+
+        prompt = agent.system_prompt or ""
         return {
             "handoff_key": handoff.handoff_key,
             "source": {
@@ -149,34 +160,56 @@ class AgentHandoffPushAction:
                 "base_url": Config.get("fastapi.app_url"),
             },
             "agent": {
+                **settings,
                 "source_agent_id": agent.id,
                 "name": agent.name,
                 "agent_type": agent.agent_type,
-                "provider": "claude",
-                "model": agent.model,
                 "description": agent.description,
-                "system_prompt": agent.system_prompt,
+                "system_prompt": prompt,
+                "system_prompt_is_default": prompt.strip()
+                == default_system_prompt(agent.agent_type).strip(),
                 "flags": _flags(agent.flags),
                 "dangerously_skip_permissions": bool(agent.dangerously_skip_permissions),
                 "plan_mode": bool(agent.plan_mode),
-                "complexity": _complexity(task),
                 "task": {"id": task.id, "title": task.title} if task else None,
             },
             "git": {"remote_url": remote_url, **snapshot.to_dict()},
-            "transcript": {"session_id": session_id, "files": files},
-            "paths": {
-                "worktree": worktree,
-                "project": project_path,
-                "home": str(Path.home()),
-                "config_dir": config_dir,
-            },
         }
 
-    @staticmethod
-    async def _record_failure(handoff: Handoff, exc: HandoffError) -> None:
-        Logger.warning(f"Handoff {handoff.id} of agent {handoff.agent_id} failed: {exc.message}")
+    async def _compensate(self, handoff, agent, server, project, worktree, progress, exc) -> None:
+        message = exc.message if isinstance(exc, HandoffError) else "Unexpected handoff failure."
+        if not isinstance(exc, HandoffError):
+            logger.exception("Handoff %s of agent %s failed", handoff.id, agent.id)
+        Logger.warning(f"Handoff {handoff.id} of agent {agent.id} failed: {message}")
+        if progress.pushed_branch:
+            await asyncio.to_thread(
+                git_snapshot.delete_remote_branch, worktree, progress.pushed_branch
+            )
+        uncertain = progress.sending and not isinstance(exc, HandoffTargetRejected)
+        retry_hint = " The target may have accepted it; push again to confirm." if uncertain else ""
         await Handoff.where("id", handoff.id).update(
-            {"status": "failed", "error": exc.message, "updated_at": utc_now()}
+            {
+                "status": "failed",
+                "error": message + retry_hint,
+                "branch": progress.pushed_branch,
+                "updated_at": utc_now(),
+            }
+        )
+        if progress.was_live and not uncertain:
+            await release_claim(agent.id, self.claim)
+            await self._resume_source(agent, server, project, message)
+
+    @staticmethod
+    async def _resume_source(agent, server, project, message: str) -> None:
+        from app.controllers.agent_trigger_controller import _spawn_headless_agent
+
+        note = (
+            f"[Keera handoff] Moving you to {server.name} failed ({message}). You are still on "
+            "this server with your worktree unchanged; continue your task from where you left off."
+        )
+        fresh = await Agent.find(agent.id)
+        run_in_background(
+            _spawn_headless_agent(fresh, project, os.path.expanduser(project.path), note)
         )
 
     @staticmethod
@@ -204,6 +237,13 @@ class AgentHandoffPushAction:
             }
         )
         return await Handoff.find(handoff.id)
+
+
+class _Progress:
+    def __init__(self, was_live: bool):
+        self.was_live = was_live
+        self.pushed_branch: str | None = None
+        self.sending = False
 
 
 def _flags(value) -> dict:
