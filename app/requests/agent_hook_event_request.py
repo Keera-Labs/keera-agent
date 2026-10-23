@@ -45,7 +45,9 @@ class AgentHookEventRequest(BaseModel):
             return Attention("question", truncate_prompt(self._question_text()))
         if self.requests_permission():
             detail = self.permission_detail() or ""
-            return Attention("permission", truncate_prompt(f"{self.permission_question()} {detail}"))
+            return Attention(
+                "permission", truncate_prompt(f"{self.permission_question()} {detail}")
+            )
         if self.hook_event_name == "Notification" and not self._concerns_user_question():
             kind = _NOTIFICATION_ATTENTION_KIND.get(self.notification_type)
             if kind:

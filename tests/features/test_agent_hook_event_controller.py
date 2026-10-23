@@ -117,7 +117,11 @@ class TestAgentHookEventController(TestCase, DatabaseTransaction):
         await self._post(ask_question("Proceed?"))
 
         agent = await self._post(
-            {"hook_event_name": "PostToolUse", "tool_name": "AskUserQuestion", "tool_use_id": ASK_TOOL_USE_ID}
+            {
+                "hook_event_name": "PostToolUse",
+                "tool_name": "AskUserQuestion",
+                "tool_use_id": ASK_TOOL_USE_ID,
+            }
         )
 
         self.assertEqual(agent.status, "running")
@@ -248,7 +252,11 @@ class TestAgentHookEventControllerPushPayload(TestCase, DatabaseTransaction):
         self.bridge.sent.clear()
 
         pushed = await self._post(
-            {"hook_event_name": "PostToolUse", "tool_name": "AskUserQuestion", "tool_use_id": ASK_TOOL_USE_ID}
+            {
+                "hook_event_name": "PostToolUse",
+                "tool_name": "AskUserQuestion",
+                "tool_use_id": ASK_TOOL_USE_ID,
+            }
         )
 
         self.assertEqual(

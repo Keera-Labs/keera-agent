@@ -203,8 +203,19 @@ class TestAgentQuestionInbox(TestCase, DatabaseTransaction):
 
     async def test_a_question_never_creates_a_permission_item(self):
         await self._hook(ask([PATH_QUESTION], "toolu_inbox_12"))
-        await self._hook({**permission_request("x"), "tool_name": "AskUserQuestion", "tool_input": {"questions": [PATH_QUESTION]}})
-        await self._hook({**PERMISSION_NOTIFICATION, "message": "Claude needs your permission to use AskUserQuestion"})
+        await self._hook(
+            {
+                **permission_request("x"),
+                "tool_name": "AskUserQuestion",
+                "tool_input": {"questions": [PATH_QUESTION]},
+            }
+        )
+        await self._hook(
+            {
+                **PERMISSION_NOTIFICATION,
+                "message": "Claude needs your permission to use AskUserQuestion",
+            }
+        )
         await self._hook(PERMISSION_NOTIFICATION)
 
         items = await self._inbox()
@@ -243,7 +254,12 @@ class TestAgentQuestionInbox(TestCase, DatabaseTransaction):
         await self._hook(ask([PATH_QUESTION], "toolu_inbox_15"))
 
         await self._hook(
-            {"session_id": SESSION_ID, "hook_event_name": "PostToolUse", "tool_name": "Read", "tool_use_id": "toolu_other"}
+            {
+                "session_id": SESSION_ID,
+                "hook_event_name": "PostToolUse",
+                "tool_name": "Read",
+                "tool_use_id": "toolu_other",
+            }
         )
 
         [item] = await self._inbox()
@@ -283,8 +299,15 @@ class TestAgentQuestionInbox(TestCase, DatabaseTransaction):
         await self._hook(ask([PATH_QUESTION], "toolu_inbox_14"))
         [question] = await self._inbox()
         leftover = await AgentQuestion.create(
-            {"agent_id": self.agent.id, "project_id": self.project.id, "kind": "permission",
-             "question": "Allow Bash?", "options": [], "multi_select": False, "status": "pending"}
+            {
+                "agent_id": self.agent.id,
+                "project_id": self.project.id,
+                "kind": "permission",
+                "question": "Allow Bash?",
+                "options": [],
+                "multi_select": False,
+                "status": "pending",
+            }
         )
 
         (await self._answer(question["id"], {"text": "keep it"})).assert_ok()
@@ -345,7 +368,9 @@ class TestAgentQuestionInbox(TestCase, DatabaseTransaction):
         )
         [item] = await self._inbox()
 
-        (await self._answer(item["id"], {"choices": ["Deny"], "text": "Never force push"})).assert_ok()
+        (
+            await self._answer(item["id"], {"choices": ["Deny"], "text": "Never force push"})
+        ).assert_ok()
 
         self.assertEqual(self.terminal.writes, [b"\x1b"])
         self.assertEqual(self.terminal.sent, ["Never force push"])
@@ -360,7 +385,9 @@ class TestAgentQuestionInbox(TestCase, DatabaseTransaction):
             }
         )
 
-        await self._hook({"session_id": SESSION_ID, "hook_event_name": "PostToolUse", "tool_name": "Bash"})
+        await self._hook(
+            {"session_id": SESSION_ID, "hook_event_name": "PostToolUse", "tool_name": "Bash"}
+        )
 
         self.assertEqual(await self._inbox(), [])
 
@@ -407,7 +434,9 @@ class TestAgentQuestionInbox(TestCase, DatabaseTransaction):
         response = await self._answer(item["id"], {"text": "too late"})
 
         response.assert_status(409)
-        self.assertEqual(response.json()["error"], "This question is no longer waiting for an answer.")
+        self.assertEqual(
+            response.json()["error"], "This question is no longer waiting for an answer."
+        )
         self.assertEqual(self.terminal.writes, [])
         self.assertEqual(await self._inbox(), [])
 
@@ -447,7 +476,9 @@ class TestAgentQuestionInbox(TestCase, DatabaseTransaction):
 
     async def test_a_new_permission_notification_replaces_a_stale_generic_one(self):
         await self._hook(PERMISSION_NOTIFICATION)
-        await self._hook({**PERMISSION_NOTIFICATION, "message": "Claude needs your permission to use Write"})
+        await self._hook(
+            {**PERMISSION_NOTIFICATION, "message": "Claude needs your permission to use Write"}
+        )
 
         [item] = await self._inbox()
 

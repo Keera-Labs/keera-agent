@@ -71,7 +71,9 @@ class AgentQuestionResource(JsonResource[AgentQuestion]):
             "agent_type": self.agent.agent_type,
             "agent_model": self.agent.model,
             "task_id": self.agent.task_id,
-            "worktree": f"agent-{self.agent.id}" if getattr(self.agent, "use_worktree", True) else None,
+            "worktree": f"agent-{self.agent.id}"
+            if getattr(self.agent, "use_worktree", True)
+            else None,
             "project_name": self.project.name if self.project else None,
             "project_slug": self.project.slug if self.project else None,
         }
