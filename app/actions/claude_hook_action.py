@@ -105,6 +105,7 @@ class ClaudeHookAction:
             ("UserPromptSubmit", _AGENT_EVENT_PATH, None, True),
             ("PreToolUse", _AGENT_EVENT_PATH, "AskUserQuestion", True),
             ("PostToolUse", _AGENT_EVENT_PATH, None, True),
+            ("PermissionRequest", _AGENT_EVENT_PATH, None, True),
             ("Notification", _AGENT_EVENT_PATH, "permission_prompt|elicitation_dialog", True),
         ]
 

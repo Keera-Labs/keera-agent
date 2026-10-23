@@ -116,6 +116,7 @@ class TestClaudeHookAction(TestCase):
             "PreToolUse": "AskUserQuestion",
             "Notification": "permission_prompt|elicitation_dialog",
             "PostToolUse": None,
+            "PermissionRequest": None,
             "UserPromptSubmit": None,
         }
         for event, matcher in expected.items():

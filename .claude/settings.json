@@ -73,6 +73,22 @@
         ]
       }
     ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:4545/api/agent-hook-events",
+            "headers": {
+              "X-Keera-Agent-Id": "$KEERA_AGENT_ID"
+            },
+            "allowedEnvVars": [
+              "KEERA_AGENT_ID"
+            ]
+          }
+        ]
+      }
+    ],
     "Notification": [
       {
         "matcher": "permission_prompt|elicitation_dialog",

@@ -8,6 +8,7 @@ from fastapi import Header, Request
 from fastapi.responses import JSONResponse
 from fastapi_startkit.application import app
 
+from app.actions.agent_question_action import settle_pending_questions
 from app.actions.agent_status_action import (
     CLEARED_ATTENTION,
     hook_agent_id,
@@ -94,6 +95,10 @@ async def claude_stopped(
     if not cwd:
         return JSONResponse({}, status_code=200)
 
+    stopped_agent_id = hook_agent_id(x_keera_agent_id, cwd)
+    if stopped_agent_id is not None:
+        await settle_pending_questions(stopped_agent_id)
+
     # Find the project by path and mark as idle
     project = await _find_project_by_cwd(cwd)
     if project:
@@ -107,7 +112,7 @@ async def claude_stopped(
     # All deferred I/O (sleeps + PTY writes) runs in the background task.
     if project:
         asyncio.create_task(
-            _handle_claude_stopped(project, project_cwd, hook_agent_id(x_keera_agent_id, cwd))
+            _handle_claude_stopped(project, project_cwd, stopped_agent_id)
         )
 
     return JSONResponse({}, status_code=200)
