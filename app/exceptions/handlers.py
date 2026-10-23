@@ -32,4 +32,6 @@ async def agent_question_invalid_answer_handler(
 def register_exception_handlers(app) -> None:
     app.add_exception_handler(ModelNotFoundException, model_not_found_handler)
     app.add_exception_handler(AgentQuestionConflictError, agent_question_conflict_handler)
-    app.add_exception_handler(AgentQuestionInvalidAnswerError, agent_question_invalid_answer_handler)
+    app.add_exception_handler(
+        AgentQuestionInvalidAnswerError, agent_question_invalid_answer_handler
+    )

@@ -111,9 +111,7 @@ async def claude_stopped(
     # Fire background work and return immediately so the hook client doesn't time out.
     # All deferred I/O (sleeps + PTY writes) runs in the background task.
     if project:
-        asyncio.create_task(
-            _handle_claude_stopped(project, project_cwd, stopped_agent_id)
-        )
+        asyncio.create_task(_handle_claude_stopped(project, project_cwd, stopped_agent_id))
 
     return JSONResponse({}, status_code=200)
 

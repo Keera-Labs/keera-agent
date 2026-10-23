@@ -83,7 +83,9 @@ async def _store_permission(agent: Agent, event: AgentHookEventRequest) -> None:
 
 
 async def settle_pending_questions(agent_id: int) -> None:
-    for question in await AgentQuestion.where("agent_id", agent_id).where("status", "pending").get():
+    for question in (
+        await AgentQuestion.where("agent_id", agent_id).where("status", "pending").get()
+    ):
         await _mark_answered(question.id, None)
 
 
