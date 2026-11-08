@@ -23,6 +23,8 @@ possible, and proposes API and schema changes in priority order.
 | Inbox | `get_agent_messages` | Reads **`agent_messages`**, a separate project-to-project table (`sender_project_id`, `receiver_project_id`), filtered by `project_path`. |
 | Tasks | `tasks` table, `TaskStatus` | `pending`, `in_progress`, `in_review`, `completed`, `cancelled`. Any caller may set any status. `updated_at` is not touched by `update_task_status`. |
 | Agents | `agents` table | `status` is set by hooks (`claude_hook_controller`, `agent_hook_event_controller`). Soft-deleted through `deleted_at`. The slot limit in `spawn_agent` counts every non-deleted agent (`max_agents_per_project`). |
+| PTY writes | `Terminal.send`, `_handle_claude_stopped` | `Terminal.send` pastes, waits for the echo, and sends the CR under a per-terminal `_send_lock`. The Stop hook's task dispatch writes raw bytes through `terminal_manager.write` instead. |
+| Caller identity | `/mcp`, `.mcp.json` (`McpSettingWriteAction`) | No authentication. Every agent in a project shares one `.mcp.json` entry with only an `X-Project-Path` header. `sender_agent_id` and `from_agent_id` are whatever the caller claims. |
 | "Heartbeat" | `app/heartbeat.py`, `app/checkin_scheduler.py` | A PM-only task digest every 300 s, and an optional fixed `[CHECK-IN]` ping. Neither measures whether an agent is alive. |
 
 The team protocol layered on top is free text: an agent must reply
@@ -38,26 +40,44 @@ the code or the database confirms it. Where it doesn't, the cause is marked
 | --- | --- | --- |
 | F1 | Agents' ACKs never reached the PM even though the agents were working, so the PM had to inspect their worktrees. | `delivered` means "claimed by the relay", not "seen by the receiver". `claim_relay_message` flips the row before `terminal.send`, and the headless path marks it `delivered` when the spawn is *scheduled*. Text typed into a busy PTY can be dropped or merged into the agent's own input. Nothing records a read. |
 | F2 | The relay returned duplicate delivery IDs. A PM message (`#38417`) was also injected into the receiver twice, and its row still read `pending` afterwards. | The second part is confirmed from the database. **Unverified:** the duplicate IDs probably come from two ID spaces. `send_message_to_agent` returns `agent_relay_messages.id`, while `get_agent_messages` lists `agent_messages.id`. Both print as `#N`. |
-| F3 | The receiver saw an ACK with the title of another task (#4022) appended. | The stored row `#38416` holds the exact ACK text. The corruption therefore happened at PTY injection. Two writes (the relay message and a concurrent spawn or task injection) landed in the same input line, because injection is unframed and not serialised per session. |
+| F3 | The receiver saw an ACK with the title of another task (#4022) appended. | The stored row `#38416` holds the exact ACK text, so the corruption happened at PTY injection, not in the relay table. `Terminal.send` (`app/terminal/terminal.py`) already serialises its own writes: `_send_lock` covers the bracketed paste, the echo wait and the CR. **Likely cause:** `_handle_claude_stopped` (`app/controllers/claude_hook_controller.py`) runs on every Stop hook. It takes the project's first `pending` task, sets it `in_progress`, and raw-writes its body (its title when the body is NULL, as for #4022) followed by a CR into the first agent with a live session. That write goes through `terminal_manager.write`, so it bypasses `_send_lock`, isn't a bracketed paste, and doesn't skip deleted agents. #4022 was created at 23:02:30 with a NULL body, minutes before the ACK. |
 | F4 | `get_task` returned an empty or truncated body (181 characters of a long description). Task #4021 shows `Body: (none)`. | The PM puts the brief in the `spawn_agent` message, not in the task, so `tasks.body` is NULL for #4018–#4022. **Unverified:** the 181-character truncation. `get_task` doesn't truncate, so the cut happened before or at `create_task`. |
 | F5 | `create_task` returned #4021 twice, and the second call overwrote a different task (the `where_raw` fix), which had to be recreated as #4022. | **Unverified.** `tasks.id` is `AUTOINCREMENT`, so SQLite ID reuse is ruled out. Nothing makes `create_task` idempotent, and nothing records history, so the overwrite can't be reconstructed. |
-| F6 | Task #4019 showed `in_progress` after the PM had set it `completed`. | **Unverified.** Any agent may call `update_task_status`, and #4019 has `updated_at == created_at`, so no trace of who changed it survives. |
+| F6 | Task #4019 showed `in_progress` after the PM had set it `completed`. | **Unverified.** Any agent may call `update_task_status`, and #4019 has `updated_at == created_at`, so no trace of who changed it survives. One candidate is the Stop-hook dispatch in F3, which flips any `pending` task to `in_progress` without an actor. It explains the flip only if #4019 had been reopened as `pending` or recreated (F7). |
 | F7 | Task #4019 vanished from the tracker and was recreated. | **Unverified.** `delete_task` is a hard delete open to every agent, and `list_tasks` hides `completed` rows older than 7 days. No audit log exists. |
-| F8 | `delete_agent` reported success for agent 3473, but the agent stayed listed and kept its slot until a second delete. | **Unverified.** `deleted_at` is saved before `stop_agent_session`, and nothing stops a live CLI from re-registering its session through the hooks. The row still has a `session_id` after the delete. Deleted agents also keep `status = running` (3441, 3465). |
+| F8 | `delete_agent` reported success for agent 3473, but the agent stayed listed and kept its slot until a second delete. | **Unverified.** `delete_agent` saves `deleted_at`, calls `stop_agent_session`, and clears `session_id`. Yet the row for 3473 had a `session_id` again after the delete, so something re-registered the session; the hook endpoints don't check `deleted_at`. Deleted agents also keep `status = running` (3441, 3465). |
 | F9 | `spawn_agent` rejects `agent_type: custom`, although the PM prompt lists it. | Confirmed. `SpawnAgentInput.agent_type` allows `pm`, `software_engineer`, `software_engineer_frontend`, `reviewer`, `qa` and `qa_browser`, while the `agents.agent_type` column defaults to `custom`. |
 | F10 | Agents 3441 and 3465 were deleted externally mid-task with no notice to the PM. | Confirmed. `DeleteAgentTool` notifies nobody, and the agent's task keeps its status. Agent 3440 is deleted and still holds `task_id = 3974`. |
-| F11 | The 5-slot cap left work unowned. | Confirmed. The limit counts every non-deleted agent, including agents whose PR merged hours ago. Nothing frees a slot or queues the waiting task. |
+| F11 | The 5-slot cap left work unowned. | Confirmed. `max_agents_per_project` defaults to 10, and this project sets it to 5. The limit counts every non-deleted agent, including agents whose PR merged hours ago. Nothing frees a slot or queues the waiting task. |
 
 ## 3. Proposals
 
 Each item gives the problem, the API and schema change, backward compatibility, and
-a rollout step. Phase 1 covers items 3.1–3.3.
+a rollout step. Phase 0 (§3.0) is a set of small fixes whose causes are confirmed.
+Phase 1 covers items 3.1–3.3.
+
+### 3.0 Phase 0 — cheap, confirmed fixes
+
+Each fix below is small, has a confirmed cause, and needs no new protocol.
+
+| # | Fix | Failures |
+| --- | --- | --- |
+| a | **Stop-hook dispatch.** Remove the automatic "first `pending` task → first live agent" dispatch from `_handle_claude_stopped`. If the dispatch is kept for single-agent projects, it skips deleted agents and other agents' tasks, and it writes through `Terminal.send`. Every PTY write in the app goes through `Terminal.send`, so `_send_lock` and the bracketed paste cover all injections. | F3, F6 |
+| b | **Delivery state.** Set `delivered` after `terminal.send` returns, and on the headless path only when the queued flush sends the message. `get_agent_messages` reads `agent_relay_messages` for the calling agent. | F1, F2 |
+| c | **Agent type.** `SpawnAgentInput.agent_type` and `app/prompts/pm.html` draw their lists from one `AgentType` enum, and the column default stops being `custom`. | F9 |
+| d | **Task history.** Every task write bumps `updated_at`. An append-only `task_events` table is written by every task tool (schema in §3.3). | F5, F6, F7 |
+
+**Backward compatibility.** None of the fixes changes a tool signature. Fix (a)
+removes an implicit auto-dispatch that the multi-agent PM flow doesn't rely on: the
+PM assigns work through `spawn_agent` and `send_message_to_agent`.
+
+**Rollout.** One small PR per fix, (a) first.
 
 ### 3.1 Reliable delivery (F1, F2, F3, F4)
 
 **Problem.** Delivery state is inferred from the agent's free-text reply. Message IDs
-come from two tables. Injection is unframed, so concurrent writes interleave. The
-task's content travels only inside the message.
+come from two tables. One injection path bypasses `Terminal.send` (fixed in §3.0a).
+The task's content travels only inside the message.
 
 **Schema.** Extend `agent_relay_messages`:
 
@@ -65,7 +85,7 @@ task's content travels only inside the message.
 | --- | --- | --- |
 | `uid` | `VARCHAR(26) UNIQUE` | Globally unique ID (ULID), returned to callers in place of the row ID. |
 | `idempotency_key` | `VARCHAR NULL`, unique per `from_agent_id` | Lets a retried send return the original `uid` instead of creating a duplicate row. |
-| `status` | `queued` · `delivered` · `read` · `acked` | Replaces `pending` · `delivered`. |
+| `status` | `queued` · `delivered` · `unconfirmed` · `read` · `acked` | Replaces `pending` · `delivered`. |
 | `delivered_at`, `read_at`, `acked_at` | `TIMESTAMP NULL` | Set by the relay, not by the sender. |
 | `attempts` | `INTEGER DEFAULT 0` | Counts redelivery attempts. |
 | `task_id`, `task_snapshot` | `INTEGER NULL`, `TEXT NULL` (JSON) | The task's state at send time. |
@@ -76,24 +96,28 @@ project-to-project mail under a different tool name.
 
 **Delivery semantics.**
 
-- **`delivered`** is set *after* `terminal.send` returns. For the headless path, it
-  is set when `deliver_pending_relay_messages` sends the message into the spawned
-  CLI, not when the spawn is scheduled.
-- **`read`** is set by the relay when the receiver's next `UserPromptSubmit` or
-  `PostToolUse` hook arrives at `/api/agent-hook-events` after delivery. This is
-  evidence that the receiver processed its input. The relay records it itself, so
-  no reply from the agent is needed.
+- **`delivered`** is set *after* `terminal.send` returns (§3.0b). For the headless
+  path, it is set when `deliver_pending_relay_messages` sends the message into the
+  spawned CLI, not when the spawn is scheduled.
+- **`read`** is set by the relay when the receiver's next `UserPromptSubmit` hook
+  arrives at `/api/agent-hook-events` after delivery. A pasted message is submitted
+  as a prompt, so this hook is direct evidence that the receiver took it in.
+  `PostToolUse` only shows that the agent is busy, not that it took in the message,
+  so it doesn't count. The relay records `read` itself, so no reply from the agent is
+  needed.
 - **`acked`** is set when the receiver sends a `kind = ack` message that references
   the `uid` (§3.4), or calls the new `ack_message(uid)` tool.
-- **Per-session injection lock.** `TerminalWriteAction` takes an `asyncio.Lock` per
-  `session_id`, so the spawn prompt, relay messages and check-ins never interleave
-  (F3). Each injection is framed as `[relay <uid>] [Message from Agent '<name>']: …`,
-  so the receiver can dedup.
+- **Framing.** Each injection is framed as
+  `[relay <uid>] [Message from Agent '<name>']: …` and goes through `Terminal.send`,
+  whose `_send_lock` already serialises writes to one terminal. No new lock is
+  needed.
 - **Receiver-side dedup.** `deliver_pending_relay_messages` skips any `uid` already
   `delivered`. The agent prompt tells agents to ignore a `uid` they have already seen.
-- **Redelivery.** A message still `delivered` but not `read` after 120 s is re-sent
-  once, with `attempts` incremented. After the second attempt the sender is notified
-  (§3.2).
+- **No blind redelivery.** A message still `delivered` but not `read` after 120 s is
+  **not** typed into the live PTY again, because that would re-create F2. The relay
+  marks it `unconfirmed` and notifies the sender. It re-sends a message only when the
+  receiver's session has restarted (a new `session_id`), and at most once
+  (`attempts`).
 
 **API.**
 
@@ -116,8 +140,9 @@ free-text `ACK task #<id>` keeps working and is also parsed into `acked` for the
 latest message from that sender carrying `task_id = <id>`. `pending` rows are
 migrated to `queued`.
 
-**Rollout.** (1) Migration plus a dual-write of `uid`. (2) Injection lock and
-post-send `delivered`. (3) Hook-driven `read`. (4) `get_message_status` and the
+**Rollout.** (1) Migration plus a dual-write of `uid` (post-send `delivered` ships
+in §3.0b). (2) Framing and receiver-side dedup. (3) `read` driven by the
+`UserPromptSubmit` hook. (4) `get_message_status` and the
 inbox switch. (5) Update the PM prompt to poll `get_message_status` instead of
 waiting 60 s for an ACK.
 
@@ -153,15 +178,16 @@ VARCHAR(140)`, `worktree_branch`, `worktree_head_sha`, `worktree_last_commit_at`
 
 **Deletion.**
 
-- `delete_agent(agent_id, reason?)` stops the session first, then clears
-  `session_id` and sets `deleted_at` and `status = deleted` in one update.
-  `claude_hook_controller` and `agent_hook_event_controller` ignore events for
-  agents with `deleted_at` set, so a dying CLI can't re-register (F8). The tool
-  re-reads the row and reports failure if the agent is still listed.
+- `delete_agent(agent_id, reason?)` already stops the session and clears
+  `session_id`. It also sets `status = deleted`. `claude_hook_controller` and
+  `agent_hook_event_controller` ignore events for agents with `deleted_at` set, so a
+  dying CLI can't re-register its session (F8). The tool re-reads the row and reports
+  failure if the agent is still listed.
 - Every deletion, including deletion from the UI, emits a relay message to the
   orchestrator (`orchestrator_id`, else the project's PM): `kind = report`,
-  `agent deleted: <name> (<reason>)`. Its task goes back to `assigned = NULL`,
-  status `created`, with the branch and head SHA kept on the task (F10).
+  `agent deleted: <name> (<reason>)`. Its task loses its assignee and goes back to
+  today's `pending`, which becomes `created` once §3.3 lands. The task keeps its
+  branch and head SHA (F10).
 
 **Backward compatibility.** Heartbeats are additive. The 60 s ACK rule keeps working
 until the PM prompt switches to health states. `delete_agent` keeps its signature,
@@ -183,6 +209,25 @@ created → assigned → acked → in_progress → in_review → approved(sha) �
                                    ↘ blocked ↗                 ↘ changes_requested → in_progress
 any non-terminal → cancelled
 ```
+
+**Caller identity.** The ownership rules and `actor_agent_id` below are only as
+trustworthy as the caller's identity. Today `/mcp` doesn't authenticate callers, and
+`sender_agent_id` is whatever the caller claims. Until the following ships, every
+ownership rule is **advisory**: it is logged in `task_events` and returned as a
+warning, never enforced.
+
+- **Per-agent token.** At spawn, `AgentCreateAction` mints a random token, stores
+  its hash in `agents.relay_token_hash`, and passes the token to the CLI process as
+  the environment variable `KEERA_AGENT_TOKEN`.
+- **Header.** `McpSettingWriteAction` adds the header
+  `"X-Keera-Agent-Token": "${KEERA_AGENT_TOKEN}"` to the shared `.mcp.json` entry,
+  using the CLI's env-var expansion. The agent prompts tell agents to send the same
+  header in direct `curl` calls.
+- **Server side.** `server.py` resolves the token to an agent before dispatch. The
+  resolved agent replaces `sender_agent_id` and `from_agent_id`, and a mismatch is an
+  error. A request without a token is treated as the user (UI or a human terminal).
+- **Enforcement.** Once every live agent carries a token, ownership rules switch from
+  advisory to enforced, per project, behind a setting.
 
 **Rules.**
 
@@ -213,12 +258,12 @@ any non-terminal → cancelled
 **Backward compatibility.** Old statuses map to new ones: `pending` → `created`,
 `completed` → `done`, and `in_progress`, `in_review` and `cancelled` keep their
 names. `update_task_status` accepts the old names and maps them. For one release the
-ownership rule is reported as a warning before it is enforced.
+ownership rule stays advisory until caller tokens are enforced.
 
-**Rollout.** (1) `task_events` plus the `updated_at` fix, logging only. (2) Soft
-delete and idempotency keys. (3) The new states with mapping. (4) Ownership rules,
-first as warnings, then enforced. (5) `approved_sha` and the merge gate. (6)
-Dependencies.
+**Rollout.** (1) `task_events` plus the `updated_at` fix (§3.0d). (2) Soft delete
+and idempotency keys. (3) The new states with mapping. (4) Per-agent tokens, then
+ownership rules, advisory first and enforced once tokens are. (5) `approved_sha` and
+the merge gate. (6) Dependencies.
 
 ### 3.4 Typed messages
 
@@ -256,8 +301,6 @@ nowhere to wait.
   slot frees.
 - `spawn_agent` returns `Error: agent limit reached; task #N queued at position K`
   instead of a bare error.
-- Fix F9: `SpawnAgentInput.agent_type` and the PM prompt (`app/prompts/pm.html`)
-  draw their lists from one `AgentType` enum.
 
 **Backward compatibility.** Finished agents remain visible in history. Only the
 limit count changes.
@@ -283,7 +326,8 @@ limit count changes.
 
 | Phase | Items | Outcome |
 | --- | --- | --- |
-| 1 | 3.1 Reliable delivery, 3.2 Agent health, 3.3 Task state machine | The PM can trust message state, agent liveness and task history without inspecting worktrees. |
+| 0 | 3.0 (a) Stop-hook dispatch through `Terminal.send`, (b) `delivered` after send and the inbox reading `agent_relay_messages`, (c) the `AgentType` enum, (d) the `updated_at` bump and `task_events` | The confirmed causes of F1–F3, F6 and F9 are removed, and every later task change leaves a trace. |
+| 1 | 3.1 Reliable delivery, 3.2 Agent health, 3.3 Task state machine (with per-agent tokens) | The PM can trust message state, agent liveness and task history without inspecting worktrees. |
 | 2 | 3.4 Typed messages, 3.5 Capacity | The relay drives task state from messages and keeps slots full. |
 | 3 | 3.6 Visibility | The user sees the team on one board and is pinged only when a decision is needed. |
 
@@ -292,17 +336,20 @@ enforcement, and free-text ACK still parsed.
 
 ## 5. Open questions
 
-1. **Read signal.** Is a hook event after injection strong enough evidence of
-   `read` for Codex and Gemini agents, whose hook sets differ from Claude's?
-2. **Truncation (F4).** Where was the 181-character cut made? Was it the PM's
+1. **Read signal.** Codex and Gemini agents have different hook sets from Claude's.
+   What is their equivalent of `UserPromptSubmit` (for example Gemini's
+   `BeforeAgent`)?
+2. **Stop-hook dispatch.** Does any single-agent flow rely on the automatic
+   dispatch that §3.0a removes, or can it go entirely?
+3. **Truncation (F4).** Where was the 181-character cut made? Was it the PM's
    client, the JSON-RPC parse in `_parse_messages` / `_decode_concatenated`, or the
    UI? This needs a reproduction before Phase 1 closes.
-3. **Duplicate `create_task` (F5).** Was the repeated #4021 a client retry, or a
+4. **Duplicate `create_task` (F5).** Was the repeated #4021 a client retry, or a
    server-side race? Phase 1's `task_events` log will answer it next time. Should
    `idempotency_key` be required for orchestrator agents?
-4. **Merge authority.** Should the relay perform the merge itself after checking
+5. **Merge authority.** Should the relay perform the merge itself after checking
    `approved_sha`, or only gate the PM's `record_merge`?
-5. **Heartbeat cost.** Does a 60 s worktree probe across ten agents cost too much
+6. **Heartbeat cost.** Does a 60 s worktree probe across ten agents cost too much
    on large repositories? Should it fall back to watching `.git/HEAD` instead?
-6. **Dedup scope.** Should the relay dedup identical content from the same sender
+7. **Dedup scope.** Should the relay dedup identical content from the same sender
    within N seconds, or only by `uid` / `idempotency_key`?
