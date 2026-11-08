@@ -40,6 +40,7 @@ the code or the database confirms it. Where it doesn't, the cause is marked
 | --- | --- | --- |
 | F1 | Agents' ACKs never reached the PM even though the agents were working, so the PM had to inspect their worktrees. | `delivered` means "claimed by the relay", not "seen by the receiver". `claim_relay_message` flips the row before `terminal.send`, and the headless path marks it `delivered` when the spawn is *scheduled*. Text typed into a busy PTY can be dropped or merged into the agent's own input. Nothing records a read. |
 | F2 | The relay returned duplicate delivery IDs. A PM message (`#38417`) was also injected into the receiver twice, and its row still read `pending` afterwards. | The second part is confirmed from the database. **Unverified:** the duplicate IDs probably come from two ID spaces. `send_message_to_agent` returns `agent_relay_messages.id`, while `get_agent_messages` lists `agent_messages.id`. Both print as `#N`. |
+| F2b | The PM's re-review request to reviewer 3472 (#871@29b08f8c) came back as "Message delivered … (#38420)", but the reviewer never received it. | Confirmed from the database. Row `#38420` is a different message: reviewer 3472 → PM, the #415 verdict at 23:13:29. No row from 3344 to 3472 mentions `29b08f8c` at all. The relay reported delivery of a message it never stored, under another message's ID. **Unverified:** the cause. The SQLite insert takes its ID from the statement's own cursor (`Connection.insert_get_id`), so a mixed-up JSON-RPC response or a lost write is as likely as a wrong ID. |
 | F3 | The receiver saw an ACK with the title of another task (#4022) appended. | The stored row `#38416` holds the exact ACK text, so the corruption happened at PTY injection, not in the relay table. `Terminal.send` (`app/terminal/terminal.py`) already serialises its own writes: `_send_lock` covers the bracketed paste, the echo wait and the CR. **Likely cause:** `_handle_claude_stopped` (`app/controllers/claude_hook_controller.py`) runs on every Stop hook. It takes the project's first `pending` task, sets it `in_progress`, and raw-writes its body (its title when the body is NULL, as for #4022) followed by a CR into the first agent with a live session. That write goes through `terminal_manager.write`, so it bypasses `_send_lock`, isn't a bracketed paste, and doesn't skip deleted agents. #4022 was created at 23:02:30 with a NULL body, minutes before the ACK. |
 | F3b | **Correctness and safety.** #4022's bare title (`Replace where_raw in topic_id_for (admin_ecrire_actions) with builder calls`) was typed into the **PM's own terminal** as if it were a user prompt. #4022 then flipped to `in_progress` again after the PM had reset it to `pending`. | Confirmed by behaviour, consistent with the code above. The dispatch picks the first agent of *any* type with a live session, the PM included, and writes the task text unframed. The receiver can't tell the injected text from the human's own input. A task title or body becomes an instruction the PM may act on as if the user had given it, and every Stop hook re-runs the dispatch, so resetting the task doesn't stick. |
 | F4 | `get_task` returned an empty or truncated body (181 characters of a long description). Task #4021 shows `Body: (none)`. | The PM puts the brief in the `spawn_agent` message, not in the task, so `tasks.body` is NULL for #4018–#4022. **Unverified:** the 181-character truncation. `get_task` doesn't truncate, so the cut happened before or at `create_task`. |
@@ -63,7 +64,7 @@ Each fix below is small, has a confirmed cause, and needs no new protocol.
 
 | # | Fix | Failures |
 | --- | --- | --- |
-| a | **Stop-hook dispatch.** Remove the automatic "first `pending` task → first live agent" dispatch from `_handle_claude_stopped`. If the dispatch is kept for single-agent projects, it skips deleted agents and other agents' tasks, and it writes through `Terminal.send`. Every PTY write in the app goes through `Terminal.send`, so `_send_lock` and the bracketed paste cover all injections. Nothing is ever injected into a `pm` session unattributed. Every relay injection carries its `[Message from Agent '<name>']` or `[relay <uid>]` prefix, so it can't pass as the human's input. | F3, F3b, F6 |
+| a | **Stop-hook dispatch.** Remove the automatic "first `pending` task → first live agent" dispatch from `_handle_claude_stopped`. If the dispatch is kept for single-agent projects, it dispatches only tasks assigned to the target agent (`agents.task_id`), skips deleted and `pm` agents, and writes through `Terminal.send`. Every PTY write in the app goes through `Terminal.send`, so `_send_lock` and the bracketed paste cover all injections. Nothing is ever injected into a `pm` session unattributed. Every relay injection carries its `[Message from Agent '<name>']` or `[relay <uid>]` prefix, so it can't pass as the human's input. | F3, F3b, F6 |
 | b | **Delivery state.** Set `delivered` after `terminal.send` returns, and on the headless path only when the queued flush sends the message. `get_agent_messages` reads `agent_relay_messages` for the calling agent. | F1, F2 |
 | c | **Agent type.** `SpawnAgentInput.agent_type` and `app/prompts/pm.html` draw their lists from one `AgentType` enum, and the column default stops being `custom`. | F9 |
 | d | **Task history.** Every task write bumps `updated_at`. An append-only `task_events` table is written by every task tool (schema in §3.3). | F5, F6, F7 |
@@ -126,7 +127,11 @@ project-to-project mail under a different tool name.
   `{uid, status}` as JSON text, for example
   `{"uid":"01J…","status":"delivered"}`.
 - New `get_message_status(uid)` returns
-  `{uid, status, delivered_at, read_at, acked_at, attempts}`.
+  `{uid, status, delivered_at, read_at, acked_at, attempts}`, or `not_found`.
+- The send response is built from the stored row, re-read after commit. It carries
+  `to_agent_id` and a short hash of the content, so a sender can tell when the ID it
+  got back isn't its own message (F2b). The PM prompt checks `get_message_status` for
+  every review or task hand-off.
 - New `ack_message(uid)`.
 - `get_agent_messages(agent_id, unread_only)` reads `agent_relay_messages` for that
   agent, and listing marks the returned rows `read`.
@@ -226,9 +231,32 @@ warning, never enforced.
   header in direct `curl` calls.
 - **Server side.** `server.py` resolves the token to an agent before dispatch. The
   resolved agent replaces `sender_agent_id` and `from_agent_id`, and a mismatch is an
-  error. A request without a token is treated as the user (UI or a human terminal).
-- **Enforcement.** Once every live agent carries a token, ownership rules switch from
-  advisory to enforced, per project, behind a setting.
+  error.
+- **Requests without a token get least privilege.** They may read (`list_tasks`,
+  `get_task`, `list_agents`) and nothing else. They can't change status, delete,
+  spawn, or send as an agent. Otherwise an agent could gain full privilege just by
+  leaving the header out.
+- **The UI and humans have their own credential.** The UI already calls the app's
+  HTTP routes, not `/mcp`, so it keeps that path. A human who drives `/mcp` by hand
+  uses a user token generated in Settings, sent as `X-Keera-User-Token`. That token
+  is separate from agent tokens and never placed in an agent's environment.
+- **Other providers.** Only Claude reads `.mcp.json`.
+  - **Gemini** gets a per-agent settings file from `write_gemini_settings`, which
+    already writes `mcpServers.keera`. The same entry gains
+    `headers: {"X-Keera-Agent-Token": …}`.
+  - **Codex** gets no relay MCP entry from Keera today (`app/ai/providers/codex.py`).
+    `build_command` would add one through `--config`, with the header sourced from
+    `KEERA_AGENT_TOKEN`.
+  - Until each provider is verified to send the header, enforcement stays off in
+    projects that run that provider.
+- **Threat model.** The token stops agents from acting under each other's identity
+  by mistake (a wrong `sender_agent_id`, a copied PM command). It is **not** a
+  security boundary. Every agent runs as the same OS user, so one agent can read
+  another's environment through `ps` or `/proc`. To narrow that window, the token is
+  rotated on every session start (new `session_id`). Real isolation would need
+  separate OS users or sandboxes, which is out of scope here.
+- **Enforcement.** Ownership rules switch from advisory to enforced per project,
+  behind a setting, and only once every live agent in that project carries a token.
 
 **Rules.**
 
