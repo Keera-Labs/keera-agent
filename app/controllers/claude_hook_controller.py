@@ -18,7 +18,6 @@ from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.models.Agent import Agent
 from app.models.AgentRelayMessage import AgentRelayMessage
 from app.models.Project import Project
-from app.models.Task import Task
 from app.terminal.connection_manager import ConnectionManager
 from app.terminal.manager import TerminalManager
 from app.terminal.readiness import is_cli_ready
@@ -51,25 +50,6 @@ async def _find_project_by_cwd(cwd: str):
 
 
 async def claude_started(request: Request):
-    """
-    Receives the Claude Code UserPromptSubmit hook POST.
-    Marks the first pending task for the project as started.
-    """
-    try:
-        body = await request.json()
-    except Exception:
-        body = {}
-
-    cwd = body.get("cwd", "")
-    if not cwd:
-        return JSONResponse({}, status_code=200)
-
-    project = await _find_project_by_cwd(cwd)
-    if project:
-        pending = await Task.where("project_id", project.id).where("status", "pending").first()
-        if pending:
-            await Task.where("id", pending.id).update({"status": "in_progress"})
-
     return JSONResponse({}, status_code=200)
 
 
