@@ -1,15 +1,17 @@
 import asyncio
-import datetime
 import json as _json
 import os
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+from app.actions.agent_delete_action import AgentDeleteAction
 from app.controllers.agent_default_controller import _set_project_default
 from app.models.Agent import Agent
 from app.requests.agent_requests import AgentStoreRequest, AgentUpdateRequest
 from app.resources.agent_resource import AgentResource
+
+DELETED_FROM_UI = "deleted from the UI"
 
 
 def _default_permissions() -> tuple[str, str]:
@@ -79,17 +81,7 @@ async def destroy(request: Request, agent_id: int):
     from app.services.worktree_cleanup import cleanup_agent_worktree
 
     agent = await Agent.find_or_fail(agent_id)
-
-    # Soft-delete before tearing the session down: every spawn path skips deleted
-    # agents, so a reconnecting terminal or an incoming relay message can't resume
-    # the agent (with --continue) in the window between teardown and the stamp.
-    agent.deleted_at = datetime.datetime.utcnow()
-    await agent.save()
-
-    # Re-read: a spawn already in flight may have registered a newer session.
-    current = await Agent.find(agent_id)
-    await stop_agent_session(current.session_id if current else agent.session_id)
-    await Agent.where("id", agent_id).update({"session_id": None})
+    await AgentDeleteAction(agent, DELETED_FROM_UI).execute()
 
     project_id = agent.project_id
     # If this was the default, pick the next available (non-deleted) agent

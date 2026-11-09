@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import Header
 from fastapi.responses import JSONResponse
 
+from app.actions.agent_health_action import record_heartbeat
 from app.actions.agent_question_action import has_pending_question, record_agent_questions
 from app.actions.agent_status_action import (
     CLEARED_ATTENTION,
@@ -21,6 +22,7 @@ async def store(
     """Receives Claude Code hooks that move an agent into or out of `needs_input`."""
     agent = await find_hook_agent(x_keera_agent_id, body.cwd)
     if agent:
+        await record_heartbeat(agent.id)
         await record_agent_questions(agent, body)
         transition = await _apply(agent, body)
         if transition:

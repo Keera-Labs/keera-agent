@@ -1,0 +1,98 @@
+import json
+import re
+
+from app.actions.agent_message_send_action import AgentMessageSendAction
+from app.actions.agent_status_action import utc_now
+from app.models.Agent import Agent
+from app.models.Task import Task
+from app.services.worktree_cleanup import PROTECTED_BRANCHES
+
+REQUEUED_STATUSES = {"in_progress"}
+REQUEUE_STATUS = "pending"
+AGENT_DEFAULT_BRANCH = re.compile(r"worktree-agent-\d+")
+
+
+def _other_live_agents(agent: Agent):
+    return Agent.where_null("deleted_at").where("id", "!=", agent.id)
+
+
+def _is_task_branch(branch: str | None) -> bool:
+    return (
+        bool(branch)
+        and branch not in PROTECTED_BRANCHES
+        and not AGENT_DEFAULT_BRANCH.fullmatch(branch)
+    )
+
+
+class AgentDeleteAction:
+    def __init__(self, agent: Agent, reason: str | None = None):
+        self.agent = agent
+        self.reason = (reason or "").strip() or None
+
+    async def execute(self) -> bool:
+        await self._mark_deleted_before_teardown()
+        deleted = await Agent.find(self.agent.id)
+        await self._stop_newest_session(deleted)
+        task = await self._requeue_task(deleted)
+        await self._notify_orchestrator(deleted, task)
+        return await Agent.where("id", self.agent.id).where_null("deleted_at").first() is None
+
+    async def _mark_deleted_before_teardown(self) -> None:
+        await Agent.where("id", self.agent.id).update(
+            {"deleted_at": utc_now(), "deleted_reason": self.reason, "status": "deleted"}
+        )
+
+    async def _stop_newest_session(self, agent: Agent) -> None:
+        from app.controllers.agent_controller import stop_agent_session
+
+        await stop_agent_session(agent.session_id)
+        await Agent.where("id", agent.id).update({"session_id": None, "task_id": None})
+
+    async def _requeue_task(self, agent: Agent) -> Task | None:
+        task = await Task.find(agent.task_id) if getattr(agent, "task_id", None) else None
+        if not task:
+            return None
+        values = {}
+        assignees = task.assignees or []
+        if agent.name in assignees:
+            values["assignees"] = json.dumps([a for a in assignees if a != agent.name])
+        if task.status in REQUEUED_STATUSES:
+            values["status"] = REQUEUE_STATUS
+        branch = getattr(agent, "worktree_branch", None)
+        if not task.branch and _is_task_branch(branch):
+            values["branch"] = branch
+        if values:
+            await Task.where("id", task.id).update({**values, "updated_at": utc_now()})
+        return await Task.find(task.id)
+
+    async def _notify_orchestrator(self, agent: Agent, task: Task | None) -> None:
+        recipient = await self._orchestrator(agent)
+        if recipient:
+            await AgentMessageSendAction.prepare(
+                agent, recipient, self._report(agent, task)
+            ).execute()
+
+    async def _orchestrator(self, agent: Agent) -> Agent | None:
+        if getattr(agent, "orchestrator_id", None):
+            orchestrator = (
+                await _other_live_agents(agent).where("id", agent.orchestrator_id).first()
+            )
+            if orchestrator:
+                return orchestrator
+        return (
+            await _other_live_agents(agent)
+            .where("project_id", agent.project_id)
+            .where("agent_type", "pm")
+            .order_by("id", "asc")
+            .first()
+        )
+
+    def _report(self, agent: Agent, task: Task | None) -> str:
+        text = f"agent deleted: {agent.name} ({self.reason or 'no reason given'})"
+        if not task:
+            return text
+        text += f"; task #{task.id} is now {task.status} and unassigned"
+        if task.branch:
+            head = getattr(agent, "worktree_head_sha", None)
+            text += f" (branch {task.branch}{f' @ {head[:8]}' if head else ''})"
+        return text

@@ -8,6 +8,12 @@ from typing import Literal, Optional, Union
 from fastapi_startkit.mcp import Response, Tool
 from pydantic import BaseModel, Field
 
+from app.actions.agent_health_action import (
+    agent_health,
+    has_live_session,
+    heartbeat_age,
+    record_heartbeat,
+)
 from app.constant.agent_types import DEFAULT_AGENT_TYPE, AgentType
 from app.constant.task_status import TaskStatus
 from app.models.Project import Project
@@ -497,9 +503,11 @@ class ListAgentsTool(Tool):
 
         lines = [f"Agents in '{project.name}' (project_id={project.id}):"]
         for a in agents:
+            health = agent_health(a, has_live_session(a))
+            note = f", note: {a.heartbeat_note}" if a.heartbeat_note else ""
             lines.append(
                 f"  - {a.name} (ID: {a.id}, type: {a.agent_type}, provider: {a.provider}, "
-                f"status: {a.status})"
+                f"status: {a.status}, health: {health}, last heartbeat: {heartbeat_age(a)}{note})"
             )
         return Response.text("\n".join(lines))
 
@@ -727,6 +735,14 @@ class GetOrchestratedAgentsTool(Tool):
                     "agent_type": a.agent_type,
                     "status": getattr(a, "status", "unknown"),
                     "active": bool(getattr(a, "session_id", None)),
+                    "health": agent_health(a, has_live_session(a)).value,
+                    "last_heartbeat_at": str(a.last_heartbeat_at) if a.last_heartbeat_at else None,
+                    "heartbeat_note": a.heartbeat_note,
+                    "worktree_branch": a.worktree_branch,
+                    "worktree_head_sha": a.worktree_head_sha,
+                    "worktree_last_change_at": str(a.worktree_last_change_at)
+                    if a.worktree_last_change_at
+                    else None,
                 }
             )
 
@@ -741,6 +757,9 @@ class GetOrchestratedAgentsTool(Tool):
 
 class DeleteAgentInput(BaseModel):
     agent_id: int = Field(description="ID of the agent to delete.")
+    reason: Optional[str] = Field(
+        default=None, description="Why the agent is being deleted; reported to its orchestrator."
+    )
 
 
 class DeleteAgentTool(Tool):
@@ -748,16 +767,19 @@ class DeleteAgentTool(Tool):
     description = (
         "Soft-delete an agent by ID. "
         "The agent is marked as deleted (deleted_at is set) and will no longer appear in agent lists. "
-        "Use this to remove agents that are no longer needed."
+        "Its in-progress task goes back to pending, unassigned, and its orchestrator (else the "
+        "project's PM) is told. Use this to remove agents that are no longer needed."
     )
 
     def schema(self):
         return DeleteAgentInput
 
     async def handle(self, arguments: dict) -> Response:
-        import datetime
+        import asyncio
 
+        from app.actions.agent_delete_action import AgentDeleteAction
         from app.models.Agent import Agent
+        from app.services.worktree_cleanup import cleanup_agent_worktree
 
         agent_id = arguments.get("agent_id")
         if not agent_id:
@@ -770,17 +792,8 @@ class DeleteAgentTool(Tool):
         if getattr(agent, "deleted_at", None):
             return Response.text(f"Error: agent {agent_id} has already been deleted")
 
-        agent.deleted_at = datetime.datetime.utcnow()
-        await agent.save()
-
-        import asyncio
-
-        from app.controllers.agent_controller import stop_agent_session
-        from app.services.worktree_cleanup import cleanup_agent_worktree
-
-        # The CLI holds a lock on its worktree until it exits, so stop it first.
-        await stop_agent_session(agent.session_id)
-        await Agent.where("id", agent.id).update({"session_id": None})
+        if not await AgentDeleteAction(agent, arguments.get("reason")).execute():
+            return Response.text(f"Error: agent {agent_id} is still listed after the delete")
 
         text = f"Agent '{agent.name}' (ID: {agent_id}) has been deleted."
         project = await Project.find(agent.project_id)
@@ -792,6 +805,37 @@ class DeleteAgentTool(Tool):
             if kept:
                 text += " Worktree kept: " + "; ".join(kept)
         return Response.text(text)
+
+
+# ── heartbeat ─────────────────────────────────────────────────────────────────
+
+
+class HeartbeatInput(BaseModel):
+    agent_id: int = Field(description="Your own agent ID.")
+    note: Optional[str] = Field(
+        default=None,
+        description="Short status, e.g. 'running tests' or 'waiting on review' (max 140 chars).",
+    )
+
+
+class HeartbeatTool(Tool):
+    name = "heartbeat"
+    description = (
+        "Tell the relay you are alive during long silent work (call every 30-60 s). "
+        "The optional note is shown to your orchestrator in list_agents."
+    )
+
+    def schema(self):
+        return HeartbeatInput
+
+    async def handle(self, arguments: dict) -> Response:
+        from app.models.Agent import Agent
+
+        agent = await Agent.where("id", arguments.get("agent_id")).where_null("deleted_at").first()
+        if not agent:
+            return Response.text(f"Error: agent #{arguments.get('agent_id')} not found")
+        await record_heartbeat(agent.id, arguments.get("note"))
+        return Response.text(f"Heartbeat recorded for agent '{agent.name}'.")
 
 
 # ── tool list ─────────────────────────────────────────────────────────────────
@@ -809,4 +853,5 @@ KEERA_TOOLS = [
     SpawnAgentTool,
     GetOrchestratedAgentsTool,
     DeleteAgentTool,
+    HeartbeatTool,
 ]
