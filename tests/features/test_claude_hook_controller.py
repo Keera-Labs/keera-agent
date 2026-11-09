@@ -51,32 +51,9 @@ class TestClaudeHookController(TestCase, DatabaseTransaction):
 
         self.assertEqual((await Task.find(task.id)).status, "pending")
 
-    # ── /api/claude-started ───────────────────────────────────────────────────
-
-    async def test_claude_started_returns_200_with_no_cwd(self):
+    async def test_claude_started_route_is_gone(self):
         response = await self.post("/api/claude-started", json={})
-        response.assert_ok()
-
-    async def test_claude_started_leaves_pending_tasks_pending(self):
-        first = await TaskFactory.new().create(project_id=self.project.id, body="First")
-        second = await TaskFactory.new().create(project_id=self.project.id, body="Second")
-        cwd = os.path.expanduser(self.project.path)
-
-        for _ in range(2):
-            response = await self.post("/api/claude-started", json={"cwd": cwd})
-            response.assert_ok()
-
-        self.assertEqual((await Task.find(first.id)).status, "pending")
-        self.assertEqual((await Task.find(second.id)).status, "pending")
-
-    async def test_claude_started_from_agent_worktree_leaves_pending_tasks_pending(self):
-        task = await TaskFactory.new().create(project_id=self.project.id)
-        cwd = os.path.join(os.path.expanduser(self.project.path), ".claude", "worktrees", "agent-7")
-
-        response = await self.post("/api/claude-started", json={"cwd": cwd})
-        response.assert_ok()
-
-        self.assertEqual((await Task.find(task.id)).status, "pending")
+        self.assertEqual(response.status_code, 404)
 
     # ── per-agent Stop attribution ────────────────────────────────────────────
 

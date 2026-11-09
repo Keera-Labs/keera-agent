@@ -21,14 +21,6 @@
         "hooks": [
           {
             "type": "http",
-            "url": "http://127.0.0.1:4545/api/claude-started"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "http",
             "url": "http://127.0.0.1:4545/api/agent-hook-events",
             "headers": {
               "X-Keera-Agent-Id": "$KEERA_AGENT_ID"
