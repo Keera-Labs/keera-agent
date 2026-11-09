@@ -55,6 +55,13 @@ class GitHubCli:
             return None
         raise CommandError(result.output or "gh pr view failed", result.stderr)
 
+    async def pull_request_head(self, ref: str) -> dict:
+        result = await self.gh("pr", "view", ref, "--json", "state,headRefOid")
+        if not result.ok:
+            raise CommandError(result.output or "gh pr view failed", result.stderr)
+        data = json.loads(result.text)
+        return {"state": data["state"], "head_sha": data["headRefOid"]}
+
     async def create_pull_request(
         self, title: str | None, body: str | None, base: str | None, draft: bool
     ) -> dict:

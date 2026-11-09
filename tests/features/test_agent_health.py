@@ -20,6 +20,7 @@ from app.mcp.tools import DeleteAgentTool, GetOrchestratedAgentsTool, HeartbeatT
 from app.models.Agent import Agent
 from app.models.AgentRelayMessage import AgentRelayMessage
 from app.models.Task import Task
+from app.models.TaskEvent import TaskEvent
 from databases.factories.agent_factory import AgentFactory
 from databases.factories.project_factory import ProjectFactory
 from databases.factories.task_factory import TaskFactory
@@ -245,11 +246,13 @@ class TestDeleteAgentRequeuesTask(TestCase, DatabaseTransaction):
         self.assertEqual(agent.deleted_reason, "stuck")
         self.assertIsNone(agent.task_id)
         task = await Task.find(self.task.id)
-        self.assertEqual(task.status, "pending")
+        self.assertEqual(task.status, "created")
         self.assertEqual(task.branch, "task/half-done")
+        [event] = await TaskEvent.where("task_id", self.task.id).get()
+        self.assertEqual((event.from_status, event.to_status), ("in_progress", "created"))
         [report] = await self._reports_to(self.pm.id)
         self.assertIn(f"agent deleted: {self.agent.name} (stuck)", report)
-        self.assertIn(f"task #{self.task.id} is now pending", report)
+        self.assertIn(f"task #{self.task.id} is now created", report)
         self.assertIn("task/half-done @ abcdef12", report)
 
     async def test_ui_delete_notifies_the_project_pm_without_an_orchestrator(self):

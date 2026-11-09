@@ -4,4 +4,4 @@ from app.models.Agent import Agent
 
 
 class AgentResource(JsonResource[Agent]):
-    pass
+    hidden = ["relay_token_hash"]

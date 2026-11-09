@@ -14,11 +14,36 @@ from app.actions.agent_health_action import (
     heartbeat_age,
     record_heartbeat,
 )
+from app.actions.task_transition_action import (
+    TaskMergeAction,
+    TaskTransitionAction,
+    record_task_event,
+    revoke_stale_approval,
+    soft_delete_task,
+    write_task,
+)
 from app.constant.agent_types import DEFAULT_AGENT_TYPE, AgentType
-from app.constant.task_status import TaskStatus
+from app.constant.task_status import TERMINAL_STATUSES, TaskStatus, canonical_status
+from app.exceptions.task_rule_rejected_error import TaskRuleRejectedError
 from app.models.Project import Project
 from app.models.Task import REVIEW_FIELDS, Task
+from app.models.TaskDependency import TaskDependency
+from app.models.TaskEvent import TaskEvent
 from app.requests.task_request import TaskReviewFields
+from app.services.pull_request_head import merged_pull_request_head
+from app.services.task_policy import (
+    TaskRules,
+    blockers_by_task,
+    blocking_dependencies,
+    pm_only_violations,
+    task_actor,
+)
+
+ACTOR_FIELD_DESCRIPTION = (
+    "Your own agent ID. Optional: recorded in the task history when your MCP client "
+    "sends no agent token."
+)
+RELAY_SHA_FIELDS = ("head_sha", "approved_sha", "merged_sha")
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -48,9 +73,24 @@ def _serialize_task(t: Task) -> dict:
         "testing_methods": _load_json(t.testing_methods),
         "validation_steps": _load_json(t.validation_steps),
         **{field: getattr(t, field, None) for field in REVIEW_FIELDS},
+        **{field: getattr(t, field, None) for field in RELAY_SHA_FIELDS},
         "completed_at": t.completed_at,
+        "deleted_at": t.deleted_at,
         "created_at": str(t.created_at),
+        "updated_at": str(t.updated_at),
     }
+
+
+def _with_warnings(text: str, warnings: list[str]) -> str:
+    return "\n".join([text, *(f"Warning: {w} (advisory)" for w in warnings)])
+
+
+def _matching_statuses(status: str) -> list[str]:
+    return [s.value for s in TaskStatus if canonical_status(s.value) == canonical_status(status)]
+
+
+async def _live_task(task_id: int) -> Task | None:
+    return await Task.where("id", task_id).where_null("deleted_at").first()
 
 
 async def _project_by_path(path: str) -> Optional[Project]:
@@ -91,6 +131,11 @@ class CreateTaskInput(BaseModel):
     assignees: list[str] = Field(
         default_factory=list, description="Names of people assigned to this task (can be empty)."
     )
+    idempotency_key: Optional[str] = Field(
+        default=None,
+        description="Optional key; repeating a create with the same key returns the existing task.",
+    )
+    actor_agent_id: Optional[int] = Field(default=None, description=ACTOR_FIELD_DESCRIPTION)
 
 
 class CreateTaskTool(Tool):
@@ -117,6 +162,24 @@ class CreateTaskTool(Tool):
         if not title:
             return Response.text("Error: title is required")
 
+        actor = await task_actor(arguments.get("actor_agent_id"))
+        try:
+            (await TaskRules.for_project(project.id)).require_identity(actor)
+        except TaskRuleRejectedError as exc:
+            return Response.text(f"Error: {exc}")
+
+        idempotency_key = (arguments.get("idempotency_key") or "").strip() or None
+        if idempotency_key:
+            existing = (
+                await Task.where("project_id", project.id)
+                .where("idempotency_key", idempotency_key)
+                .first()
+            )
+            if existing:
+                return Response.text(
+                    f"✓ Task #{existing.id} created: {existing.title} (existing task for this idempotency_key)"
+                )
+
         task = await Task.create(
             {
                 "project_id": project.id,
@@ -128,7 +191,15 @@ class CreateTaskTool(Tool):
                 "testing_methods": json.dumps(arguments.get("testing_methods") or []),
                 "validation_steps": json.dumps(arguments.get("validation_steps") or []),
                 "status": "pending",
+                "idempotency_key": idempotency_key,
             }
+        )
+        await record_task_event(
+            task.id,
+            actor.agent_id,
+            None,
+            "pending",
+            {"title": title, "idempotency_key": idempotency_key},
         )
 
         ac = arguments.get("acceptance_criteria") or []
@@ -168,7 +239,7 @@ class ListTasksTool(Tool):
                 f"Error: no Keera project found at path '{arguments['project_path']}'"
             )
 
-        q = Task.where("project_id", project.id)
+        q = Task.where("project_id", project.id).where_null("deleted_at")
         status = arguments.get("status")
         # completed_at is stamped in UTC (see Task.completed_at_for), so the cutoff
         # compared against it must be computed in UTC too.
@@ -176,24 +247,29 @@ class ListTasksTool(Tool):
             datetime.datetime.now(datetime.UTC).replace(tzinfo=None) - datetime.timedelta(days=7)
         ).isoformat()
         if status:
-            q = q.where("status", status)
-            if status == "completed":
+            q = q.where_in("status", _matching_statuses(status))
+            if canonical_status(status) == "done":
                 q = q.where("completed_at", ">=", cutoff)
         else:
             q = q.where(
-                lambda query: query.where_not_in(
-                    "tasks.status", ["completed", "cancelled"]
-                ).or_where("tasks.completed_at", ">=", cutoff)
+                lambda query: query.where_not_in("tasks.status", list(TERMINAL_STATUSES)).or_where(
+                    "tasks.completed_at", ">=", cutoff
+                )
             )
         tasks = await q.get()
 
         if not tasks:
             return Response.text("No tasks found.")
 
+        blockers_of = await blockers_by_task([t.id for t in tasks])
         lines = []
         for t in tasks:
             priority = t.priority or "medium"
-            lines.append(f"[{t.status}] #{t.id} {t.title or t.body}  ({priority})")
+            line = f"[{t.status}] #{t.id} {t.title or t.body}  ({priority})"
+            blockers = blockers_of.get(t.id)
+            if blockers:
+                line += "  blocked by " + ", ".join(f"#{b}" for b in blockers)
+            lines.append(line)
         return Response.text("\n".join(lines))
 
 
@@ -223,8 +299,15 @@ class GetTaskTool(Tool):
             f"Priority: {t['priority']}",
             f"Assignees: {', '.join(t['assignees']) if t['assignees'] else 'none'}",
             f"Created:  {t['created_at']}",
+            f"Updated:  {t['updated_at']}",
             *([f"Completed: {t['completed_at']}"] if t["completed_at"] else []),
-            *(f"{field}: {t[field]}" for field in REVIEW_FIELDS if t[field] is not None),
+            *([f"Deleted:  {t['deleted_at']}"] if t["deleted_at"] else []),
+            *(
+                f"{field}: {t[field]}"
+                for field in (*REVIEW_FIELDS, *RELAY_SHA_FIELDS)
+                if t[field] is not None
+            ),
+            *(await _dependency_lines(task.id)),
             "",
             "Body:",
             t["body"] or "(none)",
@@ -236,6 +319,20 @@ class GetTaskTool(Tool):
         if t["validation_steps"]:
             lines += ["", "Validation steps:"] + [f"  • {s}" for s in t["validation_steps"]]
         return Response.text("\n".join(lines))
+
+
+async def _dependency_lines(task_id: int) -> list[str]:
+    dependencies = await TaskDependency.where("task_id", task_id).get()
+    if not dependencies:
+        return []
+    blockers = await blocking_dependencies(task_id)
+    depends_on = ", ".join(
+        f"#{d.depends_on_task_id}{' (hard)' if d.hard else ''}" for d in dependencies
+    )
+    lines = [f"Depends on: {depends_on}"]
+    if blockers:
+        lines.append("Blocked by: " + ", ".join(f"#{b}" for b in blockers))
+    return lines
 
 
 # ── update_task ───────────────────────────────────────────────────────────────
@@ -250,6 +347,15 @@ class UpdateTaskInput(TaskReviewFields):
     acceptance_criteria: Optional[list[str]] = None
     testing_methods: Optional[list[str]] = None
     validation_steps: Optional[list[str]] = None
+    head_sha: Optional[str] = Field(
+        default=None,
+        description="Current head commit of the task's PR. A new head after approval sends the task back to in_review.",
+    )
+    expected_updated_at: Optional[str] = Field(
+        default=None,
+        description="The task's Updated value from get_task; the update is refused if the task changed since.",
+    )
+    actor_agent_id: Optional[int] = Field(default=None, description=ACTOR_FIELD_DESCRIPTION)
 
 
 class UpdateTaskTool(Tool):
@@ -257,27 +363,43 @@ class UpdateTaskTool(Tool):
     description = (
         "Update any fields of a task (title, body, acceptance_criteria, testing_methods, "
         "validation_steps, priority, assignees). Also report your work on it: pr_number, "
-        "pr_url, branch, additions/deletions (diff line counts), review_note, and "
-        "progress_step/progress_total (e.g. step 2 of 5)."
+        "pr_url, branch, head_sha, additions/deletions (diff line counts), review_note, and "
+        "progress_step/progress_total (e.g. step 2 of 5). Pass expected_updated_at to "
+        "refuse a stale write."
     )
 
     def schema(self):
         return UpdateTaskInput
 
     async def handle(self, arguments: dict) -> Response:
-        task = await Task.find(arguments["task_id"])
+        task = await _live_task(arguments["task_id"])
         if not task:
             return Response.text(f"Error: task #{arguments['task_id']} not found")
 
-        for field in ["title", "body", "priority", *REVIEW_FIELDS]:
-            if field in arguments and arguments[field] is not None:
-                setattr(task, field, arguments[field])
+        changes = {}
+        for field in ["title", "body", "priority", "head_sha", *REVIEW_FIELDS]:
+            if arguments.get(field) is not None:
+                changes[field] = arguments[field]
         for field in ["assignees", "acceptance_criteria", "testing_methods", "validation_steps"]:
-            if field in arguments and arguments[field] is not None:
-                setattr(task, field, json.dumps(arguments[field]))
+            if arguments.get(field) is not None:
+                changes[field] = json.dumps(arguments[field])
 
-        await task.save()
-        return Response.text(f"Task #{task.id} '{task.title or task.body}' updated.")
+        actor = await task_actor(arguments.get("actor_agent_id"))
+        revoked = False
+        try:
+            (await TaskRules.for_project(task.project_id)).require_identity(actor)
+            if changes:
+                await write_task(task, changes, arguments.get("expected_updated_at"))
+                await record_task_event(task.id, actor.agent_id, task.status, task.status, changes)
+            if "head_sha" in changes:
+                revoked = await revoke_stale_approval(task, changes["head_sha"], actor)
+        except TaskRuleRejectedError as exc:
+            return Response.text(f"Error: {exc}")
+
+        text = f"Task #{task.id} '{task.title or task.body}' updated."
+        if revoked:
+            text += " Its head moved after approval, so it is back in in_review."
+        return Response.text(text)
 
 
 # ── update_task_status ────────────────────────────────────────────────────────
@@ -286,22 +408,39 @@ class UpdateTaskTool(Tool):
 class UpdateTaskStatusInput(BaseModel):
     task_id: int = Field(description="The numeric task ID.")
     status: str = Field(pattern=TaskStatus.pattern())
+    head_sha: Optional[str] = Field(
+        default=None, description="The PR head commit being approved. Required for approved."
+    )
+    actor_agent_id: Optional[int] = Field(default=None, description=ACTOR_FIELD_DESCRIPTION)
 
 
 class UpdateTaskStatusTool(Tool):
     name = "update_task_status"
-    description = "Change the status of a task."
+    description = (
+        "Change the status of a task. Lifecycle: created → assigned → acked → in_progress → "
+        "in_review → approved (needs head_sha) → merged (via record_merge) → done; in_progress ↔ "
+        "blocked; in_review → changes_requested → in_progress; any non-terminal → cancelled. "
+        "The legacy names pending (= created) and completed (= done) are still accepted."
+    )
 
     def schema(self):
         return UpdateTaskStatusInput
 
     async def handle(self, arguments: dict) -> Response:
-        task = await Task.find(arguments["task_id"])
+        task = await _live_task(arguments["task_id"])
         if not task:
             return Response.text(f"Error: task #{arguments['task_id']} not found")
         status = arguments["status"]
-        await task.update({"status": status, "completed_at": task.completed_at_for(status)})
-        return Response.text(f"Task #{task.id} '{task.title or task.body}' → {task.status}")
+        actor = await task_actor(arguments.get("actor_agent_id"))
+        try:
+            warnings = await TaskTransitionAction.prepare(
+                task, status, actor, head_sha=arguments.get("head_sha")
+            ).execute()
+        except TaskRuleRejectedError as exc:
+            return Response.text(f"Error: {exc}")
+        return Response.text(
+            _with_warnings(f"Task #{task.id} '{task.title or task.body}' → {task.status}", warnings)
+        )
 
 
 # ── delete_task ───────────────────────────────────────────────────────────────
@@ -309,22 +448,185 @@ class UpdateTaskStatusTool(Tool):
 
 class DeleteTaskInput(BaseModel):
     task_id: int = Field(description="The numeric task ID to delete.")
+    actor_agent_id: Optional[int] = Field(default=None, description=ACTOR_FIELD_DESCRIPTION)
 
 
 class DeleteTaskTool(Tool):
     name = "delete_task"
-    description = "Permanently delete a task by ID."
+    description = "Delete a task by ID. The task is cancelled and hidden; its history is kept."
 
     def schema(self):
         return DeleteTaskInput
 
     async def handle(self, arguments: dict) -> Response:
-        task = await Task.find(arguments["task_id"])
+        task = await _live_task(arguments["task_id"])
         if not task:
             return Response.text(f"Error: task #{arguments['task_id']} not found")
+        actor = await task_actor(arguments.get("actor_agent_id"))
+        rules = await TaskRules.for_project(task.project_id)
+        try:
+            rules.require_identity(actor)
+            warnings = rules.settle(
+                task.id, [], pm_only_violations("delete a task", rules.effective_actor(actor))
+            )
+        except TaskRuleRejectedError as exc:
+            return Response.text(f"Error: {exc}")
+
         title = task.title or task.body or f"#{task.id}"
-        await Task.where("id", task.id).delete()
-        return Response.text(f"Task '{title}' deleted.")
+        await soft_delete_task(task, actor.agent_id, warnings)
+        return Response.text(_with_warnings(f"Task '{title}' deleted.", warnings))
+
+
+# ── get_task_history ──────────────────────────────────────────────────────────
+
+
+class GetTaskHistoryInput(BaseModel):
+    task_id: int = Field(description="The numeric task ID.")
+
+
+class GetTaskHistoryTool(Tool):
+    name = "get_task_history"
+    description = "Show the audit log of a task: every create, field change, status change and delete, with its actor."
+
+    def schema(self):
+        return GetTaskHistoryInput
+
+    async def handle(self, arguments: dict) -> Response:
+        events = await TaskEvent.where("task_id", arguments["task_id"]).order_by("id", "asc").get()
+        if not events:
+            return Response.text(f"No history for task #{arguments['task_id']}.")
+        lines = [f"History of task #{arguments['task_id']}:"]
+        for event in events:
+            actor = f"agent #{event.actor_agent_id}" if event.actor_agent_id else "unknown actor"
+            transition = f"{event.from_status or '-'} → {event.to_status or '-'}"
+            fields = json.dumps(event.fields_changed) if event.fields_changed else ""
+            lines.append(f"  {event.created_at}  {actor}  {transition}  {fields}".rstrip())
+        return Response.text("\n".join(lines))
+
+
+# ── record_merge ──────────────────────────────────────────────────────────────
+
+
+class RecordMergeInput(BaseModel):
+    task_id: int = Field(description="The numeric task ID.")
+    merged_sha: Optional[str] = Field(
+        default=None,
+        description=(
+            "The merged PR's head commit (gh pr view --json headRefOid), not the merge or squash "
+            "commit. Omit to read it from GitHub through the task's pr_number or pr_url."
+        ),
+    )
+    actor_agent_id: Optional[int] = Field(default=None, description=ACTOR_FIELD_DESCRIPTION)
+
+
+class RecordMergeTool(Tool):
+    name = "record_merge"
+    description = (
+        "Record that an approved task's PR was merged. The task moves to merged only when the "
+        "merged head equals the approved head_sha; otherwise it goes back to in_review."
+    )
+
+    def schema(self):
+        return RecordMergeInput
+
+    async def handle(self, arguments: dict) -> Response:
+        task = await _live_task(arguments["task_id"])
+        if not task:
+            return Response.text(f"Error: task #{arguments['task_id']} not found")
+        actor = await task_actor(arguments.get("actor_agent_id"))
+        merged_sha = arguments.get("merged_sha")
+        try:
+            if not merged_sha:
+                merged_sha = await merged_pull_request_head(task)
+            warnings = await TaskMergeAction.prepare(task, actor, merged_sha).execute()
+        except TaskRuleRejectedError as exc:
+            return Response.text(f"Error: {exc}")
+        return Response.text(
+            _with_warnings(f"Task #{task.id} merged at {merged_sha} → {task.status}", warnings)
+        )
+
+
+# ── add_task_dependency ───────────────────────────────────────────────────────
+
+
+class AddTaskDependencyInput(BaseModel):
+    task_id: int = Field(description="The task that waits.")
+    depends_on_task_id: int = Field(description="The task it waits for.")
+    hard: bool = Field(
+        default=False,
+        description="False: unblocked once the dependency reaches in_review. True: only once it is done.",
+    )
+    actor_agent_id: Optional[int] = Field(default=None, description=ACTOR_FIELD_DESCRIPTION)
+
+
+class AddTaskDependencyTool(Tool):
+    name = "add_task_dependency"
+    description = (
+        "Make a task wait for another one (e.g. QA waits for the implementation). A blocked task "
+        "can't move forward until its dependency reaches in_review, or done for a hard dependency."
+    )
+
+    def schema(self):
+        return AddTaskDependencyInput
+
+    async def handle(self, arguments: dict) -> Response:
+        task = await _live_task(arguments["task_id"])
+        upstream = await _live_task(arguments["depends_on_task_id"])
+        if not task or not upstream:
+            missing = arguments["task_id"] if not task else arguments["depends_on_task_id"]
+            return Response.text(f"Error: task #{missing} not found")
+        if task.id == upstream.id:
+            return Response.text("Error: a task cannot depend on itself")
+        if task.project_id != upstream.project_id:
+            return Response.text("Error: both tasks must belong to the same project")
+        if await _depends_on(upstream.id, task.id):
+            return Response.text(
+                f"Error: task #{upstream.id} already depends on #{task.id}; this would form a cycle"
+            )
+
+        actor = await task_actor(arguments.get("actor_agent_id"))
+        try:
+            (await TaskRules.for_project(task.project_id)).require_identity(actor)
+        except TaskRuleRejectedError as exc:
+            return Response.text(f"Error: {exc}")
+
+        hard = bool(arguments.get("hard"))
+        existing = (
+            await TaskDependency.where("task_id", task.id)
+            .where("depends_on_task_id", upstream.id)
+            .first()
+        )
+        if existing:
+            await existing.update({"hard": hard})
+        else:
+            await TaskDependency.create(
+                {"task_id": task.id, "depends_on_task_id": upstream.id, "hard": hard}
+            )
+        await record_task_event(
+            task.id,
+            actor.agent_id,
+            task.status,
+            task.status,
+            {"depends_on": upstream.id, "hard": hard},
+        )
+        return Response.text(
+            f"Task #{task.id} now depends on #{upstream.id}{' (hard)' if hard else ''}."
+        )
+
+
+async def _depends_on(task_id: int, target_id: int) -> bool:
+    seen = set()
+    frontier = [task_id]
+    while frontier:
+        current = frontier.pop()
+        if current == target_id:
+            return True
+        if current in seen:
+            continue
+        seen.add(current)
+        dependencies = await TaskDependency.where("task_id", current).get()
+        frontier.extend(d.depends_on_task_id for d in dependencies)
+    return False
 
 
 # ── send_message_to_agent ─────────────────────────────────────────────────────
@@ -847,6 +1149,9 @@ KEERA_TOOLS = [
     UpdateTaskTool,
     UpdateTaskStatusTool,
     DeleteTaskTool,
+    GetTaskHistoryTool,
+    RecordMergeTool,
+    AddTaskDependencyTool,
     SendMessageTool,
     GetAgentMessagesTool,
     ListAgentsTool,
