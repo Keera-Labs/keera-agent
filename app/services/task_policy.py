@@ -19,11 +19,16 @@ ALLOWED_TRANSITIONS = {
     "blocked": {"created", "assigned", "acked", "in_progress", "cancelled"},
     "in_review": {"approved", "changes_requested", "in_progress", "cancelled"},
     "approved": {"merged", "in_review", "changes_requested", "cancelled"},
-    "changes_requested": {"in_progress", "cancelled"},
+    "changes_requested": {"in_progress", "created", "cancelled"},
     "merged": {"done", "cancelled"},
     "done": {"created", "in_progress"},
     "cancelled": {"created", "in_progress"},
 }
+
+PRE_REVIEW_STATUSES = frozenset(
+    {"created", "assigned", "acked", "in_progress", "blocked", "changes_requested"}
+)
+REQUEUE_STATUS = "created"
 
 PM_TARGETS = {"done", "cancelled"}
 REVIEWER_TARGETS = {"approved", "changes_requested"}

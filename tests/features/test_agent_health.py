@@ -1,4 +1,5 @@
 import datetime
+import json
 import os
 import tempfile
 import uuid
@@ -21,6 +22,8 @@ from app.models.Agent import Agent
 from app.models.AgentRelayMessage import AgentRelayMessage
 from app.models.Task import Task
 from app.models.TaskEvent import TaskEvent
+from app.services.relay_identity import RelayCaller, acting_as
+from app.services.task_policy import ALLOWED_TRANSITIONS, PRE_REVIEW_STATUSES, REQUEUE_STATUS
 from databases.factories.agent_factory import AgentFactory
 from databases.factories.project_factory import ProjectFactory
 from databases.factories.task_factory import TaskFactory
@@ -265,13 +268,67 @@ class TestDeleteAgentRequeuesTask(TestCase, DatabaseTransaction):
         [report] = await self._reports_to(self.pm.id)
         self.assertIn("deleted from the UI", report)
 
-    async def test_task_in_review_keeps_its_status(self):
-        await Task.where("id", self.task.id).update({"status": "in_review"})
-
+    async def _delete_agent_holding_task_in(self, status: str) -> Task:
+        await Task.where("id", self.task.id).update(
+            {"status": status, "assignees": json.dumps([self.agent.name])}
+        )
         with _spawn_patch():
-            await DeleteAgentTool().handle({"agent_id": self.agent.id})
+            await DeleteAgentTool().handle({"agent_id": self.agent.id, "reason": "stuck"})
+        return await Task.find(self.task.id)
 
-        self.assertEqual((await Task.find(self.task.id)).status, "in_review")
+    async def _assert_requeued_from(self, status: str) -> None:
+        task = await self._delete_agent_holding_task_in(status)
+
+        self.assertEqual(task.status, "created")
+        self.assertEqual(task.assignees, [])
+        self.assertEqual(task.branch, "task/half-done")
+        [event] = await TaskEvent.where("task_id", self.task.id).get()
+        self.assertEqual((event.from_status, event.to_status), (status, "created"))
+        self.assertEqual(event.fields_changed["deleted_agent_id"], self.agent.id)
+        self.assertIn(f"agent {self.agent.name} deleted: stuck", event.fields_changed["reason"])
+
+    async def _assert_untouched_in(self, status: str) -> None:
+        task = await self._delete_agent_holding_task_in(status)
+
+        self.assertEqual(task.status, status)
+        self.assertEqual(task.assignees, [self.agent.name])
+        self.assertIsNone(task.branch)
+        self.assertEqual(await TaskEvent.where("task_id", self.task.id).count(), 0)
+
+    async def test_assigned_task_is_requeued(self):
+        await self._assert_requeued_from("assigned")
+
+    async def test_acked_task_is_requeued(self):
+        await self._assert_requeued_from("acked")
+
+    async def test_in_progress_task_is_requeued(self):
+        await self._assert_requeued_from("in_progress")
+
+    async def test_blocked_task_is_requeued(self):
+        await self._assert_requeued_from("blocked")
+
+    async def test_changes_requested_task_is_requeued(self):
+        await self._assert_requeued_from("changes_requested")
+
+    async def test_in_review_task_is_untouched(self):
+        await self._assert_untouched_in("in_review")
+
+    async def test_approved_task_is_untouched(self):
+        await self._assert_untouched_in("approved")
+
+    async def test_completed_task_is_untouched(self):
+        await self._assert_untouched_in("completed")
+
+    async def test_requeue_event_records_the_deleting_agent(self):
+        with acting_as(RelayCaller(agent=self.pm)):
+            await self._delete_agent_holding_task_in("acked")
+
+        [event] = await TaskEvent.where("task_id", self.task.id).get()
+        self.assertEqual(event.actor_agent_id, self.pm.id)
+
+    def test_every_pre_review_status_may_legally_requeue(self):
+        for status in PRE_REVIEW_STATUSES - {REQUEUE_STATUS}:
+            self.assertIn(REQUEUE_STATUS, ALLOWED_TRANSITIONS[status], status)
 
     async def test_default_agent_worktree_branch_is_never_recorded_on_the_task(self):
         await Agent.where("id", self.agent.id).update(

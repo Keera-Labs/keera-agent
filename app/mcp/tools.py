@@ -1069,7 +1069,7 @@ class DeleteAgentTool(Tool):
     description = (
         "Soft-delete an agent by ID. "
         "The agent is marked as deleted (deleted_at is set) and will no longer appear in agent lists. "
-        "Its in-progress task goes back to pending, unassigned, and its orchestrator (else the "
+        "Its task, if not yet in review, goes back to created, unassigned, and its orchestrator (else the "
         "project's PM) is told. Use this to remove agents that are no longer needed."
     )
 
