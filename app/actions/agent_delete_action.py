@@ -1,14 +1,15 @@
-import json
 import re
 
 from app.actions.agent_message_send_action import AgentMessageSendAction
 from app.actions.agent_status_action import utc_now
+from app.actions.task_transition_action import record_task_event, write_task
+from app.constant.task_status import TaskStatus
 from app.models.Agent import Agent
 from app.models.Task import Task
 from app.services.worktree_cleanup import PROTECTED_BRANCHES
 
-REQUEUED_STATUSES = {"in_progress"}
-REQUEUE_STATUS = "pending"
+REQUEUED_STATUSES = {TaskStatus.IN_PROGRESS.value}
+REQUEUE_STATUS = TaskStatus.CREATED.value
 AGENT_DEFAULT_BRANCH = re.compile(r"worktree-agent-\d+")
 
 
@@ -55,14 +56,22 @@ class AgentDeleteAction:
         values = {}
         assignees = task.assignees or []
         if agent.name in assignees:
-            values["assignees"] = json.dumps([a for a in assignees if a != agent.name])
+            values["assignees"] = [a for a in assignees if a != agent.name]
         if task.status in REQUEUED_STATUSES:
             values["status"] = REQUEUE_STATUS
         branch = getattr(agent, "worktree_branch", None)
         if not task.branch and _is_task_branch(branch):
             values["branch"] = branch
         if values:
-            await Task.where("id", task.id).update({**values, "updated_at": utc_now()})
+            previous_status = task.status
+            await write_task(task, values)
+            await record_task_event(
+                task.id,
+                None,
+                previous_status,
+                task.status,
+                {key: value for key, value in values.items() if key != "status"} or None,
+            )
         return await Task.find(task.id)
 
     async def _notify_orchestrator(self, agent: Agent, task: Task | None) -> None:
