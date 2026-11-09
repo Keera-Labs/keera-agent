@@ -3,6 +3,9 @@ import datetime
 from fastapi.responses import Response
 from fastapi_startkit.jsonapi import ResourceCollection
 
+from app.actions.agent_status_action import utc_now
+from app.actions.task_transition_action import record_task_event, soft_delete_task
+from app.constant.task_status import TERMINAL_STATUSES
 from app.models.Task import Task
 from app.requests.task_request import TaskStoreRequest, TaskUpdateRequest
 from app.resources.task_resource import TaskResource
@@ -17,8 +20,9 @@ async def index(project_id: int) -> ResourceCollection:
 
     tasks = await (
         Task.where("project_id", project_id)
+        .where_null("deleted_at")
         .where(
-            lambda q: q.where_not_in("tasks.status", ["completed", "cancelled"]).or_where(
+            lambda q: q.where_not_in("tasks.status", list(TERMINAL_STATUSES)).or_where(
                 "tasks.completed_at", ">=", cutoff
             )
         )
@@ -36,6 +40,7 @@ async def store(body: TaskStoreRequest, project_id: int) -> TaskResource:
             "status": "pending",
         }
     )
+    await record_task_event(task.id, None, None, "pending", {"title": task.title})
 
     return TaskResource(task)
 
@@ -44,17 +49,19 @@ async def update(request: TaskUpdateRequest, task_id: int):
     task = await Task.find_or_fail(task_id)
 
     data = request.model_dump(exclude_unset=True)
+    from_status = task.status
     if "status" in data:
         data["completed_at"] = task.completed_at_for(data["status"])
 
-    await task.update(data)
+    await task.update({**data, "updated_at": utc_now()})
+    await record_task_event(task.id, None, from_status, task.status, data)
     return TaskResource(task)
 
 
 async def destroy(task_id: int):
-    await Task.find_or_fail(task_id)
+    task = await Task.find_or_fail(task_id)
 
-    await Task.where("id", task_id).delete()
+    await soft_delete_task(task, None)
     # 204 must carry no body — a JSON body here triggers a server-side
     # "Response content longer than Content-Length" RuntimeError on every delete.
     return Response(status_code=204)

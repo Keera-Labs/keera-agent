@@ -1,0 +1,2 @@
+class TaskRuleRejectedError(Exception):
+    pass

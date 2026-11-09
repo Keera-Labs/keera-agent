@@ -4,6 +4,7 @@ import shlex
 from pathlib import Path
 
 from app.ai import ProviderCommand
+from app.services.relay_identity import AGENT_TOKEN_ENV, AGENT_TOKEN_HEADER
 from app.utils.json_utils import atomic_write_json
 
 
@@ -67,7 +68,10 @@ def write_gemini_settings(
             f"cat {shlex.quote(str(context_path))}" if event == "BeforeAgent" else "printf '{}'"
         )
         hooks[event] = [{"hooks": [{"name": "keera", "type": "command", "command": hook_command}]}]
-    settings.setdefault("mcpServers", {})["keera"] = {"httpUrl": base_url.rstrip("/") + "/mcp"}
+    settings.setdefault("mcpServers", {})["keera"] = {
+        "httpUrl": base_url.rstrip("/") + "/mcp",
+        "headers": {AGENT_TOKEN_HEADER: f"${{{AGENT_TOKEN_ENV}}}"},
+    }
     existing_hooks = settings.setdefault("hooks", {})
     for event, definitions in hooks.items():
         existing_hooks[event] = [*existing_hooks.get(event, []), *definitions]

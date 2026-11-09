@@ -5,6 +5,7 @@ from urllib.parse import urlparse, urlunparse
 from fastapi_startkit import Config
 
 from app.services.claude_config_dir import claude_env
+from app.services.relay_identity import AGENT_TOKEN_ENV
 from app.utils.json_utils import atomic_write_json
 from app.utils.process_env import user_env
 
@@ -31,9 +32,14 @@ def hook_base_url() -> str:
     return urlunparse((app_url.scheme, netloc, app_url.path.rstrip("/"), "", "", ""))
 
 
-def agent_env(agent_id: int, claude_config_dir: str | None = None) -> dict:
+def agent_env(
+    agent_id: int, claude_config_dir: str | None = None, relay_token: str | None = None
+) -> dict:
     """The environment for an agent's PTY, pointing Claude at the workspace's config dir if set."""
-    return {**user_env(), **claude_env(claude_config_dir), AGENT_ID_ENV: str(agent_id)}
+    env = {**user_env(), **claude_env(claude_config_dir), AGENT_ID_ENV: str(agent_id)}
+    if relay_token:
+        env[AGENT_TOKEN_ENV] = relay_token
+    return env
 
 
 class ClaudeHookAction:

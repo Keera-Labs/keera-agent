@@ -4,6 +4,7 @@ import os
 from fastapi_startkit import Config
 
 from app.models.Project import Project
+from app.services.relay_identity import AGENT_TOKEN_ENV, AGENT_TOKEN_HEADER
 from app.utils.json_utils import atomic_write_json
 
 # Key under mcpServers reserved for the keera-managed HTTP MCP entry in .mcp.json.
@@ -55,7 +56,10 @@ class McpSettingWriteAction:
             "type": "http",
             "url": f"{base_url}/mcp",
             # X-Project-Path scopes the MCP server to the project root.
-            "headers": {"X-Project-Path": directory},
+            "headers": {
+                "X-Project-Path": directory,
+                AGENT_TOKEN_HEADER: f"${{{AGENT_TOKEN_ENV}:-}}",
+            },
         }
 
     @staticmethod
