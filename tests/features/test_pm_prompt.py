@@ -38,6 +38,25 @@ class TestPmPrompt(TestCase):
         self.assertIn("--match-head-commit <approved_sha>", self.prompt)
         self.assertIn("Call `record_merge` for the task.", self.prompt)
 
+    def test_sets_feature_done_right_after_merge_so_hard_dependents_unblock(self):
+        self.assertIn("set the feature task `done`", self.prompt)
+        self.assertIn("Never wait for its dependents first", self.prompt)
+        self.assertNotIn("once everything that depends on it is finished", self.prompt)
+
+    def test_respawns_only_when_the_delete_notice_requeued_the_task(self):
+        self.assertIn("only when the message says the task `is now created`", self.prompt)
+        self.assertIn("ignore notices for your own `work merged` deletes", self.prompt)
+        self.assertNotIn("its task is already requeued to `created`; respawn", self.prompt)
+
+    def test_reviewer_approves_the_feature_task_and_side_tasks_close_as_cancelled(self):
+        self.assertIn("always on the **feature** task that owns the PR", self.prompt)
+        self.assertIn("give the reviewer the **feature task's ID**", self.prompt)
+        self.assertIn("close it with `cancelled`", self.prompt)
+
+    def test_actor_id_only_on_writes_and_push_does_not_revoke_approval(self):
+        self.assertIn("`actor_agent_id` on every task write", self.prompt)
+        self.assertIn("A push alone does not revoke the approval.", self.prompt)
+
     def test_orders_dependent_tasks_with_dependencies(self):
         self.assertIn("link each one with `add_task_dependency`", self.prompt)
         self.assertNotIn("Wait for the feature PR to be merged", self.prompt)
