@@ -348,12 +348,15 @@ class TestTaskController(TestCase, DatabaseTransaction):
 
     # --- destroy ---
 
-    async def test_destroy_deletes_task(self):
+    async def test_destroy_soft_deletes_task_and_hides_it(self):
         task = await TaskFactory.new().create(project_id=self.project.id)
 
         response = await self.delete(f"/api/tasks/{task.id}")
         response.assert_no_content()
-        self.assertIsNone(await Task.find(task.id))
+        self.assertIsNotNone((await Task.find(task.id)).deleted_at)
+
+        listed = (await self.get(f"/api/projects/{self.project.id}/tasks")).json()["data"]
+        self.assertNotIn(task.id, [row["id"] for row in listed])
 
     async def test_destroy_returns_bodyless_204(self):
         """A 204 must carry no body. A JSON body ({}) sets Content-Length: 0 while

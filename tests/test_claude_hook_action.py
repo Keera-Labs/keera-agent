@@ -131,8 +131,6 @@ class TestClaudeHookAction(TestCase):
         stop = self._groups_for(settings, "Stop", "/api/claude-stopped")[0]["hooks"][0]
         self.assertEqual(stop["headers"], {AGENT_ID_HEADER: f"${AGENT_ID_ENV}"})
         self.assertEqual(stop["allowedEnvVars"], [AGENT_ID_ENV])
-        started = self._groups_for(settings, "UserPromptSubmit", "/api/claude-started")
-        self.assertNotIn("headers", started[0]["hooks"][0])
 
     async def test_upgrades_legacy_stop_hook_without_duplicating_it(self):
         os.makedirs(os.path.dirname(self.settings_path))
@@ -176,3 +174,50 @@ class TestClaudeHookAction(TestCase):
         stop = self._stop_hooks(self._read())
         self.assertIn("echo hi", [h.get("command") for h in stop])
         self.assertIn(f"{BASE}/api/claude-stopped", [h.get("url") for h in stop])
+
+    def _write(self, settings: dict):
+        os.makedirs(os.path.dirname(self.settings_path))
+        with open(self.settings_path, "w") as f:
+            json.dump(settings, f)
+
+    async def test_does_not_register_claude_started_hook(self):
+        ClaudeHookAction.prepare(self.dir).execute()
+
+        urls = [h["url"] for g in self._read()["hooks"]["UserPromptSubmit"] for h in g["hooks"]]
+        self.assertEqual(urls, [f"{BASE}/api/agent-hook-events"])
+
+    async def test_removes_stale_claude_started_hook_and_keeps_others(self):
+        user_group = {"hooks": [{"type": "command", "command": "notify.sh"}]}
+        mixed_group = {
+            "hooks": [
+                {"type": "http", "url": "http://127.0.0.1:8000/api/claude-started"},
+                {"type": "command", "command": "log.sh"},
+            ]
+        }
+        stale_group = {"hooks": [{"type": "http", "url": f"{BASE}/api/claude-started"}]}
+        self._write({"hooks": {"UserPromptSubmit": [stale_group, user_group, mixed_group]}})
+
+        self.assertTrue(ClaudeHookAction.prepare(self.dir).execute())
+
+        groups = self._read()["hooks"]["UserPromptSubmit"]
+        urls = [h.get("url") for g in groups for h in g["hooks"]]
+        self.assertNotIn(f"{BASE}/api/claude-started", urls)
+        self.assertNotIn("http://127.0.0.1:8000/api/claude-started", urls)
+        self.assertIn(user_group, groups)
+        self.assertIn({"hooks": [{"type": "command", "command": "log.sh"}]}, groups)
+        self.assertEqual(
+            len(self._groups_for(self._read(), "UserPromptSubmit", "/api/agent-hook-events")), 1
+        )
+        self.assertFalse(ClaudeHookAction.prepare(self.dir).execute())
+
+    async def test_removing_last_claude_started_hook_drops_empty_event(self):
+        stale_group = {"hooks": [{"type": "http", "url": f"{BASE}/api/claude-started"}]}
+        hooks: dict = {"UserPromptSubmit": [stale_group]}
+
+        self.assertTrue(
+            ClaudeHookAction._remove_hook(hooks, "UserPromptSubmit", "/api/claude-started")
+        )
+        self.assertEqual(hooks, {})
+        self.assertFalse(
+            ClaudeHookAction._remove_hook(hooks, "UserPromptSubmit", "/api/claude-started")
+        )

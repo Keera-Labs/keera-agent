@@ -24,6 +24,7 @@ MCP tool instead
 - `list_tasks` — view pending/in-progress tasks
 - `create_task` — create a new task
 - `update_task` / `update_task_status` — update task fields or status
+- `record_merge` — after a task's PR merges, record it with `merged_sha` = the PR's head commit (`gh pr view --json headRefOid`), not the merge or squash commit; omit it to have Keera read it from GitHub
 - `send_message_to_agent` — send a message to a team agent
 - `get_agent_messages` — read replies from agents
 - `spawn_agent` — add a new agent to the team

@@ -19,6 +19,7 @@ class Project(Model):
     permissions_deny: str | None
     is_repository: bool
     worktree_copy_paths: list
+    task_rules: str | None
     # NULL hides the project from the sidebar; otherwise it orders the sidebar, newest first.
     last_opened_at: str | None
     created_at: str | None

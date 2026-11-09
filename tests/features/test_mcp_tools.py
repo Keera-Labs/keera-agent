@@ -416,7 +416,9 @@ class TestDeleteTaskTool(TestCase, DatabaseTransaction):
         text = _text(response)
         self.assertNotIn("Error", text)
         self.assertIn("deleted", text.lower())
-        self.assertIsNone(await Task.find(task.id))
+        deleted = await Task.find(task.id)
+        self.assertIsNotNone(deleted.deleted_at)
+        self.assertEqual(deleted.status, "cancelled")
 
     async def test_delete_not_found(self):
         response = await self.tool.handle({"task_id": 999999})

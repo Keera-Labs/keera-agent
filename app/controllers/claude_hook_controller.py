@@ -50,10 +50,6 @@ async def _find_project_by_cwd(cwd: str):
     return None
 
 
-async def claude_started(request: Request):
-    return JSONResponse({}, status_code=200)
-
-
 async def claude_stopped(
     request: Request, x_keera_agent_id: Annotated[str | None, Header()] = None
 ):
