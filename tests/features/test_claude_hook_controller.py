@@ -57,18 +57,26 @@ class TestClaudeHookController(TestCase, DatabaseTransaction):
         response = await self.post("/api/claude-started", json={})
         response.assert_ok()
 
-    async def test_claude_started_marks_first_pending_task_in_progress(self):
-        """UserPromptSubmit hook should mark the first pending task in_progress."""
-        import os
-
-        task = await TaskFactory.new().create(project_id=self.project.id)
+    async def test_claude_started_leaves_pending_tasks_pending(self):
+        first = await TaskFactory.new().create(project_id=self.project.id, body="First")
+        second = await TaskFactory.new().create(project_id=self.project.id, body="Second")
         cwd = os.path.expanduser(self.project.path)
+
+        for _ in range(2):
+            response = await self.post("/api/claude-started", json={"cwd": cwd})
+            response.assert_ok()
+
+        self.assertEqual((await Task.find(first.id)).status, "pending")
+        self.assertEqual((await Task.find(second.id)).status, "pending")
+
+    async def test_claude_started_from_agent_worktree_leaves_pending_tasks_pending(self):
+        task = await TaskFactory.new().create(project_id=self.project.id)
+        cwd = os.path.join(os.path.expanduser(self.project.path), ".claude", "worktrees", "agent-7")
 
         response = await self.post("/api/claude-started", json={"cwd": cwd})
         response.assert_ok()
 
-        refreshed = await Task.find(task.id)
-        self.assertEqual(refreshed.status, "in_progress")
+        self.assertEqual((await Task.find(task.id)).status, "pending")
 
     # ── per-agent Stop attribution ────────────────────────────────────────────
 
