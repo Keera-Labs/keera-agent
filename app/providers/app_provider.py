@@ -67,6 +67,10 @@ class AppProvider(Provider):
             ]
         )
 
+        from app import agent_health_probe
+
+        self.app.fastapi.add_event_handler("shutdown", agent_health_probe.stop)
+
         async def on_startup():
             """Ensure built-in templates are seeded."""
             from app.actions.seed_builtin_templates_action import SeedBuiltinTemplatesAction
@@ -92,8 +96,6 @@ class AppProvider(Provider):
                     keep=boot_log_files,
                 )
             )
-
-            from app import agent_health_probe
 
             agent_health_probe.start()
 

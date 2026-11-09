@@ -1,13 +1,21 @@
 import datetime
+import os
 import tempfile
 import uuid
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from fastapi_startkit.application import app
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
-from app.actions.agent_health_action import AgentHealth, agent_health, probe_agent
+from app import agent_health_probe
+from app.actions.agent_health_action import (
+    AgentHealth,
+    agent_health,
+    probe_agent,
+    probe_live_agents,
+)
 from app.mcp.tools import DeleteAgentTool, GetOrchestratedAgentsTool, HeartbeatTool, ListAgentsTool
 from app.models.Agent import Agent
 from app.models.AgentRelayMessage import AgentRelayMessage
@@ -120,6 +128,13 @@ class TestPassiveHeartbeat(TestCase, DatabaseTransaction):
 
         self.assertIn('"health": "healthy"', text)
 
+    async def test_heartbeat_without_a_note_keeps_the_previous_note(self):
+        await HeartbeatTool().handle({"agent_id": self.agent.id, "note": "running tests"})
+
+        await HeartbeatTool().handle({"agent_id": self.agent.id})
+
+        self.assertEqual((await Agent.find(self.agent.id)).heartbeat_note, "running tests")
+
 
 class TestWorktreeProbe(TestCase, DatabaseTransaction):
     async def asyncSetUp(self):
@@ -153,6 +168,42 @@ class TestWorktreeProbe(TestCase, DatabaseTransaction):
         await probe_agent(await Agent.find(self.agent.id))
 
         self.assertEqual((await Agent.find(self.agent.id)).worktree_branch, "task/elsewhere")
+
+    async def test_probe_never_rewrites_the_index_of_a_live_worktree(self):
+        worktree = self.repo.root / ".claude" / "worktrees" / f"agent-{self.agent.id}"
+        self.repo.git("worktree", "add", "-q", "-b", "task/probe", str(worktree))
+        index = Path(
+            self.repo.git(
+                "rev-parse", "--path-format=absolute", "--git-path", "index", cwd=worktree
+            ).strip()
+        )
+        os.utime(index, (1_000_000_000, 1_000_000_000))
+        os.utime(worktree / "README.md", (1_500_000_000, 1_500_000_000))
+        before = index.stat().st_mtime
+
+        with patch.dict("app.services.process._ENV_OVERRIDES", {"GIT_OPTIONAL_LOCKS": "1"}):
+            await probe_agent(self.agent)
+
+        self.assertEqual(index.stat().st_mtime, before)
+        self.assertFalse(index.with_name("index.lock").exists())
+
+    async def test_one_failing_agent_does_not_skip_the_rest_of_the_sweep(self):
+        await Agent.where("id", self.agent.id).update({"session_id": "broken"})
+        healthy = await AgentFactory.new().create(project_id=self.project.id, session_id="fine")
+        probed = []
+
+        async def probe(agent):
+            if agent.id == self.agent.id:
+                raise RuntimeError("bad worktree")
+            probed.append(agent.id)
+
+        with patch("app.actions.agent_health_action.probe_agent", side_effect=probe):
+            await probe_live_agents()
+
+        self.assertIn(healthy.id, probed)
+
+    def test_probe_loop_stops_on_app_shutdown(self):
+        self.assertIn(agent_health_probe.stop, app().fastapi.router.on_shutdown)
 
     async def test_probe_without_a_worktree_leaves_the_agent_untouched(self):
         self.assertIsNone(await probe_agent(self.agent))
@@ -218,6 +269,16 @@ class TestDeleteAgentRequeuesTask(TestCase, DatabaseTransaction):
             await DeleteAgentTool().handle({"agent_id": self.agent.id})
 
         self.assertEqual((await Task.find(self.task.id)).status, "in_review")
+
+    async def test_default_agent_worktree_branch_is_never_recorded_on_the_task(self):
+        await Agent.where("id", self.agent.id).update(
+            {"worktree_branch": f"worktree-agent-{self.agent.id}"}
+        )
+
+        with _spawn_patch():
+            await DeleteAgentTool().handle({"agent_id": self.agent.id})
+
+        self.assertIsNone((await Task.find(self.task.id)).branch)
 
     async def test_deleting_the_pm_notifies_nobody(self):
         with _spawn_patch():

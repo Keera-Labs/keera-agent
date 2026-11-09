@@ -834,7 +834,7 @@ class HeartbeatTool(Tool):
         agent = await Agent.where("id", arguments.get("agent_id")).where_null("deleted_at").first()
         if not agent:
             return Response.text(f"Error: agent #{arguments.get('agent_id')} not found")
-        await record_heartbeat(agent.id, arguments.get("note") or "")
+        await record_heartbeat(agent.id, arguments.get("note"))
         return Response.text(f"Heartbeat recorded for agent '{agent.name}'.")
 
 

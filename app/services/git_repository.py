@@ -333,10 +333,11 @@ class GitRepository:
             raise CommandError(result.output or f"git {args[0]} failed", result.stderr)
         return result
 
-    async def changed_files(self) -> RepositoryStatus:
+    async def changed_files(self, optional_locks: bool = True) -> RepositoryStatus:
         """Staged and unstaged changes without line counts: cheap enough for a single lookup."""
+        lock_flags = () if optional_locks else ("--no-optional-locks",)
         porcelain = await self.git_ok(
-            "status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all"
+            *lock_flags, "status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all"
         )
         return _parse_status(porcelain.stdout)
 

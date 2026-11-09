@@ -1,4 +1,5 @@
 import datetime
+import logging
 import os
 from enum import StrEnum
 
@@ -13,6 +14,8 @@ from app.services.worktree_probe import WorktreeSnapshot, probe_agent_worktrees
 HEALTHY_WINDOW = datetime.timedelta(seconds=90)
 STALL_WINDOW = datetime.timedelta(minutes=5)
 HEARTBEAT_NOTE_LENGTH = 140
+
+logger = logging.getLogger(__name__)
 
 
 class AgentHealth(StrEnum):
@@ -103,4 +106,7 @@ async def probe_agent(agent: Agent) -> WorktreeSnapshot | None:
 async def probe_live_agents() -> None:
     agents = await Agent.where_null("deleted_at").where_not_null("session_id").get()
     for agent in agents:
-        await probe_agent(agent)
+        try:
+            await probe_agent(agent)
+        except Exception:
+            logger.exception("Worktree probe failed for agent %s", agent.id)

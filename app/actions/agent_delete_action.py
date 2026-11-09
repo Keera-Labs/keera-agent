@@ -1,4 +1,5 @@
 import json
+import re
 
 from app.actions.agent_message_send_action import AgentMessageSendAction
 from app.actions.agent_status_action import utc_now
@@ -8,10 +9,19 @@ from app.services.worktree_cleanup import PROTECTED_BRANCHES
 
 REQUEUED_STATUSES = {"in_progress"}
 REQUEUE_STATUS = "pending"
+AGENT_DEFAULT_BRANCH = re.compile(r"worktree-agent-\d+")
 
 
 def _other_live_agents(agent: Agent):
     return Agent.where_null("deleted_at").where("id", "!=", agent.id)
+
+
+def _is_task_branch(branch: str | None) -> bool:
+    return (
+        bool(branch)
+        and branch not in PROTECTED_BRANCHES
+        and not AGENT_DEFAULT_BRANCH.fullmatch(branch)
+    )
 
 
 class AgentDeleteAction:
@@ -49,7 +59,7 @@ class AgentDeleteAction:
         if task.status in REQUEUED_STATUSES:
             values["status"] = REQUEUE_STATUS
         branch = getattr(agent, "worktree_branch", None)
-        if not task.branch and branch and branch not in PROTECTED_BRANCHES:
+        if not task.branch and _is_task_branch(branch):
             values["branch"] = branch
         if values:
             await Task.where("id", task.id).update({**values, "updated_at": utc_now()})

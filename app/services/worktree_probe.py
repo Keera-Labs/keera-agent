@@ -38,8 +38,8 @@ async def probe_worktree(path: str) -> WorktreeSnapshot | None:
         return None
     repo = GitRepository(root)
     try:
-        status = await repo.changed_files()
-        log = await repo.git("log", "-1", "--format=%ct")
+        status = await repo.changed_files(optional_locks=False)
+        log = await repo.git("--no-optional-locks", "log", "-1", "--format=%ct")
     except CommandError:
         return None
     last_commit_at = _utc(int(log.text.strip())) if log.ok and log.text.strip() else None
