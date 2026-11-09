@@ -1,6 +1,8 @@
 import asyncio
 from datetime import datetime
 
+from app.constant.task_status import TERMINAL_STATUSES
+
 _task: asyncio.Task | None = None
 
 
@@ -38,8 +40,6 @@ async def send_heartbeat(project_id: int) -> None:
     )
     if not pm:
         return
-    from app.constant.task_status import TERMINAL_STATUSES
-
     tasks = (
         await Task.where("project_id", project_id)
         .where_null("deleted_at")

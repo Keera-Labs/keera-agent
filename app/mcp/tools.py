@@ -14,13 +14,13 @@ from app.actions.agent_health_action import (
     heartbeat_age,
     record_heartbeat,
 )
-from app.actions.agent_status_action import utc_now
 from app.actions.task_transition_action import (
     TaskMergeAction,
     TaskTransitionAction,
     record_task_event,
     revoke_stale_approval,
     soft_delete_task,
+    write_task,
 )
 from app.constant.agent_types import DEFAULT_AGENT_TYPE, AgentType
 from app.constant.task_status import TERMINAL_STATUSES, TaskStatus, canonical_status
@@ -33,6 +33,7 @@ from app.requests.task_request import TaskReviewFields
 from app.services.pull_request_head import merged_pull_request_head
 from app.services.task_policy import (
     TaskRules,
+    blockers_by_task,
     blocking_dependencies,
     pm_only_violations,
     task_actor,
@@ -260,11 +261,12 @@ class ListTasksTool(Tool):
         if not tasks:
             return Response.text("No tasks found.")
 
+        blockers_of = await blockers_by_task([t.id for t in tasks])
         lines = []
         for t in tasks:
             priority = t.priority or "medium"
             line = f"[{t.status}] #{t.id} {t.title or t.body}  ({priority})"
-            blockers = await blocking_dependencies(t.id)
+            blockers = blockers_of.get(t.id)
             if blockers:
                 line += "  blocked by " + ", ".join(f"#{b}" for b in blockers)
             lines.append(line)
@@ -374,19 +376,6 @@ class UpdateTaskTool(Tool):
         if not task:
             return Response.text(f"Error: task #{arguments['task_id']} not found")
 
-        expected = arguments.get("expected_updated_at")
-        if expected is not None and str(task.updated_at) != expected:
-            return Response.text(
-                f"Error: task #{task.id} changed since {expected} (now {task.updated_at}); "
-                "re-read it with get_task and retry"
-            )
-
-        actor = await task_actor(arguments.get("actor_agent_id"))
-        try:
-            (await TaskRules.for_project(task.project_id)).require_identity(actor)
-        except TaskRuleRejectedError as exc:
-            return Response.text(f"Error: {exc}")
-
         changes = {}
         for field in ["title", "body", "priority", "head_sha", *REVIEW_FIELDS]:
             if arguments.get(field) is not None:
@@ -395,12 +384,17 @@ class UpdateTaskTool(Tool):
             if arguments.get(field) is not None:
                 changes[field] = json.dumps(arguments[field])
 
+        actor = await task_actor(arguments.get("actor_agent_id"))
         revoked = False
-        if changes:
+        try:
+            (await TaskRules.for_project(task.project_id)).require_identity(actor)
+            if changes:
+                await write_task(task, changes, arguments.get("expected_updated_at"))
+                await record_task_event(task.id, actor.agent_id, task.status, task.status, changes)
             if "head_sha" in changes:
                 revoked = await revoke_stale_approval(task, changes["head_sha"], actor)
-            await task.update({**changes, "updated_at": utc_now()})
-            await record_task_event(task.id, actor.agent_id, task.status, task.status, changes)
+        except TaskRuleRejectedError as exc:
+            return Response.text(f"Error: {exc}")
 
         text = f"Task #{task.id} '{task.title or task.body}' updated."
         if revoked:
@@ -517,7 +511,10 @@ class RecordMergeInput(BaseModel):
     task_id: int = Field(description="The numeric task ID.")
     merged_sha: Optional[str] = Field(
         default=None,
-        description="Head commit of the merged PR. Omit to read it from GitHub through the task's pr_number or pr_url.",
+        description=(
+            "The merged PR's head commit (gh pr view --json headRefOid), not the merge or squash "
+            "commit. Omit to read it from GitHub through the task's pr_number or pr_url."
+        ),
     )
     actor_agent_id: Optional[int] = Field(default=None, description=ACTOR_FIELD_DESCRIPTION)
 

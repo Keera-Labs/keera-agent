@@ -1,3 +1,6 @@
+import datetime
+import json
+
 from app.actions.agent_status_action import utc_now
 from app.constant.task_status import TERMINAL_STATUSES, canonical_status
 from app.exceptions.task_rule_rejected_error import TaskRuleRejectedError
@@ -14,6 +17,51 @@ from app.services.task_policy import (
 
 APPROVAL_SURVIVES = {"approved", "merged", "done"}
 MIN_SHA_LENGTH = 7
+TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
+MAX_WRITE_ATTEMPTS = 5
+
+
+class StaleTaskWriteError(TaskRuleRejectedError):
+    pass
+
+
+def _next_updated_at(previous: str | None) -> str:
+    now = utc_now()
+    if not previous or now > previous[:19]:
+        return now
+    later = datetime.datetime.strptime(previous[:19], TIMESTAMP_FORMAT) + datetime.timedelta(
+        seconds=1
+    )
+    return later.strftime(TIMESTAMP_FORMAT)
+
+
+async def _stored_updated_at(task_id: int) -> str | None:
+    stored = await Task.find(task_id)
+    if stored is None:
+        raise TaskRuleRejectedError(f"task #{task_id} not found")
+    return str(stored.updated_at) if stored.updated_at else None
+
+
+async def write_task(task: Task, changes: dict, expected_updated_at: str | None = None) -> None:
+    for _ in range(MAX_WRITE_ATTEMPTS):
+        previous = await _stored_updated_at(task.id)
+        if expected_updated_at is not None and previous != expected_updated_at:
+            raise StaleTaskWriteError(
+                f"task #{task.id} changed since {expected_updated_at} (now {previous}); "
+                "re-read it with get_task and retry"
+            )
+        values = {**changes, "updated_at": _next_updated_at(previous)}
+        stored = {
+            key: json.dumps(value) if isinstance(value, (list, dict)) else value
+            for key, value in values.items()
+        }
+        query = Task.where("id", task.id)
+        query = query.where("updated_at", previous) if previous else query.where_null("updated_at")
+        if await query.update(stored):
+            for key, value in values.items():
+                setattr(task, key, value)
+            return
+    raise StaleTaskWriteError(f"task #{task.id} kept changing during the write; retry")
 
 
 def same_sha(left: str | None, right: str | None) -> bool:
@@ -50,13 +98,8 @@ async def soft_delete_task(
     from_status = task.status
     status = from_status if from_status in TERMINAL_STATUSES else "cancelled"
     now = utc_now()
-    await task.update(
-        {
-            "status": status,
-            "completed_at": task.completed_at_for(status),
-            "deleted_at": now,
-            "updated_at": now,
-        }
+    await write_task(
+        task, {"status": status, "completed_at": task.completed_at_for(status), "deleted_at": now}
     )
     fields = {"deleted_at": now, **({"warnings": warnings} if warnings else {})}
     await record_task_event(task.id, actor_agent_id, from_status, status, fields)
@@ -66,7 +109,7 @@ async def revoke_stale_approval(task: Task, head_sha: str, actor: TaskActor) -> 
     if canonical_status(task.status) != "approved" or same_sha(head_sha, task.approved_sha):
         return False
     from_status = task.status
-    await task.update({"status": "in_review", "approved_sha": None, "updated_at": utc_now()})
+    await write_task(task, {"status": "in_review", "approved_sha": None})
     await record_task_event(
         task.id,
         actor.agent_id,
@@ -111,8 +154,8 @@ class TaskTransitionAction:
 
         from_status = self.task.status
         changes = self._changes()
-        await self.task.update(changes)
-        recorded = {key: changes[key] for key in changes if key not in ("status", "updated_at")}
+        await write_task(self.task, changes)
+        recorded = {key: changes[key] for key in changes if key != "status"}
         if warnings:
             recorded["warnings"] = warnings
         await record_task_event(
@@ -133,7 +176,6 @@ class TaskTransitionAction:
             **self.fields,
             "status": self.status,
             "completed_at": self.task.completed_at_for(self.status),
-            "updated_at": utc_now(),
         }
         target = canonical_status(self.status)
         if self.head_sha:

@@ -1,3 +1,6 @@
+import asyncio
+import json
+
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
 from app.actions.claude_hook_action import agent_env
@@ -13,9 +16,11 @@ from app.mcp.tools import (
     UpdateTaskStatusTool,
     UpdateTaskTool,
 )
+from app.models.Agent import Agent
 from app.models.Project import Project
 from app.models.Task import Task
 from app.models.TaskEvent import TaskEvent
+from app.resources.agent_resource import AgentResource
 from app.services.relay_identity import (
     AGENT_TOKEN_ENV,
     RelayCaller,
@@ -328,6 +333,64 @@ class TestAuditAndConcurrency(TaskStateMachineCase):
         self.assertIn("Error", text)
         self.assertNotEqual((await self._reload(task)).title, "New")
 
+    async def test_concurrent_writes_with_the_same_expected_updated_at_let_only_one_through(self):
+        task = await self._task(updated_at="2026-01-01 00:00:00")
+
+        results = await asyncio.gather(
+            *(
+                UpdateTaskTool().handle(
+                    {
+                        "task_id": task.id,
+                        "title": f"Writer {n}",
+                        "expected_updated_at": "2026-01-01 00:00:00",
+                    }
+                )
+                for n in range(2)
+            )
+        )
+
+        texts = [_text(result) for result in results]
+        self.assertEqual(sum("Error" in text for text in texts), 1, texts)
+        winner = next(t for t in texts if "Error" not in t)
+        self.assertIn((await self._reload(task)).title, winner)
+
+    async def test_a_second_write_in_the_same_second_still_moves_updated_at(self):
+        task = await self._task()
+        seen = str((await self._reload(task)).updated_at)
+
+        await UpdateTaskTool().handle({"task_id": task.id, "title": "First"})
+        await UpdateTaskTool().handle({"task_id": task.id, "title": "Second"})
+        stale = _text(
+            await UpdateTaskTool().handle(
+                {"task_id": task.id, "title": "Stale", "expected_updated_at": seen}
+            )
+        )
+
+        self.assertIn("Error", stale)
+        self.assertEqual((await self._reload(task)).title, "Second")
+
+    async def test_fresh_expected_updated_at_is_accepted(self):
+        task = await self._task()
+        current = str((await self._reload(task)).updated_at)
+
+        text = _text(
+            await UpdateTaskTool().handle(
+                {"task_id": task.id, "title": "Fresh", "expected_updated_at": current}
+            )
+        )
+
+        self.assertNotIn("Error", text)
+        self.assertEqual((await self._reload(task)).title, "Fresh")
+
+    async def test_head_moved_event_keeps_the_pre_revoke_status(self):
+        task = await self._task(status="approved", approved_sha=HEAD, head_sha=HEAD)
+
+        await UpdateTaskTool().handle({"task_id": task.id, "head_sha": OTHER_HEAD})
+
+        events = await TaskEvent.where("task_id", task.id).order_by("id", "asc").get()
+        transitions = [(event.from_status, event.to_status) for event in events]
+        self.assertEqual(transitions, [("approved", "approved"), ("approved", "in_review")])
+
     async def test_soft_delete_hides_the_task_and_keeps_its_history(self):
         task = await self._task(status="created", title="Doomed")
         await self._status(task, "assigned", actor_agent_id=self.pm.id)
@@ -392,12 +455,59 @@ class TestRelayIdentity(TaskStateMachineCase):
 
         self.assertIn("does not match the calling agent", error)
 
-    async def test_binding_rejects_an_unknown_token(self):
+    async def test_binding_lets_an_unknown_token_through_as_anonymous(self):
+        params = {"name": "update_task_status", "arguments": {"task_id": 1, "status": "acked"}}
+
         error = _bind_caller_identity(
-            [UpdateTaskStatusTool], {"name": "x"}, RelayCaller(token_presented=True)
+            [UpdateTaskStatusTool], params, RelayCaller(token_presented=True)
         )
 
-        self.assertEqual(error, "unknown or revoked agent token")
+        self.assertIsNone(error)
+        self.assertNotIn("actor_agent_id", params["arguments"])
+
+    async def test_unknown_token_over_http_runs_the_call_with_a_warning(self):
+        task = await self._task(title="Visible to anonymous callers")
+        body = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": "get_task", "arguments": {"task_id": task.id}},
+        }
+
+        response = await self.post(
+            "/mcp",
+            json=body,
+            headers={"Content-Type": "application/json", "X-Keera-Agent-Token": "bogus"},
+        )
+
+        texts = [item["text"] for item in response.json()["result"]["content"]]
+        self.assertIn("Visible to anonymous callers", texts[0])
+        self.assertIn("Warning: unknown or revoked agent token", texts[-1])
+
+    async def test_unexpanded_placeholder_is_treated_as_no_token(self):
+        caller = await resolve_caller("${KEERA_AGENT_TOKEN}")
+
+        self.assertFalse(caller.rejected)
+
+    async def test_rejected_token_cannot_write_once_ownership_is_enforced(self):
+        await self._enforce()
+        engineer = await AgentFactory.new().create(project_id=self.project.id, session_id="live")
+        await issue_agent_token(engineer.id)
+        task = await self._task(status="created")
+
+        with acting_as(RelayCaller(token_presented=True)):
+            text = await self._status(task, "assigned")
+
+        self.assertIn("Error: caller unidentified", text)
+
+    async def test_relay_token_hash_never_leaves_the_server(self):
+        await issue_agent_token(self.pm.id)
+        agent = await Agent.find(self.pm.id)
+
+        payload = AgentResource(agent).serialize()
+
+        self.assertIsNotNone(agent.relay_token_hash)
+        self.assertNotIn("relay_token_hash", json.dumps(payload))
 
     async def test_agent_env_carries_the_token(self):
         env = agent_env(self.pm.id, relay_token="secret")
@@ -411,6 +521,20 @@ class TestTaskRulesEndpoint(TaskStateMachineCase):
 
         response.assert_ok()
         self.assertEqual(response.json()["data"]["task_rules"], "warn")
+
+    async def test_put_enforce_persists(self):
+        response = await self.put(
+            f"/api/projects/{self.project.id}/task-rules", json={"task_rules": "enforce"}
+        )
+
+        response.assert_ok()
+        self.assertEqual(response.json()["data"]["task_rules"], "enforce")
+        self.assertEqual((await Project.find(self.project.id)).task_rules, "enforce")
+
+    async def test_unknown_project_is_404(self):
+        response = await self.put("/api/projects/999999999/task-rules", json={"task_rules": "warn"})
+
+        self.assertEqual(response.status_code, 404)
 
     async def test_rejects_unknown_modes(self):
         response = await self.put(

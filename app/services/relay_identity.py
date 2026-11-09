@@ -51,7 +51,7 @@ async def issue_agent_token(agent_id: int) -> str:
 
 async def resolve_caller(token: str | None) -> RelayCaller:
     token = (token or "").strip()
-    if not token:
+    if not token or token.startswith("${"):
         return RelayCaller()
     agent = (
         await Agent.where("relay_token_hash", hash_token(token)).where_null("deleted_at").first()

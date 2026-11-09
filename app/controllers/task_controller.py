@@ -3,8 +3,7 @@ import datetime
 from fastapi.responses import Response
 from fastapi_startkit.jsonapi import ResourceCollection
 
-from app.actions.agent_status_action import utc_now
-from app.actions.task_transition_action import record_task_event, soft_delete_task
+from app.actions.task_transition_action import record_task_event, soft_delete_task, write_task
 from app.constant.task_status import TERMINAL_STATUSES
 from app.models.Task import Task
 from app.requests.task_request import TaskStoreRequest, TaskUpdateRequest
@@ -53,7 +52,7 @@ async def update(request: TaskUpdateRequest, task_id: int):
     if "status" in data:
         data["completed_at"] = task.completed_at_for(data["status"])
 
-    await task.update({**data, "updated_at": utc_now()})
+    await write_task(task, data)
     await record_task_event(task.id, None, from_status, task.status, data)
     return TaskResource(task)
 

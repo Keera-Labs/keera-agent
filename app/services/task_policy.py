@@ -127,18 +127,30 @@ def pm_only_violations(action: str, actor: TaskActor) -> list[str]:
     return [f"only a pm may {action}{unidentified}"]
 
 
-async def blocking_dependencies(task_id: int) -> list[int]:
-    dependencies = await TaskDependency.where("task_id", task_id).get()
-    blockers = []
+async def blockers_by_task(task_ids: list[int]) -> dict[int, list[int]]:
+    if not task_ids:
+        return {}
+    dependencies = await TaskDependency.where_in("task_id", task_ids).get()
+    upstream_ids = list({dependency.depends_on_task_id for dependency in dependencies})
+    upstreams = (
+        {task.id: task for task in await Task.where_in("id", upstream_ids).get()}
+        if upstream_ids
+        else {}
+    )
+    blockers: dict[int, list[int]] = {}
     for dependency in dependencies:
-        upstream = await Task.find(dependency.depends_on_task_id)
+        upstream = upstreams.get(dependency.depends_on_task_id)
         if upstream is None or upstream.deleted_at:
             continue
         status = canonical_status(upstream.status)
         met = status == "done" if dependency.hard else status in SOFT_DEPENDENCY_MET
         if not met:
-            blockers.append(upstream.id)
+            blockers.setdefault(dependency.task_id, []).append(upstream.id)
     return blockers
+
+
+async def blocking_dependencies(task_id: int) -> list[int]:
+    return (await blockers_by_task([task_id])).get(task_id, [])
 
 
 async def dependency_violations(task: Task, to_status: str) -> list[str]:

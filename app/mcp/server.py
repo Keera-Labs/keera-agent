@@ -205,23 +205,32 @@ async def _dispatch_message(
     except Exception as exc:
         return _error(message.get("id"), -32600, f"Invalid Request: {exc}")
 
-    if rpc.method == "tools/call":
+    is_tool_call = rpc.method == "tools/call"
+    if is_tool_call:
         identity_error = _bind_caller_identity(protocol._server.tools(), rpc.params, caller)
         if identity_error:
             return _tool_error(rpc.id, identity_error)
 
     result = await protocol.dispatch(rpc.method, rpc.params, rpc.id)
+    if is_tool_call and caller.rejected:
+        logger.warning("MCP tools/call with an unknown or revoked agent token; acting anonymously")
+        _append_text(result, f"Warning: {REJECTED_TOKEN_WARNING} (advisory)")
     return None if rpc.is_notification else result
 
 
 CALLER_FIELDS = ("sender_agent_id", "from_agent_id", "actor_agent_id")
+REJECTED_TOKEN_WARNING = "unknown or revoked agent token; the call ran as an anonymous caller"
+
+
+def _append_text(result: dict | None, text: str) -> None:
+    content = (result or {}).get("result", {}).get("content")
+    if isinstance(content, list):
+        content.append({"type": "text", "text": text})
 
 
 def _bind_caller_identity(
     tool_classes: list, params: dict | None, caller: RelayCaller
 ) -> str | None:
-    if caller.rejected:
-        return "unknown or revoked agent token"
     if caller.agent is None or not isinstance(params, dict):
         return None
     tool_class = next((t for t in tool_classes if t.name == params.get("name")), None)

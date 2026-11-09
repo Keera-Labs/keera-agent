@@ -68,6 +68,10 @@ class TestGeminiProvider(unittest.TestCase):
             self.assertEqual(
                 settings["mcpServers"]["keera"]["httpUrl"], "http://127.0.0.1:4545/mcp"
             )
+            self.assertEqual(
+                settings["mcpServers"]["keera"]["headers"],
+                {"X-Keera-Agent-Token": "${KEERA_AGENT_TOKEN:-}"},
+            )
             self.assertEqual(settings["tools"]["exclude"], ["write_file"])
             self.assertEqual(settings["model"]["maxSessionTurns"], 7)
             self.assertNotIn("GEMINI_SYSTEM_MD", path)

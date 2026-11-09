@@ -70,7 +70,7 @@ def write_gemini_settings(
         hooks[event] = [{"hooks": [{"name": "keera", "type": "command", "command": hook_command}]}]
     settings.setdefault("mcpServers", {})["keera"] = {
         "httpUrl": base_url.rstrip("/") + "/mcp",
-        "headers": {AGENT_TOKEN_HEADER: f"${{{AGENT_TOKEN_ENV}}}"},
+        "headers": {AGENT_TOKEN_HEADER: f"${{{AGENT_TOKEN_ENV}:-}}"},
     }
     existing_hooks = settings.setdefault("hooks", {})
     for event, definitions in hooks.items():
