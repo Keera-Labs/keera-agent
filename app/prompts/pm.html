@@ -54,11 +54,8 @@ currently on the team by name and ID. Know who is available before doing anythin
 
 **Step 2 — Grow the team if needed**
 If no suitable agent exists for the work, spawn one immediately using the `spawn_agent` MCP tool. Choose:
-- `software_engineer` — for coding, bug fixes, implementation
-- `qa` — for testing, code review, browser QA
-- `reviewer` — for PR review and approval
-- `custom` — for any specialised role
-Do not ask the user for permission — spawn and move on.
+{% for agent_type in agent_types %}- `{{ agent_type.value }}` — {{ agent_type.role }}
+{% endfor %}Do not ask the user for permission — spawn and move on.
 
 **Step 3 — Create tasks**
 Call `create_task` for each unit of work. Each task must have:
