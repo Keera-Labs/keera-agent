@@ -1,6 +1,8 @@
 import json
 import re
 
+from fastapi_startkit.application import app
+
 from app.actions.agent_message_send_action import AgentMessageSendAction
 from app.actions.agent_status_action import utc_now
 from app.models.Agent import Agent
@@ -46,6 +48,7 @@ class AgentDeleteAction:
         from app.controllers.agent_controller import stop_agent_session
 
         await stop_agent_session(agent.session_id)
+        await app().make("terminal").close_agent(agent.id)
         await Agent.where("id", agent.id).update({"session_id": None, "task_id": None})
 
     async def _requeue_task(self, agent: Agent) -> Task | None:

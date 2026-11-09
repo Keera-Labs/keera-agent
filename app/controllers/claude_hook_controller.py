@@ -11,6 +11,7 @@ from app.actions.agent_question_action import settle_pending_questions
 from app.actions.agent_status_action import (
     CLEARED_ATTENTION,
     hook_agent_id,
+    live_agent,
     notify_agent_status,
     utc_now,
 )
@@ -100,10 +101,10 @@ async def _mark_stopped_agent_waiting(agent_id: int | None) -> None:
     # stopped; treating it as "every running agent stopped" froze still-working agents.
     if agent_id is None:
         return
-    agent = await Agent.where("id", agent_id).where_in("status", ["running", "needs_input"]).first()
+    agent = await live_agent(agent_id).where_in("status", ["running", "needs_input"]).first()
     if not agent:
         return
-    await Agent.where("id", agent_id).update(
+    await live_agent(agent_id).update(
         {
             "status": "waiting",
             "current_activity": None,

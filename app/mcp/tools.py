@@ -721,7 +721,12 @@ class GetOrchestratedAgentsTool(Tool):
         if not orchestrator_id:
             return Response.text("Error: agent_id is required")
 
-        agents = await Agent.where("orchestrator_id", orchestrator_id).order_by("id", "asc").get()
+        agents = (
+            await Agent.where("orchestrator_id", orchestrator_id)
+            .where_null("deleted_at")
+            .order_by("id", "asc")
+            .get()
+        )
 
         if not agents:
             return Response.text("You have not orchestrated any agents yet.")

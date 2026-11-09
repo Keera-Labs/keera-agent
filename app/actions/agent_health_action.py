@@ -5,7 +5,7 @@ from enum import StrEnum
 
 from fastapi_startkit.application import app
 
-from app.actions.agent_status_action import utc_now
+from app.actions.agent_status_action import live_agent, utc_now
 from app.models.Agent import Agent
 from app.models.Project import Project
 from app.models.Task import Task
@@ -79,7 +79,7 @@ async def record_heartbeat(agent_id: int, note: str | None = None) -> None:
     values = {"last_heartbeat_at": utc_now()}
     if note is not None:
         values["heartbeat_note"] = note.strip()[:HEARTBEAT_NOTE_LENGTH] or None
-    await Agent.where("id", agent_id).where_null("deleted_at").update(values)
+    await live_agent(agent_id).update(values)
 
 
 async def probe_agent(agent: Agent) -> WorktreeSnapshot | None:
@@ -92,7 +92,7 @@ async def probe_agent(agent: Agent) -> WorktreeSnapshot | None:
     )
     if snapshot is None:
         return None
-    await Agent.where("id", agent.id).update(
+    await live_agent(agent.id).update(
         {
             "worktree_branch": snapshot.branch,
             "worktree_head_sha": snapshot.head_sha,

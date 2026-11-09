@@ -12,7 +12,7 @@ from fastapi_startkit.application import app
 from fastapi_startkit.logging import Logger
 
 from app.actions.agent_startup import wait_for_agent_cli
-from app.actions.agent_status_action import CLEARED_ATTENTION, notify_agent_status
+from app.actions.agent_status_action import CLEARED_ATTENTION, live_agent, notify_agent_status
 from app.actions.claude_hook_action import agent_env
 from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.actions.terminal_write_action import TerminalWriteAction
@@ -46,7 +46,7 @@ async def _mark_agent_working(agent: Agent, message: str) -> None:
     """Record that an agent just started actively working — powers the dashboard's
     running state, current-activity text, and elapsed timer."""
     now = datetime.datetime.now().isoformat(sep=" ", timespec="seconds")
-    await Agent.where("id", agent.id).update(
+    await live_agent(agent.id).update(
         {
             "status": "running",
             "started_at": now,
