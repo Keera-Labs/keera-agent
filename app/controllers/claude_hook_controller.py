@@ -1,5 +1,4 @@
 import asyncio
-import datetime
 import json
 import os
 from typing import Annotated
@@ -81,7 +80,6 @@ async def claude_stopped(
     Receives the Claude Code Stop hook POST.
     Payload includes: session_id, cwd, hook_event_name, stop_hook_active, etc.
     We use `cwd` to find the active WebSocket and notify the frontend.
-    After marking idle, picks up the next pending task (if any) and sends it to Claude.
     Only the agent the Stop is attributed to (agent-id header, else its worktree cwd)
     moves to waiting.
     """
@@ -149,49 +147,6 @@ async def _handle_claude_stopped(project, project_cwd: str, agent_id: int | None
             pass
 
     await _mark_stopped_agent_waiting(agent_id)
-
-    # Check for pending tasks and dispatch the next one
-    next_task = await Task.where("project_id", project.id).where("status", "pending").first()
-    if next_task:
-        await Task.where("id", next_task.id).update({"status": "in_progress"})
-        terminal_manager: TerminalManager = app().make("terminal")
-        agents = await Agent.where("project_id", project.id).get()
-        active_agent = next(
-            (ag for ag in agents if ag.session_id and terminal_manager.find(ag.session_id)), None
-        )
-        if active_agent:
-            await asyncio.sleep(0.5)
-            task_text = (next_task.body or next_task.title).encode().rstrip(b"\r\n")
-            await terminal_manager.write(active_agent.session_id, task_text)
-            await asyncio.sleep(0.05)
-            await terminal_manager.write(active_agent.session_id, b"\r")
-            await Project.where("id", project.id).update({"claude_status": "running"})
-            now = datetime.datetime.now().isoformat(sep=" ", timespec="seconds")
-            await Agent.where("id", active_agent.id).update(
-                {
-                    "status": "running",
-                    "started_at": now,
-                    "current_activity": (next_task.body or next_task.title)[:140],
-                    **CLEARED_ATTENTION,
-                }
-            )
-            await notify_agent_status(active_agent, "running")
-
-            bridge = _find_project_bridge(project_cwd)
-            if bridge:
-                try:
-                    await bridge.write(
-                        json.dumps(
-                            {
-                                "type": "task_started",
-                                "cwd": project_cwd,
-                                "task_id": next_task.id,
-                                "body": next_task.body or next_task.title,
-                            }
-                        )
-                    )
-                except Exception:
-                    pass
 
     # Deliver pending agent relay messages to any agents with active PTYs
     await _deliver_agent_relay_messages(project, project_cwd)
