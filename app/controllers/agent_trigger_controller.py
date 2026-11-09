@@ -265,15 +265,15 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     try:
         await asyncio.to_thread(validate_gemini_cli, agent.provider)
     except RuntimeError as exc:
-        await Agent.where("id", agent.id).update(
+        if await live_agent(agent.id).update(
             {
                 "status": "needs_input",
                 "attention_kind": "permission",
                 "attention_prompt": str(exc),
                 "current_activity": str(exc),
             }
-        )
-        await notify_agent_status(agent, "needs_input", "permission")
+        ):
+            await notify_agent_status(agent, "needs_input", "permission")
         return
 
     base_url = app().make("config").get("fastapi.app_url")
@@ -288,21 +288,20 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
         ensure_agent_worktree, agent, cwd, project.worktree_copy_paths
     )
 
+    terminal_manager: TerminalManager = app().make("terminal")
+    config_dir = await agent_config_dir(agent, project)
+    env = agent_env(agent.id, config_dir, await issue_agent_token(agent.id))
+
     session_id = str(uuid.uuid4())
     # Registered before the session becomes visible (DB row, terminal), so a
     # relay message sent meanwhile is queued instead of typed into the shell.
     ready_event = mark_booting(session_id)
-    await Agent.where("id", agent.id).update({"session_id": session_id})
-    await _mark_agent_working(agent, initial_message)
-
-    terminal_manager: TerminalManager = app().make("terminal")
-    config_dir = await agent_config_dir(agent, project)
-    terminal_manager.create(
-        cwd=agent_cwd,
-        session_id=session_id,
-        env=agent_env(agent.id, config_dir, await issue_agent_token(agent.id)),
-    )
+    if not await live_agent(agent.id).update({"session_id": session_id}):
+        claude_ready.pop(session_id, None)
+        return
+    terminal_manager.create(cwd=agent_cwd, session_id=session_id, env=env)
     terminal = terminal_manager.get(session_id)
+    await _mark_agent_working(agent, initial_message)
 
     # Give the shell time to start, then launch claude
     await asyncio.sleep(0.5)
