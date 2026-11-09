@@ -93,6 +93,10 @@ class AppProvider(Provider):
                 )
             )
 
+            from app import agent_health_probe
+
+            agent_health_probe.start()
+
             # Resume PM check-in schedulers that were left enabled so their state
             # survives a server restart, not just a browser reload.
             try:
