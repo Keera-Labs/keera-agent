@@ -1,11 +1,3 @@
-"""
-Feature tests for claude_hook_controller.
-
-Focuses on the `claude_stopped` endpoint — specifically that it returns 200
-and that the task-dispatch logic uses `body` (not the dropped `description`)
-to identify pending work.
-"""
-
 import asyncio
 import json
 import os
@@ -52,31 +44,12 @@ class TestClaudeHookController(TestCase, DatabaseTransaction):
         refreshed = await Project.find(self.project.id)
         self.assertEqual(refreshed.claude_status, "idle")
 
-    async def test_claude_stopped_marks_pending_task_in_progress(self):
-        """
-        When Claude stops and a pending task exists, the hook marks it
-        `in_progress` using the task's `body` field (not the dropped
-        `description` column) — so the PTY write uses a non-None value.
-        """
-        import os
+    async def test_claude_stopped_leaves_pending_tasks_pending(self):
+        task = await TaskFactory.new().create(project_id=self.project.id, body="Implement it")
 
-        task = await TaskFactory.new().create(
-            project_id=self.project.id,
-            body="Implement the CSV export endpoint",
-        )
-        self.assertEqual(task.body, "Implement the CSV export endpoint")
+        await self._stop()
 
-        cwd = os.path.expanduser(self.project.path)
-        response = await self.post("/api/claude-stopped", json={"cwd": cwd})
-        response.assert_ok()
-
-        # Give the background asyncio.create_task a moment to run
-        import asyncio
-
-        await asyncio.sleep(0.1)
-
-        refreshed = await Task.find(task.id)
-        self.assertEqual(refreshed.status, "in_progress")
+        self.assertEqual((await Task.find(task.id)).status, "pending")
 
     # ── /api/claude-started ───────────────────────────────────────────────────
 
@@ -154,7 +127,7 @@ class _RecordingBridge:
 
 
 class _FakeConnections:
-    """Backs both find_by_cwd (the claude_stopped/task_started pushes) and
+    """Backs both find_by_cwd (the claude_stopped push) and
     all_for_cwd (notify_agent_status) with the same recording bridge."""
 
     def __init__(self, cwd: str, bridge: _RecordingBridge):
@@ -169,17 +142,15 @@ class _FakeConnections:
 
 
 class _FakeTerminalManager:
-    """A minimal terminal manager: `find` reports which session ids are live,
-    `write` is a no-op so the dispatch-to-active-agent path can run in a test."""
-
     def __init__(self, live_session_ids):
         self._live = set(live_session_ids)
+        self.writes: list[tuple[str, bytes]] = []
 
     def find(self, session_id):
         return session_id if session_id in self._live else None
 
     async def write(self, session_id, data):
-        pass
+        self.writes.append((session_id, data))
 
 
 class TestClaudeStoppedPushesAgentStatus(TestCase, DatabaseTransaction):
@@ -251,35 +222,28 @@ class TestClaudeStoppedPushesAgentStatus(TestCase, DatabaseTransaction):
 
         self.assertEqual(self._agent_status_pushes(), [])
 
-    async def test_dispatching_a_pending_task_to_the_active_agent_pushes_agent_status(self):
-        """The Stop hook can immediately hand a pending task to another live agent;
-        that status write must also clear a stale attention_kind and push it."""
-        active = await AgentFactory.new().create(
+    async def test_unattributed_stop_injects_nothing_into_live_agent_or_pm_sessions(self):
+        worker = await AgentFactory.new().create(
             project_id=self.project.id,
             status="needs_input",
             attention_kind="question",
-            attention_prompt="Ship it?",
-            session_id="sess-active",
+            session_id="sess-worker",
         )
-        task = await TaskFactory.new().create(project_id=self.project.id, body="Do the thing")
+        pm = await AgentFactory.new().create(
+            project_id=self.project.id,
+            agent_type="pm",
+            status="waiting",
+            session_id="sess-pm",
+        )
+        task = await TaskFactory.new().create(project_id=self.project.id, body=None)
+        terminal = _FakeTerminalManager(["sess-worker", "sess-pm"])
+        app().bind("terminal", terminal)
 
-        app().bind("terminal", _FakeTerminalManager(["sess-active"]))
         await _handle_claude_stopped(self.project, self.cwd, agent_id=None)
 
-        refreshed = await Agent.find(active.id)
-        self.assertEqual(refreshed.status, "running")
-        self.assertIsNone(refreshed.attention_kind)
-        self.assertEqual((await Task.find(task.id)).status, "in_progress")
-
-        pushed = [p for p in self._agent_status_pushes() if p["agent_id"] == active.id]
-        self.assertEqual(
-            pushed,
-            [
-                {
-                    "type": "agent_status",
-                    "agent_id": active.id,
-                    "status": "running",
-                    "attention_kind": None,
-                }
-            ],
-        )
+        self.assertEqual(terminal.writes, [])
+        self.assertEqual((await Task.find(task.id)).status, "pending")
+        self.assertEqual((await Agent.find(worker.id)).status, "needs_input")
+        self.assertEqual((await Agent.find(pm.id)).status, "waiting")
+        self.assertEqual(self._agent_status_pushes(), [])
+        self.assertFalse(any(json.loads(m).get("type") == "task_started" for m in self.bridge.sent))
