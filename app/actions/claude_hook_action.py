@@ -10,8 +10,8 @@ from app.utils.process_env import user_env
 
 # URL paths that identify keera-managed Claude hooks.
 _STOP_PATH = "/api/claude-stopped"
-_START_PATH = "/api/claude-started"
 _AGENT_EVENT_PATH = "/api/agent-hook-events"
+_RETIRED_HOOKS = [("UserPromptSubmit", "/api/claude-started")]
 
 # Set in each agent's PTY and echoed back by its hooks, so an event can be attributed to
 # the agent that raised it even when several agents share one project directory.
@@ -39,9 +39,9 @@ def agent_env(agent_id: int, claude_config_dir: str | None = None) -> dict:
 class ClaudeHookAction:
     """Upsert keera-managed Claude hooks into a directory's .claude/settings.json.
 
-    Writes the Stop and UserPromptSubmit hooks, plus the agent-status hooks
-    (AskUserQuestion, permission prompts, and the tool/prompt events that clear
-    them), with loopback URLs from hook_base_url(). All other settings keys and
+    Writes the Stop hook, plus the agent-status hooks (AskUserQuestion,
+    permission prompts, and the tool/prompt events that clear them), with
+    loopback URLs from hook_base_url(), and removes retired keera hooks. All other settings keys and
     user-defined hooks are preserved; keera-managed hooks (matched by URL path)
     are updated in place, so the write is idempotent. execute() returns True only
     when the file actually changed.
@@ -73,6 +73,8 @@ class ClaudeHookAction:
         for event, path, matcher, attributed in self._managed_hooks():
             desired = self._http_hook(f"{base_url}{path}", attributed)
             changed |= self._upsert_hook(hooks.setdefault(event, []), path, desired, matcher)
+        for event, path in _RETIRED_HOOKS:
+            changed |= self._remove_hook(hooks, event, path)
 
         if settings.get("defaultMode") != "acceptEdits":
             settings["defaultMode"] = "acceptEdits"
@@ -101,7 +103,6 @@ class ClaudeHookAction:
         """(event, url path, matcher, sends the agent-id header) for every keera hook."""
         return [
             ("Stop", _STOP_PATH, None, True),
-            ("UserPromptSubmit", _START_PATH, None, False),
             ("UserPromptSubmit", _AGENT_EVENT_PATH, None, True),
             ("PreToolUse", _AGENT_EVENT_PATH, "AskUserQuestion", True),
             ("PostToolUse", _AGENT_EVENT_PATH, None, True),
@@ -139,3 +140,20 @@ class ClaudeHookAction:
         group["hooks"] = [dict(desired)]
         hook_list.append(group)
         return True
+
+    @staticmethod
+    def _remove_hook(hooks: dict, event: str, path: str) -> bool:
+        hook_list = hooks.get(event, [])
+        changed = False
+        for group in list(hook_list):
+            kept = [h for h in group.get("hooks", []) if urlparse(h.get("url", "")).path != path]
+            if len(kept) == len(group.get("hooks", [])):
+                continue
+            changed = True
+            if kept:
+                group["hooks"] = kept
+            else:
+                hook_list.remove(group)
+        if changed and not hook_list:
+            hooks.pop(event)
+        return changed

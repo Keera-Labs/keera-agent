@@ -105,7 +105,6 @@ router.delete(
 router.post("/api/commands/{command_id}/runs", command_run_controller.store)
 router.delete("/api/commands/{command_id}/runs", command_run_controller.destroy)
 
-router.post("/api/claude-started", claude_hook_controller.claude_started)
 router.post("/api/claude-stopped", claude_hook_controller.claude_stopped)
 router.post("/api/agent-hook-events", agent_hook_event_controller.store)
 
