@@ -8,6 +8,7 @@ from typing import Literal, Optional, Union
 from fastapi_startkit.mcp import Response, Tool
 from pydantic import BaseModel, Field
 
+from app.constant.agent_types import DEFAULT_AGENT_TYPE, AgentType
 from app.constant.task_status import TaskStatus
 from app.models.Project import Project
 from app.models.Task import REVIEW_FIELDS, Task
@@ -514,7 +515,7 @@ class SpawnAgentInput(BaseModel):
         description="Short display name for the agent (e.g. 'Backend Engineer', 'QA Bot')."
     )
     agent_type: str = Field(
-        pattern="^(pm|software_engineer|software_engineer_frontend|reviewer|qa|qa_browser)$",
+        pattern=AgentType.pattern(),
         description="Role type for the agent.",
     )
     message: Optional[str] = Field(
@@ -548,7 +549,7 @@ class SpawnAgentTool(Tool):
     description = (
         "Create a new agent in the current project and optionally start it with an initial task. "
         "The new agent will appear in the sidebar immediately. "
-        "Use this to delegate work to specialist agents (software_engineer, qa, reviewer, pm). "
+        f"Use this to delegate work to specialist agents ({', '.join(t.value for t in AgentType)}). "
         "Provider defaults to the configured default provider; complexity selects the model configured for that "
         "tier in Settings > Providers, defaulting to "
         "gpt-5.6-luna/gpt-5.6-terra/gpt-5.6-sol for codex "
@@ -622,7 +623,7 @@ class SpawnAgentTool(Tool):
                 return Response.text(f"Error: {exc}")
         request_data = {
             "name": name,
-            "agent_type": arguments.get("agent_type", "software_engineer"),
+            "agent_type": arguments.get("agent_type", DEFAULT_AGENT_TYPE.value),
             "complexity": complexity,
             "description": f"{name} agent",
             # system_prompt is intentionally not forwarded: spawned agents
