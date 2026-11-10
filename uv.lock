@@ -333,7 +333,7 @@ wheels = [
 
 [[package]]
 name = "fastapi-startkit"
-version = "0.58.0"
+version = "0.75.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cleo" },
@@ -343,10 +343,11 @@ dependencies = [
     { name = "pendulum" },
     { name = "pydantic" },
     { name = "requests" },
+    { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b9/43/bd83b53cdfbdf330c4c1802181d20ea98c5837cc1e1eca73a7623d771065/fastapi_startkit-0.58.0.tar.gz", hash = "sha256:c94558a6a904ed8ed999d469aa7b2b7bbf7af469b2debccaa17b08ca2d7ac2ce", size = 210975, upload-time = "2026-09-26T06:00:07.126Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/82/64/568547fe3ed9caa69a9a3e4a2e9fd9038f585428f7232a35a5d633a920c8/fastapi_startkit-0.75.2.tar.gz", hash = "sha256:68db3d96d237456067188400f1a9f2f35720a7979da177e9d2d9607b5eb00b8d", size = 296516, upload-time = "2026-11-10T03:59:24.565Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/dd/40/d1e16aef1040e36af364b4376eefc70f8b2c9157f891a1f6e5e6f418030f/fastapi_startkit-0.58.0-py3-none-any.whl", hash = "sha256:35178a58554c84a7bb4b9e5dba6736d8b7a25a85c826120aca6567f7b12d49e8", size = 348580, upload-time = "2026-09-26T06:00:05.474Z" },
+    { url = "https://files.pythonhosted.org/packages/4d/13/d6951525784343bdef58679f6b79d896803825c2809f7739d8a3f5459f6d/fastapi_startkit-0.75.2-py3-none-any.whl", hash = "sha256:7280f0277c8d28cdae411b0a94f8f48d98909e42800d03cf8ed5e8d97f1ab41a", size = 479255, upload-time = "2026-11-10T03:59:23.091Z" },
 ]
 
 [package.optional-dependencies]
@@ -356,6 +357,7 @@ database = [
 ]
 fastapi = [
     { name = "fastapi", extra = ["standard"] },
+    { name = "httpx" },
     { name = "itsdangerous" },
 ]
 sqlite = [
@@ -586,7 +588,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "fastapi-startkit", extras = ["database", "fastapi", "sqlite", "vite"], specifier = ">=0.58.0" },
+    { name = "fastapi-startkit", extras = ["database", "fastapi", "sqlite", "vite"], specifier = ">=0.75.2" },
     { name = "playwright", specifier = ">=1.60.0" },
 ]
 

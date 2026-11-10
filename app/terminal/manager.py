@@ -2,7 +2,7 @@ import asyncio
 import uuid
 from pathlib import Path
 
-from fastapi_startkit.logging import Logger
+from fastapi_startkit.logging import Log
 
 from app.terminal.terminal import Terminal
 
@@ -64,7 +64,7 @@ class TerminalManager:
         await asyncio.gather(*(self.close(sid) for sid in doomed))
 
     async def shutdown(self):
-        Logger.info("Shutting down terminal manager")
+        Log.info("Shutting down terminal manager")
         ptys = list(self._sessions.values())
         self._sessions.clear()
         await asyncio.gather(*(pty.aclose() for pty in ptys))

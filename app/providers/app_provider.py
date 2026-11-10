@@ -33,7 +33,7 @@ class AppProvider(Provider):
         register_exception_handlers(self.app)
 
         from fastapi_startkit import Config
-        from fastapi_startkit.environment import env
+        from fastapi_startkit.environment import env, value
 
         from app.middleware.trusted_origin_middleware import TrustedOriginMiddleware, TrustedOrigins
 
@@ -46,7 +46,7 @@ class AppProvider(Provider):
             TrustedOriginMiddleware,
             trusted=TrustedOrigins(
                 app_url=Config.get("fastapi.app_url"),
-                vite_hot_file=vite_hot_file if env("APP_ENV") == "local" else None,
+                vite_hot_file=vite_hot_file if value(env("APP_ENV")) == "local" else None,
             ),
         )
 

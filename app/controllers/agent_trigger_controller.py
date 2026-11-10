@@ -9,7 +9,7 @@ import uuid
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi_startkit.application import app
-from fastapi_startkit.logging import Logger
+from fastapi_startkit.logging import Log
 
 from app.actions.agent_startup import wait_for_agent_cli
 from app.actions.agent_status_action import CLEARED_ATTENTION, live_agent, notify_agent_status
@@ -120,7 +120,7 @@ def ensure_agent_worktree(agent, cwd: str, copy_paths: list[str] | None = None) 
     try:
         worktree_path = _create_agent_worktree(agent, cwd)
     except RuntimeError as exc:
-        Logger.warning(f"Agent {agent.id} worktree not pre-created, files not copied: {exc}")
+        Log.warning(f"Agent {agent.id} worktree not pre-created, files not copied: {exc}")
         return cwd
     copy_worktree_files(cwd, worktree_path, copy_paths)
     return cwd

@@ -6,7 +6,6 @@ schema-drift bugs (e.g. writing a dropped column).
 """
 
 import datetime
-from unittest.mock import patch
 
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 from pydantic import ValidationError
@@ -31,6 +30,7 @@ from app.models.Task import Task
 from databases.factories.agent_factory import AgentFactory
 from databases.factories.project_factory import ProjectFactory
 from databases.factories.task_factory import TaskFactory
+from tests.frozen_datetime import freeze_now
 from tests.test_case import TestCase
 
 
@@ -181,8 +181,7 @@ class TestListTasksTool(TestCase, DatabaseTransaction):
             completed_at=(cutoff - datetime.timedelta(microseconds=1)).isoformat(),
         )
 
-        with patch("app.mcp.tools.datetime.datetime") as mocked_datetime:
-            mocked_datetime.now.return_value = now
+        with freeze_now("app.mcp.tools", now):
             response = await self.tool.handle(
                 {"project_path": self.project.path, "status": "completed"}
             )
@@ -225,8 +224,7 @@ class TestListTasksTool(TestCase, DatabaseTransaction):
             completed_at=None,
         )
 
-        with patch("app.mcp.tools.datetime.datetime") as mocked_datetime:
-            mocked_datetime.now.return_value = now
+        with freeze_now("app.mcp.tools", now):
             response = await self.tool.handle({"project_path": self.project.path})
 
         text = _text(response)

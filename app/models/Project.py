@@ -5,6 +5,7 @@ from fastapi_startkit.masoniteorm import Model
 
 class Project(Model):
     __table__ = "projects"
+    __timestamps__ = False
 
     id: int
     name: str

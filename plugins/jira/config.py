@@ -7,7 +7,7 @@ Env var names match the repo's .env: JIRA_BASE_URL, JIRA_USERNAME, JIRA_TOKEN.
 
 from dataclasses import dataclass
 
-from fastapi_startkit.environment.environment import env
+from fastapi_startkit.environment import env, value
 
 
 @dataclass
@@ -23,7 +23,7 @@ class JiraConfig:
 
 def jira_config() -> JiraConfig:
     return JiraConfig(
-        base_url=(env("JIRA_BASE_URL", "") or "").rstrip("/"),
-        username=env("JIRA_USERNAME", "") or "",
-        api_token=env("JIRA_TOKEN", "") or "",
+        base_url=(value(env("JIRA_BASE_URL", "")) or "").rstrip("/"),
+        username=value(env("JIRA_USERNAME", "")) or "",
+        api_token=value(env("JIRA_TOKEN", "")) or "",
     )
