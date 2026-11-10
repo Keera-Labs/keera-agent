@@ -8,6 +8,7 @@ from app.actions.agent_question_action import has_pending_question, record_agent
 from app.actions.agent_status_action import (
     CLEARED_ATTENTION,
     find_hook_agent,
+    live_agent,
     notify_agent_status,
     utc_now,
 )
@@ -39,7 +40,7 @@ async def _apply(agent: Agent, event: AgentHookEventRequest) -> tuple[str, str |
     if attention and event.notifies_permission() and agent.attention_kind == "question":
         return None
     if attention:
-        await Agent.where("id", agent.id).update(
+        await live_agent(agent.id).update(
             {
                 "status": "needs_input",
                 "attention_kind": attention.kind,
@@ -61,5 +62,5 @@ async def _apply(agent: Agent, event: AgentHookEventRequest) -> tuple[str, str |
     values = {"status": "running", **CLEARED_ATTENTION, "updated_at": utc_now()}
     if agent.provider == "gemini" and event.hook_event_name == "BeforeAgent":
         values["has_session"] = True
-    await Agent.where("id", agent.id).update(values)
+    await live_agent(agent.id).update(values)
     return ("running", None) if agent.status != "running" else None

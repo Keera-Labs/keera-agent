@@ -2,7 +2,12 @@ import asyncio
 import weakref
 
 from app.actions.agent_question_action import settle_pending_questions
-from app.actions.agent_status_action import CLEARED_ATTENTION, notify_agent_status, utc_now
+from app.actions.agent_status_action import (
+    CLEARED_ATTENTION,
+    live_agent,
+    notify_agent_status,
+    utc_now,
+)
 from app.actions.terminal_write_action import TerminalWriteAction
 from app.exceptions.agent_question_conflict_error import AgentQuestionConflictError
 from app.exceptions.agent_question_invalid_answer_error import AgentQuestionInvalidAnswerError
@@ -66,7 +71,7 @@ class AgentQuestionAnswerAction:
             return await AgentQuestion.find(self.question.id)
 
         await settle_pending_questions(agent.id)
-        await Agent.where("id", agent.id).update(
+        await live_agent(agent.id).update(
             {"status": "running", **CLEARED_ATTENTION, "updated_at": utc_now()}
         )
         await notify_agent_status(agent, "running")
