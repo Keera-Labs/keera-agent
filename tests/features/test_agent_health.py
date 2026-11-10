@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import json
 import os
@@ -11,6 +12,7 @@ from fastapi_startkit.application import app
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
 from app import agent_health_probe
+from app.actions.agent_delete_action import AgentDeleteAction
 from app.actions.agent_health_action import (
     AgentHealth,
     agent_health,
@@ -329,6 +331,41 @@ class TestDeleteAgentRequeuesTask(TestCase, DatabaseTransaction):
     def test_every_pre_review_status_may_legally_requeue(self):
         for status in PRE_REVIEW_STATUSES - {REQUEUE_STATUS}:
             self.assertIn(REQUEUE_STATUS, ALLOWED_TRANSITIONS[status], status)
+
+    async def _assert_deleted_once(self) -> None:
+        self.assertEqual(await TaskEvent.where("task_id", self.task.id).count(), 1)
+        self.assertEqual(len(await self._reports_to(self.pm.id)), 1)
+        self.assertEqual((await Agent.find(self.agent.id)).deleted_reason, "stuck")
+
+    async def test_deleting_twice_from_the_ui_has_no_second_effect(self):
+        with _spawn_patch():
+            await DeleteAgentTool().handle({"agent_id": self.agent.id, "reason": "stuck"})
+            response = await self.client.delete(f"/api/agents/{self.agent.id}")
+
+        self.assertEqual(response.status_code, 200)
+        await self._assert_deleted_once()
+
+    async def test_deleting_twice_over_mcp_has_no_second_effect(self):
+        with _spawn_patch():
+            await DeleteAgentTool().handle({"agent_id": self.agent.id, "reason": "stuck"})
+            text = _text(
+                await DeleteAgentTool().handle({"agent_id": self.agent.id, "reason": "again"})
+            )
+
+        self.assertIn("already been deleted", text)
+        await self._assert_deleted_once()
+
+    async def test_concurrent_deletes_requeue_and_report_once(self):
+        loaded = await Agent.find(self.agent.id)
+
+        with _spawn_patch():
+            results = await asyncio.gather(
+                AgentDeleteAction(loaded, "stuck").execute(),
+                AgentDeleteAction(loaded, "again").execute(),
+            )
+
+        self.assertEqual(results, [True, True])
+        await self._assert_deleted_once()
 
     async def test_default_agent_worktree_branch_is_never_recorded_on_the_task(self):
         await Agent.where("id", self.agent.id).update(

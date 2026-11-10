@@ -3,7 +3,7 @@ import re
 from fastapi_startkit.application import app
 
 from app.actions.agent_message_send_action import AgentMessageSendAction
-from app.actions.agent_status_action import utc_now
+from app.actions.agent_status_action import live_agent, utc_now
 from app.actions.task_transition_action import record_task_event, write_task
 from app.constant.task_status import canonical_status
 from app.models.Agent import Agent
@@ -32,15 +32,16 @@ class AgentDeleteAction:
         self.reason = (reason or "").strip() or None
 
     async def execute(self) -> bool:
-        await self._mark_deleted_before_teardown()
+        if not await self._mark_deleted_before_teardown():
+            return True
         deleted = await Agent.find(self.agent.id)
         await self._stop_newest_session(deleted)
         task = await self._requeue_task(deleted)
         await self._notify_orchestrator(deleted, task)
         return await Agent.where("id", self.agent.id).where_null("deleted_at").first() is None
 
-    async def _mark_deleted_before_teardown(self) -> None:
-        await Agent.where("id", self.agent.id).update(
+    async def _mark_deleted_before_teardown(self) -> bool:
+        return await live_agent(self.agent.id).update(
             {"deleted_at": utc_now(), "deleted_reason": self.reason, "status": "deleted"}
         )
 
