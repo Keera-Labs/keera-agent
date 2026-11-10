@@ -27,11 +27,15 @@ def hook_agent_id(header: str | None, cwd: str | None = None) -> int | None:
     return int(match.group(1)) if match else None
 
 
+def live_agent(agent_id: int):
+    return Agent.where("id", agent_id).where_null("deleted_at")
+
+
 async def find_hook_agent(header: str | None, cwd: str | None = None) -> Agent | None:
     agent_id = hook_agent_id(header, cwd)
     if agent_id is None:
         return None
-    return await Agent.where("id", agent_id).where_null("deleted_at").first()
+    return await live_agent(agent_id).first()
 
 
 def utc_now() -> str:

@@ -59,6 +59,10 @@ class TerminalManager:
         ]
         await asyncio.gather(*(self.close(sid) for sid in doomed))
 
+    async def close_agent(self, agent_id: int) -> None:
+        doomed = [sid for sid, pty in self._sessions.items() if pty.agent_id == str(agent_id)]
+        await asyncio.gather(*(self.close(sid) for sid in doomed))
+
     async def shutdown(self):
         Logger.info("Shutting down terminal manager")
         ptys = list(self._sessions.values())

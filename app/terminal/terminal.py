@@ -12,6 +12,7 @@ import termios
 import threading
 import time
 
+from app.actions.claude_hook_action import AGENT_ID_ENV
 from app.terminal.terminal_queries import PARTIAL_SEQUENCE, strip_queries
 
 
@@ -271,6 +272,10 @@ class Terminal:
         self._reader: tuple[asyncio.AbstractEventLoop, int] | None = None
         # (cols, rows) of each client currently showing this terminal on screen.
         self._client_sizes: dict[object, tuple[int, int]] = {}
+
+    @property
+    def agent_id(self) -> str | None:
+        return self._env.get(AGENT_ID_ENV)
 
     @property
     def size(self) -> tuple[int, int]:

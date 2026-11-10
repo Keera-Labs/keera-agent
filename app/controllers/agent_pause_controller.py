@@ -1,6 +1,11 @@
 from fastapi.responses import JSONResponse
 
-from app.actions.agent_status_action import CLEARED_ATTENTION, notify_agent_status, utc_now
+from app.actions.agent_status_action import (
+    CLEARED_ATTENTION,
+    live_agent,
+    notify_agent_status,
+    utc_now,
+)
 from app.controllers.agent_controller import stop_agent_session
 from app.models.Agent import Agent
 
@@ -19,9 +24,10 @@ async def store(project_id: int):
         .get()
     )
 
+    paused = []
     for agent in agents:
         await stop_agent_session(agent.session_id)
-        await Agent.where("id", agent.id).update(
+        if await live_agent(agent.id).update(
             {
                 "status": "idle",
                 "session_id": None,
@@ -29,7 +35,8 @@ async def store(project_id: int):
                 **CLEARED_ATTENTION,
                 "updated_at": utc_now(),
             }
-        )
-        await notify_agent_status(agent, "idle")
+        ):
+            await notify_agent_status(agent, "idle")
+            paused.append(agent.id)
 
-    return JSONResponse({"paused": [agent.id for agent in agents]})
+    return JSONResponse({"paused": paused})
