@@ -26,38 +26,59 @@ def _is_task_branch(branch: str | None) -> bool:
     )
 
 
+STEP_CLAIMED = "claimed"
+STEP_DONE = "done"
+REQUEUE_STEP = "teardown_requeue"
+REPORT_STEP = "teardown_report"
+
+
+def teardown_finished(agent: Agent) -> bool:
+    return getattr(agent, REPORT_STEP, None) == STEP_DONE
+
+
 class AgentDeleteAction:
     def __init__(self, agent: Agent, reason: str | None = None):
         self.agent = agent
         self.reason = (reason or "").strip() or None
 
     async def execute(self) -> bool:
-        if not await self._mark_deleted_before_teardown():
-            return True
-        deleted = await Agent.find(self.agent.id)
-        await self._stop_newest_session(deleted)
-        task = await self._requeue_task(deleted)
-        await self._notify_orchestrator(deleted, task)
-        return await Agent.where("id", self.agent.id).where_null("deleted_at").first() is None
-
-    async def _mark_deleted_before_teardown(self) -> bool:
-        return await live_agent(self.agent.id).update(
+        await live_agent(self.agent.id).update(
             {"deleted_at": utc_now(), "deleted_reason": self.reason, "status": "deleted"}
         )
+        await self._stop_newest_session(await Agent.find(self.agent.id))
+        await self._run_step(REQUEUE_STEP, self._requeue_task)
+        await self._run_step(REPORT_STEP, self._notify_orchestrator, after=REQUEUE_STEP)
+        return await live_agent(self.agent.id).first() is None
+
+    async def _run_step(self, step: str, perform, after: str | None = None) -> None:
+        claim = Agent.where("id", self.agent.id).where_null(step)
+        if after:
+            claim = claim.where(after, STEP_DONE)
+        if not await claim.update({step: STEP_CLAIMED}):
+            return
+        outcome = None
+        try:
+            await perform(await Agent.find(self.agent.id))
+            outcome = STEP_DONE
+        finally:
+            await Agent.where("id", self.agent.id).where(step, STEP_CLAIMED).update({step: outcome})
 
     async def _stop_newest_session(self, agent: Agent) -> None:
         from app.controllers.agent_controller import stop_agent_session
 
         await stop_agent_session(agent.session_id)
         await app().make("terminal").close_agent(agent.id)
-        await Agent.where("id", agent.id).update({"session_id": None, "task_id": None})
+        if agent.session_id:
+            await (
+                Agent.where("id", agent.id)
+                .where("session_id", agent.session_id)
+                .update({"session_id": None})
+            )
 
-    async def _requeue_task(self, agent: Agent) -> Task | None:
-        task = await Task.find(agent.task_id) if getattr(agent, "task_id", None) else None
-        if not task:
-            return None
-        if canonical_status(task.status) not in PRE_REVIEW_STATUSES:
-            return task
+    async def _requeue_task(self, agent: Agent) -> None:
+        task = await self._held_task(agent)
+        if not task or canonical_status(task.status) not in PRE_REVIEW_STATUSES:
+            return
         previous_status = task.status
         values = {"status": REQUEUE_STATUS}
         assignees = task.assignees or []
@@ -75,17 +96,19 @@ class AgentDeleteAction:
             {
                 **{key: value for key, value in values.items() if key != "status"},
                 "deleted_agent_id": agent.id,
-                "reason": f"agent {agent.name} deleted: {self.reason or 'no reason given'}",
+                "reason": f"agent {agent.name} deleted: {agent.deleted_reason or 'no reason given'}",
             },
         )
-        return await Task.find(task.id)
 
-    async def _notify_orchestrator(self, agent: Agent, task: Task | None) -> None:
+    async def _notify_orchestrator(self, agent: Agent) -> None:
         recipient = await self._orchestrator(agent)
         if recipient:
-            await AgentMessageSendAction.prepare(
-                agent, recipient, self._report(agent, task)
-            ).execute()
+            report = self._report(agent, await self._held_task(agent))
+            await AgentMessageSendAction.prepare(agent, recipient, report).execute()
+        await Agent.where("id", agent.id).update({"task_id": None})
+
+    async def _held_task(self, agent: Agent) -> Task | None:
+        return await Task.find(agent.task_id) if getattr(agent, "task_id", None) else None
 
     async def _orchestrator(self, agent: Agent) -> Agent | None:
         if getattr(agent, "orchestrator_id", None):
@@ -103,7 +126,7 @@ class AgentDeleteAction:
         )
 
     def _report(self, agent: Agent, task: Task | None) -> str:
-        text = f"agent deleted: {agent.name} ({self.reason or 'no reason given'})"
+        text = f"agent deleted: {agent.name} ({agent.deleted_reason or 'no reason given'})"
         if not task:
             return text
         text += f"; task #{task.id} is now {task.status} and unassigned"
