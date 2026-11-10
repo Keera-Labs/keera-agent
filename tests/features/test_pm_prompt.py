@@ -44,9 +44,14 @@ class TestPmPrompt(TestCase):
         self.assertNotIn("once everything that depends on it is finished", self.prompt)
 
     def test_respawns_only_when_the_delete_notice_requeued_the_task(self):
-        self.assertIn("only when the message says the task `is now created`", self.prompt)
-        self.assertIn("ignore notices for your own `work merged` deletes", self.prompt)
-        self.assertNotIn("its task is already requeued to `created`; respawn", self.prompt)
+        self.assertIn(
+            "only when someone else deleted the agent AND the notice says the task `is now created`",
+            self.prompt,
+        )
+        self.assertIn("Ignore the notice for any delete you made", self.prompt)
+        self.assertIn("a health respawn (you already spawned the replacement)", self.prompt)
+        self.assertNotIn("before review goes back", self.prompt)
+        self.assertNotIn("an `in_progress` task goes back", self.prompt)
 
     def test_reviewer_approves_the_feature_task_and_side_tasks_close_as_cancelled(self):
         self.assertIn("always on the **feature** task that owns the PR", self.prompt)

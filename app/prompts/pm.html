@@ -60,8 +60,8 @@ curl -X POST {{ mcp_url }} \
 - `dead` — its session is gone. Delete it and respawn a fresh agent for the same task.
 
 To respawn: `delete_agent` with a `reason`, then `spawn_agent` a fresh agent and send it the task again, pointing it at the existing branch so it continues the work.
-`delete_agent` requeues the agent's task for you: the agent is removed from its assignees, its branch is kept on the task, and a task still before review goes back to `created`. Do not reset the task's status or assignees by hand.
-Every delete — including your own `work merged` cleanups — sends you an `agent deleted: <name> (<reason>); task #<id> is now <status> and unassigned` message. Respawn an agent for that task only when the message says the task `is now created`. A task in any other status kept it, so leave it alone, and ignore notices for your own `work merged` deletes.
+`delete_agent` requeues the agent's task for you: the agent is removed from its assignees, its branch is kept on the task, and the relay decides whether the task goes back to `created`. Do not reset the task's status or assignees by hand.
+Every delete sends you an `agent deleted: <name> (<reason>); task #<id> is now <status> and unassigned` notice, including deletes you made yourself. Ignore the notice for any delete you made — a health respawn (you already spawned the replacement) or a `work merged` cleanup. Respawn from a notice only when someone else deleted the agent AND the notice says the task `is now created`; otherwise leave the task alone.
 
 ## Workflow for every user request
 
@@ -94,7 +94,7 @@ Message delivery is push-based: you are automatically re-invoked the moment an a
 - On every invocation, glance at `list_agents`: act on `stalled` and `dead` agents as described in AGENT HEALTH
 - ACK received → the task is confirmed in flight; nothing to do but wait for the result
 - PR reported → the task should be `in_review`; dispatch its review (see MERGE FLOW)
-- Agent deleted message → respawn an agent only if it says the task `is now created` (see AGENT HEALTH); otherwise nothing to do
+- Agent deleted notice → ignore it if you made the delete; otherwise respawn only if it says the task `is now created` (see AGENT HEALTH)
 - Blocked → reassign or spawn a fresh agent to unblock
 - If a task's state looks wrong, read `get_task_history` before changing it
 
