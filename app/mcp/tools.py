@@ -1100,7 +1100,10 @@ class DeleteAgentTool(Tool):
             return Response.text(f"Error: agent {agent_id} has already been deleted")
 
         if not await AgentDeleteAction(agent, arguments.get("reason")).execute():
-            return Response.text(f"Error: agent {agent_id} is still listed after the delete")
+            return Response.text(
+                f"Error: agent {agent_id} is deleted but another delete is still finishing its "
+                "teardown; retry delete_agent shortly"
+            )
 
         text = f"Agent '{agent.name}' (ID: {agent_id}) has been deleted."
         project = await Project.find(agent.project_id)

@@ -1,11 +1,12 @@
 from fastapi_startkit.masoniteorm import Migration
 
-_COLUMNS = ("teardown_requeue", "teardown_report")
+_COLUMNS = ("teardown_task_version", "teardown_requeue", "teardown_report")
 
 
 class AddTeardownStepsToAgents(Migration):
     async def up(self):
         async with await self.schema.table("agents") as table:
+            table.string("teardown_task_version", 32).nullable()
             table.string("teardown_requeue", 16).nullable()
             table.string("teardown_report", 16).nullable()
         await self.schema.get_connection().statement(

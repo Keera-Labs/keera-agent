@@ -364,7 +364,7 @@ class TestDeleteAgentRequeuesTask(TestCase, DatabaseTransaction):
                 AgentDeleteAction(loaded, "again").execute(),
             )
 
-        self.assertEqual(results, [True, True])
+        self.assertIn(True, results)
         await self._assert_deleted_once()
 
     async def test_default_agent_worktree_branch_is_never_recorded_on_the_task(self):

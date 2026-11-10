@@ -1,6 +1,7 @@
 import re
 
 from fastapi_startkit.application import app
+from fastapi_startkit.masoniteorm import DB
 
 from app.actions.agent_message_send_action import AgentMessageSendAction
 from app.actions.agent_status_action import live_agent, utc_now
@@ -16,6 +17,10 @@ AGENT_DEFAULT_BRANCH = re.compile(r"worktree-agent-\d+")
 
 def _other_live_agents(agent: Agent):
     return Agent.where_null("deleted_at").where("id", "!=", agent.id)
+
+
+def _task_version(task: Task) -> str:
+    return str(task.updated_at or "")
 
 
 def _is_task_branch(branch: str | None) -> bool:
@@ -42,13 +47,19 @@ class AgentDeleteAction:
         self.reason = (reason or "").strip() or None
 
     async def execute(self) -> bool:
+        held = await self._held_task(await Agent.find(self.agent.id))
         await live_agent(self.agent.id).update(
-            {"deleted_at": utc_now(), "deleted_reason": self.reason, "status": "deleted"}
+            {
+                "deleted_at": utc_now(),
+                "deleted_reason": self.reason,
+                "status": "deleted",
+                "teardown_task_version": _task_version(held) if held else None,
+            }
         )
         await self._stop_newest_session(await Agent.find(self.agent.id))
         await self._run_step(REQUEUE_STEP, self._requeue_task)
         await self._run_step(REPORT_STEP, self._notify_orchestrator, after=REQUEUE_STEP)
-        return await live_agent(self.agent.id).first() is None
+        return teardown_finished(await Agent.find(self.agent.id))
 
     async def _run_step(self, step: str, perform, after: str | None = None) -> None:
         claim = Agent.where("id", self.agent.id).where_null(step)
@@ -77,7 +88,9 @@ class AgentDeleteAction:
 
     async def _requeue_task(self, agent: Agent) -> None:
         task = await self._held_task(agent)
-        if not task or canonical_status(task.status) not in PRE_REVIEW_STATUSES:
+        if not task or not await self._still_owned(agent, task):
+            return
+        if canonical_status(task.status) not in PRE_REVIEW_STATUSES:
             return
         previous_status = task.status
         values = {"status": REQUEUE_STATUS}
@@ -87,23 +100,37 @@ class AgentDeleteAction:
         branch = getattr(agent, "worktree_branch", None)
         if not task.branch and _is_task_branch(branch):
             values["branch"] = branch
-        await write_task(task, values)
-        await record_task_event(
-            task.id,
-            (await task_actor()).agent_id,
-            previous_status,
-            REQUEUE_STATUS,
-            {
-                **{key: value for key, value in values.items() if key != "status"},
-                "deleted_agent_id": agent.id,
-                "reason": f"agent {agent.name} deleted: {agent.deleted_reason or 'no reason given'}",
-            },
-        )
+        actor_id = (await task_actor()).agent_id
+        async with DB.connection().transaction():
+            await write_task(task, values)
+            await record_task_event(
+                task.id,
+                actor_id,
+                previous_status,
+                REQUEUE_STATUS,
+                {
+                    **{key: value for key, value in values.items() if key != "status"},
+                    "deleted_agent_id": agent.id,
+                    "reason": f"agent {agent.name} deleted: "
+                    f"{agent.deleted_reason or 'no reason given'}",
+                },
+            )
+
+    async def _still_owned(self, agent: Agent, task: Task) -> bool:
+        if _task_version(task) != (agent.teardown_task_version or ""):
+            return False
+        return not await self._taken_over(agent, task)
+
+    async def _taken_over(self, agent: Agent, task: Task) -> bool:
+        return await _other_live_agents(agent).where("task_id", task.id).first() is not None
 
     async def _notify_orchestrator(self, agent: Agent) -> None:
         recipient = await self._orchestrator(agent)
         if recipient:
-            report = self._report(agent, await self._held_task(agent))
+            task = await self._held_task(agent)
+            if task and await self._taken_over(agent, task):
+                task = None
+            report = self._report(agent, task)
             await AgentMessageSendAction.prepare(agent, recipient, report).execute()
         await Agent.where("id", agent.id).update({"task_id": None})
 

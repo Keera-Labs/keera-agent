@@ -81,7 +81,7 @@ async def destroy(request: Request, agent_id: int):
     from app.services.worktree_cleanup import cleanup_agent_worktree
 
     agent = await Agent.find_or_fail(agent_id)
-    await AgentDeleteAction(agent, DELETED_FROM_UI).execute()
+    teardown_finished = await AgentDeleteAction(agent, DELETED_FROM_UI).execute()
 
     project_id = agent.project_id
     # If this was the default, pick the next available (non-deleted) agent
@@ -102,7 +102,13 @@ async def destroy(request: Request, agent_id: int):
             cleanup_agent_worktree, os.path.expanduser(project.path), agent_id
         )
 
-    return JSONResponse({"ok": True, "worktree_cleanup": worktree_cleanup})
+    return JSONResponse(
+        {
+            "ok": True,
+            "teardown_finished": teardown_finished,
+            "worktree_cleanup": worktree_cleanup,
+        }
+    )
 
 
 async def stop_agent_session(session_id: str | None) -> None:
