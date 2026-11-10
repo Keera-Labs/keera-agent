@@ -8,6 +8,7 @@ from app.ai import ProviderCommand, providers
 
 class Agent(Model):
     __table__ = "agents"
+    __timestamps__ = False
     id: int
     flags: dict
     permissions_allow: list

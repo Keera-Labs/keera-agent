@@ -1,13 +1,13 @@
 import datetime
 import os
 import time
-from unittest.mock import patch
 
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
 from app.models.Task import Task
 from databases.factories.project_factory import ProjectFactory
 from databases.factories.task_factory import TaskFactory
+from tests.frozen_datetime import freeze_now
 from tests.test_case import TestCase
 
 
@@ -203,8 +203,7 @@ class TestTaskController(TestCase, DatabaseTransaction):
             completed_at=(cutoff - datetime.timedelta(microseconds=1)).isoformat(),
         )
 
-        with patch("app.controllers.task_controller.datetime.datetime") as mocked_datetime:
-            mocked_datetime.now.return_value = now
+        with freeze_now("app.controllers.task_controller", now):
             response = await self.get(self.tasks_url)
 
         titles = {row["attributes"]["title"] for row in response.json()["data"]}

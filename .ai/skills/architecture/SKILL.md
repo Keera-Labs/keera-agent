@@ -19,14 +19,14 @@ description: Plan and place code in keera-agent: controllers, requests, resource
 | HTTP handlers | `app/controllers/<resource>_controller.py` |
 | Input validation | `app/requests/<resource>_request.py` (Pydantic) |
 | Output shaping | `app/resources/<resource>_resource.py` (`JsonResource`) |
-| Persistence | `app/models/<Model>.py` (`__table__` only), schema in `databases/migrations/` |
+| Persistence | `app/models/<Model>.py` (`__table__` and `__timestamps__ = False`; keera stamps `created_at`/`updated_at` itself), schema in `databases/migrations/` |
 | Business operations | `app/actions/<name>_action.py` |
 | Reusable logic that spans models or touches the filesystem, git, processes, or CLIs | `app/services/` |
 | Agent, MCP and plugin code | `app/mcp/`, `app/plugins/`, `app/ai/` |
 | Terminal and PTY code | `app/terminal/` |
 | Error mapping | `app/exceptions/handlers.py` |
 | Helpers without business meaning | `app/utils/` |
-| Configuration | `config/` (dataclass objects, read via `env()`) |
+| Configuration | `config/` (dataclass objects: `field: T = env("KEY", default)`; `env()` returns a dataclass field, so wrap it as `value(env(...))` anywhere else) |
 | Boot and wiring | `bootstrap/application.py`, `app/providers/` |
 
 Registration order in `bootstrap/application.py` matters: Database before FastAPI, Vite before Inertia.

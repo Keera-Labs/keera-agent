@@ -3,7 +3,7 @@ import shutil
 from collections.abc import Iterator
 from pathlib import Path
 
-from fastapi_startkit.logging import Logger
+from fastapi_startkit.logging import Log
 
 _NEVER_COPIED = (Path(".git"), Path(".claude/worktrees"))
 
@@ -61,7 +61,7 @@ def _copy(root: Path, destination: Path, source: Path) -> None:
             else:
                 _copy_entry(destination, entry, target)
         except OSError as exc:
-            Logger.warning(f"Could not copy '{entry.relative_to(root)}' into worktree: {exc}")
+            Log.warning(f"Could not copy '{entry.relative_to(root)}' into worktree: {exc}")
 
 
 def copy_worktree_files(
@@ -73,16 +73,16 @@ def copy_worktree_files(
         try:
             matches = sorted(root.glob(pattern))
         except (ValueError, NotImplementedError):
-            Logger.warning(f"Skipping invalid worktree copy pattern '{pattern}'")
+            Log.warning(f"Skipping invalid worktree copy pattern '{pattern}'")
             continue
         for source in matches:
             relative = source.relative_to(root)
             if _is_never_copied(relative):
                 continue
             if not _source_inside_project(root, source):
-                Logger.warning(f"Skipping '{relative}': it resolves outside the project")
+                Log.warning(f"Skipping '{relative}': it resolves outside the project")
                 continue
             try:
                 _copy(root, destination, source)
             except OSError as exc:
-                Logger.warning(f"Could not copy '{relative}' into worktree {destination}: {exc}")
+                Log.warning(f"Could not copy '{relative}' into worktree {destination}: {exc}")

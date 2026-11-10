@@ -24,8 +24,13 @@ class TestRemapLegacyAgentTypesMigration(TestCase, DatabaseTransaction):
     async def _make_agent(self, agent_type: str) -> Agent:
         return await AgentFactory.new().create(project_id=self.project.id, agent_type=agent_type)
 
+    async def _run_migration(self) -> None:
+        await RemapLegacyAgentTypes(
+            connection="default", schema=self.get_application().make("schema")
+        ).up()
+
     async def _agent_type_after_up(self, agent: Agent) -> str:
-        await RemapLegacyAgentTypes().up()
+        await self._run_migration()
         return (await Agent.find(agent.id)).agent_type
 
     async def test_remaps_custom_agent_to_software_engineer(self):
@@ -47,7 +52,7 @@ class TestRemapLegacyAgentTypesMigration(TestCase, DatabaseTransaction):
         custom = await AgentTemplateFactory.new().create(agent_type="custom")
         qa_browser = await AgentTemplateFactory.new().create(agent_type="qa_browser")
 
-        await RemapLegacyAgentTypes().up()
+        await self._run_migration()
 
         self.assertEqual((await AgentTemplate.find(custom.id)).agent_type, "software_engineer")
         self.assertEqual((await AgentTemplate.find(qa_browser.id)).agent_type, "qa")
@@ -61,7 +66,7 @@ class TestRemapLegacyAgentTypesMigration(TestCase, DatabaseTransaction):
 
     async def test_patch_resending_remapped_agent_type_succeeds(self):
         agent = await self._make_agent("custom")
-        await RemapLegacyAgentTypes().up()
+        await self._run_migration()
         refreshed = await Agent.find(agent.id)
 
         response = await self.client.patch(

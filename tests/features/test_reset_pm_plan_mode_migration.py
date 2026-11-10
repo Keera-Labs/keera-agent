@@ -44,10 +44,15 @@ async def _make_agent(*, name: str, agent_type: str, plan_mode: bool) -> Agent:
 
 
 class TestResetPmPlanModeMigration(TestCase, DatabaseTransaction):
+    async def _run_migration(self) -> None:
+        await ResetPmPlanMode(
+            connection="default", schema=self.get_application().make("schema")
+        ).up()
+
     async def test_flips_builtin_pm_template_to_false(self):
         tpl = await _make_template(name="PM-mig", agent_type="pm", is_builtin=True, plan_mode=True)
 
-        await ResetPmPlanMode().up()
+        await self._run_migration()
 
         refreshed = await AgentTemplate.find(tpl.id)
         self.assertFalse(bool(refreshed.plan_mode))
@@ -55,7 +60,7 @@ class TestResetPmPlanModeMigration(TestCase, DatabaseTransaction):
     async def test_flips_existing_pm_agents_to_false(self):
         agent = await _make_agent(name="PM-agent-mig", agent_type="pm", plan_mode=True)
 
-        await ResetPmPlanMode().up()
+        await self._run_migration()
 
         refreshed = await Agent.find(agent.id)
         self.assertFalse(bool(refreshed.plan_mode))
@@ -66,7 +71,7 @@ class TestResetPmPlanModeMigration(TestCase, DatabaseTransaction):
         )
         agent = await _make_agent(name="Reviewer-agent-mig", agent_type="reviewer", plan_mode=True)
 
-        await ResetPmPlanMode().up()
+        await self._run_migration()
 
         self.assertTrue(bool((await AgentTemplate.find(tpl.id)).plan_mode))
         self.assertTrue(bool((await Agent.find(agent.id)).plan_mode))
@@ -75,8 +80,8 @@ class TestResetPmPlanModeMigration(TestCase, DatabaseTransaction):
         tpl = await _make_template(name="PM-idem", agent_type="pm", is_builtin=True, plan_mode=True)
         agent = await _make_agent(name="PM-agent-idem", agent_type="pm", plan_mode=True)
 
-        await ResetPmPlanMode().up()
-        await ResetPmPlanMode().up()
+        await self._run_migration()
+        await self._run_migration()
 
         self.assertFalse(bool((await AgentTemplate.find(tpl.id)).plan_mode))
         self.assertFalse(bool((await Agent.find(agent.id)).plan_mode))

@@ -20,6 +20,7 @@ REVIEW_FIELDS = (
 
 class Task(Model):
     __table__ = "tasks"
+    __timestamps__ = False
 
     id: int
     project_id: int
