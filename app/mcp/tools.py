@@ -1084,7 +1084,7 @@ class DeleteAgentTool(Tool):
     async def handle(self, arguments: dict) -> Response:
         import asyncio
 
-        from app.actions.agent_delete_action import AgentDeleteAction
+        from app.actions.agent_delete_action import AgentDeleteAction, teardown_finished
         from app.models.Agent import Agent
         from app.services.worktree_cleanup import cleanup_agent_worktree
 
@@ -1096,11 +1096,14 @@ class DeleteAgentTool(Tool):
         if not agent:
             return Response.text(f"Error: no agent found with ID {agent_id}")
 
-        if getattr(agent, "deleted_at", None):
+        if getattr(agent, "deleted_at", None) and teardown_finished(agent):
             return Response.text(f"Error: agent {agent_id} has already been deleted")
 
         if not await AgentDeleteAction(agent, arguments.get("reason")).execute():
-            return Response.text(f"Error: agent {agent_id} is still listed after the delete")
+            return Response.text(
+                f"Error: agent {agent_id} is deleted but another delete is still finishing its "
+                "teardown; retry delete_agent shortly"
+            )
 
         text = f"Agent '{agent.name}' (ID: {agent_id}) has been deleted."
         project = await Project.find(agent.project_id)

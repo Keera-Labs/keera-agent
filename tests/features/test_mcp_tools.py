@@ -712,6 +712,8 @@ class TestDeleteAgentTool(TestCase, DatabaseTransaction):
             project_id=project.id,
             name="Already Gone",
             deleted_at=datetime.datetime.utcnow(),
+            teardown_requeue="done",
+            teardown_report="done",
         )
         response = await self.tool.handle({"agent_id": agent.id})
         self.assertIn("already been deleted", _text(response))
