@@ -21,7 +21,7 @@ async function handleCreate(label: string, command: string): Promise<string | nu
     return error
 }
 
-const handleUpdate = (c: Command, label: string, command: string) => crud.update(c, label, command)
+const handleUpdate = async (c: Command, label: string, command: string) => (await crud.update(c, label, command)) === null
 
 async function handleDelete(c: Command) {
     deleteError.value = (await crud.remove(c)) ?? ''
