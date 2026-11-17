@@ -296,6 +296,30 @@ class TestCommandRunController(TestCase, DatabaseTransaction):
         self.assertTrue(await _until(lambda: not _alive(child)))
         self.assertEqual(run.status, "stopped")
 
+    async def test_runs_a_saved_multi_line_script_as_one_shell_script(self):
+        script = (
+            "greeting='hello \"world\"'\n"
+            'echo "$greeting" | tr a-z A-Z\n'
+            "printf '%s\\n' 'left|right' | cut -d'|' -f2"
+        )
+        stored = await self.post(
+            f"/api/projects/{self.project.id}/commands",
+            json={"label": "Script", "command": script},
+        )
+        command = await Command.find(int(stored.json()["data"]["id"]))
+        self.commands.append(command)
+
+        response = await self._start(command)
+
+        response.assert_ok()
+        self.assertEqual(response.json()["data"]["attributes"]["command"], script)
+        run = self._run(command, self.repo.root)
+        output = await self._finished_output(run)
+        self.assertEqual(run.exit_code, 0)
+        self.assertIn('HELLO "WORLD"', output)
+        self.assertIn("right", output)
+        self.assertNotIn("left|right", output)
+
     async def test_records_the_exit_code_of_a_natural_exit(self):
         command = await self._command("exit 3")
 
