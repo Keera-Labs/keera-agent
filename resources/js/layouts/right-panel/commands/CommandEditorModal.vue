@@ -91,7 +91,7 @@ const fieldClass = (invalid: boolean) => [inputClass, 'box-border w-full', inval
                             autocomplete="off"
                             placeholder="cp ../../../.env ./.env && composer install && php artisan serve --port=8000"
                             :aria-invalid="scriptMissing"
-                            :class="[fieldClass(scriptMissing), 'resize-y leading-normal whitespace-pre']"
+                            :class="[fieldClass(scriptMissing), 'resize-y leading-normal']"
                         />
                         <span v-if="scriptMissing" class="text-ui-12 text-danger">Script is required</span>
                     </label>
