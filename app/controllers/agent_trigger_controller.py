@@ -20,6 +20,7 @@ from app.models.Agent import Agent
 from app.models.Project import Project
 from app.services.claude_config_dir import agent_config_dir
 from app.services.gemini_cli import validate_gemini_cli
+from app.services.git_head import agent_worktree_available, repo_has_commit
 from app.services.relay_identity import issue_agent_token
 from app.services.worktree_cleanup import cleanup_agent_worktree
 from app.services.worktree_files import copy_worktree_files
@@ -107,7 +108,7 @@ async def trigger(request: Request, agent_id: int):
 
 
 def ensure_agent_worktree(agent, cwd: str, copy_paths: list[str] | None = None) -> str:
-    if not getattr(agent, "use_worktree", True):
+    if not getattr(agent, "use_worktree", True) or not repo_has_commit(cwd):
         return cwd
     runs_in_worktree = getattr(agent, "provider", None) in ("codex", "gemini")
     if not runs_in_worktree and not copy_paths:
@@ -278,9 +279,8 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
 
     base_url = app().make("config").get("fastapi.app_url")
 
-    if getattr(agent, "provider", None) not in ("codex", "gemini") and getattr(
-        agent, "use_worktree", True
-    ):
+    in_worktree = await asyncio.to_thread(agent_worktree_available, agent, cwd)
+    if getattr(agent, "provider", None) not in ("codex", "gemini") and in_worktree:
         # A leftover worktree/branch blocks `claude --worktree`; one holding
         # unsaved work is kept, and the CLI reuses it.
         await asyncio.to_thread(cleanup_agent_worktree, cwd, agent.id, 0)
@@ -335,7 +335,7 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
             f"\n\n## Your identity\nYour agent ID is {a.id}. "
             f"When other agents ask you to report back, always use this ID as `sender_agent_id` in send_message_to_agent calls."
         )
-        return a.to_command(system_prompt_suffix=suffix)
+        return a.to_command(system_prompt_suffix=suffix, in_worktree=in_worktree)
 
     # Parts 1 & 3: monitor PTY output via WebsocketTerminal (no WS connection)
     # after_restart re-injects the initial message so the agent has a task after recovery

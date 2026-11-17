@@ -16,7 +16,7 @@ class Agent(Model):
     dangerously_skip_permissions: bool
     plan_mode: bool
 
-    def to_command(self, system_prompt_suffix: str = "") -> str:
+    def to_command(self, system_prompt_suffix: str = "", in_worktree: bool = True) -> str:
         # `flags` is a JSON-cast column, so the ORM returns a native dict.
         # Tolerate a raw string too, in case an uncast value slips through.
         if isinstance(self.flags, str):
@@ -49,7 +49,9 @@ class Agent(Model):
         enforce_permissions = self.plan_mode or not self.dangerously_skip_permissions
         command = ProviderCommand(
             model=self.model,
-            worktree=f"agent-{self.id}" if getattr(self, "use_worktree", True) else None,
+            worktree=f"agent-{self.id}"
+            if in_worktree and getattr(self, "use_worktree", True)
+            else None,
             continue_session=getattr(self, "has_session", False),
             system_prompt_file=prompt_file,
             allowed_tools=self.permissions_allow if enforce_permissions else [],

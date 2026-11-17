@@ -14,6 +14,7 @@ from app.models.Agent import Agent
 from app.models.Project import Project
 from app.services.claude_config_dir import agent_config_dir
 from app.services.gemini_cli import validate_gemini_cli
+from app.services.git_head import agent_worktree_available
 from app.services.relay_identity import issue_agent_token
 from app.terminal.agent_session import attach_client, live_terminal, own_session, spawn_lock
 from app.terminal.claude_monitor import make_claude_session_monitor
@@ -136,6 +137,7 @@ async def _spawn_agent_session(
 
     from app.controllers.agent_trigger_controller import ensure_agent_worktree
 
+    in_worktree = await asyncio.to_thread(agent_worktree_available, agent_record, cwd)
     try:
         agent_cwd = await asyncio.to_thread(
             ensure_agent_worktree, agent_record, cwd, project_record.worktree_copy_paths
@@ -159,7 +161,9 @@ async def _spawn_agent_session(
     asyncio.create_task(_signal_ready_and_relay(ready_event, agent_record.id, terminal))
 
     def build_cmd(a):
-        return a.to_command(system_prompt_suffix=_build_identity_suffix(a.id))
+        return a.to_command(
+            system_prompt_suffix=_build_identity_suffix(a.id), in_worktree=in_worktree
+        )
 
     monitor = make_claude_session_monitor(
         agent_id=agent_record.id,

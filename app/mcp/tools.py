@@ -1,5 +1,6 @@
 """MCP tool definitions — Tool subclasses for all 11 Keera tools."""
 
+import asyncio
 import datetime
 import json
 import os
@@ -30,6 +31,7 @@ from app.models.Task import REVIEW_FIELDS, Task
 from app.models.TaskDependency import TaskDependency
 from app.models.TaskEvent import TaskEvent
 from app.requests.task_request import TaskReviewFields
+from app.services.git_head import repo_has_commit
 from app.services.pull_request_head import merged_pull_request_head
 from app.services.task_policy import (
     TaskRules,
@@ -870,8 +872,6 @@ class SpawnAgentTool(Tool):
         return SpawnAgentInput
 
     async def handle(self, arguments: dict) -> Response:
-        import asyncio
-
         from fastapi_startkit.application import app as _app
 
         from app.actions.agent_create_action import AgentCreateAction
@@ -985,6 +985,7 @@ class SpawnAgentTool(Tool):
             except Exception:
                 pass
 
+        workspace_note = await _shared_workspace_note(agent, cwd)
         message = (arguments.get("message") or "").strip()
         if message:
             from app.controllers.agent_trigger_controller import _spawn_headless_agent
@@ -992,11 +993,24 @@ class SpawnAgentTool(Tool):
             asyncio.create_task(_spawn_headless_agent(agent, project, cwd, message))
             return Response.text(
                 f"Agent '{name}' created (ID: {agent.id}) and starting with task: {message}"
+                f"{workspace_note}"
             )
 
         return Response.text(
             f"Agent '{name}' created (ID: {agent.id}). Use send_message_to_agent to send it a task."
+            f"{workspace_note}"
         )
+
+
+async def _shared_workspace_note(agent, cwd: str) -> str:
+    if not getattr(agent, "use_worktree", True):
+        return ""
+    if await asyncio.to_thread(repo_has_commit, cwd):
+        return ""
+    return (
+        "\nNote: the project is not a git repository with at least one commit, so this agent "
+        "works directly in the project directory instead of an isolated worktree."
+    )
 
 
 # ── get_orchestrated_agents ───────────────────────────────────────────────────
