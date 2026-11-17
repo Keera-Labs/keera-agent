@@ -22,7 +22,7 @@ vi.mock('@/stores/appLayoutStore', async () => {
     return {
         useAppLayoutStore: defineStore('appLayout', () => ({
             activeAgentId: ref<number | null>(null),
-            settingsSection: ref<string | null>(null),
+            commandEditor: ref<unknown>(null),
             agentHook: markRaw({
                 agents: ref([
                     { id: 3, agent_type: 'dev' },
@@ -359,27 +359,33 @@ describe('CommandsView', () => {
         expect(rows[1].text()).toContain('exit 2 · 5m ago')
     })
 
-    it('creates a saved command from + New', async () => {
-        const { commands } = await mountViews()
+    it('opens the command editor for a new command from + New', async () => {
+        const { commands, pinia } = await mountViews()
 
         await commands.get('[data-testid="commands-new"]').trigger('click')
-        const [label, command] = commands.findAll('form input').slice(1)
-        await label.setValue('Tests')
-        await command.setValue('npm test')
-        await commands.findAll('form')[1].trigger('submit')
-        await flushPromises()
 
-        expect(JSON.parse(calls('/api/projects/7/commands', 'POST')[0][1].body)).toEqual({ label: 'Tests', command: 'npm test' })
-        expect(commands.findAll('[data-testid="saved-command"]').map(r => r.text())).toEqual([
-            expect.stringContaining('dev'), expect.stringContaining('Tests'),
-        ])
+        expect((useAppLayoutStore(pinia) as unknown as { commandEditor: unknown }).commandEditor).toEqual({ projectId: 7, command: null })
     })
 
-    it('deletes a saved command and opens the manager to edit one', async () => {
+    it('previews the first line of a multi-line script with its extra line count', async () => {
+        fetchMock.mockImplementation((url: string, init?: RequestInit) => url === '/api/projects/7/commands'
+            ? json({ data: [{ type: 'commands', id: '1', attributes: { project_id: 7, label: 'Server', command: 'cp ../.env ./.env\ncomposer install\nphp artisan serve', kind: 'run', run: null } }] })
+            : fakeFetch(url, init))
+        const { commands } = await mountViews()
+
+        const preview = commands.get('[data-testid="saved-preview"]')
+        expect(preview.text()).toContain('cp ../.env ./.env')
+        expect(preview.text()).not.toContain('composer install')
+        expect(preview.text()).toContain('+2 lines')
+    })
+
+    it('deletes a saved command and opens the editor pre-filled to edit one', async () => {
         const { commands, pinia } = await mountViews()
 
         await commands.get('button[aria-label="Edit dev"]').trigger('click')
-        expect((useAppLayoutStore(pinia) as unknown as { settingsSection: string | null }).settingsSection).toBe('commands')
+        expect((useAppLayoutStore(pinia) as unknown as { commandEditor: unknown }).commandEditor).toEqual({
+            projectId: 7, command: expect.objectContaining({ id: 1, label: 'dev', command: 'npm run dev' }),
+        })
 
         await commands.get('button[aria-label="Delete dev"]').trigger('click')
         await flushPromises()

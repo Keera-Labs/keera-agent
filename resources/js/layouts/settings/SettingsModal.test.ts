@@ -442,7 +442,7 @@ describe('SettingsModal', () => {
             expect(pane.text()).toContain('/dev')
 
             await pane.findAll('button').find(b => b.text() === 'New command')!.trigger('click')
-            const [label, cmd] = pane.findAll('form input')
+            const [label, cmd] = pane.findAll('form input, form textarea')
             await label.setValue('build')
             await cmd.setValue('npm run build')
             await pane.get('form').trigger('submit')

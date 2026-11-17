@@ -68,7 +68,7 @@ describe('CommandsPanel', () => {
         fetchMock.mockResolvedValueOnce(jsonResponse({ data: resource(command({ id: 5, label: 'build', command: 'npm run build' })) }))
 
         await w.get('button.border-dashed').trigger('click')
-        const [label, cmd] = w.findAll('form input')
+        const [label, cmd] = w.findAll('form input, form textarea')
         await label.setValue(' build ')
         await cmd.setValue('npm run build')
         await w.get('form').trigger('submit')
@@ -87,7 +87,7 @@ describe('CommandsPanel', () => {
         fetchMock.mockResolvedValueOnce(jsonResponse({ detail: 'Label taken' }, 422))
 
         await w.get('button.border-dashed').trigger('click')
-        const [label, cmd] = w.findAll('form input')
+        const [label, cmd] = w.findAll('form input, form textarea')
         await label.setValue('dev')
         await cmd.setValue('npm run dev')
         await w.get('form').trigger('submit')
@@ -102,7 +102,7 @@ describe('CommandsPanel', () => {
         fetchMock.mockResolvedValueOnce(jsonResponse({ data: resource(command({ label: 'serve', command: 'npm start' })) }))
 
         await w.get('button[title="Edit"]').trigger('click')
-        const [label, cmd] = w.findAll('form input')
+        const [label, cmd] = w.findAll('form input, form textarea')
         await label.setValue('serve')
         await cmd.setValue('npm start')
         await w.get('form').trigger('submit')

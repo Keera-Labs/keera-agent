@@ -2,7 +2,6 @@
 import { Check, Pencil, Play, Plus, Search, Square, SquareTerminal, Trash2, X } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import CommandForm from '@/components/commands/CommandForm.vue'
 import type { Command, CommandRun } from '@/components/commands/types'
 import { useCommandCrud } from '@/composables/useCommandCrud'
 import { relativeTime } from '@/utils/relativeTime'
@@ -14,7 +13,7 @@ import { duration, recentRuns, succeeded } from './commandRuns'
 
 const props = defineProps<{ visible: boolean }>()
 
-const { settingsSection } = storeToRefs(useAppLayoutStore())
+const { commandEditor } = storeToRefs(useAppLayoutStore())
 const runs = useCommandRunStore()
 const { tabs, outputOpen } = storeToRefs(runs)
 
@@ -25,7 +24,6 @@ const crud = useCommandCrud(() => projectId.value ?? 0)
 
 const query = ref('')
 const error = ref('')
-const creating = ref(false)
 const searchInput = ref<HTMLInputElement | null>(null)
 const now = ref(Date.now())
 
@@ -42,6 +40,8 @@ const saved = computed(() => (commands.value ?? []).filter(c =>
     !needle.value || c.label.toLowerCase().includes(needle.value) || c.command.toLowerCase().includes(needle.value)))
 const exactMatch = computed(() => (commands.value ?? []).find(c =>
     c.label.toLowerCase() === needle.value || c.command.toLowerCase() === needle.value))
+
+const scriptLines = (command: Command) => command.command.split('\n')
 
 const savedOf = (run: CommandRun) => (run.command_id !== null ? commandById.value.get(run.command_id) : undefined)
 const runName = (run: CommandRun) => run.label ?? savedOf(run)?.label ?? run.command ?? 'Command'
@@ -107,10 +107,8 @@ function stop(command: Command) {
     if (run && projectId.value !== null) attempt(() => runs.stopRun(projectId.value!, run))
 }
 
-async function create(label: string, command: string) {
-    const failure = await crud.create(label, command)
-    if (!failure) creating.value = false
-    return failure
+function openEditor(command: Command | null) {
+    if (projectId.value !== null) commandEditor.value = { projectId: projectId.value, command }
 }
 
 function remove(command: Command) {
@@ -176,13 +174,10 @@ const iconButton = 'shrink-0 w-6 h-6 flex items-center justify-center rounded-md
                         type="button"
                         data-testid="commands-new"
                         class="h-6 flex items-center gap-1 px-1.5 rounded-md normal-case tracking-normal font-medium text-ui-12 text-zinc-600 cursor-pointer hover:bg-black/[0.05] hover:text-zinc-900"
-                        @click="creating = !creating"
+                        @click="openEditor(null)"
                     >
-                        <component :is="creating ? X : Plus" :size="12" /> {{ creating ? 'Cancel' : 'New' }}
+                        <Plus :size="12" /> New
                     </button>
-                </div>
-                <div v-if="creating" class="mb-2 overflow-hidden rounded-lg border border-stroke">
-                    <CommandForm :on-create="create" @cancel="creating = false" />
                 </div>
                 <ul class="flex flex-col">
                     <li
@@ -200,14 +195,17 @@ const iconButton = 'shrink-0 w-6 h-6 flex items-center justify-center rounded-md
                             @click="showOutput(command)"
                         >
                             <span class="block truncate text-ui-13 font-semibold text-zinc-900">{{ command.label }}</span>
-                            <span class="block truncate font-mono text-ui-11 text-zinc-400">{{ command.command }}</span>
+                            <span data-testid="saved-preview" class="flex min-w-0 items-baseline gap-1.5 font-mono text-ui-11 text-zinc-400">
+                                <span class="truncate">{{ scriptLines(command)[0] }}</span>
+                                <span v-if="scriptLines(command).length > 1" class="shrink-0 font-sans text-zinc-400">+{{ scriptLines(command).length - 1 }} lines</span>
+                            </span>
                         </button>
                         <button
                             type="button"
-                            title="Edit commands"
+                            title="Edit"
                             :aria-label="`Edit ${command.label}`"
                             :class="[iconButton, 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100']"
-                            @click="settingsSection = 'commands'"
+                            @click="openEditor(command)"
                         >
                             <Pencil :size="12" />
                         </button>

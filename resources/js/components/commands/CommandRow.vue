@@ -42,11 +42,12 @@ async function handleSave() {
             required
             :class="`${inputClass} box-border w-full`"
         />
-        <input
+        <textarea
             v-model="editCmd"
             placeholder="Shell command"
             required
-            :class="`${inputClass} box-border w-full font-mono`"
+            :class="`${inputClass} box-border w-full font-mono resize-y leading-normal`"
+            rows="2"
         />
         <div class="flex gap-1.5 justify-end">
             <button type="button" :class="cancelBtnClass" @click="editing = false">Cancel</button>
