@@ -13,7 +13,7 @@ from fastapi_startkit.logging import Log
 
 from app.actions.agent_startup import wait_for_agent_cli
 from app.actions.agent_status_action import CLEARED_ATTENTION, live_agent, notify_agent_status
-from app.actions.claude_hook_action import agent_env
+from app.actions.claude_hook_action import ClaudeHookAction, agent_env
 from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.actions.terminal_write_action import TerminalWriteAction
 from app.models.Agent import Agent
@@ -104,6 +104,11 @@ async def trigger(request: Request, agent_id: int):
     cwd = os.path.expanduser(project.path)
     asyncio.create_task(_spawn_headless_agent(agent, project, cwd, message))
     return JSONResponse({"status": "starting", "message": "Agent is starting up..."})
+
+
+def prepare_agent_cwd(agent, cwd: str, copy_paths: list[str] | None = None) -> str:
+    ClaudeHookAction.prepare(cwd).execute()
+    return ensure_agent_worktree(agent, cwd, copy_paths)
 
 
 def ensure_agent_worktree(agent, cwd: str, copy_paths: list[str] | None = None) -> str:
@@ -284,9 +289,7 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
         # A leftover worktree/branch blocks `claude --worktree`; one holding
         # unsaved work is kept, and the CLI reuses it.
         await asyncio.to_thread(cleanup_agent_worktree, cwd, agent.id, 0)
-    agent_cwd = await asyncio.to_thread(
-        ensure_agent_worktree, agent, cwd, project.worktree_copy_paths
-    )
+    agent_cwd = await asyncio.to_thread(prepare_agent_cwd, agent, cwd, project.worktree_copy_paths)
 
     terminal_manager: TerminalManager = app().make("terminal")
     config_dir = await agent_config_dir(agent, project)
