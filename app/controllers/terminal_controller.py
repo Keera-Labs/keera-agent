@@ -134,11 +134,11 @@ async def _spawn_agent_session(
     session_id = str(uuid.uuid4())
     await Agent.where("id", agent_record.id).update({"session_id": session_id})
 
-    from app.controllers.agent_trigger_controller import ensure_agent_worktree
+    from app.controllers.agent_trigger_controller import prepare_agent_cwd
 
     try:
         agent_cwd = await asyncio.to_thread(
-            ensure_agent_worktree, agent_record, cwd, project_record.worktree_copy_paths
+            prepare_agent_cwd, agent_record, cwd, project_record.worktree_copy_paths
         )
     except RuntimeError as exc:
         await Agent.where("id", agent_record.id).update({"session_id": None})
