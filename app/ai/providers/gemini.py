@@ -37,8 +37,8 @@ class GeminiProvider(Provider):
 
     def _build_antigravity_command(self, command: ProviderCommand) -> str:
         parts = ["agy"]
-        if command.agent_profile:
-            parts.extend(("--agent", shlex.quote(command.agent_profile)))
+        if command.rules_dir:
+            parts.extend(("--add-dir", shlex.quote(command.rules_dir)))
         if command.model:
             parts.extend(("--model", shlex.quote(command.model)))
         if command.thinking_level:

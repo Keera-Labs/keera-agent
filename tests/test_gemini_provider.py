@@ -7,7 +7,7 @@ from pathlib import Path
 
 from app.ai import ProviderCommand, providers
 from app.mcp.tools import SpawnAgentInput
-from app.services.antigravity_agent import write_antigravity_agent
+from app.services.antigravity_agent import write_antigravity_rules
 from app.services.gemini_cli import gemini_cli_binary, validate_gemini_cli
 from app.services.gemini_settings import write_gemini_settings
 from app.terminal.terminal import _drawn_dialog
@@ -184,7 +184,7 @@ class TestGeminiProvider(unittest.TestCase):
             agy = Path(directory) / "agy"
             agy.write_text(
                 "#!/bin/sh\nprintf '%s' '--model --mode --continue "
-                "--dangerously-skip-permissions' >&2\n"
+                "--dangerously-skip-permissions --add-dir' >&2\n"
             )
             agy.chmod(0o755)
             self.assertEqual(gemini_cli_binary(directory), "agy")
@@ -224,18 +224,23 @@ class TestGeminiProvider(unittest.TestCase):
         self.assertEqual(gemini.build_command(ProviderCommand(binary="agy")), "agy")
         self.assertEqual(
             gemini.build_command(
-                ProviderCommand(binary="agy", agent_profile="keera-agent-7", continue_session=True)
+                ProviderCommand(binary="agy", rules_dir="/tmp/agent 7", continue_session=True)
             ),
-            "agy --agent keera-agent-7 --continue",
+            "agy --add-dir '/tmp/agent 7' --continue",
         )
 
-    def test_antigravity_agent_profile_carries_the_role_prompt(self):
+    def test_antigravity_role_prompt_is_an_always_on_rule_outside_the_repo(self):
         with tempfile.TemporaryDirectory() as directory:
             prompt = Path(directory) / "prompt.txt"
             prompt.write_text("You are the SE agent.")
-            name = write_antigravity_agent(7, str(prompt), Path(directory) / "agents")
-            self.assertEqual(name, "keera-agent-7")
+            rules_dir = write_antigravity_rules(7, str(prompt), Path(directory) / "antigravity")
+            self.assertEqual(rules_dir, str(Path(directory) / "antigravity" / "agent-7"))
             self.assertEqual(
-                (Path(directory) / "agents" / "keera-agent-7.md").read_text(),
-                "---\nname: keera-agent-7\ndescription: Keera agent 7\n---\nYou are the SE agent.",
+                (Path(rules_dir) / ".agents" / "rules" / "keera-agent.md").read_text(),
+                "---\ntrigger: always_on\n---\nYou are the SE agent.",
             )
+
+    def test_antigravity_without_role_prompt_adds_no_rules(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertIsNone(write_antigravity_rules(7, None, Path(directory)))
+            self.assertEqual(list(Path(directory).iterdir()), [])

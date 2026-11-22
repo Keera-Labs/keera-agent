@@ -18,7 +18,7 @@ const providers = computed(() => page.props.global_settings?.providers ?? FALLBA
 const models = ref<Record<string, string[]>>(
     Object.fromEntries(providers.value.map(provider => [provider.slug, [...provider.models]])),
 )
-const defaultProvider = ref(settings?.default_provider === 'claude' ? 'claude' : 'codex')
+const defaultProvider = ref(settings?.default_provider ?? 'codex')
 const enforceDefaultProvider = ref(settings?.enforce_default_provider ?? false)
 const complexityModels = ref<Record<string, Partial<ComplexityModels>>>({ ...(settings?.complexity_models ?? {}) })
 const thinkingLevels = ref<Record<string, Partial<ComplexityThinkingLevels>>>({ ...(settings?.complexity_thinking_levels ?? {}) })

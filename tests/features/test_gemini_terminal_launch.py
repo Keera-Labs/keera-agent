@@ -1,5 +1,6 @@
 import json
 import os
+import shlex
 import tempfile
 from pathlib import Path
 from unittest import mock
@@ -76,7 +77,7 @@ class TestGeminiTerminalLaunch(TestCase, DatabaseTransaction):
 
         executable = Path(self.bin_dir) / "agy"
         executable.write_text(
-            "#!/bin/sh\nprintf '%s' '--model --mode --continue --dangerously-skip-permissions' >&2\n"
+            "#!/bin/sh\nprintf '%s' '--model --mode --continue --dangerously-skip-permissions --add-dir' >&2\n"
         )
         executable.chmod(0o755)
         home = tempfile.mkdtemp()
@@ -92,9 +93,10 @@ class TestGeminiTerminalLaunch(TestCase, DatabaseTransaction):
 
         agent = await Agent.find(agent.id)
         command = agent.to_command(system_prompt_suffix="")
-        self.assertIn(f"agy --agent keera-agent-{agent.id} --model gemini-3.8-flash", command)
-        self.assertTrue(
-            (Path(home) / ".gemini" / "config" / "agents" / f"keera-agent-{agent.id}.md").exists()
-        )
+        self.assertIn("agy --add-dir ", command)
+        self.assertIn(" --model gemini-3.8-flash", command)
+        self.assertNotIn("--agent", command)
+        rules_dir = Path(shlex.split(command.split("agy ", 1)[1])[1])
+        self.assertTrue((rules_dir / ".agents" / "rules" / "keera-agent.md").exists())
         self.assertNotIn("--approval-mode", command)
         self.assertNotIn("GEMINI_CLI_HOME", command)
