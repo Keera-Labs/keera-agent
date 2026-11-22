@@ -221,3 +221,17 @@ class TestGeminiProvider(unittest.TestCase):
             "agy --mode plan",
         )
         self.assertEqual(gemini.build_command(ProviderCommand(binary="agy")), "agy")
+        self.assertEqual(
+            gemini.build_command(
+                ProviderCommand(binary="agy", system_prompt_file="/tmp/role prompt.txt")
+            ),
+            "agy -i \"$(cat '/tmp/role prompt.txt')\"",
+        )
+        self.assertEqual(
+            gemini.build_command(
+                ProviderCommand(
+                    binary="agy", system_prompt_file="/tmp/role.txt", continue_session=True
+                )
+            ),
+            "agy --continue",
+        )

@@ -40,6 +40,8 @@ class GeminiProvider(Provider):
             parts.extend(("--model", shlex.quote(command.model)))
         if command.continue_session:
             parts.append("--continue")
+        elif command.system_prompt_file:
+            parts.extend(("-i", f'"$(cat {shlex.quote(command.system_prompt_file)})"'))
         if command.permission_mode == "plan":
             parts.extend(("--mode", "plan"))
         elif command.skip_permissions:
