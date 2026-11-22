@@ -57,7 +57,7 @@ DIALOG_OPTIONS = re.compile(
 )
 DIALOG_FOOTERS = re.compile(
     r"Enter to confirm · Esc to (?:cancel|exit)|enter continue · esc quit|Press enter to continue"
-    r"|Use Enter to select|Don't trust"
+    r"|Use Enter to select|Don't trust|Navigate · enter Confirm"
 )
 _DIALOG_MARKERS = re.compile(f"{DIALOG_OPTIONS.pattern}|{DIALOG_FOOTERS.pattern}")
 # How far before its footer a dialog's option may appear.

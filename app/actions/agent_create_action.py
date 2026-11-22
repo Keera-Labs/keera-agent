@@ -17,6 +17,19 @@ class AgentCreateAction:
     def prepare(project_id: int, request: AgentStoreRequest):
         return AgentCreateAction(project_id=project_id, request=request)
 
+    @staticmethod
+    def resolve_provider(request: AgentStoreRequest, settings: dict) -> None:
+        default_provider = settings["default_provider"]
+        if "provider" not in request.model_fields_set:
+            request.provider = default_provider
+        elif (
+            settings.get("enforce_default_provider", False) and request.provider != default_provider
+        ):
+            raise ValueError(
+                f"Provider {request.provider} is not allowed: settings enforce default provider "
+                f"{default_provider}"
+            )
+
     async def execute(self) -> Agent:
         from app.controllers.agent_controller import _default_permissions
         from app.controllers.global_settings_controller import (
@@ -37,15 +50,7 @@ class AgentCreateAction:
             )
 
         req = self.request
-        default_provider = settings["default_provider"]
-        if settings.get("enforce_default_provider", False):
-            if "provider" in req.model_fields_set and req.provider != default_provider:
-                raise ValueError(
-                    f"Provider {req.provider} is not allowed: settings enforce default provider "
-                    f"{default_provider}"
-                )
-            if "provider" not in req.model_fields_set:
-                req.provider = default_provider
+        self.resolve_provider(req, settings)
 
         provider_models = settings.get("provider_models", {})
         available_models = provider_models.get(req.provider, [])

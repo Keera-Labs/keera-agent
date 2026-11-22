@@ -237,5 +237,7 @@ class TestGeminiProvider(unittest.TestCase):
             self.assertEqual(name, "keera-agent-7")
             self.assertEqual(
                 (Path(directory) / "agents" / "keera-agent-7.md").read_text(),
-                "---\nname: keera-agent-7\ndescription: Keera agent 7\n---\nYou are the SE agent.",
+                "---\nname: keera-agent-7\ndescription: Keera agent 7\n"
+                "tools: [read_file, edit_file, write_file, run_command, manage_task, search_web, "
+                "schedule, generate_image, send_message]\n---\nYou are the SE agent.",
             )

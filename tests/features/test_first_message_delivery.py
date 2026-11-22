@@ -72,6 +72,14 @@ CODEX_UPDATE_DIALOG = (
     b"Update available! 0.1.0 -> 0.2.0\r\n\xe2\x80\xba 1. Update now\r\n  2. Skip\r\n"
     b"  3. Skip until next version\r\n\r\n  Press enter to continue"
 )
+AGY_TRUST_DIALOG = (
+    b"\x1b[H\x1b[33;1mAccessing workspace:\x1b[m\r\n\x1b[K\n\x1b[1m/tmp/agent-7\x1b[m\r\n\x1b[K\n"
+    b"Do you trust the contents of this project?\r\n\n"
+    b"\x1b[38;2;66;133;244mAntigravity CLI\x1b[m requires permission to read, edit, and execute "
+    b"files here.\r\n\n\x1b[94m> Yes, I trust this folder\x1b[m\r\n  \x1b[90mNo, exit\x1b[m\r\n\n"
+    b"  \x1b[94;1m\xe2\x86\x91/\xe2\x86\x93\x1b[90;22m Navigate \xc2\xb7 \x1b[94;1menter\x1b[90;22m"
+    b" Confirm\x1b[m\x1b[14;61H\x1b[2mGemini 4 Neon \xc2\xb7 high"
+)
 MAIN_SCREEN = (
     "\u2500" * 120 + "\r\n> \r\n" + "\u2500" * 120 + "\r\n  ? for shortcuts\r\n"
 ).encode()
@@ -336,6 +344,7 @@ class TestStartupDialogDetection(TestCase):
             (CLAUDE_TRUST_DIALOG, "Yes, I trust this folder"),
             (CODEX_TRUST_DIALOG, "Trust and continue"),
             (CODEX_UPDATE_DIALOG, "Skip until next version"),
+            (AGY_TRUST_DIALOG, "Yes, I trust this folder"),
         ]
         for dialog, option in cases:
             for size in (1, 7, 64, len(dialog)):

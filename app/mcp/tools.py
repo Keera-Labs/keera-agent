@@ -946,6 +946,10 @@ class SpawnAgentTool(Tool):
         if provider is not None:
             request_data["provider"] = provider
         request = AgentStoreRequest(**request_data)
+        try:
+            AgentCreateAction.resolve_provider(request, settings)
+        except ValueError as e:
+            return Response.text(f"Error: {e}")
         if arguments.get("message"):
             from app.services.gemini_cli import validate_gemini_cli
 

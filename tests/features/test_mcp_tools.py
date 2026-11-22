@@ -890,6 +890,44 @@ class TestSpawnAgentComplexity(TestCase, DatabaseTransaction):
         self.assertEqual(agent.provider, "codex")
         self.assertEqual(agent.model, "gpt-5.6-terra")
 
+    async def test_omitted_provider_uses_configured_default_without_enforcement(self):
+        from app.controllers.global_settings_controller import write_global_setting
+
+        await write_global_setting("default_provider", "claude")
+        await write_global_setting("enforce_default_provider", False)
+
+        agent = await self._spawn(complexity="medium")
+
+        self.assertEqual(agent.provider, "claude")
+        self.assertEqual(agent.model, "claude-opus-5")
+
+    async def test_omitted_provider_checks_the_default_provider_cli_before_creating(self):
+        from unittest.mock import patch
+
+        from app.controllers.global_settings_controller import write_global_setting
+
+        await write_global_setting("default_provider", "gemini")
+        with patch(
+            "app.services.gemini_cli.validate_gemini_cli",
+            side_effect=RuntimeError("Gemini CLI is missing."),
+        ) as validate:
+            text = _text(
+                await self.tool.handle(
+                    {
+                        "project_path": self.project.path,
+                        "name": "Default Gemini",
+                        "complexity": "medium",
+                        "message": "Start",
+                    }
+                )
+            )
+
+        validate.assert_called_once_with("gemini")
+        self.assertEqual(text, "Error: Gemini CLI is missing.")
+        self.assertIsNone(
+            await Agent.where("project_id", self.project.id).where("name", "Default Gemini").first()
+        )
+
     async def test_enforcement_uses_default_provider_when_omitted(self):
         from app.controllers.global_settings_controller import write_global_setting
 
