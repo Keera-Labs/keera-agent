@@ -7,6 +7,7 @@ from pathlib import Path
 
 from app.ai import ProviderCommand, providers
 from app.mcp.tools import SpawnAgentInput
+from app.services.antigravity_agent import write_antigravity_agent
 from app.services.gemini_cli import gemini_cli_binary, validate_gemini_cli
 from app.services.gemini_settings import write_gemini_settings
 from app.terminal.terminal import _drawn_dialog
@@ -223,15 +224,18 @@ class TestGeminiProvider(unittest.TestCase):
         self.assertEqual(gemini.build_command(ProviderCommand(binary="agy")), "agy")
         self.assertEqual(
             gemini.build_command(
-                ProviderCommand(binary="agy", system_prompt_file="/tmp/role prompt.txt")
+                ProviderCommand(binary="agy", agent_profile="keera-agent-7", continue_session=True)
             ),
-            "agy -i \"$(cat '/tmp/role prompt.txt')\"",
+            "agy --agent keera-agent-7 --continue",
         )
-        self.assertEqual(
-            gemini.build_command(
-                ProviderCommand(
-                    binary="agy", system_prompt_file="/tmp/role.txt", continue_session=True
-                )
-            ),
-            "agy --continue",
-        )
+
+    def test_antigravity_agent_profile_carries_the_role_prompt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            prompt = Path(directory) / "prompt.txt"
+            prompt.write_text("You are the SE agent.")
+            name = write_antigravity_agent(7, str(prompt), Path(directory) / "agents")
+            self.assertEqual(name, "keera-agent-7")
+            self.assertEqual(
+                (Path(directory) / "agents" / "keera-agent-7.md").read_text(),
+                "---\nname: keera-agent-7\ndescription: Keera agent 7\n---\nYou are the SE agent.",
+            )

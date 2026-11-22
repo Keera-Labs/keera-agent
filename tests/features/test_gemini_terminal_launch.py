@@ -79,6 +79,9 @@ class TestGeminiTerminalLaunch(TestCase, DatabaseTransaction):
             "#!/bin/sh\nprintf '%s' '--model --mode --continue --dangerously-skip-permissions' >&2\n"
         )
         executable.chmod(0o755)
+        home = tempfile.mkdtemp()
+        self.addCleanup(os.environ.__setitem__, "HOME", os.environ["HOME"])
+        os.environ["HOME"] = home
         agent, project = await self._gemini_agent()
 
         with (
@@ -89,6 +92,9 @@ class TestGeminiTerminalLaunch(TestCase, DatabaseTransaction):
 
         agent = await Agent.find(agent.id)
         command = agent.to_command(system_prompt_suffix="")
-        self.assertIn("agy --model gemini-3.8-flash", command)
+        self.assertIn(f"agy --agent keera-agent-{agent.id} --model gemini-3.8-flash", command)
+        self.assertTrue(
+            (Path(home) / ".gemini" / "config" / "agents" / f"keera-agent-{agent.id}.md").exists()
+        )
         self.assertNotIn("--approval-mode", command)
         self.assertNotIn("GEMINI_CLI_HOME", command)
