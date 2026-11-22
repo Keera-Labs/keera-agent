@@ -208,6 +208,8 @@ export function socketMessageHandler(getSession: () => Pick<Session, 'term' | 'w
             } else if (event.type === 'replay_end') {
                 replaying = false
                 acknowledgeReplay(session)
+            } else if (event.type === 'error') {
+                session.term.write(`\r\n\x1b[31m${String(event.message ?? 'Terminal error')}\x1b[0m\r\n`)
             } else {
                 handlers.onEvent(event)
             }
