@@ -38,6 +38,13 @@ class TestAgentProviders(TestCase, DatabaseTransaction):
         )
 
     async def test_create_gemini_agent_uses_complexity_model_and_native_command(self):
+        bin_dir = tempfile.mkdtemp()
+        gemini = os.path.join(bin_dir, "gemini")
+        with open(gemini, "w") as executable:
+            executable.write("#!/bin/sh\n")
+        os.chmod(gemini, 0o755)
+        self.addCleanup(os.environ.__setitem__, "PATH", os.environ.get("PATH", ""))
+        os.environ["PATH"] = bin_dir
         response = await self.post(
             f"/api/projects/{self.project.id}/agents",
             json={"name": "Gemini worker", "provider": "gemini", "complexity": "easy"},

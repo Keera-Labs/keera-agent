@@ -10,6 +10,8 @@ class GeminiProvider(Provider):
     default_models = ("gemini-3.8-flash",)
 
     def build_command(self, command: ProviderCommand) -> str:
+        if command.binary == "agy":
+            return self._build_antigravity_command(command)
         parts = []
         if command.settings_file:
             parts.append(
@@ -30,4 +32,16 @@ class GeminiProvider(Provider):
             parts.extend(("--allowed-tools", shlex.quote(",".join(command.allowed_tools))))
         if command.verbose:
             parts.append("--debug")
+        return " ".join(parts)
+
+    def _build_antigravity_command(self, command: ProviderCommand) -> str:
+        parts = ["agy"]
+        if command.model:
+            parts.extend(("--model", shlex.quote(command.model)))
+        if command.continue_session:
+            parts.append("--continue")
+        if command.permission_mode == "plan":
+            parts.extend(("--mode", "plan"))
+        elif command.skip_permissions:
+            parts.append("--dangerously-skip-permissions")
         return " ".join(parts)

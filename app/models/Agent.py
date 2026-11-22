@@ -63,9 +63,12 @@ class Agent(Model):
         if getattr(self, "provider", None) == "gemini":
             from fastapi_startkit import Config
 
+            from app.services.gemini_cli import gemini_cli_binary
             from app.services.gemini_settings import write_gemini_settings
 
-            command.settings_file = write_gemini_settings(
-                self.id, Config.get("fastapi.app_url"), command
-            )
+            command.binary = gemini_cli_binary()
+            if command.binary != "agy":
+                command.settings_file = write_gemini_settings(
+                    self.id, Config.get("fastapi.app_url"), command
+                )
         return providers.get(getattr(self, "provider", None) or "codex").build_command(command)
