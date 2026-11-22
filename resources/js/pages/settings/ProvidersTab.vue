@@ -173,6 +173,9 @@ async function save() {
                         </select>
                     </div>
                 </div>
+                <span v-if="provider.slug === 'gemini'" class="text-ui-10 text-zinc-400">
+                    Thinking level applies only when Gemini runs through the agy CLI.
+                </span>
                 <span :class="labelClass">Models</span>
                 <div v-for="(model, index) in models[provider.slug] ?? []" :key="`${provider.slug}-${index}`" class="flex gap-2">
                     <input

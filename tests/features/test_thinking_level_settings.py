@@ -15,8 +15,6 @@ UNSET = {"easy": None, "medium": None, "hard": None}
 
 
 class TestThinkingLevelSettingsController(TestCase):
-    """PATCH commits on its own connection, so each test restores the key it touched."""
-
     async def asyncTearDown(self):
         await GlobalSettings.where("key", "complexity_thinking_levels").delete()
         await super().asyncTearDown()
@@ -39,13 +37,13 @@ class TestThinkingLevelSettingsController(TestCase):
             providers["claude"]["thinking_levels"], ["low", "medium", "high", "xhigh", "max"]
         )
         self.assertEqual(
-            providers["codex"]["thinking_levels"], ["minimal", "low", "medium", "high", "xhigh"]
+            providers["codex"]["thinking_levels"], ["none", "low", "medium", "high", "xhigh", "max"]
         )
 
     async def test_saved_levels_persist_across_reads(self):
         saved = {
             "claude": {"easy": "low", "medium": None, "hard": "max"},
-            "codex": {"easy": "minimal", "medium": "medium", "hard": "xhigh"},
+            "codex": {"easy": "none", "medium": "medium", "hard": "xhigh"},
         }
 
         response = await self._save(saved)
@@ -57,10 +55,10 @@ class TestThinkingLevelSettingsController(TestCase):
         self.assertEqual(data["gemini"], UNSET)
 
     async def test_rejects_level_unsupported_by_provider(self):
-        response = await self._save({"claude": {"easy": "minimal", "medium": None, "hard": None}})
+        response = await self._save({"claude": {"easy": "none", "medium": None, "hard": None}})
 
         self.assertEqual(response.status_code, 422)
-        self.assertIn("minimal", response.json()["error"])
+        self.assertIn("none", response.json()["error"])
         self.assertEqual(
             (await self.get(URL)).json()["complexity_thinking_levels"]["claude"], UNSET
         )
@@ -115,7 +113,7 @@ class TestSpawnThinkingLevelResolution(TestCase, DatabaseTransaction):
     def test_request_rejects_level_unsupported_by_provider(self):
         with self.assertRaises(ValidationError):
             AgentStoreRequest(
-                name="Worker", provider="claude", complexity="easy", thinking_level="minimal"
+                name="Worker", provider="claude", complexity="easy", thinking_level="none"
             )
 
 
@@ -127,7 +125,26 @@ class TestAgentUpdateThinkingLevel(TestCase, DatabaseTransaction):
 
     async def test_rejects_level_unsupported_by_provider(self):
         response = await self.client.patch(
-            f"/api/agents/{self.agent.id}", json={"thinking_level": "minimal"}
+            f"/api/agents/{self.agent.id}", json={"thinking_level": "none"}
         )
 
         self.assertEqual(response.status_code, 422)
+
+    async def _switch_to_claude(self, thinking_level: str):
+        agent = await AgentFactory.new().create(
+            project_id=self.project.id,
+            provider="codex",
+            model="gpt-5.6-sol",
+            thinking_level=thinking_level,
+        )
+        response = await self.client.patch(
+            f"/api/agents/{agent.id}", json={"provider": "claude", "model": "claude-sonnet-5"}
+        )
+        self.assertEqual(response.status_code, 200)
+        return response.json()["data"]["attributes"]["thinking_level"]
+
+    async def test_provider_change_clears_level_the_new_provider_lacks(self):
+        self.assertIsNone(await self._switch_to_claude("none"))
+
+    async def test_provider_change_keeps_level_the_new_provider_supports(self):
+        self.assertEqual(await self._switch_to_claude("high"), "high")

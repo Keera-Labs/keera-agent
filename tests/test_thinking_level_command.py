@@ -56,5 +56,5 @@ class TestAgentThinkingLevelCommand(TestCase, DatabaseTransaction):
         self.assertIn("--effort max", agent.to_command())
 
     async def test_level_unsupported_by_current_provider_is_dropped(self):
-        agent = await self._agent(provider="claude", thinking_level="minimal")
+        agent = await self._agent(provider="claude", thinking_level="none")
         self.assertNotIn("--effort", agent.to_command())

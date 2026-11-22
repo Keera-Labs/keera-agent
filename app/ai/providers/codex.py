@@ -7,7 +7,7 @@ class CodexProvider(Provider):
     slug = "codex"
     display_name = "Codex"
     default_models = ("gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol")
-    thinking_levels = ("minimal", "low", "medium", "high", "xhigh")
+    thinking_levels = ("none", "low", "medium", "high", "xhigh", "max")
 
     def build_command(self, command: ProviderCommand) -> str:
         # The update prompt blocks startup, and Enter on it runs a global npm install.

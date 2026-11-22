@@ -64,6 +64,10 @@ async def update(body: AgentUpdateRequest, agent_id: int):
         error = thinking_level_error(provider, update_data["thinking_level"])
         if error:
             return JSONResponse({"error": error}, status_code=422)
+    elif "provider" in update_data and thinking_level_error(
+        provider, getattr(agent, "thinking_level", None)
+    ):
+        update_data["thinking_level"] = None
 
     # plan_mode is column-authoritative. If a legacy client nests it in flags,
     # promote it to the column and strip it so the two never diverge.
