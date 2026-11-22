@@ -10,10 +10,11 @@ vi.mock('@inertiajs/vue3', () => ({
     usePage: () => reactive({
         props: {
             global_settings: {
-                providers: [{ slug: 'codex', name: 'Codex', models: ['gpt-a', 'gpt-b'] }],
+                providers: [{ slug: 'codex', name: 'Codex', models: ['gpt-a', 'gpt-b'], thinking_levels: ['low', 'high'] }],
                 default_provider: 'codex',
                 enforce_default_provider: false,
                 complexity_models: { codex: { easy: 'gpt-a', medium: 'gpt-b', hard: 'gpt-b' } },
+                complexity_thinking_levels: { codex: { easy: null, medium: 'low', hard: null } },
             },
         },
     }),
@@ -49,9 +50,32 @@ describe('ProvidersTab', () => {
             enforce_default_provider: true,
             // gpt-b was removed, so tiers pointing at it fall back to the first remaining model.
             complexity_models: { codex: { easy: 'gpt-a', medium: 'gpt-a', hard: 'gpt-a' } },
+            complexity_thinking_levels: { codex: { easy: null, medium: 'low', hard: null } },
         })
         expect(reload).toHaveBeenCalledWith({ only: ['global_settings'] })
         expect(w.text()).toContain('Saved ✓')
+    })
+
+    it('loads saved thinking levels and saves the level chosen next to each model', async () => {
+        const fetchMock = vi.fn((_url: string, init?: RequestInit) => Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(JSON.parse(init?.body as string)),
+        }))
+        vi.stubGlobal('fetch', fetchMock)
+        const w = mount(ProvidersTab)
+
+        const medium = w.get<HTMLSelectElement>('select[aria-label="Codex Medium thinking level"]')
+        expect(medium.element.value).toBe('low')
+        expect(medium.findAll('option').map(o => o.element.value)).toEqual(['', 'low', 'high'])
+
+        await w.get('select[aria-label="Codex Complex / Hard thinking level"]').setValue('high')
+        await medium.setValue('')
+        await w.findAll('button').find(b => b.text() === 'Save provider settings')!.trigger('click')
+        await flushPromises()
+
+        expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string).complexity_thinking_levels).toEqual({
+            codex: { easy: null, medium: null, hard: 'high' },
+        })
     })
 
     it('shows the server error when saving fails', async () => {

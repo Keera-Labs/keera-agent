@@ -2,8 +2,8 @@
 import { router, usePage } from '@inertiajs/vue3'
 import { computed, ref } from 'vue'
 import { cancelBtnClass, flagRowClass, inputClass, labelClass, submitBtnClass, toggleClass } from '@/components/ui/styles'
-import type { Complexity, ComplexityModels, GlobalSettings } from '@/types/provider'
-import { FALLBACK_PROVIDERS, reconcileComplexityModels } from '@/types/provider'
+import type { Complexity, ComplexityModels, ComplexityThinkingLevels, GlobalSettings } from '@/types/provider'
+import { FALLBACK_PROVIDERS, reconcileComplexityModels, reconcileThinkingLevels } from '@/types/provider'
 
 const COMPLEXITY_LABELS: [Complexity, string][] = [
     ['easy', 'Easy'],
@@ -21,6 +21,7 @@ const models = ref<Record<string, string[]>>(
 const defaultProvider = ref(settings?.default_provider === 'claude' ? 'claude' : 'codex')
 const enforceDefaultProvider = ref(settings?.enforce_default_provider ?? false)
 const complexityModels = ref<Record<string, Partial<ComplexityModels>>>({ ...(settings?.complexity_models ?? {}) })
+const thinkingLevels = ref<Record<string, Partial<ComplexityThinkingLevels>>>({ ...(settings?.complexity_thinking_levels ?? {}) })
 const saving = ref(false)
 const saved = ref(false)
 const error = ref('')
@@ -38,6 +39,21 @@ function setTier(slug: string, complexity: Complexity, model: string) {
     complexityModels.value = {
         ...complexityModels.value,
         [slug]: { ...resolvedComplexityModels(slug), [complexity]: model },
+    }
+}
+
+function supportedThinkingLevels(slug: string): string[] {
+    return providers.value.find(provider => provider.slug === slug)?.thinking_levels ?? []
+}
+
+function resolvedThinkingLevels(slug: string): ComplexityThinkingLevels {
+    return reconcileThinkingLevels(supportedThinkingLevels(slug), thinkingLevels.value[slug] ?? {})
+}
+
+function setThinkingLevel(slug: string, complexity: Complexity, level: string) {
+    thinkingLevels.value = {
+        ...thinkingLevels.value,
+        [slug]: { ...resolvedThinkingLevels(slug), [complexity]: level || null },
     }
 }
 
@@ -66,6 +82,9 @@ async function save() {
                 complexity_models: Object.fromEntries(
                     providers.value.map(provider => [provider.slug, resolvedComplexityModels(provider.slug)]),
                 ),
+                complexity_thinking_levels: Object.fromEntries(
+                    providers.value.map(provider => [provider.slug, resolvedThinkingLevels(provider.slug)]),
+                ),
             }),
         })
         const data = await response.json()
@@ -74,6 +93,7 @@ async function save() {
         defaultProvider.value = data.default_provider
         enforceDefaultProvider.value = data.enforce_default_provider
         complexityModels.value = data.complexity_models
+        thinkingLevels.value = data.complexity_thinking_levels ?? {}
         saved.value = true
         router.reload({ only: ['global_settings'] })
     } catch {
@@ -90,7 +110,7 @@ async function save() {
             <div>
                 <h2 class="m-0 text-zinc-900 text-ui-15 font-semibold">Provider settings</h2>
                 <p class="mt-1 mb-0 text-zinc-500 text-ui-12">
-                    Choose the default provider, each provider's models, and the model used for each task complexity.
+                    Choose the default provider, each provider's models, and the model and thinking level used for each task complexity.
                 </p>
             </div>
             <span v-if="error" class="text-danger text-ui-12">{{ error }}</span>
@@ -131,7 +151,7 @@ async function save() {
                     <span class="font-mono text-zinc-400 text-ui-10">{{ provider.slug }}</span>
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <label v-for="[complexity, label] in COMPLEXITY_LABELS" :key="complexity" class="flex flex-col gap-1.5 min-w-0">
+                    <div v-for="[complexity, label] in COMPLEXITY_LABELS" :key="complexity" class="flex flex-col gap-1.5 min-w-0">
                         <span :class="labelClass">{{ label }}</span>
                         <select
                             :aria-label="`${provider.name} ${label} model`"
@@ -141,7 +161,17 @@ async function save() {
                         >
                             <option v-for="model in cleanModels(models[provider.slug])" :key="model" :value="model">{{ model }}</option>
                         </select>
-                    </label>
+                        <select
+                            v-if="supportedThinkingLevels(provider.slug).length"
+                            :aria-label="`${provider.name} ${label} thinking level`"
+                            :value="resolvedThinkingLevels(provider.slug)[complexity] ?? ''"
+                            :class="[inputClass, 'w-full']"
+                            @change="setThinkingLevel(provider.slug, complexity, ($event.target as HTMLSelectElement).value)"
+                        >
+                            <option value="">Default thinking</option>
+                            <option v-for="level in supportedThinkingLevels(provider.slug)" :key="level" :value="level">{{ level }} thinking</option>
+                        </select>
+                    </div>
                 </div>
                 <span :class="labelClass">Models</span>
                 <div v-for="(model, index) in models[provider.slug] ?? []" :key="`${provider.slug}-${index}`" class="flex gap-2">

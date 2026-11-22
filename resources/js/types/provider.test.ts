@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FALLBACK_PROVIDERS, modelForProviderComplexity, modelsForProvider, reconcileComplexityModels } from './provider'
+import { FALLBACK_PROVIDERS, modelForProviderComplexity, modelsForProvider, reconcileComplexityModels, reconcileThinkingLevels } from './provider'
 
 describe('reconcileComplexityModels', () => {
     it('offers Gemini models and resolves its complexity defaults', () => {
@@ -16,5 +16,15 @@ describe('reconcileComplexityModels', () => {
         })
 
         expect(Object.values(submittedComplexityModels).every(model => modelsAfterEdit.includes(model))).toBe(true)
+    })
+})
+
+describe('reconcileThinkingLevels', () => {
+    it('keeps supported levels and clears unset or unsupported ones', () => {
+        expect(reconcileThinkingLevels(['low', 'high'], { easy: 'high', medium: 'max' })).toEqual({
+            easy: 'high',
+            medium: null,
+            hard: null,
+        })
     })
 })
