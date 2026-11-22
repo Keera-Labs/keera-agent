@@ -9,6 +9,7 @@ from app.actions.task_transition_action import record_task_event, write_task
 from app.constant.task_status import canonical_status
 from app.models.Agent import Agent
 from app.models.Task import Task
+from app.services.antigravity_agent import remove_antigravity_agent
 from app.services.task_policy import PRE_REVIEW_STATUSES, REQUEUE_STATUS, task_actor
 from app.services.worktree_cleanup import PROTECTED_BRANCHES
 
@@ -57,6 +58,7 @@ class AgentDeleteAction:
             }
         )
         await self._stop_newest_session(await Agent.find(self.agent.id))
+        remove_antigravity_agent(self.agent.id)
         await self._run_step(REQUEUE_STEP, self._requeue_task)
         await self._run_step(REPORT_STEP, self._notify_orchestrator, after=REQUEUE_STEP)
         return teardown_finished(await Agent.find(self.agent.id))

@@ -7,7 +7,11 @@ from pathlib import Path
 
 from app.ai import ProviderCommand, providers
 from app.mcp.tools import SpawnAgentInput
-from app.services.antigravity_agent import write_antigravity_agent
+from app.services.antigravity_agent import (
+    antigravity_agent_name,
+    remove_antigravity_agent,
+    write_antigravity_agent,
+)
 from app.services.gemini_cli import gemini_cli_binary, validate_gemini_cli
 from app.services.gemini_settings import write_gemini_settings
 from app.terminal.terminal import _drawn_dialog
@@ -229,13 +233,45 @@ class TestGeminiProvider(unittest.TestCase):
             "agy --agent keera-agent-7 --continue",
         )
 
-    def test_antigravity_agent_profile_carries_the_role_prompt(self):
+    def test_antigravity_agent_profile_carries_the_role_prompt_privately(self):
         with tempfile.TemporaryDirectory() as directory:
             prompt = Path(directory) / "prompt.txt"
             prompt.write_text("You are the SE agent.")
-            name = write_antigravity_agent(7, str(prompt), Path(directory) / "agents")
-            self.assertEqual(name, "keera-agent-7")
+            agents = Path(directory) / "agents"
+            name = write_antigravity_agent(7, str(prompt), agents)
+            self.assertEqual(name, antigravity_agent_name(7))
+            profile = agents / f"{name}.md"
             self.assertEqual(
-                (Path(directory) / "agents" / "keera-agent-7.md").read_text(),
-                "---\nname: keera-agent-7\ndescription: Keera agent 7\n---\nYou are the SE agent.",
+                profile.read_text(),
+                f"---\nname: {name}\ndescription: Keera agent 7\n---\nYou are the SE agent.",
+            )
+            self.assertEqual(profile.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(agents.stat().st_mode & 0o777, 0o700)
+            self.assertEqual([path.name for path in agents.iterdir()], [profile.name])
+            remove_antigravity_agent(7, agents)
+            self.assertFalse(profile.exists())
+            remove_antigravity_agent(7, agents)
+
+    def test_antigravity_agent_name_is_namespaced_per_install(self):
+        name = antigravity_agent_name(7)
+        self.assertRegex(name, r"^keera-[0-9a-f]{8}-agent-7$")
+        self.assertNotEqual(name, "keera-agent-7")
+        self.assertEqual(name, antigravity_agent_name(7))
+        self.assertNotEqual(name, antigravity_agent_name(8))
+
+    def test_empty_role_prompt_skips_the_agent_profile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            agents = Path(directory) / "agents"
+            prompt = Path(directory) / "prompt.txt"
+            prompt.write_text("Old role")
+            write_antigravity_agent(7, str(prompt), agents)
+            prompt.write_text("  \n")
+            self.assertIsNone(write_antigravity_agent(7, str(prompt), agents))
+            self.assertIsNone(write_antigravity_agent(7, None, agents))
+            self.assertEqual(list(agents.iterdir()), [])
+            self.assertEqual(
+                providers.get("gemini").build_command(
+                    ProviderCommand(binary="agy", agent_profile=None)
+                ),
+                "agy",
             )
