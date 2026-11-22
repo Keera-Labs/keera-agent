@@ -44,6 +44,6 @@ def _atomic_write_private(path: Path, content: str) -> None:
         with os.fdopen(descriptor, "w") as file:
             file.write(content)
         os.replace(temporary, path)
-    except BaseException:
+    except Exception:
         Path(temporary).unlink(missing_ok=True)
         raise
