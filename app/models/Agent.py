@@ -47,8 +47,11 @@ class Agent(Model):
                 pass
 
         enforce_permissions = self.plan_mode or not self.dangerously_skip_permissions
+        provider = providers.get(getattr(self, "provider", None) or "codex")
+        thinking_level = getattr(self, "thinking_level", None)
         command = ProviderCommand(
             model=self.model,
+            thinking_level=thinking_level if thinking_level in provider.thinking_levels else None,
             worktree=f"agent-{self.id}" if getattr(self, "use_worktree", True) else None,
             continue_session=getattr(self, "has_session", False),
             system_prompt_file=prompt_file,
@@ -74,4 +77,4 @@ class Agent(Model):
                 command.settings_file = write_gemini_settings(
                     self.id, Config.get("fastapi.app_url"), command
                 )
-        return providers.get(getattr(self, "provider", None) or "codex").build_command(command)
+        return provider.build_command(command)

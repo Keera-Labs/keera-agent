@@ -2,6 +2,7 @@ export interface AIProvider {
     slug: string
     name: string
     models: string[]
+    thinking_levels?: string[]
 }
 
 export interface GlobalSettings {
@@ -10,10 +11,12 @@ export interface GlobalSettings {
     default_provider?: string
     enforce_default_provider?: boolean
     complexity_models?: Record<string, ComplexityModels>
+    complexity_thinking_levels?: Record<string, ComplexityThinkingLevels>
 }
 
 export type Complexity = 'easy' | 'medium' | 'hard'
 export type ComplexityModels = Record<Complexity, string>
+export type ComplexityThinkingLevels = Record<Complexity, string | null>
 
 export function savedModelForComplexity(settings: GlobalSettings | undefined, provider: string, complexity: string): string | undefined {
     return settings?.complexity_models?.[provider]?.[complexity as Complexity]
@@ -64,4 +67,15 @@ export function reconcileComplexityModels(
             : (models.includes(defaultModel) ? defaultModel : (models[0] ?? ''))
         return resolved
     }, {} as ComplexityModels)
+}
+
+export function reconcileThinkingLevels(
+    levels: string[],
+    current: Partial<ComplexityThinkingLevels>,
+): ComplexityThinkingLevels {
+    return (['easy', 'medium', 'hard'] as const).reduce((resolved, complexity) => {
+        const selected = current[complexity]
+        resolved[complexity] = selected && levels.includes(selected) ? selected : null
+        return resolved
+    }, {} as ComplexityThinkingLevels)
 }

@@ -8,6 +8,7 @@ class GeminiProvider(Provider):
     slug = "gemini"
     display_name = "Gemini CLI"
     default_models = ("gemini-3.8-flash",)
+    thinking_levels = ("low", "medium", "high", "xhigh", "max")
 
     def build_command(self, command: ProviderCommand) -> str:
         if command.binary == "agy":
@@ -40,6 +41,8 @@ class GeminiProvider(Provider):
             parts.extend(("--agent", shlex.quote(command.agent_profile)))
         if command.model:
             parts.extend(("--model", shlex.quote(command.model)))
+        if command.thinking_level:
+            parts.extend(("--effort", shlex.quote(command.thinking_level)))
         if command.continue_session:
             parts.append("--continue")
         if command.permission_mode == "plan":

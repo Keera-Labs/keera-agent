@@ -7,6 +7,7 @@ class CodexProvider(Provider):
     slug = "codex"
     display_name = "Codex"
     default_models = ("gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol")
+    thinking_levels = ("none", "low", "medium", "high", "xhigh", "max")
 
     def build_command(self, command: ProviderCommand) -> str:
         # The update prompt blocks startup, and Enter on it runs a global npm install.
@@ -15,6 +16,10 @@ class CodexProvider(Provider):
             parts.extend(("resume", "--last"))
         if command.model:
             parts.extend(("--model", shlex.quote(command.model)))
+        if command.thinking_level:
+            parts.extend(
+                ("--config", shlex.quote(f"model_reasoning_effort={command.thinking_level}"))
+            )
         if command.system_prompt_file:
             path = shlex.quote(command.system_prompt_file)
             parts.extend(("--config", f'developer_instructions="$(cat {path})"'))

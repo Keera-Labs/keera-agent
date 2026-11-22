@@ -6,6 +6,14 @@ from app.constant.agent_types import ALLOWED_AGENT_TYPES
 from app.constant.complexity import TaskComplexity
 
 
+def _validate_thinking_level(provider: str, level: Optional[str]) -> None:
+    from app.controllers.global_settings_controller import thinking_level_error
+
+    error = thinking_level_error(provider, level)
+    if error:
+        raise ValueError(error)
+
+
 class AgentStoreRequest(BaseModel):
     """Input model for AgentCreateAction — covers all agent-creation paths."""
 
@@ -14,6 +22,7 @@ class AgentStoreRequest(BaseModel):
     description: Optional[str] = None
     provider: str = "codex"
     model: Optional[str] = None
+    thinking_level: Optional[str] = None
     system_prompt: Optional[str] = None
     flags: dict = {}
     dangerously_skip_permissions: bool = True
@@ -39,6 +48,11 @@ class AgentStoreRequest(BaseModel):
         # A None model is resolved from the saved complexity settings at create time.
         if "provider" not in self.model_fields_set:
             self.model = None
+        return self
+
+    @model_validator(mode="after")
+    def _thinking_level_supported(self):
+        _validate_thinking_level(self.provider, self.thinking_level)
         return self
 
     @field_validator("provider")
@@ -69,6 +83,7 @@ class AgentUpdateRequest(BaseModel):
     description: Optional[str] = None
     provider: Optional[str] = None
     model: Optional[str] = None
+    thinking_level: Optional[str] = None
     system_prompt: Optional[str] = None
     agent_type: Optional[str] = None
     flags: Optional[dict] = None

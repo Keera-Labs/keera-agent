@@ -21,6 +21,7 @@ class AgentCreateAction:
         from app.controllers.agent_controller import _default_permissions
         from app.controllers.global_settings_controller import (
             complexity_model,
+            complexity_thinking_level,
             read_global_settings,
         )
         from app.utils.system_prompts import default_system_prompt
@@ -51,6 +52,11 @@ class AgentCreateAction:
         model = req.model or await complexity_model(req.provider, req.complexity)
         if model not in available_models:
             raise ValueError(f"Model '{model or ''}' is not configured for {req.provider}")
+        thinking_level = (
+            req.thinking_level
+            if "thinking_level" in req.model_fields_set
+            else await complexity_thinking_level(req.provider, req.complexity)
+        )
 
         # Resolve system prompt: caller value wins, fall back to type default
         system_prompt = (req.system_prompt or "").strip() or default_system_prompt(req.agent_type)
@@ -86,6 +92,7 @@ class AgentCreateAction:
             "description": req.description,
             "provider": req.provider,
             "model": model,
+            "thinking_level": thinking_level,
             "system_prompt": system_prompt,
             "task_id": req.task_id,
             "permissions_allow": perms_allow,
