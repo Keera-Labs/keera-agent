@@ -19,7 +19,7 @@ class ProviderCommand:
     max_turns: int | None = None
     settings_file: str | None = None
     binary: str | None = None
-    agent_profile: str | None = None
+    rules_dir: str | None = None
 
 
 class Provider(ABC):
