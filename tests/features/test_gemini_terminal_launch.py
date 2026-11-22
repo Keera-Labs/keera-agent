@@ -70,3 +70,25 @@ class TestGeminiTerminalLaunch(TestCase, DatabaseTransaction):
         command = agent.to_command(system_prompt_suffix="")
         self.assertIn("gemini --model gemini-3.8-flash", command)
         self.assertIn("--approval-mode", command)
+
+    async def test_antigravity_cli_spawns_when_gemini_is_absent(self):
+        from app.controllers.terminal_controller import terminal_ws
+
+        executable = Path(self.bin_dir) / "agy"
+        executable.write_text(
+            "#!/bin/sh\nprintf '%s' '--model --mode --continue --dangerously-skip-permissions' >&2\n"
+        )
+        executable.chmod(0o755)
+        agent, project = await self._gemini_agent()
+
+        with (
+            mock.patch.object(self.terminals, "create", side_effect=_Spawned),
+            self.assertRaises(_Spawned),
+        ):
+            await terminal_ws(mock.AsyncMock(), project.slug, agent_id=agent.id)
+
+        agent = await Agent.find(agent.id)
+        command = agent.to_command(system_prompt_suffix="")
+        self.assertIn("agy --model gemini-3.8-flash", command)
+        self.assertNotIn("--approval-mode", command)
+        self.assertNotIn("GEMINI_CLI_HOME", command)

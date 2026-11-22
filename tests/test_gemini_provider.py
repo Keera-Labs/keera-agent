@@ -7,7 +7,7 @@ from pathlib import Path
 
 from app.ai import ProviderCommand, providers
 from app.mcp.tools import SpawnAgentInput
-from app.services.gemini_cli import validate_gemini_cli
+from app.services.gemini_cli import gemini_cli_binary, validate_gemini_cli
 from app.services.gemini_settings import write_gemini_settings
 from app.terminal.terminal import _drawn_dialog
 
@@ -176,3 +176,48 @@ class TestGeminiProvider(unittest.TestCase):
                 validate_gemini_cli("codex")
             finally:
                 os.environ["PATH"] = original
+
+    def test_antigravity_cli_is_used_when_gemini_is_absent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertIsNone(gemini_cli_binary(directory))
+            agy = Path(directory) / "agy"
+            agy.write_text(
+                "#!/bin/sh\nprintf '%s' '--model --mode --continue "
+                "--dangerously-skip-permissions' >&2\n"
+            )
+            agy.chmod(0o755)
+            self.assertEqual(gemini_cli_binary(directory), "agy")
+            original = os.environ.get("PATH", "")
+            os.environ["PATH"] = directory
+            try:
+                validate_gemini_cli("gemini")
+            finally:
+                os.environ["PATH"] = original
+            gemini = Path(directory) / "gemini"
+            gemini.write_text("#!/bin/sh\n")
+            gemini.chmod(0o755)
+            self.assertEqual(gemini_cli_binary(directory), "gemini")
+
+    def test_antigravity_flags(self):
+        gemini = providers.get("gemini")
+        self.assertEqual(
+            gemini.build_command(
+                ProviderCommand(
+                    binary="agy",
+                    model="gemini-3.8-flash",
+                    continue_session=True,
+                    skip_permissions=True,
+                    allowed_tools=["read_file"],
+                    verbose=True,
+                    settings_file="/tmp/settings.json",
+                )
+            ),
+            "agy --model gemini-3.8-flash --continue --dangerously-skip-permissions",
+        )
+        self.assertEqual(
+            gemini.build_command(
+                ProviderCommand(binary="agy", permission_mode="plan", skip_permissions=True)
+            ),
+            "agy --mode plan",
+        )
+        self.assertEqual(gemini.build_command(ProviderCommand(binary="agy")), "agy")
