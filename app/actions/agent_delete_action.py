@@ -1,3 +1,4 @@
+import logging
 import re
 
 from fastapi_startkit.application import app
@@ -9,8 +10,11 @@ from app.actions.task_transition_action import record_task_event, write_task
 from app.constant.task_status import canonical_status
 from app.models.Agent import Agent
 from app.models.Task import Task
+from app.services.antigravity_agent import remove_antigravity_agent
 from app.services.task_policy import PRE_REVIEW_STATUSES, REQUEUE_STATUS, task_actor
 from app.services.worktree_cleanup import PROTECTED_BRANCHES
+
+logger = logging.getLogger("keera.agents")
 
 AGENT_DEFAULT_BRANCH = re.compile(r"worktree-agent-\d+")
 
@@ -57,9 +61,16 @@ class AgentDeleteAction:
             }
         )
         await self._stop_newest_session(await Agent.find(self.agent.id))
+        self._discard_antigravity_profile()
         await self._run_step(REQUEUE_STEP, self._requeue_task)
         await self._run_step(REPORT_STEP, self._notify_orchestrator, after=REQUEUE_STEP)
         return teardown_finished(await Agent.find(self.agent.id))
+
+    def _discard_antigravity_profile(self) -> None:
+        try:
+            remove_antigravity_agent(self.agent.id)
+        except OSError:
+            logger.exception("Could not remove the agy profile of agent %s", self.agent.id)
 
     async def _run_step(self, step: str, perform, after: str | None = None) -> None:
         claim = Agent.where("id", self.agent.id).where_null(step)

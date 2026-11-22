@@ -7,7 +7,9 @@ from unittest import mock
 from fastapi_startkit.application import app
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
+from app.actions.agent_delete_action import AgentDeleteAction
 from app.models.Agent import Agent
+from app.services.antigravity_agent import antigravity_agent_name
 from databases.factories.agent_factory import AgentFactory
 from databases.factories.project_factory import ProjectFactory
 from tests.test_case import TestCase
@@ -92,9 +94,13 @@ class TestGeminiTerminalLaunch(TestCase, DatabaseTransaction):
 
         agent = await Agent.find(agent.id)
         command = agent.to_command(system_prompt_suffix="")
-        self.assertIn(f"agy --agent keera-agent-{agent.id} --model gemini-3.8-flash", command)
-        self.assertTrue(
-            (Path(home) / ".gemini" / "config" / "agents" / f"keera-agent-{agent.id}.md").exists()
-        )
+        name = antigravity_agent_name(agent.id)
+        self.assertIn(f"agy --agent {name} --model gemini-3.8-flash", command)
+        profile = Path(home) / ".gemini" / "config" / "agents" / f"{name}.md"
+        self.assertTrue(profile.exists())
+
+        await AgentDeleteAction(agent, "done").execute()
+
+        self.assertFalse(profile.exists())
         self.assertNotIn("--approval-mode", command)
         self.assertNotIn("GEMINI_CLI_HOME", command)

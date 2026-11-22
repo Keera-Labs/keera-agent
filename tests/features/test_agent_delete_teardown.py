@@ -111,6 +111,19 @@ class TestDeleteRacingAgentWrites(TestCase, DatabaseTransaction):
         await self._assert_still_deleted()
         self.assertIsNone((await Agent.find(self.agent.id)).attention_kind)
 
+    async def test_agy_profile_removal_failure_still_finishes_teardown(self):
+        with (
+            patch(
+                "app.actions.agent_delete_action.remove_antigravity_agent",
+                side_effect=PermissionError("denied"),
+            ),
+            self.assertLogs("keera.agents", level="ERROR"),
+        ):
+            finished = await AgentDeleteAction(self.agent, "done").execute()
+
+        self.assertTrue(finished)
+        await self._assert_still_deleted()
+
     async def test_delete_during_spawn_setup_opens_no_terminal(self):
         real_config_dir = agent_config_dir
 
