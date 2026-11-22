@@ -145,6 +145,15 @@ describe('socketMessageHandler', () => {
         expect(sent(send)).toEqual([{ type: 'replay_done' }])
     })
 
+    it('draws a server error in the terminal instead of dropping it', () => {
+        const { term, onEvent, handle } = setup()
+
+        handle(JSON.stringify({ type: 'error', message: 'Gemini CLI is missing.' }))
+
+        expect(term.write).toHaveBeenCalledWith('\r\n\x1b[31mGemini CLI is missing.\x1b[0m\r\n')
+        expect(onEvent).not.toHaveBeenCalled()
+    })
+
     it('passes other events and live output through', () => {
         const { onOutput, onEvent, handle, bytes } = setup()
 
