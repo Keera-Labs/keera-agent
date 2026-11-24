@@ -29,7 +29,7 @@ class TestProviderThinkingLevelFlags(unittest.TestCase):
         command = providers.get("gemini").build_command(
             ProviderCommand(model="gemini-3.8-flash", thinking_level="low", binary="agy")
         )
-        self.assertEqual(command, "agy --model gemini-3.8-flash --effort low")
+        self.assertTrue(command.startswith("agy --model gemini-3.8-flash --effort low --settings "))
 
     def test_gemini_cli_omits_unsupported_thinking_level(self):
         command = providers.get("gemini").build_command(

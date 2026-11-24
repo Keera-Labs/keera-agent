@@ -5,7 +5,14 @@ from app.utils.process_env import user_env
 
 REQUIRED_FLAGS = {
     "gemini": ("--approval-mode", "--resume", "--model", "gemini hooks"),
-    "agy": ("--dangerously-skip-permissions", "--continue", "--model", "--mode", "--add-dir"),
+    "agy": (
+        "--dangerously-skip-permissions",
+        "--continue",
+        "--model",
+        "--mode",
+        "--add-dir",
+        "--settings",
+    ),
 }
 
 

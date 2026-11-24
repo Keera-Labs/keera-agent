@@ -77,7 +77,7 @@ class TestGeminiTerminalLaunch(TestCase, DatabaseTransaction):
 
         executable = Path(self.bin_dir) / "agy"
         executable.write_text(
-            "#!/bin/sh\nprintf '%s' '--model --mode --continue --dangerously-skip-permissions --add-dir' >&2\n"
+            "#!/bin/sh\nprintf '%s' '--model --mode --continue --dangerously-skip-permissions --add-dir --settings' >&2\n"
         )
         executable.chmod(0o755)
         home = tempfile.mkdtemp()

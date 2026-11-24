@@ -3,6 +3,8 @@ from pathlib import Path
 
 from app.ai.provider import Provider, ProviderCommand
 
+TRUST_LAUNCH_DIRECTORY = '"{\\"trustedWorkspaces\\":[\\"$PWD\\"]}"'
+
 
 class GeminiProvider(Provider):
     slug = "gemini"
@@ -49,4 +51,5 @@ class GeminiProvider(Provider):
             parts.extend(("--mode", "plan"))
         elif command.skip_permissions:
             parts.append("--dangerously-skip-permissions")
+        parts.extend(("--settings", TRUST_LAUNCH_DIRECTORY))
         return " ".join(parts)
