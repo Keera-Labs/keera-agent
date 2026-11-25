@@ -1,6 +1,7 @@
 import json
 import os
 import shlex
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,6 +12,8 @@ from app.services.antigravity_agent import write_antigravity_rules
 from app.services.gemini_cli import gemini_cli_binary, validate_gemini_cli
 from app.services.gemini_settings import write_gemini_settings
 from app.terminal.terminal import _drawn_dialog
+
+TRUST_LAUNCH_DIRECTORY = ' --settings "{\\"trustedWorkspaces\\":[\\"$PWD\\"]}"'
 
 
 class TestGeminiProvider(unittest.TestCase):
@@ -184,7 +187,7 @@ class TestGeminiProvider(unittest.TestCase):
             agy = Path(directory) / "agy"
             agy.write_text(
                 "#!/bin/sh\nprintf '%s' '--model --mode --continue "
-                "--dangerously-skip-permissions --add-dir' >&2\n"
+                "--dangerously-skip-permissions --add-dir --settings' >&2\n"
             )
             agy.chmod(0o755)
             self.assertEqual(gemini_cli_binary(directory), "agy")
@@ -213,21 +216,41 @@ class TestGeminiProvider(unittest.TestCase):
                     settings_file="/tmp/settings.json",
                 )
             ),
-            "agy --model gemini-3.8-flash --continue --dangerously-skip-permissions",
+            "agy --model gemini-3.8-flash --continue --dangerously-skip-permissions"
+            + TRUST_LAUNCH_DIRECTORY,
         )
         self.assertEqual(
             gemini.build_command(
                 ProviderCommand(binary="agy", permission_mode="plan", skip_permissions=True)
             ),
-            "agy --mode plan",
+            "agy --mode plan" + TRUST_LAUNCH_DIRECTORY,
         )
-        self.assertEqual(gemini.build_command(ProviderCommand(binary="agy")), "agy")
+        self.assertEqual(
+            gemini.build_command(ProviderCommand(binary="agy")), "agy" + TRUST_LAUNCH_DIRECTORY
+        )
         self.assertEqual(
             gemini.build_command(
                 ProviderCommand(binary="agy", rules_dir="/tmp/agent 7", continue_session=True)
             ),
-            "agy --add-dir '/tmp/agent 7' --continue",
+            "agy --add-dir '/tmp/agent 7' --continue" + TRUST_LAUNCH_DIRECTORY,
         )
+
+    def test_antigravity_trusts_the_directory_it_launches_in(self):
+        command = providers.get("gemini").build_command(
+            ProviderCommand(binary="agy", skip_permissions=True)
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            launched = subprocess.run(
+                ["/bin/sh", "-c", command.replace("agy", "printf '%s\\n'", 1)],
+                capture_output=True,
+                text=True,
+                cwd=directory,
+                env={**os.environ, "PWD": directory},
+                check=True,
+            )
+        arguments = launched.stdout.splitlines()
+        settings = json.loads(arguments[arguments.index("--settings") + 1])
+        self.assertEqual(settings, {"trustedWorkspaces": [directory]})
 
     def test_antigravity_role_prompt_is_an_always_on_rule_outside_the_repo(self):
         with tempfile.TemporaryDirectory() as directory:
