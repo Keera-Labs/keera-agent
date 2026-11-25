@@ -3,9 +3,8 @@ import datetime
 from fastapi_startkit.masoniteorm import Model
 
 from app.constant.complexity import TaskComplexity
+from app.constant.task_status import TERMINAL_STATUSES
 from app.models.casts import NullableInt
-
-TERMINAL_STATUSES = {"completed", "cancelled"}
 
 REVIEW_FIELDS = (
     "pr_number",
@@ -21,6 +20,7 @@ REVIEW_FIELDS = (
 
 class Task(Model):
     __table__ = "tasks"
+    __timestamps__ = False
 
     id: int
     project_id: int
@@ -41,6 +41,11 @@ class Task(Model):
     review_note: str | None
     progress_step: NullableInt
     progress_total: NullableInt
+    idempotency_key: str | None
+    head_sha: str | None
+    approved_sha: str | None
+    merged_sha: str | None
+    deleted_at: str | None
     completed_at: str | None
     created_at: str | None
     updated_at: str | None

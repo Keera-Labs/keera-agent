@@ -6,6 +6,7 @@ import ConfirmDeleteWorkspaceModal from '@/components/modals/ConfirmDeleteWorksp
 import ProjectPermissionsModal from '@/components/modals/ProjectPermissionsModal.vue'
 import ProjectSearchModal from '@/components/modals/ProjectSearchModal.vue'
 import SystemPromptModal from '@/components/modals/SystemPromptModal.vue'
+import CommandEditorModal from '@/layouts/right-panel/commands/CommandEditorModal.vue'
 import SettingsModal from '@/layouts/settings/SettingsModal.vue'
 import useAllProjects from '@/queries/allProjectsQuery'
 import { PROJECTS_QUERY_KEY } from '@/queries/projectsQuery'
@@ -18,6 +19,7 @@ const {
     settingsSection,
     systemPromptProject,
     permissionsProject,
+    commandEditor,
 } = storeToRefs(layout)
 const workspaceStore = useWorkspaceStore()
 const queryCache = useQueryCache()
@@ -54,6 +56,13 @@ function refreshProjects() {
         :key="permissionsProject.id"
         :project="permissionsProject"
         @close="permissionsProject = null"
+    />
+    <CommandEditorModal
+        v-if="commandEditor"
+        :key="commandEditor.command?.id ?? 'new'"
+        :project-id="commandEditor.projectId"
+        :command="commandEditor.command"
+        @close="commandEditor = null"
     />
     <ProjectSearchModal
         v-if="showProjectSearch"

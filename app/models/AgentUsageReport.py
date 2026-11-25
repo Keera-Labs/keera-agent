@@ -5,3 +5,4 @@ class AgentUsageReport(Model):
     """The latest plan-limit and context usage an agent's statusline reported."""
 
     __table__ = "agent_usage_reports"
+    __timestamps__ = False

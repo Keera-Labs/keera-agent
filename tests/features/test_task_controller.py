@@ -1,13 +1,13 @@
 import datetime
 import os
 import time
-from unittest.mock import patch
 
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
 from app.models.Task import Task
 from databases.factories.project_factory import ProjectFactory
 from databases.factories.task_factory import TaskFactory
+from tests.frozen_datetime import freeze_now
 from tests.test_case import TestCase
 
 
@@ -203,8 +203,7 @@ class TestTaskController(TestCase, DatabaseTransaction):
             completed_at=(cutoff - datetime.timedelta(microseconds=1)).isoformat(),
         )
 
-        with patch("app.controllers.task_controller.datetime.datetime") as mocked_datetime:
-            mocked_datetime.now.return_value = now
+        with freeze_now("app.controllers.task_controller", now):
             response = await self.get(self.tasks_url)
 
         titles = {row["attributes"]["title"] for row in response.json()["data"]}
@@ -348,12 +347,15 @@ class TestTaskController(TestCase, DatabaseTransaction):
 
     # --- destroy ---
 
-    async def test_destroy_deletes_task(self):
+    async def test_destroy_soft_deletes_task_and_hides_it(self):
         task = await TaskFactory.new().create(project_id=self.project.id)
 
         response = await self.delete(f"/api/tasks/{task.id}")
         response.assert_no_content()
-        self.assertIsNone(await Task.find(task.id))
+        self.assertIsNotNone((await Task.find(task.id)).deleted_at)
+
+        listed = (await self.get(f"/api/projects/{self.project.id}/tasks")).json()["data"]
+        self.assertNotIn(task.id, [row["id"] for row in listed])
 
     async def test_destroy_returns_bodyless_204(self):
         """A 204 must carry no body. A JSON body ({}) sets Content-Length: 0 while

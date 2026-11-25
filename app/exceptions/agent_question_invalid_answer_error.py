@@ -1,0 +1,2 @@
+class AgentQuestionInvalidAnswerError(Exception):
+    pass

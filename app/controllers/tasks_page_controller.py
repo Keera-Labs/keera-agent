@@ -3,6 +3,7 @@ import re
 from fastapi import Request
 from fastapi_startkit.inertia.inertia import Inertia
 
+from app.constant.task_status import display_status
 from app.models.Project import Project
 from app.models.Task import REVIEW_FIELDS, Task
 
@@ -37,7 +38,8 @@ def _serialize(t: Task) -> dict:
         "acceptance_criteria": _load_json(t.acceptance_criteria),
         "testing_methods": _load_json(t.testing_methods),
         "validation_steps": _load_json(t.validation_steps),
-        "status": t.status,
+        "status": display_status(t.status),
+        "state": t.status,
         **{field: getattr(t, field, None) for field in REVIEW_FIELDS},
         "completed_at": t.completed_at,
         "created_at": str(t.created_at),
@@ -49,7 +51,7 @@ async def tasks_page(request: Request, project: str):
     proj = next((p for p in projects if _slugify(p.name) == project), None)
     tasks = []
     if proj:
-        raw = await Task.where("project_id", proj.id).get()
+        raw = await Task.where("project_id", proj.id).where_null("deleted_at").get()
         tasks = [_serialize(t) for t in raw]
     return Inertia.render(
         "Tasks",

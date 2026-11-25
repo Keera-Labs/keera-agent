@@ -1,5 +1,7 @@
 import pathlib
 
+from app.constant.agent_types import AgentType
+
 
 def _prompts_dir() -> pathlib.Path:
     """Resolve the prompts directory from the application base path.
@@ -67,7 +69,9 @@ def default_system_prompt(agent_type: str) -> str | None:
                 autoescape=select_autoescape([]),  # plain text — no HTML escaping
                 keep_trailing_newline=True,
             )
-            return env.get_template(f"{agent_type}.html").render(mcp_url=_mcp_url())
+            return env.get_template(f"{agent_type}.html").render(
+                mcp_url=_mcp_url(), agent_types=list(AgentType)
+            )
         except Exception:
             pass  # fall through to hard-coded fallback
 

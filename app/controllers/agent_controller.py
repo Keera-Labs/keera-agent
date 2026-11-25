@@ -1,15 +1,17 @@
 import asyncio
-import datetime
 import json as _json
 import os
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+from app.actions.agent_delete_action import AgentDeleteAction
 from app.controllers.agent_default_controller import _set_project_default
 from app.models.Agent import Agent
 from app.requests.agent_requests import AgentStoreRequest, AgentUpdateRequest
 from app.resources.agent_resource import AgentResource
+
+DELETED_FROM_UI = "deleted from the UI"
 
 
 def _default_permissions() -> tuple[str, str]:
@@ -49,12 +51,23 @@ async def update(body: AgentUpdateRequest, agent_id: int):
 
     provider = update_data.get("provider", getattr(agent, "provider", None) or "claude")
     model = update_data.get("model", agent.model)
-    from app.controllers.global_settings_controller import provider_model_is_configured
+    from app.controllers.global_settings_controller import (
+        provider_model_is_configured,
+        thinking_level_error,
+    )
 
     if not await provider_model_is_configured(provider, model):
         return JSONResponse(
             {"error": f"Model '{model}' is not configured for {provider}"}, status_code=422
         )
+    if "thinking_level" in update_data:
+        error = thinking_level_error(provider, update_data["thinking_level"])
+        if error:
+            return JSONResponse({"error": error}, status_code=422)
+    elif "provider" in update_data and thinking_level_error(
+        provider, getattr(agent, "thinking_level", None)
+    ):
+        update_data["thinking_level"] = None
 
     # plan_mode is column-authoritative. If a legacy client nests it in flags,
     # promote it to the column and strip it so the two never diverge.
@@ -79,17 +92,7 @@ async def destroy(request: Request, agent_id: int):
     from app.services.worktree_cleanup import cleanup_agent_worktree
 
     agent = await Agent.find_or_fail(agent_id)
-
-    # Soft-delete before tearing the session down: every spawn path skips deleted
-    # agents, so a reconnecting terminal or an incoming relay message can't resume
-    # the agent (with --continue) in the window between teardown and the stamp.
-    agent.deleted_at = datetime.datetime.utcnow()
-    await agent.save()
-
-    # Re-read: a spawn already in flight may have registered a newer session.
-    current = await Agent.find(agent_id)
-    await stop_agent_session(current.session_id if current else agent.session_id)
-    await Agent.where("id", agent_id).update({"session_id": None})
+    teardown_finished = await AgentDeleteAction(agent, DELETED_FROM_UI).execute()
 
     project_id = agent.project_id
     # If this was the default, pick the next available (non-deleted) agent
@@ -110,7 +113,13 @@ async def destroy(request: Request, agent_id: int):
             cleanup_agent_worktree, os.path.expanduser(project.path), agent_id
         )
 
-    return JSONResponse({"ok": True, "worktree_cleanup": worktree_cleanup})
+    return JSONResponse(
+        {
+            "ok": True,
+            "teardown_finished": teardown_finished,
+            "worktree_cleanup": worktree_cleanup,
+        }
+    )
 
 
 async def stop_agent_session(session_id: str | None) -> None:

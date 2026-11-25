@@ -147,7 +147,14 @@ async def destroy(request: Request, project_id: int):
         # Cascade-delete related records before removing the project
         from app.models.Command import Command
         from app.models.Task import Task
+        from app.models.TaskDependency import TaskDependency
+        from app.models.TaskEvent import TaskEvent
 
+        task_ids = [task.id for task in await Task.where("project_id", project_id).get()]
+        if task_ids:
+            await TaskEvent.where_in("task_id", task_ids).delete()
+            await TaskDependency.where_in("task_id", task_ids).delete()
+            await TaskDependency.where_in("depends_on_task_id", task_ids).delete()
         await Task.where("project_id", project_id).delete()
         await Command.where("project_id", project_id).delete()
         await AgentMessage.where("receiver_project_id", project_id).delete()

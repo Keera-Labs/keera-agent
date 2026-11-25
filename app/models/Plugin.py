@@ -3,6 +3,7 @@ from fastapi_startkit.masoniteorm import Model
 
 class Plugin(Model):
     __table__ = "plugins"
+    __timestamps__ = False
 
     id: int
     slug: str

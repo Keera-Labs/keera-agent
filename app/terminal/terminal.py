@@ -12,6 +12,7 @@ import termios
 import threading
 import time
 
+from app.actions.claude_hook_action import AGENT_ID_ENV
 from app.terminal.terminal_queries import PARTIAL_SEQUENCE, strip_queries
 
 
@@ -56,7 +57,7 @@ DIALOG_OPTIONS = re.compile(
 )
 DIALOG_FOOTERS = re.compile(
     r"Enter to confirm · Esc to (?:cancel|exit)|enter continue · esc quit|Press enter to continue"
-    r"|Use Enter to select|Don't trust"
+    r"|Use Enter to select|Don't trust|Navigate · enter Confirm"
 )
 _DIALOG_MARKERS = re.compile(f"{DIALOG_OPTIONS.pattern}|{DIALOG_FOOTERS.pattern}")
 # How far before its footer a dialog's option may appear.
@@ -271,6 +272,10 @@ class Terminal:
         self._reader: tuple[asyncio.AbstractEventLoop, int] | None = None
         # (cols, rows) of each client currently showing this terminal on screen.
         self._client_sizes: dict[object, tuple[int, int]] = {}
+
+    @property
+    def agent_id(self) -> str | None:
+        return self._env.get(AGENT_ID_ENV)
 
     @property
     def size(self) -> tuple[int, int]:

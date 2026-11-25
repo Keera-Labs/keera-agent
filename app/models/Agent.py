@@ -8,6 +8,7 @@ from app.ai import ProviderCommand, providers
 
 class Agent(Model):
     __table__ = "agents"
+    __timestamps__ = False
     id: int
     flags: dict
     permissions_allow: list
@@ -46,8 +47,11 @@ class Agent(Model):
                 pass
 
         enforce_permissions = self.plan_mode or not self.dangerously_skip_permissions
+        provider = providers.get(getattr(self, "provider", None) or "codex")
+        thinking_level = getattr(self, "thinking_level", None)
         command = ProviderCommand(
             model=self.model,
+            thinking_level=thinking_level if thinking_level in provider.thinking_levels else None,
             worktree=f"agent-{self.id}" if getattr(self, "use_worktree", True) else None,
             continue_session=getattr(self, "has_session", False),
             system_prompt_file=prompt_file,
@@ -62,9 +66,15 @@ class Agent(Model):
         if getattr(self, "provider", None) == "gemini":
             from fastapi_startkit import Config
 
+            from app.services.antigravity_agent import write_antigravity_rules
+            from app.services.gemini_cli import gemini_cli_binary
             from app.services.gemini_settings import write_gemini_settings
 
-            command.settings_file = write_gemini_settings(
-                self.id, Config.get("fastapi.app_url"), command
-            )
-        return providers.get(getattr(self, "provider", None) or "codex").build_command(command)
+            command.binary = gemini_cli_binary()
+            if command.binary == "agy":
+                command.rules_dir = write_antigravity_rules(self.id, prompt_file)
+            else:
+                command.settings_file = write_gemini_settings(
+                    self.id, Config.get("fastapi.app_url"), command
+                )
+        return provider.build_command(command)

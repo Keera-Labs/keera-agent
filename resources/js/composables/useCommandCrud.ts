@@ -30,13 +30,13 @@ export function useCommandCrud(projectId: MaybeRefOrGetter<number>) {
         }
     }
 
-    async function update(target: Command, label: string, command: string): Promise<boolean> {
+    async function update(target: Command, label: string, command: string): Promise<string | null> {
         try {
             const updated = await updateCommand(target.id, { label, command })
             setCommands(prev => prev.map(c => (c.id === target.id ? updated : c)))
-            return true
-        } catch {
-            return false
+            return null
+        } catch (e) {
+            return errorMessage(e)
         }
     }
 

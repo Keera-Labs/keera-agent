@@ -9,17 +9,18 @@ import uuid
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi_startkit.application import app
-from fastapi_startkit.logging import Logger
+from fastapi_startkit.logging import Log
 
 from app.actions.agent_startup import wait_for_agent_cli
-from app.actions.agent_status_action import CLEARED_ATTENTION, notify_agent_status
-from app.actions.claude_hook_action import agent_env
+from app.actions.agent_status_action import CLEARED_ATTENTION, live_agent, notify_agent_status
+from app.actions.claude_hook_action import ClaudeHookAction, agent_env
 from app.actions.relay_delivery import deliver_pending_relay_messages
 from app.actions.terminal_write_action import TerminalWriteAction
 from app.models.Agent import Agent
 from app.models.Project import Project
 from app.services.claude_config_dir import agent_config_dir
 from app.services.gemini_cli import validate_gemini_cli
+from app.services.relay_identity import issue_agent_token
 from app.services.worktree_cleanup import cleanup_agent_worktree
 from app.services.worktree_files import copy_worktree_files
 from app.terminal.claude_monitor import make_claude_session_monitor
@@ -46,7 +47,7 @@ async def _mark_agent_working(agent: Agent, message: str) -> None:
     """Record that an agent just started actively working — powers the dashboard's
     running state, current-activity text, and elapsed timer."""
     now = datetime.datetime.now().isoformat(sep=" ", timespec="seconds")
-    await Agent.where("id", agent.id).update(
+    await live_agent(agent.id).update(
         {
             "status": "running",
             "started_at": now,
@@ -105,6 +106,11 @@ async def trigger(request: Request, agent_id: int):
     return JSONResponse({"status": "starting", "message": "Agent is starting up..."})
 
 
+def prepare_agent_cwd(agent, cwd: str, copy_paths: list[str] | None = None) -> str:
+    ClaudeHookAction.prepare(cwd).execute()
+    return ensure_agent_worktree(agent, cwd, copy_paths)
+
+
 def ensure_agent_worktree(agent, cwd: str, copy_paths: list[str] | None = None) -> str:
     if not getattr(agent, "use_worktree", True):
         return cwd
@@ -119,7 +125,7 @@ def ensure_agent_worktree(agent, cwd: str, copy_paths: list[str] | None = None) 
     try:
         worktree_path = _create_agent_worktree(agent, cwd)
     except RuntimeError as exc:
-        Logger.warning(f"Agent {agent.id} worktree not pre-created, files not copied: {exc}")
+        Log.warning(f"Agent {agent.id} worktree not pre-created, files not copied: {exc}")
         return cwd
     copy_worktree_files(cwd, worktree_path, copy_paths)
     return cwd
@@ -264,15 +270,15 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
     try:
         await asyncio.to_thread(validate_gemini_cli, agent.provider)
     except RuntimeError as exc:
-        await Agent.where("id", agent.id).update(
+        if await live_agent(agent.id).update(
             {
                 "status": "needs_input",
                 "attention_kind": "permission",
                 "attention_prompt": str(exc),
                 "current_activity": str(exc),
             }
-        )
-        await notify_agent_status(agent, "needs_input", "permission")
+        ):
+            await notify_agent_status(agent, "needs_input", "permission")
         return
 
     base_url = app().make("config").get("fastapi.app_url")
@@ -283,23 +289,22 @@ async def _spawn_headless_agent(agent, project, cwd: str, initial_message: str) 
         # A leftover worktree/branch blocks `claude --worktree`; one holding
         # unsaved work is kept, and the CLI reuses it.
         await asyncio.to_thread(cleanup_agent_worktree, cwd, agent.id, 0)
-    agent_cwd = await asyncio.to_thread(
-        ensure_agent_worktree, agent, cwd, project.worktree_copy_paths
-    )
+    agent_cwd = await asyncio.to_thread(prepare_agent_cwd, agent, cwd, project.worktree_copy_paths)
+
+    terminal_manager: TerminalManager = app().make("terminal")
+    config_dir = await agent_config_dir(agent, project)
+    env = agent_env(agent.id, config_dir, await issue_agent_token(agent.id))
 
     session_id = str(uuid.uuid4())
     # Registered before the session becomes visible (DB row, terminal), so a
     # relay message sent meanwhile is queued instead of typed into the shell.
     ready_event = mark_booting(session_id)
-    await Agent.where("id", agent.id).update({"session_id": session_id})
-    await _mark_agent_working(agent, initial_message)
-
-    terminal_manager: TerminalManager = app().make("terminal")
-    config_dir = await agent_config_dir(agent, project)
-    terminal_manager.create(
-        cwd=agent_cwd, session_id=session_id, env=agent_env(agent.id, config_dir)
-    )
+    if not await live_agent(agent.id).update({"session_id": session_id}):
+        claude_ready.pop(session_id, None)
+        return
+    terminal_manager.create(cwd=agent_cwd, session_id=session_id, env=env)
     terminal = terminal_manager.get(session_id)
+    await _mark_agent_working(agent, initial_message)
 
     # Give the shell time to start, then launch claude
     await asyncio.sleep(0.5)

@@ -53,12 +53,28 @@ def _resolve_complexity_models(
     return resolved
 
 
+def _resolve_complexity_thinking_levels(saved: dict) -> dict[str, dict[str, str | None]]:
+    resolved: dict[str, dict[str, str | None]] = {}
+    for provider in providers.all():
+        chosen = saved.get(provider.slug) if isinstance(saved.get(provider.slug), dict) else {}
+        resolved[provider.slug] = {
+            complexity.value: (
+                chosen.get(complexity.value)
+                if chosen.get(complexity.value) in provider.thinking_levels
+                else None
+            )
+            for complexity in TaskComplexity
+        }
+    return resolved
+
+
 def _provider_payload(model_settings: dict[str, list[str]]) -> list[dict]:
     return [
         {
             "slug": provider.slug,
             "name": provider.display_name,
             "models": model_settings.get(provider.slug, list(provider.default_models)),
+            "thinking_levels": list(provider.thinking_levels),
         }
         for provider in providers.all()
     ]
@@ -74,6 +90,7 @@ async def read_global_settings() -> dict:
         "enforce_default_provider": DEFAULT_SETTINGS["enforce_default_provider"],
     }
     saved_complexity_models: dict = {}
+    saved_thinking_levels: dict = {}
     for row in rows:
         key = row.key
         if key == "max_agents_per_project":
@@ -106,9 +123,16 @@ async def read_global_settings() -> dict:
             stored = _load_json(row.value)
             if isinstance(stored, dict):
                 saved_complexity_models = stored
+        elif key == "complexity_thinking_levels":
+            stored = _load_json(row.value)
+            if isinstance(stored, dict):
+                saved_thinking_levels = stored
     result["providers"] = _provider_payload(result["provider_models"])
     result["complexity_models"] = _resolve_complexity_models(
         saved_complexity_models, result["provider_models"]
+    )
+    result["complexity_thinking_levels"] = _resolve_complexity_thinking_levels(
+        saved_thinking_levels
     )
     return result
 
@@ -136,6 +160,23 @@ async def provider_model_is_configured(provider: str, model: str) -> bool:
 async def complexity_model(provider: str, complexity: TaskComplexity) -> str:
     settings = await read_global_settings()
     return settings["complexity_models"][provider][TaskComplexity(complexity).value]
+
+
+async def complexity_thinking_level(provider: str, complexity: TaskComplexity) -> str | None:
+    settings = await read_global_settings()
+    return settings["complexity_thinking_levels"][provider][TaskComplexity(complexity).value]
+
+
+def thinking_level_error(provider: str, level: str | None) -> str | None:
+    if level is None:
+        return None
+    supported = providers.get(provider).thinking_levels
+    if level not in supported:
+        return (
+            f"Thinking level '{level}' is not supported by {provider}; "
+            f"allowed: {', '.join(supported)}"
+        )
+    return None
 
 
 async def get_global_settings(request: Request):
@@ -205,6 +246,12 @@ async def update_global_settings(body: GlobalSettingsUpdateRequest):
             return JSONResponse({"error": error}, status_code=422)
         pending["complexity_models"] = body["complexity_models"]
 
+    if "complexity_thinking_levels" in body:
+        error = _complexity_thinking_levels_error(body["complexity_thinking_levels"])
+        if error:
+            return JSONResponse({"error": error}, status_code=422)
+        pending["complexity_thinking_levels"] = body["complexity_thinking_levels"]
+
     # Written only after every field validates, so a rejected save changes nothing.
     for key, value in pending.items():
         await write_global_setting(key, value)
@@ -224,4 +271,21 @@ def _complexity_models_error(value, provider_models: dict[str, list[str]]) -> st
         for complexity, model in chosen.items():
             if model not in provider_models[slug]:
                 return f"Model '{model}' is not configured for {slug} ({complexity})"
+    return None
+
+
+def _complexity_thinking_levels_error(value) -> str | None:
+    if not isinstance(value, dict):
+        return "complexity_thinking_levels must map each provider to its easy/medium/hard levels"
+    tiers = {complexity.value for complexity in TaskComplexity}
+    known = {provider.slug for provider in providers.all()}
+    for slug, chosen in value.items():
+        if slug not in known:
+            return f"Unknown provider '{slug}' in complexity_thinking_levels"
+        if not isinstance(chosen, dict) or set(chosen) != tiers:
+            return f"complexity_thinking_levels for {slug} must set easy, medium and hard"
+        for level in chosen.values():
+            error = thinking_level_error(slug, level)
+            if error:
+                return error
     return None

@@ -5,6 +5,14 @@ from databases.factories.project_factory import ProjectFactory
 from tests.features.git_test_repo import GitTestRepo
 from tests.test_case import TestCase
 
+LARAVEL_SETUP = "cp ../../../.env ./.env && composer install && php artisan serve --port=8000"
+MULTI_LINE_SCRIPT = (
+    "set -e\n"
+    'echo "it\'s a \\"quoted\\" value" | tr a-z A-Z\n'
+    "cat package.json | grep -E 'dev|build' || true\n"
+    "\tprintf '%s\\n' \"$HOME\" | wc -c"
+)
+
 
 class TestCommandController(TestCase, DatabaseTransaction):
     async def asyncSetUp(self):
@@ -102,6 +110,64 @@ class TestCommandController(TestCase, DatabaseTransaction):
         response = await self.patch(f"/api/commands/{command.id}", json={"command": "  "})
 
         response.assert_status(422)
+
+    async def test_store_keeps_a_chained_shell_command_verbatim(self):
+        response = await self.post(
+            f"/api/projects/{self.project.id}/commands",
+            json={"label": "Laravel", "command": LARAVEL_SETUP},
+        )
+
+        response.assert_ok()
+        data = response.json()["data"]
+        self.assertEqual(data["attributes"]["command"], LARAVEL_SETUP)
+        self.assertEqual((await Command.find(int(data["id"]))).command, LARAVEL_SETUP)
+
+    async def test_store_keeps_a_multi_line_script_and_index_returns_it(self):
+        response = await self.post(
+            f"/api/projects/{self.project.id}/commands",
+            json={"label": "Script", "command": f"\n  {MULTI_LINE_SCRIPT}\n\n"},
+        )
+
+        response.assert_ok()
+        data = response.json()["data"]
+        self.assertEqual(data["attributes"]["command"], MULTI_LINE_SCRIPT)
+        self.assertEqual((await Command.find(int(data["id"]))).command, MULTI_LINE_SCRIPT)
+        listed = (await self.get(f"/api/projects/{self.project.id}/commands")).json()["data"]
+        scripts = {item["id"]: item["attributes"]["command"] for item in listed}
+        self.assertEqual(scripts[data["id"]], MULTI_LINE_SCRIPT)
+
+    async def test_update_keeps_a_multi_line_script_and_index_returns_it(self):
+        command = await self._create_command()
+
+        response = await self.patch(
+            f"/api/commands/{command.id}", json={"command": MULTI_LINE_SCRIPT}
+        )
+
+        response.assert_ok()
+        self.assertEqual(response.json()["data"]["attributes"]["command"], MULTI_LINE_SCRIPT)
+        self.assertEqual((await Command.find(command.id)).command, MULTI_LINE_SCRIPT)
+        listed = (await self.get(f"/api/projects/{self.project.id}/commands")).json()["data"]
+        self.assertEqual(listed[0]["attributes"]["command"], MULTI_LINE_SCRIPT)
+
+    async def test_store_rejects_an_empty_or_whitespace_only_script(self):
+        for script in ["", "   ", "\n\t\n  \n"]:
+            with self.subTest(script=script):
+                response = await self.post(
+                    f"/api/projects/{self.project.id}/commands",
+                    json={"label": "Script", "command": script},
+                )
+
+                response.assert_status(422)
+                self.assertIn("command", response.json()["errors"])
+
+    async def test_update_rejects_a_multi_line_whitespace_only_script(self):
+        command = await self._create_command()
+
+        response = await self.patch(f"/api/commands/{command.id}", json={"command": "\n \n\t"})
+
+        response.assert_status(422)
+        self.assertIn("command", response.json()["errors"])
+        self.assertEqual((await Command.find(command.id)).command, "ls -la")
 
     async def test_destroy_deletes_command_with_a_bodyless_204(self):
         command = await self._create_command()

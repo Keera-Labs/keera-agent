@@ -50,6 +50,7 @@ function summary(id: number, projectId: number, status: string, extra: Record<st
 }
 let projectTasks = { rows: 0, total: 0 }
 let summaries: ReturnType<typeof summary>[]
+let pendingQuestions = 0
 
 function fakeFetch(url: string, init?: RequestInit) {
     calls.push({ url, method: init?.method ?? 'GET' })
@@ -61,6 +62,9 @@ function fakeFetch(url: string, init?: RequestInit) {
         if (JSON.parse(String(init.body)).hidden) hiddenIds.add(id)
         else hiddenIds.delete(id)
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: { id: String(id) } }) })
+    }
+    if (pathname === '/api/agent-questions') {
+        body = { data: Array.from({ length: pendingQuestions }, (_, i) => ({ id: String(i + 1), attributes: { question: `q${i + 1}` } })) }
     }
     if (pathname === '/api/workspaces') body = { data: workspaces.map(({ id, ...attributes }) => ({ type: 'workspaces', id: String(id), attributes })) }
     if (pathname === '/api/agent-summaries') {
@@ -107,6 +111,7 @@ beforeEach(() => {
     calls = []
     hiddenIds = new Set()
     summaries = []
+    pendingQuestions = 0
     projectTasks = { rows: 0, total: 0 }
     page.component = 'Home'
     page.props = {}
@@ -356,13 +361,17 @@ describe('Sidebar', () => {
         expect(w.get('[data-tab="tasks"]').text()).toContain('40')
     })
 
-    it('offers only Tasks in the nav, marked current on the Tasks page', async () => {
+    it('offers Inbox and Tasks in the nav, marked current on their page', async () => {
         const w = await mountSidebar()
         useProjectStore().setActiveProject(projects[0])
         await flushPromises()
 
-        expect(w.findAll('[data-tab]').map(t => t.attributes('data-tab'))).toEqual(['tasks'])
+        expect(w.findAll('[data-tab]').map(t => t.attributes('data-tab'))).toEqual(['inbox', 'tasks'])
         expect(w.get('[data-tab="tasks"]').attributes('aria-current')).toBeUndefined()
+
+        page.component = 'Inbox'
+        await flushPromises()
+        expect(w.get('[data-tab="inbox"]').attributes('aria-current')).toBe('page')
 
         page.component = 'Tasks'
         await flushPromises()
@@ -528,9 +537,12 @@ describe('Sidebar', () => {
             expect(w.find('[data-testid="agent-reply"]').exists()).toBe(false)
         })
 
-        it('puts a needs-input agent\'s question in the tooltip with a Reply action that opens the agent', async () => {
+        it('shows a needs-input agent as waiting for you, keeps the question in the tooltip and opens it on click', async () => {
+            vi.useFakeTimers({ toFake: ['Date'] })
+            vi.setSystemTime(new Date('2026-10-22T10:12:00Z'))
             summaries = [summary(1, 10, 'needs_input', {
                 last_message: 'Old instruction', attention_kind: 'question', attention_prompt: 'Which port should I use?',
+                last_activity_at: '2026-10-22T10:00:00Z',
             })]
             const w = await mountSidebar()
 
@@ -539,28 +551,31 @@ describe('Sidebar', () => {
             expect(row.get('[data-testid="agent-status-indicator"]').attributes('aria-label')).toBe('Needs input')
             expect(row.attributes('title')).toBe('agent-1 — Which port should I use?')
             expect(row.find('[data-testid="agent-preview"]').exists()).toBe(false)
+            expect(row.get('[data-testid="agent-attention"]').text()).toBe('Waiting for you · 12m')
+            expect(row.get('[data-testid="agent-attention"]').classes()).toContain('text-blue-700')
 
-            const reply = w.get('[data-testid="agent-reply"]')
-            expect(reply.attributes('aria-label')).toBe('Reply to agent-1')
-            expect(reply.attributes('title')).toBe('Reply to agent-1')
-            await reply.trigger('click')
+            await row.trigger('click')
 
             expect(router.visit).toHaveBeenCalledWith('/p-10/agents/1')
+            vi.useRealTimers()
         })
 
-        // happy-dom has no container queries, so this pins the markup the browser
-        // collapses: in a narrow row the badge drops its label and keeps only the icon,
-        // while the name takes all the remaining room instead of sliding under the badge.
-        it('lets a needs-input row give the name the room and collapse Reply to an icon', async () => {
-            summaries = [summary(1, 10, 'needs_input')]
+        it('shows the Inbox entry with a live pending-count badge', async () => {
+            pendingQuestions = 3
             const w = await mountSidebar()
 
-            expect(w.get('[data-testid="agent-name"]').classes()).toEqual(expect.arrayContaining(['flex-1', 'min-w-0', 'truncate']))
-            const reply = w.get('[data-testid="agent-reply"]')
-            expect(reply.classes()).toEqual(expect.arrayContaining(['absolute', 'right-1.5']))
-            expect(reply.get('svg').classes()).toContain('@min-[10em]:hidden')
-            expect(reply.get('span').classes()).toEqual(expect.arrayContaining(['hidden', '@min-[10em]:inline']))
-            expect(reply.get('span').text()).toBe('Reply')
+            const inbox = w.get('[data-tab="inbox"]')
+            expect(inbox.text()).toContain('Inbox')
+            expect(inbox.get('[data-testid="inbox-badge"]').text()).toBe('3')
+            await inbox.trigger('click')
+
+            expect(router.visit).toHaveBeenCalledWith('/inbox')
+        })
+
+        it('hides the Inbox badge when nothing is pending', async () => {
+            const w = await mountSidebar()
+
+            expect(w.get('[data-tab="inbox"]').find('[data-testid="inbox-badge"]').exists()).toBe(false)
         })
 
         it('describes a permission prompt without text generically', async () => {

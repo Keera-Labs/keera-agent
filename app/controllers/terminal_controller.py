@@ -14,6 +14,7 @@ from app.models.Agent import Agent
 from app.models.Project import Project
 from app.services.claude_config_dir import agent_config_dir
 from app.services.gemini_cli import validate_gemini_cli
+from app.services.relay_identity import issue_agent_token
 from app.terminal.agent_session import attach_client, live_terminal, own_session, spawn_lock
 from app.terminal.claude_monitor import make_claude_session_monitor
 from app.terminal.cli_supervisor import supervise_cli
@@ -133,11 +134,11 @@ async def _spawn_agent_session(
     session_id = str(uuid.uuid4())
     await Agent.where("id", agent_record.id).update({"session_id": session_id})
 
-    from app.controllers.agent_trigger_controller import ensure_agent_worktree
+    from app.controllers.agent_trigger_controller import prepare_agent_cwd
 
     try:
         agent_cwd = await asyncio.to_thread(
-            ensure_agent_worktree, agent_record, cwd, project_record.worktree_copy_paths
+            prepare_agent_cwd, agent_record, cwd, project_record.worktree_copy_paths
         )
     except RuntimeError as exc:
         await Agent.where("id", agent_record.id).update({"session_id": None})
@@ -148,7 +149,9 @@ async def _spawn_agent_session(
     terminal_manager: TerminalManager = app().make("terminal")
     config_dir = await agent_config_dir(agent_record, project_record)
     terminal_manager.create(
-        cwd=agent_cwd, session_id=session_id, env=agent_env(agent_record.id, config_dir)
+        cwd=agent_cwd,
+        session_id=session_id,
+        env=agent_env(agent_record.id, config_dir, await issue_agent_token(agent_record.id)),
     )
     terminal = terminal_manager.get(session_id)
 

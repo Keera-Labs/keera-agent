@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { router, usePage } from '@inertiajs/vue3'
+import { Inbox } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, ref } from 'vue'
 import keeraIcon from '../../../icons/keera-icon.svg'
 import ProjectCreateModal from '@/components/project/ProjectCreateModal.vue'
 import Icon from '@/components/ui/Icon.vue'
+import { useInboxQuestions } from '@/queries/agentQuestionsQuery'
 import { useAgentSummaries, type AgentSummary } from '@/queries/agentSummariesQuery'
 import useProjects from '@/queries/projectsQuery'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
@@ -46,6 +48,8 @@ function selectAgent(project: Project, agent: AgentSummary) {
 
 const isSettingsOpen = computed(() => settingsSection.value !== null)
 const isTasksPage = computed(() => page.component === 'Tasks')
+const isInboxPage = computed(() => page.component === 'Inbox')
+const { questions: pendingQuestions } = useInboxQuestions('pending')
 
 function openTasks() {
     const project = activeProject.value
@@ -106,6 +110,23 @@ const iconButtonClass = 'shrink-0 flex items-center justify-center w-6 h-6 round
             </button>
 
             <nav class="mt-1.5 flex flex-col">
+                <button
+                    type="button"
+                    data-tab="inbox"
+                    :aria-current="isInboxPage ? 'page' : undefined"
+                    :class="navClass(isInboxPage)"
+                    @click="router.visit('/inbox')"
+                >
+                    <Inbox :size="14" class="shrink-0 text-zinc-500" />
+                    <span class="flex-1">Inbox</span>
+                    <span
+                        v-if="pendingQuestions.length > 0"
+                        data-testid="inbox-badge"
+                        class="min-w-5 h-5 px-1.5 rounded-full bg-blue-600 text-white text-ui-11 font-semibold tabular-nums flex items-center justify-center"
+                    >
+                        {{ pendingQuestions.length }}
+                    </span>
+                </button>
                 <button
                     type="button"
                     data-tab="tasks"

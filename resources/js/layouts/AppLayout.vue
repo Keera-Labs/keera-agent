@@ -7,6 +7,7 @@ import { useResizablePanel } from '@/composables/useResizablePanel'
 import AppHeader from '@/layouts/app/AppHeader.vue'
 import StatusBar from '@/layouts/app/StatusBar.vue'
 import ModalLayer from '@/layouts/ModalLayer.vue'
+import ToastHost from '@/components/ToastHost.vue'
 import RightPanel from '@/layouts/right-panel/RightPanel.vue'
 import Sidebar from '@/layouts/sidebar/Sidebar.vue'
 import { useAppLayoutStore } from '@/stores/appLayoutStore'
@@ -78,6 +79,7 @@ function setHolder(el: unknown) {
         </footer>
 
         <ModalLayer />
+        <ToastHost />
 
         <!-- Off-screen parking spot for live xterm instances not shown in any slot. -->
         <div

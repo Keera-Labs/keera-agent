@@ -2,6 +2,7 @@ import json
 
 from fastapi_startkit.jsonapi import JsonResource
 
+from app.constant.task_status import display_status
 from app.models.Task import REVIEW_FIELDS, Task
 
 _JSON_FIELDS = ("assignees", "acceptance_criteria", "testing_methods", "validation_steps")
@@ -31,4 +32,6 @@ class TaskResource(JsonResource[Task]):
             data[field] = _as_list(data.get(field))
         for field in (*REVIEW_FIELDS, "completed_at"):
             data.setdefault(field, None)
+        data["state"] = data.get("status")
+        data["status"] = display_status(data.get("status"))
         return data

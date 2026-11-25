@@ -3,6 +3,7 @@ import { useQueryCache } from '@pinia/colada'
 import { defineStore, storeToRefs } from 'pinia'
 import { computed, markRaw, onScopeDispose, ref, shallowRef, watch } from 'vue'
 import { attachTerminal, reportSize, useTerminalSessions } from '@/composables/useTerminalSessions'
+import type { Command } from '@/components/commands/types'
 import { useAgents } from '@/queries/agentQuery'
 import { AGENT_QUESTIONS_QUERY_KEY } from '@/queries/agentQuestionsQuery'
 import { AGENT_SUMMARIES_QUERY_KEY } from '@/queries/agentSummariesQuery'
@@ -76,6 +77,7 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
     // The project whose system prompt / permissions dialog is open, or null when closed.
     const systemPromptProject = ref<Project | null>(null)
     const permissionsProject = ref<Project | null>(null)
+    const commandEditor = ref<{ projectId: number; command: Command | null } | null>(null)
 
     const projectView = ref<ProjectView>('agents')
     const sidebarOpen = persistedFlag('keera.layout.sidebarOpen', true)
@@ -237,6 +239,7 @@ export const useAppLayoutStore = defineStore('appLayout', () => {
         closeSettings,
         systemPromptProject,
         permissionsProject,
+        commandEditor,
         projectView,
         sidebarOpen,
         rightPanelOpen,

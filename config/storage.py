@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict
 
-from fastapi_startkit.environment import env
+from fastapi_startkit.environment import env, value
 from fastapi_startkit.storage import LocalDiskConfig
 
 
@@ -11,6 +11,6 @@ class StorageConfig:
 
     disks: dict[str, Dict[str, Any]] = field(
         default_factory=lambda: {
-            "local": LocalDiskConfig(root=env("FILESYSTEM_DISK_ROOT", "storage")),
+            "local": LocalDiskConfig(root=value(env("FILESYSTEM_DISK_ROOT", "storage"))),
         }
     )

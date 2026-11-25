@@ -7,6 +7,7 @@ class ClaudeProvider(Provider):
     slug = "claude"
     display_name = "Claude"
     default_models = ("claude-opus-5", "claude-sonnet-5", "claude-fable-5")
+    thinking_levels = ("low", "medium", "high", "xhigh", "max")
 
     def build_command(self, command: ProviderCommand) -> str:
         parts = ["claude"]
@@ -19,6 +20,8 @@ class ClaudeProvider(Provider):
             parts.extend(("--system-prompt", f'"$(cat {path})"'))
         if command.model:
             parts.extend(("--model", shlex.quote(command.model)))
+        if command.thinking_level:
+            parts.extend(("--effort", shlex.quote(command.thinking_level)))
         if command.allowed_tools:
             parts.extend(("--allowedTools", shlex.quote(",".join(command.allowed_tools))))
         if command.disallowed_tools:

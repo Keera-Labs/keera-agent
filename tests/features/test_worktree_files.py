@@ -72,7 +72,7 @@ class TestCopyWorktreeFiles(unittest.TestCase):
             mock.patch(
                 "app.services.worktree_files.shutil.copy2", side_effect=[OSError("boom"), None]
             ),
-            mock.patch("app.services.worktree_files.Logger") as logger,
+            mock.patch("app.services.worktree_files.Log") as logger,
         ):
             self.copy(".env", ".env.local")
 
@@ -93,7 +93,7 @@ class TestCopyWorktreeFilesSymlinks(unittest.TestCase):
         self.outside.mkdir()
         (self.outside / "id_rsa").write_text("private key")
         self.worktree = self.repo.add_worktree(".claude/worktrees/agent-7", "worktree-agent-7")
-        logger = mock.patch("app.services.worktree_files.Logger")
+        logger = mock.patch("app.services.worktree_files.Log")
         self.logger = logger.start()
         self.addCleanup(logger.stop)
 
@@ -160,7 +160,7 @@ class TestCopiedFilesAndWorktreeCleanup(unittest.TestCase):
         self.repo.write(".env", "SECRET=1\n")
         self.repo.write("notes.txt", "untracked, not ignored\n")
         self.worktree = self.repo.add_worktree(".claude/worktrees/agent-7", "worktree-agent-7")
-        logger = mock.patch("app.services.worktree_cleanup.Logger")
+        logger = mock.patch("app.services.worktree_cleanup.Log")
         logger.start()
         self.addCleanup(logger.stop)
 
@@ -243,7 +243,7 @@ class TestEnsureAgentWorktree(unittest.TestCase):
                 "app.controllers.agent_trigger_controller._create_agent_worktree",
                 side_effect=RuntimeError("git failed"),
             ),
-            mock.patch("app.controllers.agent_trigger_controller.Logger") as logger,
+            mock.patch("app.controllers.agent_trigger_controller.Log") as logger,
         ):
             self.assertEqual(ensure_agent_worktree(self.agent(), self.cwd, [".env"]), self.cwd)
 

@@ -4,23 +4,31 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { reactive } from 'vue'
 import ProvidersTab from './ProvidersTab.vue'
 
-const { reload } = vi.hoisted(() => ({ reload: vi.fn() }))
+const { reload, globalSettings } = vi.hoisted(() => ({
+    reload: vi.fn(),
+    globalSettings: {} as Record<string, unknown>,
+}))
+
+function resetGlobalSettings() {
+    Object.assign(globalSettings, {
+        providers: [{ slug: 'codex', name: 'Codex', models: ['gpt-a', 'gpt-b'], thinking_levels: ['low', 'high'] }],
+        default_provider: 'codex',
+        enforce_default_provider: false,
+        complexity_models: { codex: { easy: 'gpt-a', medium: 'gpt-b', hard: 'gpt-b' } },
+        complexity_thinking_levels: { codex: { easy: null, medium: 'low', hard: null } },
+    })
+}
+resetGlobalSettings()
 
 vi.mock('@inertiajs/vue3', () => ({
-    usePage: () => reactive({
-        props: {
-            global_settings: {
-                providers: [{ slug: 'codex', name: 'Codex', models: ['gpt-a', 'gpt-b'] }],
-                default_provider: 'codex',
-                enforce_default_provider: false,
-                complexity_models: { codex: { easy: 'gpt-a', medium: 'gpt-b', hard: 'gpt-b' } },
-            },
-        },
-    }),
+    usePage: () => reactive({ props: { global_settings: globalSettings } }),
     router: { reload },
 }))
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+    vi.unstubAllGlobals()
+    resetGlobalSettings()
+})
 
 describe('ProvidersTab', () => {
     it('saves models, enforcement and complexity tiers, then reloads global settings', async () => {
@@ -49,9 +57,56 @@ describe('ProvidersTab', () => {
             enforce_default_provider: true,
             // gpt-b was removed, so tiers pointing at it fall back to the first remaining model.
             complexity_models: { codex: { easy: 'gpt-a', medium: 'gpt-a', hard: 'gpt-a' } },
+            complexity_thinking_levels: { codex: { easy: null, medium: 'low', hard: null } },
         })
         expect(reload).toHaveBeenCalledWith({ only: ['global_settings'] })
         expect(w.text()).toContain('Saved ✓')
+    })
+
+    it('loads saved thinking levels and saves the level chosen next to each model', async () => {
+        const fetchMock = vi.fn((_url: string, init?: RequestInit) => Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(JSON.parse(init?.body as string)),
+        }))
+        vi.stubGlobal('fetch', fetchMock)
+        const w = mount(ProvidersTab)
+
+        const medium = w.get<HTMLSelectElement>('select[aria-label="Codex Medium thinking level"]')
+        expect(medium.element.value).toBe('low')
+        expect(medium.findAll('option').map(o => o.element.value)).toEqual(['', 'low', 'high'])
+
+        await w.get('select[aria-label="Codex Complex / Hard thinking level"]').setValue('high')
+        await medium.setValue('')
+        await w.findAll('button').find(b => b.text() === 'Save provider settings')!.trigger('click')
+        await flushPromises()
+
+        expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string).complexity_thinking_levels).toEqual({
+            codex: { easy: null, medium: null, hard: 'high' },
+        })
+    })
+
+    it('keeps a saved gemini default provider when saving', async () => {
+        Object.assign(globalSettings, {
+            providers: [
+                { slug: 'codex', name: 'Codex', models: ['gpt-a'] },
+                { slug: 'gemini', name: 'Gemini CLI', models: ['gemini-a'] },
+            ],
+            default_provider: 'gemini',
+            complexity_models: {},
+            complexity_thinking_levels: {},
+        })
+        const fetchMock = vi.fn((_url: string, init?: RequestInit) => Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(JSON.parse(init?.body as string)),
+        }))
+        vi.stubGlobal('fetch', fetchMock)
+        const w = mount(ProvidersTab)
+
+        expect((w.get('select[aria-label="Default provider"]').element as HTMLSelectElement).value).toBe('gemini')
+        await w.findAll('button').find(b => b.text() === 'Save provider settings')!.trigger('click')
+        await flushPromises()
+
+        expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string).default_provider).toBe('gemini')
     })
 
     it('shows the server error when saving fails', async () => {

@@ -12,7 +12,7 @@ import subprocess
 import time
 from dataclasses import asdict, dataclass, field
 
-from fastapi_startkit.logging import Logger
+from fastapi_startkit.logging import Log
 
 # Never deleted even when fully pushed: other worktrees and the user work off them.
 PROTECTED_BRANCHES = {"main", "master", "dev", "develop"}
@@ -224,9 +224,9 @@ def cleanup_agent_worktree(repo: str, agent_id: int, wait: float = 5.0) -> list[
 
     for r in results:
         if r.error:
-            Logger.warning(f"Agent {agent_id} worktree cleanup: {r.path or r.branch}: {r.error}")
+            Log.warning(f"Agent {agent_id} worktree cleanup: {r.path or r.branch}: {r.error}")
         elif r.removed:
-            Logger.info(f"Agent {agent_id} worktree removed: {r.path} (branch {r.branch})")
+            Log.info(f"Agent {agent_id} worktree removed: {r.path} (branch {r.branch})")
     return [r.to_dict() for r in results]
 
 

@@ -7,6 +7,7 @@ class ProviderCommand:
     """Provider-neutral options used to start an interactive AI session."""
 
     model: str | None = None
+    thinking_level: str | None = None
     worktree: str | None = None
     continue_session: bool = False
     system_prompt_file: str | None = None
@@ -17,6 +18,8 @@ class ProviderCommand:
     verbose: bool = False
     max_turns: int | None = None
     settings_file: str | None = None
+    binary: str | None = None
+    rules_dir: str | None = None
 
 
 class Provider(ABC):
@@ -25,6 +28,7 @@ class Provider(ABC):
     slug: str
     display_name: str
     default_models: tuple[str, ...]
+    thinking_levels: tuple[str, ...] = ()
 
     @abstractmethod
     def build_command(self, command: ProviderCommand) -> str:

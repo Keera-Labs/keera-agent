@@ -12,7 +12,7 @@ import { useDiffStore, type DiffTab } from '@/stores/diffStore'
 import { SAVE_STATUS_LABEL, saveStatus, useEditorStore, type EditorTab, type SaveStatus } from '@/stores/editorStore'
 import { useProjectStore } from '@/stores/projectStore'
 
-type TabState = 'running' | 'live' | 'off'
+type TabState = 'waiting' | 'running' | 'live' | 'off'
 
 // Pages that show the active agent's terminal; elsewhere no tab reads as active.
 const TERMINAL_PAGES = ['Home', 'agents/Detail']
@@ -47,11 +47,13 @@ function tabState(agent: ProjectAgent): TabState {
         if (claudeStatus.value[project.id] === 'running') return 'running'
         return layout.sessions.has(project.id) ? 'live' : 'off'
     }
+    if (agent.status === 'needs_input') return 'waiting'
     if (agent.status === 'running') return 'running'
     return layout.agentSessions.has(agent.id) ? 'live' : 'off'
 }
 
 const DOT_CLASS: Record<TabState, string> = {
+    waiting: 'bg-blue-600',
     running: 'bg-orange-500 animate-pulse',
     live: 'bg-emerald-500',
     off: 'bg-zinc-300',

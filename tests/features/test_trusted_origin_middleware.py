@@ -101,7 +101,7 @@ class TestTrustedOriginMiddleware(TestCase):
         response.assert_status(415)
 
     async def test_bodyless_post_without_origin_is_allowed(self):
-        response = await self.post("/api/claude-started")
+        response = await self.post("/api/claude-stopped")
 
         self.assertNotIn(response.status_code, (403, 415))
 

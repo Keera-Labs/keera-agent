@@ -6,7 +6,6 @@ schema-drift bugs (e.g. writing a dropped column).
 """
 
 import datetime
-from unittest.mock import patch
 
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 from pydantic import ValidationError
@@ -31,6 +30,7 @@ from app.models.Task import Task
 from databases.factories.agent_factory import AgentFactory
 from databases.factories.project_factory import ProjectFactory
 from databases.factories.task_factory import TaskFactory
+from tests.frozen_datetime import freeze_now
 from tests.test_case import TestCase
 
 
@@ -181,8 +181,7 @@ class TestListTasksTool(TestCase, DatabaseTransaction):
             completed_at=(cutoff - datetime.timedelta(microseconds=1)).isoformat(),
         )
 
-        with patch("app.mcp.tools.datetime.datetime") as mocked_datetime:
-            mocked_datetime.now.return_value = now
+        with freeze_now("app.mcp.tools", now):
             response = await self.tool.handle(
                 {"project_path": self.project.path, "status": "completed"}
             )
@@ -225,8 +224,7 @@ class TestListTasksTool(TestCase, DatabaseTransaction):
             completed_at=None,
         )
 
-        with patch("app.mcp.tools.datetime.datetime") as mocked_datetime:
-            mocked_datetime.now.return_value = now
+        with freeze_now("app.mcp.tools", now):
             response = await self.tool.handle({"project_path": self.project.path})
 
         text = _text(response)
@@ -416,7 +414,9 @@ class TestDeleteTaskTool(TestCase, DatabaseTransaction):
         text = _text(response)
         self.assertNotIn("Error", text)
         self.assertIn("deleted", text.lower())
-        self.assertIsNone(await Task.find(task.id))
+        deleted = await Task.find(task.id)
+        self.assertIsNotNone(deleted.deleted_at)
+        self.assertEqual(deleted.status, "cancelled")
 
     async def test_delete_not_found(self):
         response = await self.tool.handle({"task_id": 999999})
@@ -710,6 +710,8 @@ class TestDeleteAgentTool(TestCase, DatabaseTransaction):
             project_id=project.id,
             name="Already Gone",
             deleted_at=datetime.datetime.utcnow(),
+            teardown_requeue="done",
+            teardown_report="done",
         )
         response = await self.tool.handle({"agent_id": agent.id})
         self.assertIn("already been deleted", _text(response))
@@ -887,6 +889,44 @@ class TestSpawnAgentComplexity(TestCase, DatabaseTransaction):
         agent = await self._spawn(complexity="medium")
         self.assertEqual(agent.provider, "codex")
         self.assertEqual(agent.model, "gpt-5.6-terra")
+
+    async def test_omitted_provider_uses_configured_default_without_enforcement(self):
+        from app.controllers.global_settings_controller import write_global_setting
+
+        await write_global_setting("default_provider", "claude")
+        await write_global_setting("enforce_default_provider", False)
+
+        agent = await self._spawn(complexity="medium")
+
+        self.assertEqual(agent.provider, "claude")
+        self.assertEqual(agent.model, "claude-opus-5")
+
+    async def test_omitted_provider_checks_the_default_provider_cli_before_creating(self):
+        from unittest.mock import patch
+
+        from app.controllers.global_settings_controller import write_global_setting
+
+        await write_global_setting("default_provider", "gemini")
+        with patch(
+            "app.services.gemini_cli.validate_gemini_cli",
+            side_effect=RuntimeError("Gemini CLI is missing."),
+        ) as validate:
+            text = _text(
+                await self.tool.handle(
+                    {
+                        "project_path": self.project.path,
+                        "name": "Default Gemini",
+                        "complexity": "medium",
+                        "message": "Start",
+                    }
+                )
+            )
+
+        validate.assert_called_once_with("gemini")
+        self.assertEqual(text, "Error: Gemini CLI is missing.")
+        self.assertIsNone(
+            await Agent.where("project_id", self.project.id).where("name", "Default Gemini").first()
+        )
 
     async def test_enforcement_uses_default_provider_when_omitted(self):
         from app.controllers.global_settings_controller import write_global_setting

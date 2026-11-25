@@ -9,7 +9,8 @@ import { useProjectStore } from '@/stores/projectStore'
 import { color } from '@/tokens'
 import { AGENT_TYPE_COLORS, AGENT_TYPE_LABELS } from '@/types/agent'
 import { agentColor } from '@/utils/agentColor'
-import AgentQuestions from './AgentQuestions.vue'
+import { useAgentQuestions } from '@/queries/agentQuestionsQuery'
+import AgentQuestionCard from './AgentQuestionCard.vue'
 import PmCheckinControl from './PmCheckinControl.vue'
 import ProjectOverview from './ProjectOverview.vue'
 import { agentRoleLabel } from './presentation'
@@ -42,6 +43,7 @@ const subtitle = computed(() => {
     return agent.model ? `${agentRoleLabel(agent)} · ${agent.model}` : agentRoleLabel(agent)
 })
 const terminalSlot = ref<HTMLElement | null>(null)
+const { pending: pendingQuestion } = useAgentQuestions(activeAgentId)
 
 /** Reply: put the cursor in the agent's terminal, where the question or permission prompt is showing. */
 function focusTerminal() {
@@ -151,7 +153,7 @@ function onDrop(e: DragEvent) {
                     <div class="flex items-center gap-3 shrink-0">
                         <PmCheckinControl v-if="activeAgent?.agent_type === 'pm'" :agent-id="activeAgent.id" compact />
                         <span
-                            v-if="activeAgent?.status === 'needs_input'"
+                            v-if="activeAgent?.status === 'needs_input' && !pendingQuestion"
                             data-testid="agent-needs-input"
                             class="flex items-center gap-2 ml-2 max-w-[360px] py-1 pl-1.5 pr-1 rounded-md bg-amber-50 border border-amber-200"
                         >
@@ -182,8 +184,8 @@ function onDrop(e: DragEvent) {
                 </div>
 
                 <div ref="terminalSlot" data-testid="agent-terminal" class="flex-1 relative overflow-hidden bg-white terminal-host" />
+                <AgentQuestionCard v-if="pendingQuestion" :question="pendingQuestion" :agent-name="displayName" />
             </div>
-            <AgentQuestions :agent-id="activeAgentId" />
         </div>
     </template>
 </template>

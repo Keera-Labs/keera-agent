@@ -37,11 +37,12 @@ async function handleSubmit() {
                 </div>
                 <div class="flex flex-col gap-1 flex-1">
                     <span :class="labelClass">Shell command</span>
-                    <input
+                    <textarea
                         v-model="cmd"
                         placeholder="npm run dev"
                         required
-                        :class="`${inputClass} box-border w-full font-mono`"
+                        :class="`${inputClass} box-border w-full font-mono resize-y leading-normal`"
+                        rows="2"
                     />
                 </div>
             </div>
