@@ -5,11 +5,18 @@ from app.actions.claude_hook_action import AGENT_ID_ENV
 from app.models.Project import Project
 from app.services.claude_config_dir import claude_env, project_config_dir
 from app.services.git_repository import GitRepository, InvalidWorktree
+from app.services.process import CommandError
 from app.utils.agent_worktree import agent_id_for_worktree
 from app.utils.process_env import user_env
 
 PROJECT_ROOT_ENV = "KEERA_PROJECT_ROOT"
 WORKTREE_ENV = "KEERA_WORKTREE"
+AGENT_WORKTREES_DIR = Path(".claude/worktrees")
+
+
+class AgentWorktreeMissing(CommandError):
+    def __init__(self, agent_id: int, path: Path):
+        super().__init__(f"Agent #{agent_id} has no worktree at {path}")
 
 
 async def command_env(project: Project) -> dict:
@@ -33,6 +40,15 @@ class CommandWorkspace:
         if repo is None:
             raise InvalidWorktree(worktree)
         return cls(project, root, (await repo.select_worktree(worktree)).root)
+
+    @classmethod
+    async def for_agent(cls, project: Project, agent_id: int) -> "CommandWorkspace":
+        root = Path(project.path).expanduser().resolve()
+        worktree = root / AGENT_WORKTREES_DIR / f"agent-{agent_id}"
+        try:
+            return await cls.resolve(project, str(worktree))
+        except InvalidWorktree as exc:
+            raise AgentWorktreeMissing(agent_id, worktree) from exc
 
     @property
     def key(self) -> str:
