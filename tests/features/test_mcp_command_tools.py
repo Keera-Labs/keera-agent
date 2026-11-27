@@ -3,7 +3,9 @@ import json
 from fastapi_startkit.application import app
 from fastapi_startkit.masoniteorm.testing import DatabaseTransaction
 
+from app.models.Agent import Agent
 from app.models.Command import Command
+from app.models.Project import Project
 from app.services.relay_identity import AGENT_TOKEN_HEADER, issue_agent_token
 from app.terminal.command_runs import CommandRunRegistry
 from databases.factories.agent_factory import AgentFactory
@@ -185,5 +187,57 @@ class TestMcpCommandTools(TestCase, DatabaseTransaction):
             },
         )
 
-        self.assertIn(f"Error: Agent #{self.agent.id} has no worktree", text)
+        self.assertEqual(text, f"Error: Agent #{self.agent.id} has no worktree")
+        self.assertEqual(self.registry.for_project(self.project.id), [])
+
+    async def test_run_command_selects_an_all_digit_name_when_no_id_matches(self):
+        worktree = self._agent_worktree(self.agent.id)
+        command = await self._command("2024", "pwd")
+
+        text = await self._call(
+            "run_command",
+            {
+                "project_path": self.project.path,
+                "command": "2024",
+                "actor_agent_id": self.agent.id,
+            },
+        )
+
+        payload = json.loads(text)
+        self.assertEqual(payload["command_id"], command.id)
+        self.assertEqual(payload["cwd"], str(worktree))
+
+    async def test_run_command_prefers_an_id_over_an_all_digit_name(self):
+        self._agent_worktree(self.agent.id)
+        target = await self._command("Target", "pwd")
+        await self._command(str(target.id), "pwd")
+
+        text = await self._call(
+            "run_command",
+            {
+                "project_path": self.project.path,
+                "command": str(target.id),
+                "actor_agent_id": self.agent.id,
+            },
+        )
+
+        self.assertEqual(json.loads(text)["command_id"], target.id)
+
+    async def test_enforced_project_ignores_an_untokened_actor_agent_id(self):
+        await Project.where("id", self.project.id).update({"task_rules": "enforce"})
+        await Agent.where("id", self.agent.id).update({"session_id": "live"})
+        await issue_agent_token(self.agent.id)
+        self._agent_worktree(self.agent.id)
+        command = await self._command("Where", "pwd")
+
+        text = await self._call(
+            "run_command",
+            {
+                "project_path": self.project.path,
+                "command": command.id,
+                "actor_agent_id": self.agent.id,
+            },
+        )
+
+        self.assertIn("Error: could not identify the calling agent", text)
         self.assertEqual(self.registry.for_project(self.project.id), [])

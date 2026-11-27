@@ -15,8 +15,8 @@ AGENT_WORKTREES_DIR = Path(".claude/worktrees")
 
 
 class AgentWorktreeMissing(CommandError):
-    def __init__(self, agent_id: int, path: Path):
-        super().__init__(f"Agent #{agent_id} has no worktree at {path}")
+    def __init__(self, agent_id: int):
+        super().__init__(f"Agent #{agent_id} has no worktree")
 
 
 async def command_env(project: Project) -> dict:
@@ -48,7 +48,7 @@ class CommandWorkspace:
         try:
             return await cls.resolve(project, str(worktree))
         except InvalidWorktree as exc:
-            raise AgentWorktreeMissing(agent_id, worktree) from exc
+            raise AgentWorktreeMissing(agent_id) from exc
 
     @property
     def key(self) -> str:

@@ -1210,11 +1210,17 @@ class RunCommandInput(BaseModel):
 
 
 async def _project_command(project: Project, reference: Union[int, str]) -> Command | None:
-    commands = await Command.where("project_id", project.id).order_by("id").get()
-    if isinstance(reference, int) or str(reference).strip().isdigit():
-        return next((c for c in commands if c.id == int(reference)), None)
-    name = str(reference).strip().lower()
-    return next((c for c in commands if (c.label or "").strip().lower() == name), None)
+    text = str(reference).strip()
+    if text.isdigit():
+        by_id = await Command.where("project_id", project.id).where("id", int(text)).first()
+        if by_id is not None:
+            return by_id
+    return (
+        await Command.where("project_id", project.id)
+        .where_raw("LOWER(TRIM(label)) = ?", [text.lower()])
+        .order_by("id")
+        .first()
+    )
 
 
 class RunCommandTool(Tool):
@@ -1241,7 +1247,8 @@ class RunCommandTool(Tool):
                 "Use list_commands to see available commands."
             )
 
-        agent = (await task_actor(arguments.get("actor_agent_id"))).agent
+        rules = await TaskRules.for_project(project.id)
+        agent = rules.effective_actor(await task_actor(arguments.get("actor_agent_id"))).agent
         if agent is None or agent.project_id != project.id or agent.deleted_at:
             return Response.text(
                 "Error: could not identify the calling agent in this project; "
