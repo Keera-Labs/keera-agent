@@ -93,6 +93,15 @@ class TestShellController(TestCase, DatabaseTransaction):
 
         self.assertNotIn("venv=[/keera/.venv]", output)
 
+    async def test_disables_oh_my_zsh_auto_update_prompts(self):
+        ws, _ = self._attach()
+
+        await self._output_of(
+            ws,
+            'echo "auto=$DISABLE_AUTO_UPDATE prompt=$DISABLE_UPDATE_PROMPT"',
+            "auto=true prompt=true",
+        )
+
     async def test_disconnecting_kills_the_shell(self):
         ws, task = self._attach()
         await self._output_of(ws, "echo ready-$((1+1))", "ready-2")
