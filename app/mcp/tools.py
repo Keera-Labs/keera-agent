@@ -14,6 +14,7 @@ from app.actions.agent_health_action import (
     heartbeat_age,
     record_heartbeat,
 )
+from app.actions.command_run_start_action import start_command_run
 from app.actions.task_transition_action import (
     TaskMergeAction,
     TaskTransitionAction,
@@ -25,11 +26,14 @@ from app.actions.task_transition_action import (
 from app.constant.agent_types import DEFAULT_AGENT_TYPE, AgentType
 from app.constant.task_status import TERMINAL_STATUSES, TaskStatus, canonical_status
 from app.exceptions.task_rule_rejected_error import TaskRuleRejectedError
+from app.models.Command import Command
 from app.models.Project import Project
 from app.models.Task import REVIEW_FIELDS, Task
 from app.models.TaskDependency import TaskDependency
 from app.models.TaskEvent import TaskEvent
 from app.requests.task_request import TaskReviewFields
+from app.services.command_workspace import CommandWorkspace
+from app.services.process import CommandError
 from app.services.pull_request_head import merged_pull_request_head
 from app.services.task_policy import (
     TaskRules,
@@ -1152,6 +1156,126 @@ class HeartbeatTool(Tool):
         return Response.text(f"Heartbeat recorded for agent '{agent.name}'.")
 
 
+# ── list_commands ─────────────────────────────────────────────────────────────
+
+
+class ListCommandsInput(BaseModel):
+    project_path: str = Field(
+        description="Absolute path of the project (use the current working directory)."
+    )
+
+
+class ListCommandsTool(Tool):
+    name = "list_commands"
+    description = (
+        "List the saved commands of the current Keera project as JSON objects with id, "
+        "name and command. Start one with run_command."
+    )
+
+    def schema(self):
+        return ListCommandsInput
+
+    async def handle(self, arguments: dict) -> Response:
+        project = await _project_by_path(arguments["project_path"])
+        if not project:
+            return Response.text(
+                f"Error: no Keera project found at path '{arguments['project_path']}'"
+            )
+
+        commands = await Command.where("project_id", project.id).order_by("id").get()
+        rows = [
+            {"id": command.id, "name": command.label, "command": command.command}
+            for command in commands
+        ]
+        return Response.text(json.dumps(rows, indent=2))
+
+
+# ── run_command ───────────────────────────────────────────────────────────────
+
+
+class RunCommandInput(BaseModel):
+    project_path: str = Field(
+        description="Absolute path of the project (use the current working directory)."
+    )
+    command: Union[int, str] = Field(
+        description="The id (numeric) or name of a command returned by list_commands."
+    )
+    actor_agent_id: Optional[int] = Field(
+        default=None,
+        description=(
+            "Your own agent ID. Optional when your MCP client sends an agent token. "
+            "The command runs in this agent's worktree."
+        ),
+    )
+
+
+async def _project_command(project: Project, reference: Union[int, str]) -> Command | None:
+    text = str(reference).strip()
+    if text.isdigit():
+        by_id = await Command.where("project_id", project.id).where("id", int(text)).first()
+        if by_id is not None:
+            return by_id
+    return (
+        await Command.where("project_id", project.id)
+        .where_raw("LOWER(TRIM(label)) = ?", [text.lower()])
+        .order_by("id")
+        .first()
+    )
+
+
+class RunCommandTool(Tool):
+    name = "run_command"
+    description = (
+        "Start a saved project command (see list_commands) in the calling agent's worktree. "
+        "Restarts it if it is already running there. Returns the run id and status as JSON."
+    )
+
+    def schema(self):
+        return RunCommandInput
+
+    async def handle(self, arguments: dict) -> Response:
+        project = await _project_by_path(arguments["project_path"])
+        if not project:
+            return Response.text(
+                f"Error: no Keera project found at path '{arguments['project_path']}'"
+            )
+
+        command = await _project_command(project, arguments["command"])
+        if command is None:
+            return Response.text(
+                f"Error: no command '{arguments['command']}' in project '{project.name}'. "
+                "Use list_commands to see available commands."
+            )
+
+        rules = await TaskRules.for_project(project.id)
+        agent = rules.effective_actor(await task_actor(arguments.get("actor_agent_id"))).agent
+        if agent is None or agent.project_id != project.id or agent.deleted_at:
+            return Response.text(
+                "Error: could not identify the calling agent in this project; "
+                "pass actor_agent_id or send your agent token"
+            )
+
+        try:
+            workspace = await CommandWorkspace.for_agent(project, agent.id)
+        except CommandError as exc:
+            return Response.text(f"Error: {exc.message}")
+
+        run = await start_command_run(command, workspace)
+        return Response.text(
+            json.dumps(
+                {
+                    "run_id": run.id,
+                    "status": run.status,
+                    "command_id": command.id,
+                    "name": command.label,
+                    "command": command.command,
+                    "cwd": run.cwd,
+                },
+                indent=2,
+            )
+        )
+
+
 # ── tool list ─────────────────────────────────────────────────────────────────
 
 KEERA_TOOLS = [
@@ -1171,4 +1295,6 @@ KEERA_TOOLS = [
     GetOrchestratedAgentsTool,
     DeleteAgentTool,
     HeartbeatTool,
+    ListCommandsTool,
+    RunCommandTool,
 ]

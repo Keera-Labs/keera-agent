@@ -4,6 +4,7 @@ from fastapi import Query, WebSocket
 from fastapi.responses import Response
 from fastapi_startkit.application import app
 
+from app.actions.command_run_start_action import start_command_run
 from app.models.Command import Command
 from app.models.Project import Project
 from app.requests.command_request import CommandRunStoreRequest
@@ -11,7 +12,7 @@ from app.requests.git_request import GitWorktreeQuery
 from app.resources.command_run_resource import CommandRunResource
 from app.services.command_workspace import CommandWorkspace
 from app.services.process import CommandError
-from app.terminal.command_runs import CommandRunRegistry, CommandRunSpec
+from app.terminal.command_runs import CommandRunRegistry
 from app.terminal.websocket_terminal import WebsocketTerminal
 from app.utils.git_responses import git_error_response
 
@@ -31,13 +32,7 @@ async def store(body: CommandRunStoreRequest, command_id: int):
     except CommandError as e:
         return git_error_response(e)
 
-    spec = CommandRunSpec(
-        project_id=command.project_id,
-        label=command.label,
-        command=command.command,
-        command_id=command.id,
-    )
-    run = await _runs().start(spec, workspace.key, await workspace.env())
+    run = await start_command_run(command, workspace)
     return CommandRunResource(run, str(workspace.root))
 
 
