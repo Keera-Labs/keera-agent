@@ -15,7 +15,6 @@ import time
 from app.actions.claude_hook_action import AGENT_ID_ENV
 from app.terminal.terminal_queries import PARTIAL_SEQUENCE, strip_queries
 
-
 OH_MY_ZSH_DISABLE_ENV = {
     "DISABLE_AUTO_UPDATE": "true",
     "DISABLE_UPDATE_PROMPT": "true",
