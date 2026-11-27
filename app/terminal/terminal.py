@@ -15,16 +15,18 @@ import time
 from app.actions.claude_hook_action import AGENT_ID_ENV
 from app.terminal.terminal_queries import PARTIAL_SEQUENCE, strip_queries
 
+OH_MY_ZSH_DISABLE_ENV = {
+    "DISABLE_AUTO_UPDATE": "true",
+    "DISABLE_UPDATE_PROMPT": "true",
+}
 
-def _with_color_env(env: dict) -> dict:
-    # The PTY is always rendered by xterm.js (a 256-color, truecolor-capable
-    # frontend), so advertise a color terminal regardless of how the server
-    # was launched. When booted from a GUI process (the pywebview desktop
-    # build) the parent environment has no TERM/COLORTERM, which makes the
-    # claude CLI fall back to monochrome; setting these restores color.
-    env.setdefault("TERM", "xterm-256color")
-    env.setdefault("COLORTERM", "truecolor")
-    return env
+
+def build_pty_env(env: dict[str, str] | None = None) -> dict[str, str]:
+    resolved = dict(os.environ if env is None else env)
+    resolved.setdefault("TERM", "xterm-256color")
+    resolved.setdefault("COLORTERM", "truecolor")
+    resolved.update(OH_MY_ZSH_DISABLE_ENV)
+    return resolved
 
 
 PASTE_START = b"\x1b[200~"
@@ -247,7 +249,7 @@ class Terminal:
         self._cwd = cwd or os.path.expanduser("~")
         self._cols = cols
         self._rows = rows
-        self._env = _with_color_env(env or os.environ.copy())
+        self._env = build_pty_env(env)
         self._proc: subprocess.Popen | None = None
         self.master_fd: int | None = None
         self._stop_lock = threading.Lock()
