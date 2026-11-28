@@ -4,6 +4,7 @@ import json as _json
 from fastapi_startkit.support import Str
 
 from app.actions.agent_status_action import utc_now
+from app.actions.provider_distribution_action import ProviderDistributionAction
 from app.models.Agent import Agent
 from app.requests.agent_requests import AgentStoreRequest
 
@@ -18,10 +19,10 @@ class AgentCreateAction:
         return AgentCreateAction(project_id=project_id, request=request)
 
     @staticmethod
-    def resolve_provider(request: AgentStoreRequest, settings: dict) -> None:
+    async def resolve_provider(project_id: int, request: AgentStoreRequest, settings: dict) -> None:
         default_provider = settings["default_provider"]
         if "provider" not in request.model_fields_set:
-            request.provider = default_provider
+            request.provider = await AgentCreateAction._unspecified_provider(project_id, settings)
         elif (
             settings.get("enforce_default_provider", False) and request.provider != default_provider
         ):
@@ -29,6 +30,14 @@ class AgentCreateAction:
                 f"Provider {request.provider} is not allowed: settings enforce default provider "
                 f"{default_provider}"
             )
+
+    @staticmethod
+    async def _unspecified_provider(project_id: int, settings: dict) -> str:
+        if settings.get("provider_distribution") != "even":
+            return settings["default_provider"]
+        return await ProviderDistributionAction(
+            project_id, settings["distribution_providers"]
+        ).execute()
 
     async def execute(self) -> Agent:
         from app.controllers.agent_controller import _default_permissions
@@ -50,7 +59,7 @@ class AgentCreateAction:
             )
 
         req = self.request
-        self.resolve_provider(req, settings)
+        await self.resolve_provider(self.project_id, req, settings)
 
         provider_models = settings.get("provider_models", {})
         available_models = provider_models.get(req.provider, [])
