@@ -26,6 +26,11 @@ Vue 3 `<script setup lang="ts">` SFCs, TypeScript, Inertia.js via `@inertiajs/vu
 - Reusable logic: composables in `resources/js/composables/` named `useX`.
 - Terminal sessions and their WebSockets are owned by `stores/appLayoutStore.ts` via `composables/useTerminalSessions.ts`, not by components, so they survive page transitions. Keep xterm objects raw with `markRaw`.
 
+## HTTP requests and forms
+
+- Make API requests with `useHttp` from `@inertiajs/vue3` (`get`, `post`, `put`, `patch`, `delete`), never plain `fetch`. Create one `useHttp` instance per independent request so processing state and abort controllers are not shared; see `queries/agentCheckinQuery.ts`. Wrap it in a Pinia Colada `useQuery`/`useMutation` for server data.
+- Handle form submissions with Inertia's `useForm`, or another Inertia helper when one fits, never hand-rolled `fetch` or manual form state.
+
 ## Verify
 
 - `npm run types:check`
