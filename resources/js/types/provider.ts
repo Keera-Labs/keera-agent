@@ -10,10 +10,13 @@ export interface GlobalSettings {
     providers?: AIProvider[]
     default_provider?: string
     enforce_default_provider?: boolean
+    provider_distribution?: ProviderDistribution
+    distribution_providers?: string[]
     complexity_models?: Record<string, ComplexityModels>
     complexity_thinking_levels?: Record<string, ComplexityThinkingLevels>
 }
 
+export type ProviderDistribution = 'default' | 'even'
 export type Complexity = 'easy' | 'medium' | 'hard'
 export type ComplexityModels = Record<Complexity, string>
 export type ComplexityThinkingLevels = Record<Complexity, string | null>

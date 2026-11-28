@@ -838,7 +838,10 @@ class SpawnAgentInput(BaseModel):
     )
     provider: Optional[Literal["codex", "claude", "gemini"]] = Field(
         default=None,
-        description="Agent backend to run (codex, claude or gemini). Omit to use the configured default.",
+        description=(
+            "Agent backend to run (codex, claude or gemini). Omit to follow the provider "
+            "distribution setting (default provider or evenly distributed)."
+        ),
     )
     complexity: str = Field(
         pattern="^(easy|medium|hard)$",
@@ -864,7 +867,9 @@ class SpawnAgentTool(Tool):
         "Create a new agent in the current project and optionally start it with an initial task. "
         "The new agent will appear in the sidebar immediately. "
         f"Use this to delegate work to specialist agents ({', '.join(t.value for t in AgentType)}). "
-        "Provider defaults to the configured default provider; complexity selects the model configured for that "
+        "An omitted provider follows the provider distribution setting in Settings > Providers: "
+        "the configured default provider, or, when distributing evenly, the enabled provider with the "
+        "fewest active agents; an explicit provider always wins. Complexity selects the model configured for that "
         "tier in Settings > Providers, defaulting to "
         "gpt-5.6-luna/gpt-5.6-terra/gpt-5.6-sol for codex "
         "and claude-sonnet-5/claude-opus-5/claude-fable-5 for claude; gemini-3.8-flash for all gemini tiers."
@@ -951,7 +956,7 @@ class SpawnAgentTool(Tool):
             request_data["provider"] = provider
         request = AgentStoreRequest(**request_data)
         try:
-            AgentCreateAction.resolve_provider(request, settings)
+            await AgentCreateAction.resolve_provider(project.id, request, settings)
         except ValueError as e:
             return Response.text(f"Error: {e}")
         if arguments.get("message"):

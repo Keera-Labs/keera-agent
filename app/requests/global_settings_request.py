@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, StrictBool
 
@@ -10,3 +10,5 @@ class GlobalSettingsUpdateRequest(BaseModel):
     complexity_models: Any = None
     complexity_thinking_levels: Any = None
     enforce_default_provider: StrictBool | None = None
+    provider_distribution: Literal["default", "even"] | None = None
+    distribution_providers: list[str] | None = None

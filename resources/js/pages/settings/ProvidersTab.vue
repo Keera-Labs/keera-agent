@@ -2,13 +2,18 @@
 import { router, usePage } from '@inertiajs/vue3'
 import { computed, ref } from 'vue'
 import { cancelBtnClass, flagRowClass, inputClass, labelClass, submitBtnClass, toggleClass } from '@/components/ui/styles'
-import type { Complexity, ComplexityModels, ComplexityThinkingLevels, GlobalSettings } from '@/types/provider'
+import type { Complexity, ComplexityModels, ComplexityThinkingLevels, GlobalSettings, ProviderDistribution } from '@/types/provider'
 import { FALLBACK_PROVIDERS, reconcileComplexityModels, reconcileThinkingLevels } from '@/types/provider'
 
 const COMPLEXITY_LABELS: [Complexity, string][] = [
     ['easy', 'Easy'],
     ['medium', 'Medium'],
     ['hard', 'Complex / Hard'],
+]
+
+const DISTRIBUTION_MODES: [ProviderDistribution, string, string][] = [
+    ['default', 'Default provider', 'Agents without an explicit provider use the default provider.'],
+    ['even', 'Distribute evenly', 'Agents without an explicit provider go to the selected provider with the fewest agents in the project.'],
 ]
 
 const page = usePage<{ global_settings?: GlobalSettings }>()
@@ -20,6 +25,8 @@ const models = ref<Record<string, string[]>>(
 )
 const defaultProvider = ref(settings?.default_provider ?? 'codex')
 const enforceDefaultProvider = ref(settings?.enforce_default_provider ?? false)
+const providerDistribution = ref<ProviderDistribution>(settings?.provider_distribution ?? 'default')
+const distributionProviders = ref<string[]>(settings?.distribution_providers ?? providers.value.map(provider => provider.slug))
 const complexityModels = ref<Record<string, Partial<ComplexityModels>>>({ ...(settings?.complexity_models ?? {}) })
 const thinkingLevels = ref<Record<string, Partial<ComplexityThinkingLevels>>>({ ...(settings?.complexity_thinking_levels ?? {}) })
 const saving = ref(false)
@@ -57,6 +64,12 @@ function setThinkingLevel(slug: string, complexity: Complexity, level: string) {
     }
 }
 
+function toggleDistributionProvider(slug: string) {
+    distributionProviders.value = distributionProviders.value.includes(slug)
+        ? distributionProviders.value.filter(selected => selected !== slug)
+        : [...distributionProviders.value, slug]
+}
+
 function addModel(slug: string) {
     models.value = { ...models.value, [slug]: [...(models.value[slug] ?? []), ''] }
 }
@@ -66,6 +79,10 @@ function removeModel(slug: string, index: number) {
 }
 
 async function save() {
+    if (providerDistribution.value === 'even' && !distributionProviders.value.length) {
+        error.value = 'Select at least one provider to distribute agents across'
+        return
+    }
     saving.value = true
     saved.value = false
     error.value = ''
@@ -79,6 +96,8 @@ async function save() {
                 ),
                 default_provider: defaultProvider.value,
                 enforce_default_provider: enforceDefaultProvider.value,
+                provider_distribution: providerDistribution.value,
+                distribution_providers: distributionProviders.value,
                 complexity_models: Object.fromEntries(
                     providers.value.map(provider => [provider.slug, resolvedComplexityModels(provider.slug)]),
                 ),
@@ -92,6 +111,8 @@ async function save() {
         models.value = data.provider_models
         defaultProvider.value = data.default_provider
         enforceDefaultProvider.value = data.enforce_default_provider
+        providerDistribution.value = data.provider_distribution
+        distributionProviders.value = data.distribution_providers
         complexityModels.value = data.complexity_models
         thinkingLevels.value = data.complexity_thinking_levels ?? {}
         saved.value = true
@@ -110,7 +131,7 @@ async function save() {
             <div>
                 <h2 class="m-0 text-zinc-900 text-ui-15 font-semibold">Provider settings</h2>
                 <p class="mt-1 mb-0 text-zinc-500 text-ui-12">
-                    Choose the default provider, each provider's models, and the model and thinking level used for each task complexity.
+                    Choose the default provider, how new agents are distributed across providers, each provider's models, and the model and thinking level used for each task complexity.
                 </p>
             </div>
             <span v-if="error" class="text-danger text-ui-12">{{ error }}</span>
@@ -139,6 +160,47 @@ async function save() {
                             ]"
                         />
                     </button>
+                </div>
+            </section>
+            <section class="border border-stroke rounded-md bg-canvas p-4 flex flex-col gap-3">
+                <span :class="labelClass">Provider distribution</span>
+                <div role="radiogroup" aria-label="Provider distribution" class="flex flex-col gap-2">
+                    <label
+                        v-for="[mode, title, hint] in DISTRIBUTION_MODES"
+                        :key="mode"
+                        class="flex items-start gap-2 cursor-pointer"
+                    >
+                        <input
+                            v-model="providerDistribution"
+                            type="radio"
+                            name="provider-distribution"
+                            :value="mode"
+                            :aria-label="title"
+                            class="mt-0.5 accent-zinc-900"
+                        >
+                        <span>
+                            <span class="block text-ui-12 font-medium text-zinc-700">{{ title }}</span>
+                            <span class="block text-ui-10 text-zinc-400">{{ hint }}</span>
+                        </span>
+                    </label>
+                </div>
+                <div v-if="providerDistribution === 'even'" class="flex flex-col gap-1.5">
+                    <span :class="labelClass">Distribute across</span>
+                    <div class="flex flex-wrap gap-4">
+                        <label v-for="provider in providers" :key="provider.slug" class="flex items-center gap-1.5 cursor-pointer text-ui-12 text-zinc-700">
+                            <input
+                                type="checkbox"
+                                :aria-label="`Distribute to ${provider.name}`"
+                                :checked="distributionProviders.includes(provider.slug)"
+                                class="accent-zinc-900"
+                                @change="toggleDistributionProvider(provider.slug)"
+                            >
+                            {{ provider.name }}
+                        </label>
+                    </div>
+                    <span v-if="enforceDefaultProvider" class="text-ui-10 text-danger">
+                        Turn off "Enforce default provider" to distribute agents evenly.
+                    </span>
                 </div>
             </section>
             <section

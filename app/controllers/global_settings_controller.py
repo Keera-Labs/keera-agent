@@ -17,7 +17,12 @@ DEFAULT_SETTINGS: dict = {
     },
     "default_provider": "codex",
     "enforce_default_provider": False,
+    "provider_distribution": "default",
+    "distribution_providers": [provider.slug for provider in providers.all()],
 }
+
+
+PROVIDER_DISTRIBUTION_MODES = ("default", "even")
 
 
 def _load_json(value):
@@ -88,6 +93,8 @@ async def read_global_settings() -> dict:
         "provider_models": dict(DEFAULT_SETTINGS["provider_models"]),
         "default_provider": DEFAULT_SETTINGS["default_provider"],
         "enforce_default_provider": DEFAULT_SETTINGS["enforce_default_provider"],
+        "provider_distribution": DEFAULT_SETTINGS["provider_distribution"],
+        "distribution_providers": list(DEFAULT_SETTINGS["distribution_providers"]),
     }
     saved_complexity_models: dict = {}
     saved_thinking_levels: dict = {}
@@ -119,6 +126,15 @@ async def read_global_settings() -> dict:
                 result[key] = row.value
         elif key == "enforce_default_provider":
             result[key] = row.value.lower() == "true"
+        elif key == "provider_distribution":
+            if row.value in PROVIDER_DISTRIBUTION_MODES:
+                result[key] = row.value
+        elif key == "distribution_providers":
+            stored = _load_json(row.value)
+            if isinstance(stored, list):
+                result[key] = [
+                    provider.slug for provider in providers.all() if provider.slug in stored
+                ]
         elif key == "complexity_models":
             stored = _load_json(row.value)
             if isinstance(stored, dict):
@@ -237,6 +253,26 @@ async def update_global_settings(body: GlobalSettingsUpdateRequest):
             )
         pending["enforce_default_provider"] = body["enforce_default_provider"]
 
+    if body.get("provider_distribution") is not None:
+        pending["provider_distribution"] = body["provider_distribution"]
+
+    if body.get("distribution_providers") is not None:
+        known = {provider.slug for provider in providers.all()}
+        unknown = [slug for slug in body["distribution_providers"] if slug not in known]
+        if unknown:
+            return JSONResponse(
+                {"error": f"Unknown provider '{unknown[0]}' in distribution_providers"},
+                status_code=422,
+            )
+        pending["distribution_providers"] = list(dict.fromkeys(body["distribution_providers"]))
+
+    if {"provider_distribution", "distribution_providers", "enforce_default_provider"} & set(
+        pending
+    ):
+        error = _distribution_error({**(await read_global_settings()), **pending})
+        if error:
+            return JSONResponse({"error": error}, status_code=422)
+
     if "complexity_models" in body:
         provider_models = (
             pending.get("provider_models") or (await read_global_settings())["provider_models"]
@@ -257,6 +293,16 @@ async def update_global_settings(body: GlobalSettingsUpdateRequest):
         await write_global_setting(key, value)
 
     return JSONResponse(await read_global_settings())
+
+
+def _distribution_error(settings: dict) -> str | None:
+    if settings["provider_distribution"] != "even":
+        return None
+    if not settings["distribution_providers"]:
+        return "Select at least one provider to distribute agents across"
+    if settings["enforce_default_provider"]:
+        return "Distributing evenly cannot be combined with enforcing the default provider"
+    return None
 
 
 def _complexity_models_error(value, provider_models: dict[str, list[str]]) -> str | None:

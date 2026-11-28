@@ -14,6 +14,8 @@ function resetGlobalSettings() {
         providers: [{ slug: 'codex', name: 'Codex', models: ['gpt-a', 'gpt-b'], thinking_levels: ['low', 'high'] }],
         default_provider: 'codex',
         enforce_default_provider: false,
+        provider_distribution: 'default',
+        distribution_providers: ['codex'],
         complexity_models: { codex: { easy: 'gpt-a', medium: 'gpt-b', hard: 'gpt-b' } },
         complexity_thinking_levels: { codex: { easy: null, medium: 'low', hard: null } },
     })
@@ -55,6 +57,8 @@ describe('ProvidersTab', () => {
             provider_models: { codex: ['gpt-a', 'gpt-c'] },
             default_provider: 'codex',
             enforce_default_provider: true,
+            provider_distribution: 'default',
+            distribution_providers: ['codex'],
             // gpt-b was removed, so tiers pointing at it fall back to the first remaining model.
             complexity_models: { codex: { easy: 'gpt-a', medium: 'gpt-a', hard: 'gpt-a' } },
             complexity_thinking_levels: { codex: { easy: null, medium: 'low', hard: null } },
@@ -107,6 +111,49 @@ describe('ProvidersTab', () => {
         await flushPromises()
 
         expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string).default_provider).toBe('gemini')
+    })
+
+    it('saves even distribution across the checked providers', async () => {
+        Object.assign(globalSettings, {
+            providers: [
+                { slug: 'codex', name: 'Codex', models: ['gpt-a'] },
+                { slug: 'claude', name: 'Claude', models: ['claude-a'] },
+                { slug: 'gemini', name: 'Gemini CLI', models: ['gemini-a'] },
+            ],
+            distribution_providers: ['codex', 'claude', 'gemini'],
+            complexity_models: {},
+            complexity_thinking_levels: {},
+        })
+        const fetchMock = vi.fn((_url: string, init?: RequestInit) => Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(JSON.parse(init?.body as string)),
+        }))
+        vi.stubGlobal('fetch', fetchMock)
+        const w = mount(ProvidersTab)
+
+        expect(w.find('input[aria-label="Distribute to Codex"]').exists()).toBe(false)
+        await w.get('input[aria-label="Distribute evenly"]').setValue(true)
+        await w.get('input[aria-label="Distribute to Claude"]').trigger('change')
+        await w.findAll('button').find(b => b.text() === 'Save provider settings')!.trigger('click')
+        await flushPromises()
+
+        const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string)
+        expect(body.provider_distribution).toBe('even')
+        expect(body.distribution_providers).toEqual(['codex', 'gemini'])
+    })
+
+    it('blocks saving even distribution with no provider checked', async () => {
+        const fetchMock = vi.fn()
+        vi.stubGlobal('fetch', fetchMock)
+        const w = mount(ProvidersTab)
+
+        await w.get('input[aria-label="Distribute evenly"]').setValue(true)
+        await w.get('input[aria-label="Distribute to Codex"]').trigger('change')
+        await w.findAll('button').find(b => b.text() === 'Save provider settings')!.trigger('click')
+        await flushPromises()
+
+        expect(fetchMock).not.toHaveBeenCalled()
+        expect(w.text()).toContain('Select at least one provider')
     })
 
     it('shows the server error when saving fails', async () => {
