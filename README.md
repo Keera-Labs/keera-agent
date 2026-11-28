@@ -99,4 +99,4 @@ On macOS, run it under `caffeinate -i` (`caffeinate -i ./bin/build.sh`) so the m
 - Pull requests are merged manually after review approval.
 - Write commit messages in the [Conventional Commits](https://www.conventionalcommits.org/) format (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`), with a short **Why** and **How** in the body.
 - Run `uv run pytest`, `npm run test:frontend` and `npm run types:check` before opening a pull request.
-- See [`CLAUDE.md`](CLAUDE.md) for architecture notes and coding standards.
+- See [`AGENTS.md`](AGENTS.md) for architecture notes and coding standards.

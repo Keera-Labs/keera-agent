@@ -574,7 +574,7 @@ call is made.
 - [ ] Tests in `tests/features/`, network stubbed
 - [ ] Mention the capability in the relevant agent's system prompt
 - [ ] No migration needed unless the plugin persists state (then follow the
-      "Adding a new resource" steps in `CLAUDE.md`)
+      "Adding a new resource" steps in `AGENTS.md`)
 
 ---
 
