@@ -28,7 +28,7 @@ This file provides guidance to AI coding agents working in this repository.
 5. For routes and controllers, use `.ai/skills/fastapi-startkit/fastapi/SKILL.md`.
 
 6. When starting a feature or task, consult `.ai/skills/architecture/SKILL.md` for HTTP layers, business logic, and boundaries.
-7. For the ORM, migrations and query builder, use `.ai/fastapi-startkit/database/SKILL.md`; for Inertia pages, use `.ai/fastapi-startkit/inertia/SKILL.md`.
+7. For the ORM, migrations and query builder, use `.ai/fastapi-startkit/database/SKILL.md`; for Inertia pages, use `.ai/fastapi-startkit/inertia/SKILL.md`; for Vue components, state and queries under `resources/js`, use `.ai/skills/frontend/SKILL.md`.
 
 Agent skills live in `.ai/` (`.ai/skills/` and `.ai/fastapi-startkit/`) so every provider reads the same files; do not add provider-specific copies such as `.claude/skills/`.
 
